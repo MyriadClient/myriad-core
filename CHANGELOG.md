@@ -6,6 +6,23 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.2.9
+
+Latency that's right where the tab list isn't, and quieter notifications. No API changes, so addons built for 0.2.x
+keep working.
+
+- `Myriad.server().ping()` is measured from the server's answers to what you do: the time from an action that carries a
+  sequence number (using an item, on a block or not; digging) to the server's acknowledgement of it, the median of the
+  last few, its tick included. Where the tab list shows more, that's used. On 2b2t the tab list shows everyone at 0,
+  so ping read 0 there and whatever waited a round trip on it (Elytra Fly's chestplate swaps, block placement
+  timeouts) waited too little; it now reads the real thing. No packets of its
+  own: a ping request a second (as vanilla sends with its network chart open) was tried, and the server's instant
+  answer got Grim's next ping to the client ahead of what came with it, which Elytra Tweaks' glide hold needs in order.
+- Notifications: the same one again (title, message, level) while it's still on screen is counted on it ("×3") and
+  stays up longer, instead of stacking a copy. One sent with a key that's showing replaces it, as before, and counts
+  up when it's the same.
+- Dev console: `status` shows the ping.
+
 ## 0.2.8
 
 Inventory handling, rotations and placements for Grim (2b2t) by the version the server sees you as. Two additions to
