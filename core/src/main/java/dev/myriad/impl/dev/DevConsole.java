@@ -292,10 +292,10 @@ public final class DevConsole {
 			case EntityHitResult en -> "entity " + en.getEntity().getName().getString();
 			case null, default -> "none";
 		};
-		LOG.info("[dev] status: pos {} {} {} motion {} {} {} ({} b/s) rot {} {} ground={} gliding={} sprinting={} sneaking={} health={} slot={} serverSlot={} item={} mode={} target={} fps={}",
+		LOG.info("[dev] status: pos {} {} {} motion {} {} {} ({} b/s) rot {} {} ground={} gliding={} sprinting={} sneaking={} health={} slot={} serverSlot={} item={} mode={} target={} fps={} ping={}",
 			fmt(p.getX()), fmt(p.getY()), fmt(p.getZ()), fmt(v.x), fmt(v.y), fmt(v.z), fmt(v.length() * 20), fmt(p.getYRot()), fmt(p.getXRot()),
 			p.onGround(), p.isFallFlying(), p.isSprinting(), p.isShiftKeyDown(), fmt(p.getHealth()), p.getInventory().getSelectedSlot() + 1, Myriad.inventory().serverSlot() + 1, p.getMainHandItem().getItem(),
-			mc.gameMode == null ? "?" : mc.gameMode.getPlayerMode().getName(), target, mc.getFps());
+			mc.gameMode == null ? "?" : mc.gameMode.getPlayerMode().getName(), target, mc.getFps(), Myriad.server().ping());
 	}
 
 	private static String fmt(double d) {

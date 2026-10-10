@@ -7,6 +7,7 @@ import dev.myriad.api.event.events.PacketEvent;
 import dev.myriad.api.event.events.WorldEvent;
 import dev.myriad.api.service.ServerStats;
 import dev.myriad.api.util.RateCounter;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,10 +21,17 @@ import org.jetbrains.annotations.Nullable;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTimePacket;
+import net.minecraft.network.protocol.game.ClientboundBlockChangedAckPacket;
+import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
+import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
+import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 
-/** Server TPS from the once-a-second time updates, and totem pops from entity status 35 (pop) and 3 (death). */
+/**
+ * Server TPS from the once-a-second time updates, latency from the server's answers to what you do (see {@link #ping}),
+ * and totem pops from entity status 35 (pop) and 3 (death).
+ */
 public final class ServerStatsTracker implements ServerStats {
 	private final float[] samples = new float[20];
 	private int count, next;
@@ -31,10 +39,33 @@ public final class ServerStatsTracker implements ServerStats {
 	private final Map<UUID, Integer> pops = new ConcurrentHashMap<>();
 	private final RateCounter sent = new RateCounter(), received = new RateCounter();
 	private volatile long lastPacket = System.currentTimeMillis(), lastRubberband;
+	/** Round trips of the last answered actions, ms, newest at {@code nextRtt - 1}; -1 where none came back yet. */
+	private final int[] rtts = new int[5];
+	private int nextRtt;
+	private volatile int rtt = -1;
+	/** The last sequenced action sent and when (System.nanoTime), until the server acknowledges it. */
+	private int sentSequence = -1;
+	private long sentNanos;
+
+	{
+		Arrays.fill(rtts, -1);
+	}
 
 	@Subscribe
 	private void onSend(PacketEvent.Send e) {
 		sent.record();
+		int sequence = switch (e.packet()) {
+			case ServerboundUseItemPacket p -> p.getSequence();
+			case ServerboundUseItemOnPacket p -> p.getSequence();
+			case ServerboundPlayerActionPacket p -> p.getSequence();
+			default -> 0;
+		};
+		if (sequence > 0) {
+			synchronized (rtts) {
+				sentSequence = sequence;
+				sentNanos = System.nanoTime();
+			}
+		}
 	}
 
 	@Subscribe
@@ -42,6 +73,8 @@ public final class ServerStatsTracker implements ServerStats {
 		lastPacket = System.currentTimeMillis();
 		received.record();
 		if (e.packet() instanceof ClientboundPlayerPositionPacket) lastRubberband = System.currentTimeMillis();
+		// Timed here, as it comes off the wire, not when the game thread gets to it a tick later.
+		if (e.packet() instanceof ClientboundBlockChangedAckPacket ack) acknowledged(ack.sequence());
 		if (e.packet() instanceof ClientboundSetTimePacket) sample();
 		else if (e.packet() instanceof ClientboundEntityEventPacket p && (p.getEventId() == 35 || p.getEventId() == 3)) {
 			Minecraft mc = Minecraft.getInstance();
@@ -71,6 +104,32 @@ public final class ServerStatsTracker implements ServerStats {
 		pops.clear();
 		lastPacket = System.currentTimeMillis();
 		lastRubberband = 0;
+		synchronized (rtts) {
+			Arrays.fill(rtts, -1);
+			rtt = -1;
+			sentSequence = -1;
+		}
+	}
+
+	/**
+	 * The server acknowledges the actions you send (using an item, on a block or not; digging) up to {@code sequence}
+	 * once its next tick has handled them: the time from the last one sent is a round trip plus that wait, which is how
+	 * long an action of yours takes to be answered. Measured from what you do anyway, with no packets of its own: a
+	 * ping request would be answered at once, ahead of what the server was about to send, and anything that holds back
+	 * the server's pings (Elytra Tweaks' glide hold) can't then tell which one came before what.
+	 */
+	private void acknowledged(int sequence) {
+		synchronized (rtts) {
+			if (sentSequence < 0 || sequence < sentSequence) return;
+			long ms = (System.nanoTime() - sentNanos) / 1_000_000;
+			sentSequence = -1;
+			if (ms > 30_000) return;
+			rtts[nextRtt] = (int) ms;
+			nextRtt = (nextRtt + 1) % rtts.length;
+			// The median of the last few: one slow answer (a lag spike, a garbage collection) doesn't move it.
+			int[] known = Arrays.stream(rtts).filter(r -> r >= 0).sorted().toArray();
+			rtt = known[known.length / 2];
+		}
 	}
 
 	private synchronized void sample() {
@@ -92,12 +151,17 @@ public final class ServerStatsTracker implements ServerStats {
 		return sum / count;
 	}
 
+	/**
+	 * How long the server takes to answer your actions (see {@link #acknowledged}), or the tab list's latency where
+	 * that's higher. Some servers (2b2t) show everyone at 0 in the tab list; joined as a version without sequenced
+	 * actions (ViaFabricPlus, before 1.19), the acknowledgements are made up on your side and come back at once.
+	 */
 	@Override
 	public int ping() {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player == null || mc.getConnection() == null) return 0;
 		var entry = mc.getConnection().getPlayerInfo(mc.player.getUUID());
-		return entry == null ? 0 : entry.getLatency();
+		return Math.max(rtt, entry == null ? 0 : entry.getLatency());
 	}
 
 	@Override

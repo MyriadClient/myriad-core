@@ -20,7 +20,10 @@ public interface ServerStats {
 	/** Average ticks per second over the last ~20 seconds, from the spacing of time updates; 20 until known. */
 	float tps();
 
-	/** Your latency to the server in milliseconds, as the tab list shows it; 0 in singleplayer or before it's known. */
+	/**
+	 * Your round trip to the server in milliseconds: how long it takes to answer an action of yours (using an item,
+	 * digging), its tick included, or the tab list's latency if that's higher. 0 in singleplayer or before it's known.
+	 */
 	int ping();
 
 	/** The server address you connected with ("play.example.net"), or null in singleplayer or the menus. */

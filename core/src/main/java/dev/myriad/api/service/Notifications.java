@@ -10,7 +10,8 @@ public interface Notifications {
 
 	/**
 	 * Shows a notification. A notification with the same non-null {@code key} replaces the previous one instead of
-	 * stacking (useful for repeated status updates).
+	 * stacking (useful for repeated status updates). Sent again while it's still showing, the same notification (title,
+	 * message and level, no key) is counted on the one showing ("×3") and stays up longer, instead of stacking.
 	 */
 	void send(String title, String message, Level level, long durationMs, String key);
 

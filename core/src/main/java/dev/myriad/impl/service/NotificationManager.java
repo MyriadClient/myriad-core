@@ -22,18 +22,20 @@ public final class NotificationManager implements Notifications {
 
 	@Override
 	public synchronized void send(String title, String message, Level level, long durationMs, String key) {
-		if (key != null) {
-			for (Entry e : entries) {
-				if (key.equals(e.key)) {
-					e.title = title;
-					e.message = message;
-					e.level = level;
-					e.expires = System.currentTimeMillis() + durationMs;
-					return;
-				}
+		long now = System.currentTimeMillis();
+		for (Entry e : entries) {
+			// The same key replaces; the same notification again while it's still up is counted on it ("×3"), not stacked.
+			boolean same = e.title.equals(title) && e.message.equals(message) && e.level == level;
+			if (key != null ? key.equals(e.key) : e.key == null && same && now <= e.expires) {
+				e.count = same ? e.count + 1 : 1;
+				e.title = title;
+				e.message = message;
+				e.level = level;
+				e.expires = now + durationMs;
+				return;
 			}
 		}
-		Entry e = new Entry(title, message, level, System.currentTimeMillis() + durationMs, key);
+		Entry e = new Entry(title, message, level, now + durationMs, key);
 		entries.add(e);
 		while (entries.size() > MAX) entries.removeFirst();
 	}
@@ -83,6 +85,10 @@ public final class NotificationManager implements Notifications {
 			c.roundRect(x, y, 2.5f, h, theme.rounding.get(), 0, 0, theme.rounding.get(), accent);
 			c.text(FontFamily.MONO, size, levelIcon(e.level), x + 7, y + 6, accent);
 			c.text(FontFamily.SANS_BOLD, size, e.title, x + 18, y + 6, theme.text.argb());
+			if (e.count > 1) {
+				String count = "×" + e.count;
+				c.text(FontFamily.SANS, size * 0.95f, count, x + WIDTH - 6 - c.textWidth(FontFamily.SANS, size * 0.95f, count), y + 6, theme.textDim.argb());
+			}
 			float ly = y + 6 + c.textHeight(FontFamily.SANS_BOLD, size) + 2;
 			for (String line : lines) {
 				c.text(FontFamily.SANS, size * 0.95f, line, x + 18, ly, theme.textDim.argb());
@@ -98,6 +104,8 @@ public final class NotificationManager implements Notifications {
 		String title, message, key;
 		Level level;
 		long expires;
+		/** How many times it was sent while showing (see {@link #send}). */
+		int count = 1;
 		final Animated slide = new Animated(0);
 
 		Entry(String title, String message, Level level, long expires, String key) {
