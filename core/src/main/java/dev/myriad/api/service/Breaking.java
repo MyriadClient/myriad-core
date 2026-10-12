@@ -64,26 +64,27 @@ public interface Breaking {
 	 * }</pre>
 	 */
 	final class Options {
-		public static final Options DEFAULT = new Options(Mode.VANILLA, false, true, 4.5, true, false);
-		public static final Options STRICT = new Options(Mode.VANILLA, true, true, 4.5, true, false);
+		public static final Options DEFAULT = new Options(Mode.VANILLA, false, true, 4.5, true, false, false);
+		public static final Options STRICT = new Options(Mode.VANILLA, true, true, 4.5, true, false, false);
 		/** Packet mining, Grim-safe: hand free, vanilla's time. */
-		public static final Options PACKET = new Options(Mode.PACKET, false, true, 4.5, true, false);
+		public static final Options PACKET = new Options(Mode.PACKET, false, true, 4.5, true, false, false);
 		/** For servers that don't check break times. */
-		public static final Options FAST = new Options(Mode.FAST, false, true, 4.5, true, true);
+		public static final Options FAST = new Options(Mode.FAST, false, true, 4.5, true, true, false);
 		/** Fast mining past Grim on servers with ViaVersion (2b2t); experimental. */
-		public static final Options FAST_GRIM = new Options(Mode.FAST_GRIM, false, true, 4.5, true, true);
+		public static final Options FAST_GRIM = new Options(Mode.FAST_GRIM, false, true, 4.5, true, true, false);
 
 		private final Mode mode;
-		private final boolean rotate, swing, autoTool, doubleBreak;
+		private final boolean rotate, swing, autoTool, doubleBreak, waitForServer;
 		private final double range;
 
-		private Options(Mode mode, boolean rotate, boolean swing, double range, boolean autoTool, boolean doubleBreak) {
+		private Options(Mode mode, boolean rotate, boolean swing, double range, boolean autoTool, boolean doubleBreak, boolean waitForServer) {
 			this.mode = java.util.Objects.requireNonNull(mode);
 			this.rotate = rotate;
 			this.swing = swing;
 			this.range = range;
 			this.autoTool = autoTool;
 			this.doubleBreak = doubleBreak;
+			this.waitForServer = waitForServer;
 		}
 
 		/**
@@ -134,45 +135,58 @@ public interface Breaking {
 			return doubleBreak;
 		}
 
+		/**
+		 * Packet modes: leave the block in place on your screen until the server says it's gone, instead of showing it
+		 * broken as the packet goes out. A finish the server refuses then never flashes the block away and back (no
+		 * ghost blocks to walk into); the cost is a round trip before you see it go.
+		 */
+		public boolean waitForServer() {
+			return waitForServer;
+		}
+
 		public Options withMode(Mode mode) {
-			return new Options(mode, rotate, swing, range, autoTool, doubleBreak);
+			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
 		public Options withRotate(boolean rotate) {
-			return new Options(mode, rotate, swing, range, autoTool, doubleBreak);
+			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
 		public Options withSwing(boolean swing) {
-			return new Options(mode, rotate, swing, range, autoTool, doubleBreak);
+			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
 		public Options withRange(double range) {
-			return new Options(mode, rotate, swing, range, autoTool, doubleBreak);
+			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
 		public Options withAutoTool(boolean autoTool) {
-			return new Options(mode, rotate, swing, range, autoTool, doubleBreak);
+			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
 		public Options withDoubleBreak(boolean doubleBreak) {
-			return new Options(mode, rotate, swing, range, autoTool, doubleBreak);
+			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
+		}
+
+		public Options withWaitForServer(boolean waitForServer) {
+			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
 		@Override
 		public boolean equals(Object o) {
 			return o instanceof Options x && x.mode == mode && x.rotate == rotate && x.swing == swing && x.range == range
-				&& x.autoTool == autoTool && x.doubleBreak == doubleBreak;
+				&& x.autoTool == autoTool && x.doubleBreak == doubleBreak && x.waitForServer == waitForServer;
 		}
 
 		@Override
 		public int hashCode() {
-			return java.util.Objects.hash(mode, rotate, swing, range, autoTool, doubleBreak);
+			return java.util.Objects.hash(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
 		@Override
 		public String toString() {
 			return "Breaking.Options[mode=" + mode + ", rotate=" + rotate + ", swing=" + swing + ", range=" + range
-				+ ", autoTool=" + autoTool + ", doubleBreak=" + doubleBreak + "]";
+				+ ", autoTool=" + autoTool + ", doubleBreak=" + doubleBreak + ", waitForServer=" + waitForServer + "]";
 		}
 	}
 

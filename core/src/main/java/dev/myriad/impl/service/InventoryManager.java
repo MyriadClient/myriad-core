@@ -71,6 +71,14 @@ public final class InventoryManager implements Inventory {
 	private boolean userClick;
 	/** The hold stepped aside for your own click: the server has your visible slot until you're done. */
 	private boolean yielded;
+	/**
+	 * The last hold refused because someone else held: when that hold ends right after, it's handed straight over, so
+	 * the server doesn't get your visible slot and then this one again in the same tick.
+	 */
+	private Object waitingOwner;
+	private int waitingSlot, waitingTicks;
+	private boolean waitingWeak;
+	private long waitingAt;
 	/** Set while vanilla handles your own attack or mining. */
 	private boolean userAttack;
 
@@ -268,6 +276,19 @@ public final class InventoryManager implements Inventory {
 		mc.gameMode.carriedIndex = visible;
 	}
 
+	/** Whether a silent swap is waiting to go back (first thing next tick, or {@link #restoreNow}). */
+	public boolean restorePending() {
+		return restorePending;
+	}
+
+	/**
+	 * Sends a silent swap back now, in the tick it was made, instead of first thing next tick: for swaps whose action
+	 * was only digging, which Grim's PacketOrderE doesn't mind a slot change after.
+	 */
+	public void restoreNow() {
+		if (restorePending && mc.player != null && mc.getConnection() != null) restore();
+	}
+
 	/**
 	 * Undoes what a silent swap's action left for the next tick, with the client holding that slot again as it did; the
 	 * server stays where it is. Anything that changes the server's slot settles first.
@@ -356,7 +377,15 @@ public final class InventoryManager implements Inventory {
 
 	private boolean hold(Object owner, int hotbarSlot, int maxTicks, boolean weak) {
 		if (mc.player == null || hotbarSlot < 0 || hotbarSlot > 8) return false;
-		if (holder != null && holder != owner && (weak || !weakHold)) return false;
+		if (holder != null && holder != owner && (weak || !weakHold)) {
+			waitingOwner = owner;
+			waitingSlot = hotbarSlot;
+			waitingTicks = maxTicks;
+			waitingWeak = weak;
+			waitingAt = Ticks.current();
+			return false;
+		}
+		if (waitingOwner == owner) waitingOwner = null;
 		holder = owner;
 		weakHold = weak;
 		holdTicks = Math.max(1, maxTicks);
@@ -370,15 +399,34 @@ public final class InventoryManager implements Inventory {
 
 	@Override
 	public void release(Object owner) {
+		if (waitingOwner == owner) waitingOwner = null;
 		if (holder == null || holder != owner) return;
 		holder = null;
 		holdTicks = 0;
 		yielded = false;
+		if (handOver()) return;
 		if (mc.player != null && mc.getConnection() != null) {
 			settle();
 			int visible = mc.player.getInventory().getSelectedSlot();
 			if (serverSlot != visible) sendSlot(visible);
 		}
+	}
+
+	/**
+	 * Gives the hold to whoever asked for it this tick or last and was refused, for a couple of ticks (asking again
+	 * keeps it, as with any hold).
+	 */
+	private boolean handOver() {
+		Object next = waitingOwner;
+		waitingOwner = null;
+		if (next == null || Ticks.current() - waitingAt > 1 || mc.player == null || mc.getConnection() == null) return false;
+		holder = next;
+		weakHold = waitingWeak;
+		holdTicks = Math.clamp(waitingTicks, 1, 2);
+		holdSlot = waitingSlot;
+		settle();
+		if (serverSlot != holdSlot) sendSlot(holdSlot);
+		return true;
 	}
 
 	@Override

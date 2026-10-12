@@ -168,7 +168,11 @@ public final class BreakManager implements Breaking {
 	private BlockPos serverDelayedPos;
 	private Block serverDelayedBlock;
 	private long counter;
-	private int tick, finishCooldown, swungTick = -1;
+	private int tick, finishCooldown;
+	/** The tick a swing last went out, from anyone (vanilla's for your click, a module's): one a tick is all Grim wants. */
+	private int swungTick = -1;
+	/** A tool was swapped in this step: it goes back at the end of the step. */
+	private boolean swapBackNow;
 	/**
 	 * When the last finish went out, in wall-clock ms. Grim measures breaks and the pause between them in real time, so
 	 * tick counts alone aren't enough: a client that falls behind runs several ticks back to back.
@@ -326,7 +330,10 @@ public final class BreakManager implements Breaking {
 			case ServerboundPlayerActionPacket p when p.getAction() == Action.START_DESTROY_BLOCK -> grim.started(p.getPos(), grimDamage(p.getPos()), now);
 			case ServerboundPlayerActionPacket p when p.getAction() == Action.STOP_DESTROY_BLOCK -> grim.finished(now);
 			case ServerboundMovePlayerPacket m -> sampleGrim();
-			case ServerboundSwingPacket s -> sampleGrim();
+			case ServerboundSwingPacket s -> {
+				swungTick = tick;
+				sampleGrim();
+			}
 			default -> {
 			}
 		}
@@ -385,6 +392,9 @@ public final class BreakManager implements Breaking {
 		if (mc.player == null || mc.level == null || mc.gameMode == null) return;
 		sampleEfficiency();
 		if (jobs.isEmpty() && !holding) return;
+		// Another module's swap still to go back is its own business: only ours go back early.
+		boolean othersPending = Myriad.inventory() instanceof InventoryManager inv && inv.restorePending();
+		swapBackNow = false;
 		if (serverDelayedPos != null && !mc.level.getBlockState(serverDelayedPos).is(serverDelayedBlock)) serverDelayedPos = null;
 		validate();
 		fetchTool();
@@ -392,6 +402,7 @@ public final class BreakManager implements Breaking {
 		instants();
 		mine();
 		updateHold();
+		if (swapBackNow && !othersPending && Myriad.inventory() instanceof InventoryManager inv) inv.restoreNow();
 	}
 
 	/** Drops finished and impossible jobs, and completes the ones the server has dealt with. */
@@ -639,8 +650,10 @@ public final class BreakManager implements Breaking {
 			lastStopMs = System.currentTimeMillis();
 			if (j.keepsGap()) finishCooldown = FINISH_GAP;
 		}
+		// Waiting for the server: the block stays on screen until its update says it's gone.
+		boolean show = predict && !(j.packet() && j.options.waitForServer());
 		CompletableFuture<BlockState> ack = Packets.sendSequenced(j.pos, seq -> {
-			if (predict) mc.gameMode.destroyBlock(j.pos);
+			if (show) mc.gameMode.destroyBlock(j.pos);
 			return new ServerboundPlayerActionPacket(action, j.pos, j.face, seq);
 		});
 		swing(j);
@@ -756,13 +769,12 @@ public final class BreakManager implements Breaking {
 	}
 
 	/**
-	 * Swings with a break packet, as vanilla does with each one (Grim notices break packets without a swing): shown
-	 * if the options want the hand to swing, otherwise only sent, once a tick.
+	 * Swings with a break packet, as vanilla does (Grim's NoSwingBreak, experimental, flags one without): shown if the
+	 * options want the hand to swing, otherwise only sent, unless a swing already went out this tick.
 	 */
 	private void swing(Job j) {
 		if (j.options.swing()) mc.player.swing(InteractionHand.MAIN_HAND);
 		else if (swungTick != tick && mc.getConnection() != null) mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
-		swungTick = tick;
 	}
 
 	/**
@@ -806,10 +818,18 @@ public final class BreakManager implements Breaking {
 		return best < 0 || Mining.delta(state, pos, selected) >= Mining.delta(state, pos, best) ? selected : best;
 	}
 
-	/** Runs {@code action} with {@code slot} held at the server, swapping only if it isn't already. */
+	/**
+	 * Runs {@code action} (break packets) with {@code slot} held at the server, swapping only if it isn't already. The
+	 * swap goes back at the end of this step, in the same tick: Grim's PacketOrderE flags a slot change after an attack
+	 * or a use in the same tick, not after a dig.
+	 */
 	private void withTool(int slot, Runnable action) {
-		if (Myriad.inventory().serverSlot() == slot) action.run();
-		else Myriad.inventory().silentSwap(slot, action);
+		if (Myriad.inventory().serverSlot() == slot) {
+			action.run();
+			return;
+		}
+		Myriad.inventory().silentSwap(slot, action);
+		swapBackNow = true;
 	}
 
 	/** Vanilla's pause after a finish is over, in ticks and in real time. */

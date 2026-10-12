@@ -6,6 +6,27 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.2.10 (unreleased)
+
+Packet mining that waits for the server and sends fewer packets. One addition to the API (`Breaking.Options`);
+nothing changes or goes, so addons built for 0.2.x keep working.
+
+- `Breaking.Options.withWaitForServer`: in packet modes the block stays on screen until the server's update says it's
+  gone, instead of turning to air as the packet goes out. A finish the server refuses no longer flashes the block away
+  and back (a ghost block you could walk into); you see the break a round trip later.
+- A tool swapped in for a break packet goes back at the end of the break step, in the same tick (before the movement
+  packet), instead of first thing next tick. Grim's PacketOrderE, the reason for waiting a tick, only looks at slot
+  changes after attacks, uses, sneaking, sprinting and glide starts, not digging (read in Grim 2.3.74's source).
+  Another module's swap still waiting to go back is left to go back as before.
+- The breaking service's unseen swing with a break packet is skipped when a swing already went out that tick (vanilla's
+  for your click, a module's): one a tick, as vanilla sends while you hold the button.
+- Slot holds hand over: when a module's hold ends while another module asked for one this tick or last (Kill Aura
+  readying your weapon while you mine with it), the server goes straight to that slot, instead of to the one you see
+  and back again in the same tick.
+- Tested on the local Grim (2.3.74, experimental checks on, joined as 1.20.4) and on 2b2t: no flags, setbacks or
+  blocks coming back; every finish was confirmed by the server 2 to 3 ticks later. Finishes keep their unseen swing:
+  without it Grim's experimental NoSwingBreak flags them.
+
 ## 0.2.9
 
 Latency that's right where the tab list isn't, and quieter notifications. No API changes, so addons built for 0.2.x
