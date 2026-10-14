@@ -6,7 +6,7 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
-## 0.2.10 (unreleased)
+## 0.2.10
 
 Packet mining that waits for the server and sends fewer packets, and display masks for swaps you needn't see.
 Additions to the API (`Breaking.Options`, `Inventory.mask`, `Inventory.clickWaiting`/`keepKeys`); nothing changes or
@@ -15,14 +15,12 @@ goes, so addons built for 0.2.x keep working.
 - `Inventory.clickWaiting()` and `keepKeys()`: a click waiting for a tick the server takes it on (yours from a screen,
   or a module's) can be given one by the module holding your sprint or keys, where that costs it least, and that
   module can keep its keys on a tick it can't spare (a jump) instead of core letting go of them.
-
 - `Inventory.mask(owner, holdMs, slots...)`, `unmask`, `shown(slot)` and `shownArmor()`: while a module moves items
   among a few slots (a chestplate in and out of the chest slot several times a second), each keeps showing the item it
   held: in the hotbar, both hands (without the hand dipping for a new item), the selected item's name, the armour
   bar, inventory screens (and their tooltips) and your own model's armour, wings and held items. Anything from outside
   the group (a pickup) shows as it is. It shows a copy, kept through the tick a swap's two slot updates can come
   apart. `shownInHotbar` (borrowed items) now goes through `shown`.
-
 - `Breaking.Options.withWaitForServer`: in packet modes the block stays on screen until the server's update says it's
   gone, instead of turning to air as the packet goes out. A finish the server refuses no longer flashes the block away
   and back (a ghost block you could walk into); you see the break a round trip later.

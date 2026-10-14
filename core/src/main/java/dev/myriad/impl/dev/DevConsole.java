@@ -190,13 +190,6 @@ public final class DevConsole {
 					if (!waits) mc.gameMode.handleContainerInput(menu, slot, button, type, mc.player);
 					LOG.info("[dev] uclick {}", waits ? "waits" : "sent");
 				}
-				case "shown" -> {
-					var inv = (dev.myriad.impl.service.InventoryManager) Myriad.inventory();
-					StringBuilder sb = new StringBuilder();
-					for (int i : new int[]{0, 1, 38, 40}) sb.append(i).append('=').append(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(mc.player.getInventory().getItem(i).getItem()).getPath())
-						.append('/').append(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(inv.shown(i).getItem()).getPath()).append(inv.masked(i) ? "*" : "").append(' ');
-					LOG.info("[dev] shown {}", sb);
-				}
 				case "attack" -> attack();
 				// As your own right click (a module's slot hold steps aside for it).
 				case "use" -> asClick(this::use);
