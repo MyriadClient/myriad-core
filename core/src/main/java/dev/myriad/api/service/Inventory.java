@@ -122,6 +122,20 @@ public interface Inventory {
 	boolean prepareClick();
 
 	/**
+	 * Whether a click (yours from a screen, or a module's) is waiting for a tick the server takes it on: no sprint and,
+	 * for newer versions, no movement keys, jump or sneak (see {@link #safeToClick()}). A module that holds sprint or
+	 * keys for you can let go of them for a tick where that costs it least, so the click goes then.
+	 */
+	boolean clickWaiting();
+
+	/**
+	 * Keeps your keys as they are this tick although a click is waiting ({@link #prepareClick()} would let go of them):
+	 * for a module that needs them this tick (a jump it can't miss) and gives the click a still tick itself soon (see
+	 * {@link #clickWaiting()}). Call it each tick it needs them, before the keyboard is read.
+	 */
+	void keepKeys();
+
+	/**
 	 * Brings the item at {@code inventoryIndex} (9-35) into the hotbar to be used, keeping out of the way of what you
 	 * use: into an empty slot, else over an item {@code replaceable} accepts (they swap places, so it lands where this
 	 * one was), else over ordinary building blocks. Never the selected slot or one a module holds. One click; while you
@@ -152,6 +166,31 @@ public interface Inventory {
 	 * selected), otherwise its item.
 	 */
 	ItemStack shownInHotbar(int hotbarSlot);
+
+	/**
+	 * Keeps the slots {@code inventoryIndexes} looking as they do now while {@code owner} moves items among them, for
+	 * a swap the player needn't see (a chestplate in and out of the chest slot several times a second, say). Each keeps
+	 * showing the item it held, wherever among them that item is now (its own stack, so wear and counts stay true):
+	 * in the hotbar, the hands, the item name, the armour bar, inventory screens and your player model. Anything else
+	 * that turns up in one of them (a pickup) shows as it is, as does a slot whose item has gone.
+	 * <p>
+	 * Mask before the first move. Call again to keep it (adding slots is fine; each shows what it held when first
+	 * masked); it lapses {@code holdMs} after the last call, or at {@link #unmask}, and the slots show what they hold.
+	 * Indexes as for {@link #move}.
+	 */
+	void mask(Object owner, long holdMs, int... inventoryIndexes);
+
+	/** Ends {@code owner}'s mask: its slots show what they hold. */
+	void unmask(Object owner);
+
+	/**
+	 * What inventory slot {@code inventoryIndex} shows: its item, or what a {@link #mask} or {@link #borrow} keeps it
+	 * showing. Indexes as for {@link #move}.
+	 */
+	ItemStack shown(int inventoryIndex);
+
+	/** The armour points to show: yours, or while a {@link #mask} covers armour slots, what they were when masked. */
+	int shownArmor();
 
 	// The moves below click in your own inventory screen, which works without opening it (as vanilla's number keys
 	// do). They need no container to be open, and return false otherwise, for bad slots, or when the packet budget

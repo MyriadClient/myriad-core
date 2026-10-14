@@ -180,6 +180,23 @@ public final class DevConsole {
 					mc.player.setXRot(Float.parseFloat(a[2]));
 				}
 				case "select" -> Myriad.inventory().select(Integer.parseInt(a[1]) - 1);
+				case "move" -> LOG.info("[dev] move {}", Myriad.inventory().move(Integer.parseInt(a[1]), Integer.parseInt(a[2])));
+				case "uclick" -> {
+					// As your own click in the inventory screen: it waits for a tick the server takes it, as those do.
+					var inv = (dev.myriad.impl.service.InventoryManager) Myriad.inventory();
+					int menu = mc.player.inventoryMenu.containerId, slot = Integer.parseInt(a[1]), button = Integer.parseInt(a[2]);
+					var type = net.minecraft.world.inventory.ContainerInput.valueOf(a[3].toUpperCase(Locale.ROOT));
+					boolean waits = inv.holdScreenClick(menu, slot, button, type);
+					if (!waits) mc.gameMode.handleContainerInput(menu, slot, button, type, mc.player);
+					LOG.info("[dev] uclick {}", waits ? "waits" : "sent");
+				}
+				case "shown" -> {
+					var inv = (dev.myriad.impl.service.InventoryManager) Myriad.inventory();
+					StringBuilder sb = new StringBuilder();
+					for (int i : new int[]{0, 1, 38, 40}) sb.append(i).append('=').append(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(mc.player.getInventory().getItem(i).getItem()).getPath())
+						.append('/').append(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(inv.shown(i).getItem()).getPath()).append(inv.masked(i) ? "*" : "").append(' ');
+					LOG.info("[dev] shown {}", sb);
+				}
 				case "attack" -> attack();
 				// As your own right click (a module's slot hold steps aside for it).
 				case "use" -> asClick(this::use);

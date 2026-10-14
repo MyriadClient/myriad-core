@@ -593,10 +593,26 @@ public final class InventoryManager implements Inventory {
 	public boolean prepareClick() {
 		if (safeToClick()) return true;
 		if (mc.player == null) return false;
+		stillWantedAt = mc.player.tickCount;
 		// Letting go of sneak on an edge, with what's left of your speed, would walk you off it: wait for it to settle.
 		if (rules().sneak() && mc.player.isShiftKeyDown() && mc.player.onGround() && wouldStepOffEdge()) return false;
 		stillRequested = true;
 		return false;
+	}
+
+	/** The player tick a still one was last asked for (see clickWaiting). */
+	private int stillWantedAt = Integer.MIN_VALUE / 2;
+	/** A module needs your keys this tick (see keepKeys): the still tick waits. */
+	private boolean keysKept;
+
+	@Override
+	public boolean clickWaiting() {
+		return mc.player != null && (!waitingClicks.isEmpty() || mc.player.tickCount - stillWantedAt <= 2);
+	}
+
+	@Override
+	public void keepKeys() {
+		keysKept = true;
 	}
 
 	/** Whether this tick's motion, without sneak's edge guard, would take you off the block you stand on. */
@@ -615,7 +631,10 @@ public final class InventoryManager implements Inventory {
 	@Subscribe(priority = Priority.LOWEST)
 	private void onInput(InputEvent e) {
 		if (mc.player == null) return;
-		if (stillRequested) {
+		boolean kept = keysKept;
+		keysKept = false;
+		// A module needs the keys this tick: the still tick comes later (asked for again meanwhile).
+		if (stillRequested && !kept) {
 			stillRequested = false;
 			ClickRules rules = rules();
 			if (rules.input()) e.forward = e.backward = e.left = e.right = e.jump = false;
@@ -671,7 +690,7 @@ public final class InventoryManager implements Inventory {
 		if (replaying || mc.player == null || mc.gameMode == null) return false;
 		if (safeToClick()) {
 			// A still moment came between ticks: what waited goes first.
-			if (!waitingClicks.isEmpty()) clickWaiting();
+			if (!waitingClicks.isEmpty()) replayWaitingClicks();
 			return false;
 		}
 		waitingClicks.add(new ScreenClick(containerId, slotId, button, input));
@@ -688,16 +707,16 @@ public final class InventoryManager implements Inventory {
 			return;
 		}
 		if (!prepareClick() && ++waitedTicks < MAX_CLICK_WAIT) return;
-		clickWaiting();
+		replayWaitingClicks();
 	}
 
 	/** Closing the screen: what waited is clicked first, while it's still open. */
 	@Subscribe(priority = Priority.HIGHEST, packets = ServerboundContainerClosePacket.class)
 	private void beforeClose(PacketEvent.Send e) {
-		if (!waitingClicks.isEmpty() && mc.isSameThread() && mc.player != null) clickWaiting();
+		if (!waitingClicks.isEmpty() && mc.isSameThread() && mc.player != null) replayWaitingClicks();
 	}
 
-	private void clickWaiting() {
+	private void replayWaitingClicks() {
 		waitedTicks = 0;
 		replaying = true;
 		try {
@@ -800,11 +819,109 @@ public final class InventoryManager implements Inventory {
 
 	@Override
 	public ItemStack shownInHotbar(int hotbarSlot) {
-		if (mc.player == null) return ItemStack.EMPTY;
+		return shown(hotbarSlot);
+	}
+
+	/** Display masks (see Inventory.mask), by owner: what each masked slot held when masked, and until when. */
+	private final Map<Object, Mask> masks = new IdentityHashMap<>();
+
+	private static final class Mask {
+		final Map<Integer, ItemStack> held = new java.util.HashMap<>();
+		/**
+		 * What each slot shows: a copy, the same one for as long as the item is unchanged (the hand would take a new
+		 * stack for a new item), and kept while the item is in none of the slots (a swap's two slot updates can come a
+		 * tick apart). Never the live stack: moving an item empties the stack it leaves.
+		 */
+		final Map<Integer, ItemStack> last = new java.util.HashMap<>();
+		long untilMs;
+		int armor;
+
+		/** Whether {@code stack} is one of the masked items (by kind: its wear may have changed since). */
+		boolean has(ItemStack stack) {
+			for (ItemStack h : held.values()) if (!h.isEmpty() && ItemStack.isSameItem(h, stack)) return true;
+			return false;
+		}
+	}
+
+	@Override
+	public void mask(Object owner, long holdMs, int... inventoryIndexes) {
+		if (mc.player == null) return;
 		var inv = mc.player.getInventory();
-		Borrow b = borrowAt(hotbarSlot);
-		if (b == null || inv.getSelectedSlot() == hotbarSlot || !intact(b)) return inv.getItem(hotbarSlot);
+		Mask m = masks.get(owner);
+		if (m == null || System.currentTimeMillis() > m.untilMs) {
+			m = new Mask();
+			m.armor = mc.player.getArmorValue();
+			masks.put(owner, m);
+		}
+		for (int i : inventoryIndexes) if (valid(i)) m.held.putIfAbsent(i, inv.getItem(i).copy());
+		m.untilMs = System.currentTimeMillis() + holdMs;
+	}
+
+	@Override
+	public void unmask(Object owner) {
+		masks.remove(owner);
+	}
+
+	/** The live mask covering {@code index}, if any. */
+	private Mask maskAt(int index) {
+		if (masks.isEmpty()) return null;
+		long now = System.currentTimeMillis();
+		for (Mask m : masks.values()) if (now <= m.untilMs && m.held.containsKey(index)) return m;
+		return null;
+	}
+
+	/** Whether a mask covers inventory slot {@code index} right now. */
+	public boolean masked(int index) {
+		return maskAt(index) != null;
+	}
+
+	@Override
+	public ItemStack shown(int index) {
+		if (mc.player == null || !valid(index)) return ItemStack.EMPTY;
+		var inv = mc.player.getInventory();
+		ItemStack real = inv.getItem(index);
+		Mask m = maskAt(index);
+		if (m != null) {
+			// Something from outside the group turned up here (a pickup): it shows as it is.
+			if (!real.isEmpty() && !m.has(real)) return real;
+			ItemStack was = m.held.get(index);
+			if (was.isEmpty()) return ItemStack.EMPTY;
+			ItemStack live = ItemStack.isSameItem(real, was) ? real : null;
+			for (int i : m.held.keySet()) {
+				if (live != null) break;
+				ItemStack there = inv.getItem(i);
+				if (ItemStack.isSameItem(there, was)) live = there;
+			}
+			ItemStack last = m.last.get(index);
+			if (live == null) return last != null ? last : real;
+			if (last == null || !ItemStack.matches(last, live)) m.last.put(index, last = live.copy());
+			return last;
+		}
+		if (!Slots.isHotbar(index)) return real;
+		Borrow b = borrowAt(index);
+		if (b == null || inv.getSelectedSlot() == index || !intact(b)) return real;
 		return inv.getItem(b.home);
+	}
+
+	@Override
+	public int shownArmor() {
+		if (mc.player == null) return 0;
+		for (int i = Slots.FEET; i <= Slots.HEAD; i++) {
+			Mask m = maskAt(i);
+			if (m != null) return m.armor;
+		}
+		return mc.player.getArmorValue();
+	}
+
+	/** What the local player's {@code slot} shows (see Inventory.mask): for the hands, the selected slot or the off hand. */
+	public ItemStack shownEquipment(EquipmentSlot slot) {
+		if (mc.player == null) return ItemStack.EMPTY;
+		return switch (slot) {
+			case MAINHAND -> shown(mc.player.getInventory().getSelectedSlot());
+			case OFFHAND -> shown(Slots.OFF_HAND);
+			case FEET, LEGS, CHEST, HEAD -> shown(Slots.FEET + slot.getIndex());
+			default -> mc.player.getItemBySlot(slot);
+		};
 	}
 
 	private Borrow borrowAt(int hotbarSlot) {
@@ -826,6 +943,10 @@ public final class InventoryManager implements Inventory {
 	@Subscribe(priority = 940)
 	private void tickBorrows(TickEvent.Pre e) {
 		ticks++;
+		if (!masks.isEmpty()) {
+			long now = System.currentTimeMillis();
+			masks.values().removeIf(m -> now > m.untilMs);
+		}
 		if (borrows.isEmpty() || mc.player == null) return;
 		var inv = mc.player.getInventory();
 		int selected = inv.getSelectedSlot();
@@ -851,6 +972,7 @@ public final class InventoryManager implements Inventory {
 	@Subscribe
 	private void onLeave(WorldEvent.Leave e) {
 		borrows.clear();
+		masks.clear();
 		waitingClicks.clear();
 		restorePending = false;
 		beforeRestore.clear();
