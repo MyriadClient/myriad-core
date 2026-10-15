@@ -1,5 +1,6 @@
 package dev.myriad.api.service;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
 import net.minecraft.world.item.ItemStack;
@@ -221,4 +222,17 @@ public interface Inventory {
 
 	/** Throws out the stack at {@code inventoryIndex} (or one item). */
 	boolean drop(int inventoryIndex, boolean wholeStack);
+
+	/**
+	 * Asks the server for your whole inventory (and the open container's contents, if one is open) and completes once
+	 * it's here, so the client shows what the server has. The server only answers a click with the slots that came out
+	 * differently from what the client predicted, and a click an anti-cheat drops gets no answer at all: the client
+	 * then shows items where the server has none. For a module that's lost track of what moved.
+	 * <p>
+	 * The ask is one click that changes nothing, which the server answers with everything; like any click it waits for
+	 * a tick the server takes one on ({@link #safeToClick()}), releasing your keys for one if none comes within a
+	 * second, and for the cursor to be empty. It fails if the menu closes meanwhile or no answer comes. Servers older
+	 * than 1.17 (through ViaFabricPlus) can't be asked: it completes at once.
+	 */
+	CompletableFuture<Void> refresh();
 }

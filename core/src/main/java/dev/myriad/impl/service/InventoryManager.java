@@ -12,6 +12,7 @@ import dev.myriad.api.service.Inventory;
 import dev.myriad.api.service.PacketLimits;
 import dev.myriad.api.util.Slots;
 import dev.myriad.api.util.Ticks;
+import dev.myriad.impl.MyriadImpl;
 import dev.myriad.impl.network.ActionTiming;
 import dev.myriad.impl.network.JoinedVersion;
 import java.util.ArrayDeque;
@@ -21,6 +22,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
 import net.minecraft.client.Minecraft;
@@ -1078,6 +1080,12 @@ public final class InventoryManager implements Inventory {
 		if (!canClick(1) || !valid(inventoryIndex)) return false;
 		click(inventoryIndex, wholeStack ? 1 : 0, ContainerInput.THROW);
 		return true;
+	}
+
+	@Override
+	public CompletableFuture<Void> refresh() {
+		if (mc.player == null) return CompletableFuture.failedFuture(new IllegalStateException("Not in a world"));
+		return MyriadImpl.get().menuSync().refresh(mc.player.containerMenu);
 	}
 
 	private int find(Predicate<ItemStack> predicate, int from, int to) {

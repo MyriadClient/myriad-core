@@ -35,6 +35,7 @@ import dev.myriad.impl.keybind.KeybindManager;
 import dev.myriad.impl.service.BreakManager;
 import dev.myriad.impl.service.BuildManager;
 import dev.myriad.impl.service.ContainerTracker;
+import dev.myriad.impl.service.MenuSync;
 import dev.myriad.impl.service.FriendsManager;
 import dev.myriad.impl.service.InventoryManager;
 import dev.myriad.impl.network.BlockAckTracker;
@@ -84,7 +85,8 @@ public final class MyriadImpl implements MyriadApi {
 	private final BuildManager building = new BuildManager();
 	private final FriendsManager friends = new FriendsManager(config.root());
 	private final dev.myriad.impl.service.ServerStatsTracker serverStats = new dev.myriad.impl.service.ServerStatsTracker();
-	private final ContainerTracker containers = new ContainerTracker();
+	private final MenuSync menuSync = new MenuSync();
+	private final ContainerTracker containers = new ContainerTracker(menuSync);
 	private final TaskScheduler tasks = new TaskScheduler();
 	private final WindowManager windowManager = new WindowManager();
 	private final CommandManager commandManager = new CommandManager(commands);
@@ -133,6 +135,7 @@ public final class MyriadImpl implements MyriadApi {
 		events.subscribe(blockAcks);
 		events.subscribe(serverStats);
 		events.subscribe(antiCheat);
+		events.subscribe(menuSync);
 		events.subscribe(containers);
 		events.subscribe(tasks);
 		events.subscribe(keybindManager);
@@ -316,6 +319,10 @@ public final class MyriadImpl implements MyriadApi {
 
 	public ContainerTracker containerTracker() {
 		return containers;
+	}
+
+	public MenuSync menuSync() {
+		return menuSync;
 	}
 
 	@Override

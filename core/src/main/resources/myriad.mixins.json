@@ -4,6 +4,7 @@
 	"plugin": "dev.myriad.api.mixin.CompatMixinPlugin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
+		"AbstractContainerMenuAccessor",
 		"AbstractContainerScreenMixin",
 		"ArmedEntityRenderStateMixin",
 		"BlockItemAccessor",

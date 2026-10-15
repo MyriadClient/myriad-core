@@ -26,6 +26,14 @@ import net.minecraft.world.item.ItemStack;
  * }</pre>
  *
  * Futures complete on the render thread, so it's safe to touch the game from them.
+ * <p>
+ * To move many items, {@link View#take} and {@link View#put} plan the clicks and check the result with the server:
+ *
+ * <pre>{@code
+ * Myriad.containers().open(chestPos, 20)
+ *     .thenCompose(view -> view.take(s -> s.is(Items.DIAMOND), Containers.Transfer.all()))
+ *     .thenAccept(moved -> info("Took " + moved + " diamonds"));
+ * }</pre>
  */
 @ApiStatus.NonExtendable
 public interface Containers {
@@ -41,6 +49,53 @@ public interface Containers {
 
 	/** Closes the open container (and its screen), if any. */
 	void close();
+
+	/**
+	 * How much a {@link View#take} or {@link View#put} moves, and whether your hotbar takes part. Start from
+	 * {@link #all()} or {@link #upTo(int)}.
+	 */
+	final class Transfer {
+		private static final Transfer ALL = new Transfer(Integer.MAX_VALUE, true);
+
+		private final int count;
+		private final boolean hotbar;
+
+		private Transfer(int count, boolean hotbar) {
+			this.count = count;
+			this.hotbar = hotbar;
+		}
+
+		/** Everything that matches, as far as there's room. */
+		public static Transfer all() {
+			return ALL;
+		}
+
+		/** At most {@code count} items. */
+		public static Transfer upTo(int count) {
+			return ALL.withCount(count);
+		}
+
+		public Transfer withCount(int count) {
+			return new Transfer(Math.max(0, count), hotbar);
+		}
+
+		/**
+		 * Leaves your hotbar out: what's taken only goes into the main inventory (put down by hand, two clicks a stack
+		 * instead of a shift click's one), and what's put only comes from the main inventory.
+		 */
+		public Transfer withoutHotbar() {
+			return new Transfer(count, false);
+		}
+
+		public int count() {
+			return count;
+		}
+
+		/** Whether the hotbar takes part (it does unless {@link #withoutHotbar()}). */
+		public boolean hotbar() {
+			return hotbar;
+		}
+	}
 
 	/** An open container. Slot numbers are the container's own (0 = its first slot), unless noted. */
 	@ApiStatus.NonExtendable
@@ -96,6 +151,29 @@ public interface Containers {
 
 		/** Any click, with a raw screen slot id. */
 		void click(int screenSlot, int button, ContainerInput action);
+
+		/**
+		 * Moves items {@code what} accepts from the container into your inventory, as many as {@code how} allows and there
+		 * is room for, and completes with how many went by the server's count. Whole stacks go with a shift click; part
+		 * of one is picked up and shared out (onto stacks of the same item first), and the cursor is empty again
+		 * after each stack. The clicks wait for ticks the server takes them on, within the packet budget
+		 * ({@link PacketLimits}), so a large move takes a few seconds. Once the planned clicks are made, the server is
+		 * asked what it has ({@link #refresh()}); a click it never took or a slot someone else changed meanwhile gets
+		 * another round, up to three.
+		 * <p>
+		 * Moves on one container run one after another. It fails if the container closes, or another click (yours, or a
+		 * module's) moves the cursor's items while it runs.
+		 */
+		CompletableFuture<Integer> take(Predicate<ItemStack> what, Transfer how);
+
+		/** Like {@link #take}, the other way: items {@code what} accepts from your inventory into the container. */
+		CompletableFuture<Integer> put(Predicate<ItemStack> what, Transfer how);
+
+		/**
+		 * Asks the server for the container's contents (and your inventory's) and completes once they're here: what the
+		 * client shows is then what the server has (see {@link Inventory#refresh()}).
+		 */
+		CompletableFuture<View> refresh();
 
 		void close();
 	}

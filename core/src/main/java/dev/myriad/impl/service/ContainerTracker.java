@@ -12,6 +12,7 @@ import dev.myriad.api.util.Reach;
 import dev.myriad.api.util.Slots;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -36,6 +37,9 @@ public final class ContainerTracker implements Containers {
 	private static final long CLICK_WINDOW_MS = 2000;
 
 	private final Minecraft mc = Minecraft.getInstance();
+	private final MenuSync sync;
+	/** Takes and puts on the open container, in the order asked; the first is under way. */
+	private final ArrayDeque<ContainerTransfer> transfers = new ArrayDeque<>();
 	private ViewImpl current;
 	private BlockPos lastClicked;
 	private long lastClickedAt;
@@ -43,17 +47,27 @@ public final class ContainerTracker implements Containers {
 	private BlockPos pendingPos;
 	private int pendingTicks;
 
+	public ContainerTracker(MenuSync sync) {
+		this.sync = sync;
+	}
+
 	// ---- called from ClientPlayNetworkHandlerMixin (render thread, after vanilla handled the packet) ---------------
 
 	public void onOpened(int syncId) {
 		closeTracked();
 		if (mc.player == null || mc.player.containerMenu.containerId != syncId || syncId == 0) return;
 		BlockPos pos = lastClicked != null && System.currentTimeMillis() - lastClickedAt < CLICK_WINDOW_MS ? lastClicked : null;
-		current = new ViewImpl(mc.player.containerMenu, pos);
+		AbstractContainerMenu menu = mc.player.containerMenu;
+		// Something else opened instead of what open() asked for (a server plugin's menu, say): it isn't that container.
+		if (pending != null && pendingPos != null && mc.level != null && !ContainerKinds.opens(mc.level.getBlockState(pendingPos), menu)) {
+			fail(new IllegalStateException("Something else opened instead of the container at " + pendingPos.toShortString()));
+		}
+		current = new ViewImpl(menu, pos);
 		Myriad.events().post(new ContainerEvent.Opened(current));
 	}
 
 	public void onContents(int syncId) {
+		sync.onContents(syncId);
 		if (current == null || current.syncId() != syncId || current.loaded) return;
 		current.loaded = true;
 		Myriad.events().post(new ContainerEvent.Loaded(current));
@@ -79,6 +93,13 @@ public final class ContainerTracker implements Containers {
 		}
 	}
 
+	/** At the start of the tick, before the movement packet, as clicks go. */
+	@Subscribe
+	private void runTransfers(TickEvent.Pre e) {
+		ContainerTransfer t = transfers.peek();
+		if (t != null && t.tick(sync)) transfers.poll();
+	}
+
 	@Subscribe
 	private void onTick(TickEvent.Post e) {
 		if (current != null && (mc.player == null || mc.player.containerMenu != current.handler)) closeTracked();
@@ -95,6 +116,8 @@ public final class ContainerTracker implements Containers {
 		if (current == null) return;
 		ViewImpl closed = current;
 		current = null;
+		for (ContainerTransfer t : transfers) t.result.completeExceptionally(new IllegalStateException("The container closed"));
+		transfers.clear();
 		Myriad.events().post(new ContainerEvent.Closed(closed));
 	}
 
@@ -124,6 +147,8 @@ public final class ContainerTracker implements Containers {
 			f.complete(current);
 			return f;
 		}
+		// Another container is open: it closes first, as it would for a click on a block by hand.
+		if (current != null) close();
 		pending = f;
 		pendingPos = pos.immutable();
 		pendingTicks = Math.max(1, timeoutTicks);
@@ -243,6 +268,29 @@ public final class ContainerTracker implements Containers {
 			// the next tick so it can be made then.
 			if (!Myriad.inventory().prepareClick()) return;
 			mc.gameMode.handleContainerInput(handler.containerId, screenSlot, button, action, mc.player);
+		}
+
+		@Override
+		public CompletableFuture<Integer> take(Predicate<ItemStack> what, Transfer how) {
+			return transfer(what, how, true);
+		}
+
+		@Override
+		public CompletableFuture<Integer> put(Predicate<ItemStack> what, Transfer how) {
+			return transfer(what, how, false);
+		}
+
+		private CompletableFuture<Integer> transfer(Predicate<ItemStack> what, Transfer how, boolean take) {
+			if (!isOpen()) return CompletableFuture.failedFuture(new IllegalStateException("The container closed"));
+			ContainerTransfer t = new ContainerTransfer(handler, what, take, how);
+			transfers.add(t);
+			return t.result;
+		}
+
+		@Override
+		public CompletableFuture<View> refresh() {
+			if (!isOpen()) return CompletableFuture.failedFuture(new IllegalStateException("The container closed"));
+			return sync.refresh(handler).thenApply(v -> this);
 		}
 
 		@Override

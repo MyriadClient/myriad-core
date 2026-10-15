@@ -6,6 +6,22 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.2.11 (unreleased)
+
+Moving items in containers in bulk, checked with the server. Additions to the API; nothing changes or goes away.
+
+- `Containers.View.take(what, how)` and `put(what, how)` move items between a container and your inventory, as many as
+  `Containers.Transfer` allows (`all()`, `upTo(n)`, `withoutHotbar()`) and there's room for, and complete with how many
+  went by the server's count. Whole stacks go with a shift click; part of one is picked up and shared out (never more
+  than half the stack plus two clicks), onto stacks of the same item first, the cursor empty again after each stack.
+  The clicks wait for ticks Grim takes them on, within the packet budget. Once they're made the server is asked what it
+  has; a click it never took, or a slot someone else changed, gets another round (up to three).
+- `Inventory.refresh()` and `Containers.View.refresh()` ask the server for the whole menu and complete once it's here:
+  a click that changes nothing, sent with a state id the server doesn't have, which it answers with everything. For when
+  the client may show items the server doesn't have (Grim drops a click without a word).
+- `Containers.open` fails when something other than that block's container opens (a server plugin's menu), and closes
+  a container that's already open first.
+
 ## 0.2.10
 
 Packet mining that waits for the server and sends fewer packets, and display masks for swaps you needn't see.

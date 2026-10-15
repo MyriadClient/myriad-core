@@ -56,5 +56,17 @@ loom {
 	}
 }
 
+// -Photswap: the dev client on the JetBrains Runtime (Java 25) with a debug port, so myriad-essentials' tools/grim-test/reload
+// can swap freshly compiled classes in (`./gradlew :core:classes`, then reload) without a restart.
+if (project.hasProperty("hotswap")) {
+	tasks.matching { it.name == "runClient" }.configureEach {
+		javaLauncher = javaToolchains.launcherFor {
+			languageVersion = JavaLanguageVersion.of(25)
+			vendor = JvmVendorSpec.JETBRAINS
+		}
+		jvmArgs("-XX:+AllowEnhancedClassRedefinition", "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=localhost:" + (project.findProperty("debugPort") ?: "5005"))
+	}
+}
+
 // The example is for reading and running, not depending on: it isn't published or released.
 tasks.withType(AbstractPublishToMaven).configureEach { enabled = false }
