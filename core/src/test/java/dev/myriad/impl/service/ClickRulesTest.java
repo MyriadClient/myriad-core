@@ -56,4 +56,24 @@ class ClickRulesTest {
 		assertTrue(ClickRules.ALL.refuses(WALKING, false));
 		assertTrue(ClickRules.ALL.refuses(SNEAKING, false));
 	}
+
+	@Test
+	void twoBeeTwoTeeDoesNotJudgeTheKeys() {
+		assertEquals(ClickRules.SNEAK, ClickRules.forServer(776, "2b2t.org"));
+		assertEquals(ClickRules.SNEAK, ClickRules.forServer(776, "connect.2B2T.org:25565"));
+		assertEquals(ClickRules.SPRINT, ClickRules.forServer(769, "2b2t.org"), "1.21.4 there: sprint alone");
+		assertEquals(ClickRules.SPRINT, ClickRules.forServer(765, "2b2t.org"));
+		assertEquals(ClickRules.ALL, ClickRules.forServer(776, "not2b2t.org"));
+		assertEquals(ClickRules.ALL, ClickRules.forServer(776, null));
+		assertFalse(ClickRules.SNEAK.refuses(WALKING, false));
+		assertFalse(ClickRules.SNEAK.refuses(JUMPING, false));
+		assertTrue(ClickRules.SNEAK.refuses(SNEAKING, false));
+	}
+
+	@Test
+	void theKeysAloneLeaveSprintOut() {
+		assertFalse(ClickRules.ALL.refusesKeys(STILL));
+		assertTrue(ClickRules.ALL.refusesKeys(WALKING));
+		assertFalse(ClickRules.SPRINT.refusesKeys(WALKING));
+	}
 }

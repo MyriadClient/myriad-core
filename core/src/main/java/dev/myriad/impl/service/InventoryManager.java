@@ -13,6 +13,7 @@ import dev.myriad.api.service.PacketLimits;
 import dev.myriad.api.util.Slots;
 import dev.myriad.api.util.Ticks;
 import dev.myriad.impl.MyriadImpl;
+import dev.myriad.impl.mixin.LocalPlayerAccessor;
 import dev.myriad.impl.network.ActionTiming;
 import dev.myriad.impl.network.JoinedVersion;
 import java.util.ArrayDeque;
@@ -569,21 +570,42 @@ public final class InventoryManager implements Inventory {
 	}
 
 	/**
-	 * Grim (MultiActionsC) cancels a click while you sprint, and, depending on the version the server sees you as
-	 * ({@link ClickRules}), while the last input packet had a movement key or jump down, or sneak. A click at the start of
-	 * a tick goes out before that tick's input packet, so the one that counts is the last one sent.
+	 * Grim (MultiActionsC) cancels a click while you sprint, and, depending on the version the server sees you as and
+	 * the server ({@link ClickRules}), while the last input packet had a movement key or jump down, or sneak. A click at
+	 * the start of a tick goes out before that tick's input packet, so the one that counts is the last one sent.
+	 * Sprinting alone doesn't stop a click from going in this tick: see {@link #prepareClick()}.
 	 */
 	@Override
 	public boolean safeToClick() {
 		if (mc.player == null) return false;
 		// Only anti-cheats that simulate movement (Grim) refuse clicks while you move.
 		if (!Myriad.antiCheat().isStrict()) return true;
-		return !rules().refuses(sentInput, sentSprinting);
+		return !rules().refusesKeys(sentInput) && (!sentSprinting || canBracket());
 	}
 
-	/** What a click has to wait for, for the version this connection joined as. */
+	/** What a click has to wait for, for the version this connection joined as and the server. */
 	public ClickRules rules() {
-		return ClickRules.forProtocol(JoinedVersion.get().protocol());
+		return ClickRules.forServer(JoinedVersion.get().protocol(), Myriad.server().address());
+	}
+
+	/**
+	 * Whether a click can go between a sprint stop and start in this tick: on the game thread, before this tick's
+	 * movement packet. After it, the stop would reach Grim after the movement (its Post check), so the click waits for
+	 * the next tick's start.
+	 */
+	private boolean canBracket() {
+		return mc.isSameThread() && mc.getConnection() != null && !ActionTiming.get().isLate();
+	}
+
+	/**
+	 * The sprint bracket: Grim takes your sprint state from the sprint packets as they arrive, so a stop sent now lets
+	 * this tick's clicks through, and vanilla sends the start again just before the movement packet (the player still
+	 * sprints, and it's told the server has a stop). You never slow down. True if the server has the stop.
+	 */
+	private boolean stopSprintForClicks() {
+		mc.getConnection().send(new ServerboundPlayerCommandPacket(mc.player, ServerboundPlayerCommandPacket.Action.STOP_SPRINTING));
+		((LocalPlayerAccessor) mc.player).myriad$setWasSprinting(false);
+		return !sentSprinting;
 	}
 
 	/** A still tick is wanted: the next input releases sprint, and what else {@link #rules()} counts. */
@@ -591,10 +613,21 @@ public final class InventoryManager implements Inventory {
 	/** Sprinting was stopped for a still tick; it's pressed again once you move forward. */
 	private boolean resumeSprint;
 
+	/**
+	 * True if a click can go now: the keys the server last heard don't refuse it, and sprinting, if the server has it,
+	 * is stopped for this tick's clicks ({@link #stopSprintForClicks()}). Otherwise what a still tick needs is released
+	 * for the next tick; with only sprint in the way after this tick's movement, nothing is released: the next tick's
+	 * clicks get their stop.
+	 */
 	@Override
 	public boolean prepareClick() {
-		if (safeToClick()) return true;
 		if (mc.player == null) return false;
+		if (!Myriad.antiCheat().isStrict()) return true;
+		if (!rules().refusesKeys(sentInput)) {
+			if (!sentSprinting) return true;
+			if (canBracket()) return stopSprintForClicks();
+			return false;
+		}
 		stillWantedAt = mc.player.tickCount;
 		// Letting go of sneak on an edge, with what's left of your speed, would walk you off it: wait for it to settle.
 		if (rules().sneak() && mc.player.isShiftKeyDown() && mc.player.onGround() && wouldStepOffEdge()) return false;
@@ -607,9 +640,11 @@ public final class InventoryManager implements Inventory {
 	/** A module needs your keys this tick (see keepKeys): the still tick waits. */
 	private boolean keysKept;
 
+	/** Only clicks that need a still tick: sprint alone is got past in the tick (see {@link #prepareClick()}). */
 	@Override
 	public boolean clickWaiting() {
-		return mc.player != null && (!waitingClicks.isEmpty() || mc.player.tickCount - stillWantedAt <= 2);
+		if (mc.player == null) return false;
+		return mc.player.tickCount - stillWantedAt <= 2 || !waitingClicks.isEmpty() && Myriad.antiCheat().isStrict() && rules().refusesKeys(sentInput);
 	}
 
 	@Override
@@ -690,7 +725,7 @@ public final class InventoryManager implements Inventory {
 	/** Your own click in a container screen (from the mixin on it): true if it has to wait, and was kept for later. */
 	public boolean holdScreenClick(int containerId, int slotId, int button, ContainerInput input) {
 		if (replaying || mc.player == null || mc.gameMode == null) return false;
-		if (safeToClick()) {
+		if (safeToClick() && prepareClick()) {
 			// A still moment came between ticks: what waited goes first.
 			if (!waitingClicks.isEmpty()) replayWaitingClicks();
 			return false;

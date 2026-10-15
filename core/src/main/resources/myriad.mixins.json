@@ -33,6 +33,7 @@
 		"KeyboardMixin",
 		"LevelRendererMixin",
 		"LivingEntityMixin",
+		"LocalPlayerAccessor",
 		"LivingEntityRendererMixin",
 		"MinecraftClientMixin",
 		"MouseMixin",

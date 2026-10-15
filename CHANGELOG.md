@@ -21,6 +21,15 @@ Moving items in containers in bulk, checked with the server. Additions to the AP
   the client may show items the server doesn't have (Grim drops a click without a word).
 - `Containers.open` fails when something other than that block's container opens (a server plugin's menu), and closes
   a container that's already open first.
+- Inventory clicks no longer slow you down while you sprint. Grim refuses a click while it has you sprinting, and takes
+  your sprint state from the sprint packets as they arrive, so core now tells the server you stopped just before the
+  click, and vanilla tells it you started again with that tick's movement: you sprint on throughout. Before, sprint
+  (and for newer versions your movement keys and jump) was let go of for a whole tick. Every click core makes goes
+  this way (refills, armour, totems, tools and weapons from the inventory, container moves, your own clicks while
+  moving), and `Inventory.safeToClick()` is true while you sprint.
+- On 2b2t, clicks no longer wait for you to let go of movement keys or jump: its Grim doesn't judge them (live
+  captures, joined as 26.2: clicks over held forward and jump were all applied, where current Grim cancels them).
+  `Inventory.clickWaiting()` only reports clicks that need a still tick.
 
 ## 0.2.10
 

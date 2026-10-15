@@ -102,30 +102,32 @@ public interface Inventory {
 	int ensureInHotbar(Predicate<ItemStack> predicate, int preferredSlot);
 
 	/**
-	 * Whether an inventory click now would pass anti-cheats that refuse clicks while you move: Grim (2b2t) cancels a
-	 * click while you sprint and, depending on the version the server sees you as (ViaFabricPlus's, if it translates),
-	 * when the last movement keys it heard had a direction or jump down (from 1.21.2), or sneak (from 1.21.9). Moves
-	 * that can wait (refills, tools, building material) should wait for this. A click made anyway isn't lost: core holds
-	 * it back until a tick the server takes it on (releasing your keys for a tick, as {@link #prepareClick()} does), and
-	 * the client shows its result meanwhile. Always true where the server doesn't check this
-	 * ({@link AntiCheat#isStrict()} is false).
+	 * Whether an inventory click now would pass anti-cheats that refuse clicks while you move. Grim cancels a click
+	 * while you sprint and, depending on the version the server sees you as (ViaFabricPlus's, if it translates), when
+	 * the last movement keys it heard had a direction or jump down (from 1.21.2), or sneak (from 1.21.9). 2b2t's Grim
+	 * only judges sprint and sneak. Sprinting doesn't make this false while this tick's movement hasn't gone out:
+	 * {@link #prepareClick()} gets a click past it at no cost.
+	 * <p>
+	 * Moves that can wait (refills, tools, building material) should wait for this. A click made anyway isn't lost:
+	 * core holds it back until a tick the server takes it on, and the client shows its result meanwhile. Always true
+	 * where the server doesn't check this ({@link AntiCheat#isStrict()} is false).
 	 */
 	boolean safeToClick();
 
 	/**
-	 * For a click that shouldn't wait for you to stop moving: true if one is safe now ({@link #safeToClick()});
-	 * otherwise what {@link #safeToClick()} counts is released for the next tick (sprint, and for newer versions your
-	 * movement keys, jump and sneak; sprint comes back after) and it returns false, so asking again next tick gets a
-	 * safe click. While sneaking at an edge it waits instead (letting
-	 * go would walk you off). Costs a moment of slowing down, so moves that can wait (refills) should use
-	 * {@link #safeToClick()} instead.
+	 * Call it just before clicking: true if a click can go now. While you sprint, the server is told you stopped just
+	 * before the click, and you sprint on: vanilla tells it you started again with this tick's movement, so you never
+	 * slow down. The keys the server judges (movement and jump from 1.21.2, sneak from 1.21.9, not on 2b2t) need a still
+	 * tick: they're released for the next tick and it returns false, so asking again then gets a click. While sneaking
+	 * at an edge it waits instead (letting go would walk you off). Releasing keys costs a moment of slowing down, so
+	 * moves that can wait (refills) should check {@link #safeToClick()} first.
 	 */
 	boolean prepareClick();
 
 	/**
-	 * Whether a click (yours from a screen, or a module's) is waiting for a tick the server takes it on: no sprint and,
-	 * for newer versions, no movement keys, jump or sneak (see {@link #safeToClick()}). A module that holds sprint or
-	 * keys for you can let go of them for a tick where that costs it least, so the click goes then.
+	 * Whether a click (yours from a screen, or a module's) is waiting for a still tick: the keys the server judges were
+	 * held (see {@link #prepareClick()}; sprint alone never makes a click wait). A module that holds keys for you can let
+	 * go of them for a tick where that costs it least, so the click goes then.
 	 */
 	boolean clickWaiting();
 
