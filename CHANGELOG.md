@@ -6,7 +6,7 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
-## 0.2.11 (unreleased)
+## 0.2.11
 
 Moving items in containers in bulk, checked with the server. Additions to the API; nothing changes or goes away.
 
