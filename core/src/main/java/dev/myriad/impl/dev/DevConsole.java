@@ -64,6 +64,7 @@ import java.util.Set;
  * echo text                    log the text (scripts use it to know they're done)
  * screenshot name              save screenshots/name.png (README pictures are taken this way)
  * menu open|close              the Myriad menu; workspace 3 switches; panel myriad:theme opens a panel
+ * hud myriad-essentials:fps     puts a HUD element on the HUD (at its default spot)
  * launcher [query]             the launcher with the query typed; wm launcher|layout|close|... runs a desktop binding
  * settings kill_aura           a module's settings in a window of its own
  * </pre>
@@ -237,6 +238,7 @@ public final class DevConsole {
 				}
 				case "workspace" -> Myriad.ui().switchWorkspace(Integer.parseInt(a[1]));
 				case "panel" -> Myriad.ui().openPanel(MyriadId.parse(a[1]));
+				case "hud" -> Myriad.panels().get(MyriadId.parse(a[1])).ifPresent(((WindowManager) Myriad.ui())::addHudElement);
 				case "launcher" -> ((WindowManager) Myriad.ui()).showLauncher(line.length() > 8 ? line.substring(8).strip() : "");
 				case "wm" -> ((WindowManager) Myriad.ui()).runBind(a[1]);
 				case "settings" -> Myriad.modules().byName(a[1]).ifPresentOrElse(m -> CorePanels.openModuleSettings(m, true),

@@ -6,6 +6,15 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.2.12
+
+A fix for shader packs. No API changes.
+
+- Lines and shapes drawn in the world (Tracers, boxes) now show with Iris and a shader pack on. The pack's passes
+  painted over them, as Iris drew them with vanilla's shader into its buffers; they're now assigned the pack's own
+  line and basic programs (Iris's API, found reflectively), the way vanilla's lines are drawn.
+- Dev console: `hud <panel id>` puts a HUD element on the HUD, for scripted screenshots and tests.
+
 ## 0.2.11
 
 Moving items in containers in bulk, checked with the server. Additions to the API; nothing changes or goes away.

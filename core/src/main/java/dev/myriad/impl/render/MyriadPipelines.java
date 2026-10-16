@@ -11,6 +11,7 @@ import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import dev.myriad.impl.compat.IrisCompat;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.rendertype.OutputTarget;
@@ -146,6 +147,11 @@ public final class MyriadPipelines {
 
 	/** Loads the class, registering the pipelines; call before the first resource reload. */
 	public static void init() {
+		// Shapes and lines drawn in the world (Tracers, boxes) as a shader pack draws vanilla's.
+		IrisCompat.assign(WORLD_LINES, "LINES");
+		IrisCompat.assign(WORLD_LINES_XRAY, "LINES");
+		IrisCompat.assign(WORLD_QUADS, "BASIC");
+		IrisCompat.assign(WORLD_QUADS_XRAY, "BASIC");
 	}
 
 	private static RenderPipeline blur(String name) {
