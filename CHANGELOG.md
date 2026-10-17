@@ -6,6 +6,11 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.3.4 (unreleased)
+
+- A hold-bound module let go while a screen was up (a portal's loading screen, the disconnect screen, the menu) now
+  turns off; it stayed on before (Free Look kept the mouse from turning you).
+
 ## 0.3.3
 
 - **Myriad's cape**: Myriad players wear Myriad's cape (the logo on dark, speckled cloth with a torn hem) and elytra

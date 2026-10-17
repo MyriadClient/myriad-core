@@ -29,6 +29,8 @@ public final class KeybindManager {
 			return;
 		}
 		if (e.inScreen()) {
+			// A hold bind let go behind a screen (a portal's loading screen, the disconnect screen) still lets go.
+			if (!e.isPress()) releaseHolds(e.key(), false);
 			// The menu can also be opened from the title screen.
 			if (e.isPress() && titleScreen) {
 				for (KeyAction a : Myriad.keyActions()) {
@@ -46,8 +48,20 @@ public final class KeybindManager {
 
 	@Subscribe(priority = Priority.HIGH)
 	private void onMouse(MouseButtonEvent e) {
-		if (e.inScreen()) return;
+		if (e.inScreen()) {
+			if (!e.isPress()) releaseHolds(e.button(), true);
+			return;
+		}
 		if (handle(e.button(), true, e.modifiers(), e.isPress())) e.cancel();
+	}
+
+	/** Turns off the hold-bound modules on this key or button: its release, wherever it happened. */
+	private static void releaseHolds(int code, boolean mouse) {
+		for (Module m : Myriad.modules()) {
+			if (m.isMirror() || !m.holdMode.get()) continue;
+			Keybind bind = m.keybind.get();
+			if (bind.isSet() && bind.mouse() == mouse && bind.code() == code && m.isEnabled()) m.setEnabled(false);
+		}
 	}
 
 	/** Returns true if a key action ran (its input is then consumed so nothing else sees it). */
