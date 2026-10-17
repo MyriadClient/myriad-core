@@ -6,6 +6,10 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.4.1 (unreleased)
+
+- A control panel's module picker stays open while you pick: it closed after every module.
+
 ## 0.4.0
 
 - **Control panels**: a set of modules switched together by one bind or switch, each with settings the panel

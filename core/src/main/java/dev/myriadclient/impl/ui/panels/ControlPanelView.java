@@ -31,6 +31,11 @@ final class ControlPanelView extends WidgetPanel {
 	private boolean editing;
 	/** The modules last built, to rebuild when they change. */
 	private Set<MyriadId> built = Set.of();
+	/**
+	 * The Settings section, made once: the window rebuilds as modules are picked (for their cards), and a new one
+	 * would close the module picker after every pick, losing its search and scroll.
+	 */
+	private Collapsible settingsSection;
 
 	ControlPanelView(ControlPanelImpl control) {
 		this.control = control;
@@ -72,13 +77,8 @@ final class ControlPanelView extends WidgetPanel {
 		}
 	}
 
-	@Override
-	protected void build(VBox content) {
-		built = Set.copyOf(control.members.get());
-		List<Module> modules = control.modules();
-		if (modules.isEmpty()) content.add(new Label("No modules yet: pick some under Settings below.").dim());
-		for (Module m : modules) content.add(new ControlMemberEntry(m, unfolded, control));
-
+	private Collapsible settingsSection() {
+		if (settingsSection != null) return settingsSection;
 		VBox edit = new VBox(2, 0);
 		edit.add(SettingsView.build(control.settings));
 		HBox actions = new HBox(4);
@@ -89,6 +89,17 @@ final class ControlPanelView extends WidgetPanel {
 		actions.addWeighted(new Label(""), 1);
 		actions.addFixed(new Button("Delete", () -> Myriad.controls().delete(control)).tooltip("Delete " + control.name() + "."), 40);
 		edit.add(actions);
-		content.add(new Collapsible(() -> "  Settings", edit, () -> editing, v -> editing = v));
+		settingsSection = new Collapsible(() -> "  Settings", edit, () -> editing, v -> editing = v);
+		return settingsSection;
+	}
+
+	@Override
+	protected void build(VBox content) {
+		built = Set.copyOf(control.members.get());
+		List<Module> modules = control.modules();
+		if (modules.isEmpty()) content.add(new Label("No modules yet: pick some under Settings below.").dim());
+		for (Module m : modules) content.add(new ControlMemberEntry(m, unfolded, control));
+
+		content.add(settingsSection());
 	}
 }
