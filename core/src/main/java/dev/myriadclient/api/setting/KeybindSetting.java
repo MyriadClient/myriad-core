@@ -2,12 +2,10 @@ package dev.myriadclient.api.setting;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
-import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.event.events.KeyEvent;
 import dev.myriadclient.api.event.events.MouseButtonEvent;
 import dev.myriadclient.api.util.Keybind;
 
-import java.util.Locale;
 import java.util.function.Supplier;
 
 /**
@@ -47,19 +45,10 @@ public class KeybindSetting extends Setting<Keybind> {
 
 	@Override
 	public boolean parse(String input) {
-		String in = input.trim().toLowerCase(Locale.ROOT);
-		if (in.equals("none") || in.equals("unbind")) {
-			set(Keybind.NONE);
-			return true;
-		}
-		try {
-			InputConstants.Key key = InputConstants.getKey("key.keyboard." + in);
-			if (key.getValue() < 0) return false;
-			set(Keybind.key(key.getValue()));
-			return true;
-		} catch (RuntimeException e) {
-			return false;
-		}
+		Keybind bind = Keybind.parse(input);
+		if (bind == null) return false;
+		set(bind);
+		return true;
 	}
 
 	@Override

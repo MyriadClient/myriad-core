@@ -9,6 +9,12 @@ and may change in any release. Addons declare the oldest core they support in `f
 ## 0.4.1 (unreleased)
 
 - A control panel's module picker stays open while you pick: it closed after every module.
+- **Binds with modifiers**: a press runs only the most specific Myriad binds that match it. With T and Ctrl+T both
+  bound, Ctrl+T runs only the Ctrl+T one (both used to); Shift+T, bound to nothing, still runs T. Hold binds also
+  check the modifiers when pressed.
+- `.bind` and `.set` take modifiers and mouse buttons as the menu shows them: `ctrl+t`, `shift+alt+f6`, `mouse5`,
+  `rmb` (`Keybind.parse`).
+- The dev console's `cursor <x> <y>` moves the mouse (window pixels), for clicking through the menu in tests.
 
 ## 0.4.0
 

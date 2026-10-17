@@ -17,6 +17,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /** One place that maps raw input to module toggles and key actions, outside of screens. */
@@ -76,35 +77,53 @@ public final class KeybindManager {
 		return MyriadImpl.get().controlManager().impls();
 	}
 
-	/** Returns true if a key action ran (its input is then consumed so nothing else sees it). */
+	/** A bind that matches this press, and what it does. */
+	private record Hit(Keybind bind, Runnable run, boolean consumes) {
+	}
+
+	/**
+	 * Presses run the binds that match the held modifiers, but only the most specific of them: with T and Ctrl+T both
+	 * bound, Ctrl+T runs only the Ctrl+T one, while Shift+T (nothing bound to it) still runs T. Releases let go of
+	 * every hold bind on the key, whatever modifiers are held by then.
+	 * Returns true if a control panel or key action ran (its input is then consumed so nothing else sees it).
+	 */
 	private boolean handle(int code, boolean mouse, int mods, boolean press) {
+		if (!press) return release(code, mouse);
+		List<Hit> hits = new ArrayList<>();
 		for (Module m : Myriad.modules()) {
 			// A mirror's key is handled by the mod it mirrors; acting on it here too would toggle twice.
-			if (m.isMirror()) continue;
-			Keybind bind = m.keybind.get();
-			if (!bind.isSet() || bind.mouse() != mouse || bind.code() != code) continue;
-			if (m.holdMode.get()) {
-				m.setEnabled(press);
-			} else if (press && matches(bind, code, mouse, mods)) {
-				m.toggle();
-			}
+			if (m.isMirror() || !matches(m.keybind.get(), code, mouse, mods)) continue;
+			hits.add(new Hit(m.keybind.get(), m.holdMode.get() ? () -> m.setEnabled(true) : m::toggle, false));
 		}
+		for (ControlPanelImpl c : controls()) {
+			if (!matches(c.keybind.get(), code, mouse, mods)) continue;
+			hits.add(new Hit(c.keybind.get(), c.hold.get() ? () -> c.setActive(true) : c::toggle, true));
+		}
+		for (KeyAction a : Myriad.keyActions()) {
+			if (matches(a.bind(), code, mouse, mods)) hits.add(new Hit(a.bind(), a::run, true));
+		}
+		int most = 0;
+		for (Hit h : hits) most = Math.max(most, Integer.bitCount(h.bind.modifiers()));
+		boolean consumed = false;
+		for (Hit h : hits) {
+			if (Integer.bitCount(h.bind.modifiers()) < most) continue;
+			h.run.run();
+			consumed |= h.consumes;
+		}
+		return consumed;
+	}
+
+	/** The key or button let go: hold-bound modules and control panels on it turn off. */
+	private boolean release(int code, boolean mouse) {
 		boolean ran = false;
+		for (Module m : Myriad.modules()) {
+			Keybind bind = m.keybind.get();
+			if (!m.isMirror() && m.holdMode.get() && bind.isSet() && bind.mouse() == mouse && bind.code() == code) m.setEnabled(false);
+		}
 		for (ControlPanelImpl c : controls()) {
 			Keybind bind = c.keybind.get();
-			if (!bind.isSet() || bind.mouse() != mouse || bind.code() != code) continue;
-			if (c.hold.get()) {
-				c.setActive(press);
-				ran = true;
-			} else if (press && matches(bind, code, mouse, mods)) {
-				c.toggle();
-				ran = true;
-			}
-		}
-		if (!press) return ran;
-		for (KeyAction a : Myriad.keyActions()) {
-			if (matches(a.bind(), code, mouse, mods)) {
-				a.run();
+			if (c.hold.get() && bind.isSet() && bind.mouse() == mouse && bind.code() == code) {
+				c.setActive(false);
 				ran = true;
 			}
 		}

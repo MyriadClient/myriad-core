@@ -2,6 +2,7 @@ package dev.myriadclient.api.util;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Locale;
@@ -69,6 +70,49 @@ public record Keybind(int code, boolean mouse, int modifiers) {
 		if (glfw != null) return glfw.toUpperCase(Locale.ROOT);
 		String translated = InputConstants.Type.KEYSYM.getOrCreate(key).getDisplayName().getString();
 		return translated.startsWith("key.keyboard.") ? "Key " + key : translated;
+	}
+
+	/**
+	 * A bind written the way {@link #displayName()} shows it, in any case: {@code "t"}, {@code "ctrl+t"},
+	 * {@code "shift+alt+f6"}, {@code "left.shift"}, {@code "mouse5"}, {@code "rmb"}; {@code "none"} for no bind.
+	 * Null if it isn't one.
+	 */
+	public static @Nullable Keybind parse(String input) {
+		String in = input.trim().toLowerCase(Locale.ROOT);
+		if (in.equals("none") || in.equals("unbind")) return NONE;
+		String[] parts = in.split("\\+");
+		int mods = 0;
+		for (int i = 0; i < parts.length - 1; i++) {
+			mods |= switch (parts[i].trim()) {
+				case "ctrl", "control" -> GLFW.GLFW_MOD_CONTROL;
+				case "alt" -> GLFW.GLFW_MOD_ALT;
+				case "shift" -> GLFW.GLFW_MOD_SHIFT;
+				case "super", "win", "cmd" -> GLFW.GLFW_MOD_SUPER;
+				default -> -1;
+			};
+			if (mods < 0) return null;
+		}
+		String key = parts[parts.length - 1].trim();
+		switch (key) {
+			case "lmb" -> {
+				return new Keybind(GLFW.GLFW_MOUSE_BUTTON_LEFT, true, mods);
+			}
+			case "rmb" -> {
+				return new Keybind(GLFW.GLFW_MOUSE_BUTTON_RIGHT, true, mods);
+			}
+			case "mmb" -> {
+				return new Keybind(GLFW.GLFW_MOUSE_BUTTON_MIDDLE, true, mods);
+			}
+			default -> {
+			}
+		}
+		if (key.matches("mouse[1-8]")) return new Keybind(Integer.parseInt(key.substring(5)) - 1, true, mods);
+		try {
+			InputConstants.Key k = InputConstants.getKey("key.keyboard." + key);
+			return k.getValue() < 0 ? null : new Keybind(k.getValue(), false, mods);
+		} catch (RuntimeException e) {
+			return null;
+		}
 	}
 
 	/** Serialised as {@code "key:65:0"} / {@code "mouse:1:0"}. */

@@ -86,7 +86,7 @@ public final class CoreCommands {
 					Module m = c.getArgument("module", Module.class);
 					KeybindSetting k = m.keybind;
 					if (!k.parse(StringArgumentType.getString(c, "key"))) {
-						error("Unknown key. Use names like r, f6, left.shift or none.");
+						error("Unknown key. Use names like r, ctrl+t, shift+f6, left.shift, mouse5 or none.");
 						return 0;
 					}
 					info(m.name() + " bound to " + k.valueString());

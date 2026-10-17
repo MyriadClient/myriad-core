@@ -223,6 +223,9 @@ public final class DevConsole {
 							mc.getWindow().handle(), new CharacterEvent(cp));
 					}
 				}
+				// Moves the cursor to x y in window pixels, as screenshots show them: "cursor 400 220".
+				case "cursor" -> invokeMouse("onMove", new Class<?>[]{long.class, double.class, double.class},
+					mc.getWindow().handle(), Double.parseDouble(a[1]), Double.parseDouble(a[2]));
 				case "scroll" -> invokeMouse("onScroll", new Class<?>[]{long.class, double.class, double.class},
 					mc.getWindow().handle(), 0.0, Double.parseDouble(a[1]));
 				case "connect" -> {
