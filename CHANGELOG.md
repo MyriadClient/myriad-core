@@ -6,7 +6,7 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
-## 0.3.2 (unreleased)
+## 0.3.2
 
 - **Opening the menu**: mod+1–9 (Alt by default) opens the menu on that workspace, in game and on the title screen,
   and pressing the number of the workspace that's showing closes it; mod+S opens it on the HUD. Right Shift no longer
