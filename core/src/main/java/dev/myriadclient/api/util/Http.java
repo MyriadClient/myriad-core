@@ -47,6 +47,13 @@ public final class Http {
 			HttpResponse.BodyHandlers.ofString());
 	}
 
+	/** DELETEs {@code url}, authorised with {@code bearerToken} (none if null), and returns the response body. */
+	public static CompletableFuture<String> delete(String url, String bearerToken) {
+		HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(url)).DELETE();
+		if (bearerToken != null) request.header("Authorization", "Bearer " + bearerToken);
+		return send(request, HttpResponse.BodyHandlers.ofString());
+	}
+
 	private static <T> CompletableFuture<T> send(HttpRequest.Builder request, HttpResponse.BodyHandler<T> body) {
 		request.header("User-Agent", USER_AGENT).timeout(Duration.ofSeconds(30));
 		return CLIENT.sendAsync(request.build(), body).thenApply(r -> {

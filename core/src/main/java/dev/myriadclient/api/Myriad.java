@@ -25,6 +25,7 @@ import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.service.ServerStats;
 import dev.myriadclient.api.service.Tasks;
+import dev.myriadclient.api.share.ConfigShares;
 import dev.myriadclient.api.service.TickSpeed;
 import dev.myriadclient.api.ui.BarWidget;
 import dev.myriadclient.api.ui.Desktop;
@@ -193,6 +194,11 @@ public final class Myriad {
 	/** Control panels: sets of modules switched together by one bind, each with the settings it takes while on. */
 	public static Controls controls() {
 		return api().controls();
+	}
+
+	/** Shared configs: share modules, control panels and a theme as a code, take one in (see {@link dev.myriadclient.api.share}). */
+	public static ConfigShares shares() {
+		return api().shares();
 	}
 
 	/** Hook contributions and service replacements (see {@link dev.myriadclient.api.hook}). */

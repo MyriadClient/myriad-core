@@ -55,6 +55,8 @@ public class BlockPosSetting extends Setting<BlockPos> {
 	public static class Builder extends Setting.Builder<BlockPosSetting.Builder, BlockPos, BlockPosSetting> {
 		public Builder(String name) {
 			super(name, BlockPos.ZERO);
+			// Coordinates are where your things are: private unless the addon says otherwise.
+			protect = true;
 		}
 
 		@Override

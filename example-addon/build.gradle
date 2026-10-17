@@ -53,6 +53,9 @@ loom {
 			// -PquickPlayServer=localhost:25565 joins a server instead (the Grim test server in myriad-essentials, say).
 			if (project.hasProperty("quickPlayServer")) programArgs("--quickPlayMultiplayer", project.property("quickPlayServer").toString())
 			// -PupdatesPretend=myriad-essentials=0.0.9 makes the update check treat those addons as that version.
+			// A local myriad-api and website for shared configs (./gradlew runClient -Papi=http://localhost:3000).
+			if (project.hasProperty("api")) property("myriad.api", project.property("api").toString())
+			if (project.hasProperty("site")) property("myriad.site", project.property("site").toString())
 			if (project.hasProperty("updatesPretend")) property("myriad.updates.pretend", project.property("updatesPretend").toString())
 			// -Pusername=Name plays as that name (offline servers), so a test server can op it once and keep it.
 			if (project.hasProperty("username")) programArgs("--username", project.property("username").toString())

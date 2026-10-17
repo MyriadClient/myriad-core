@@ -30,6 +30,7 @@ public final class CorePanels {
 	public static final MyriadId PROFILER = MyriadId.of("myriad", "profiler");
 	public static final MyriadId CONTROLS = MyriadId.of("myriad", "controls");
 	public static final MyriadId HOOKS = MyriadId.of("myriad", "hooks");
+	public static final MyriadId SHARE = MyriadId.of("myriad", "share");
 	public static final MyriadId CONTROL = MyriadId.of("myriad", "control");
 
 	private CorePanels() {
@@ -57,6 +58,7 @@ public final class CorePanels {
 		ctx.registerPanel(PanelType.builder(HUD_ELEMENTS, "HUD").icon("\uf2d2").factory(() -> new HudElementsPanel(wm)).build());
 		ctx.registerPanel(PanelType.builder(KEYBINDS, "Keybinds").icon("").factory(() -> new KeybindsPanel(wm)).build());
 		ctx.registerPanel(PanelType.builder(PROFILER, "Profiler").icon("\uf0e4").factory(ProfilerPanel::new).build());
+		ctx.registerPanel(PanelType.builder(SHARE, "Share").icon("\uf1e0").factory(SharePanel::new).build());
 		ctx.registerPanel(PanelType.builder(HOOKS, "Hooks").icon("\uf1e6").factory(HooksPanel::new).build());
 		ctx.registerPanel(PanelType.builder(CONTROLS, "Control Panels").icon("\uf1de").factory(ControlPanelsPanel::new).build());
 		// One control panel's window; not listed on its own (the launcher lists each control panel).

@@ -10,6 +10,7 @@ import dev.myriadclient.api.control.Controls;
 import dev.myriadclient.api.elytra.Elytra;
 import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.hook.Hooks;
+import dev.myriadclient.api.share.ConfigShares;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.ModuleRegistry;
@@ -43,6 +44,7 @@ import dev.myriadclient.impl.control.ControlManager;
 import dev.myriadclient.impl.elytra.ElytraManager;
 import dev.myriadclient.impl.event.MyriadEventBus;
 import dev.myriadclient.impl.hook.HookManager;
+import dev.myriadclient.impl.share.ShareManager;
 import dev.myriadclient.impl.keybind.KeybindManager;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
@@ -109,6 +111,7 @@ public final class MyriadImpl implements MyriadApi {
 	private final WindowManager windowManager = new WindowManager();
 	private final CommandManager commandManager = new CommandManager(commands);
 	private final KeybindManager keybindManager = new KeybindManager();
+	private final ShareManager shares = new ShareManager();
 	private final HookManager hooks = new HookManager(events);
 	private final AddonLoader addonLoader = new AddonLoader(this);
 	private final UpdateManager updates = new UpdateManager(config.root());
@@ -324,6 +327,15 @@ public final class MyriadImpl implements MyriadApi {
 
 	public HookManager hookManager() {
 		return hooks;
+	}
+
+	@Override
+	public ConfigShares shares() {
+		return shares;
+	}
+
+	public ShareManager shareManager() {
+		return shares;
 	}
 
 	@Override

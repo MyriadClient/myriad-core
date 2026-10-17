@@ -1,5 +1,7 @@
 package dev.myriadclient.impl.control;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.control.ControlPanel;
@@ -244,6 +246,57 @@ public final class ControlPanelImpl implements ControlPanel {
 		applied.forEach(on::addProperty);
 		o.add("applied", on);
 		return o;
+	}
+
+	/**
+	 * This panel as a shared config carries it: name, description, members and the settings it saves for them, minus
+	 * protected ones (and any whose module isn't installed to say whether they are).
+	 */
+	public JsonObject share() {
+		JsonObject o = new JsonObject();
+		o.addProperty("name", name.get());
+		o.addProperty("description", description.get());
+		JsonArray ids = new JsonArray();
+		for (MyriadId m : members.get()) ids.add(m.toString());
+		o.add("members", ids);
+		JsonObject values = new JsonObject();
+		remembered.forEach((module, saved) -> {
+			Module m = Myriad.modules().get(MyriadId.parse(module)).orElse(null);
+			if (m == null) return;
+			JsonObject v = new JsonObject();
+			saved.forEach((key, value) -> m.settings.get(key).filter(st -> !st.isProtected()).ifPresent(st -> v.add(key, value.deepCopy())));
+			if (!v.isEmpty()) values.add(module, v);
+		});
+		o.add("settings", values);
+		return o;
+	}
+
+	/** Takes a shared panel's members and saved settings ({@link #share}'s); protected settings are dropped on the way in too. */
+	public void takeShared(JsonObject shared) {
+		if (shared.has("description")) description.set(shared.get("description").getAsString());
+		Set<MyriadId> ids = new LinkedHashSet<>();
+		if (shared.has("members")) for (var e : shared.getAsJsonArray("members")) ids.add(MyriadId.parse(e.getAsString()));
+		members.set(ids);
+		remembered.clear();
+		if (shared.has("settings")) {
+			for (var e : shared.getAsJsonObject("settings").entrySet()) {
+				Module m = Myriad.modules().get(MyriadId.parse(e.getKey())).orElse(null);
+				Map<String, JsonObject> values = new LinkedHashMap<>();
+				for (var v : e.getValue().getAsJsonObject().entrySet()) {
+					boolean secret = m != null && m.settings.get(v.getKey()).map(Setting::isProtected).orElse(false);
+					if (!secret && v.getValue().isJsonObject()) values.put(v.getKey(), v.getValue().getAsJsonObject());
+				}
+				if (!values.isEmpty()) remembered.put(e.getKey(), values);
+			}
+		}
+		Myriad.config().markDirty();
+	}
+
+	/** Saves {@code value} for {@code module}'s setting {@code key}, as a typed value (a shared config tried as a panel). */
+	public void remember(String module, String key, JsonElement value) {
+		JsonObject o = new JsonObject();
+		o.add("json", value.deepCopy());
+		remembered.computeIfAbsent(module, k -> new LinkedHashMap<>()).put(key, o);
 	}
 
 	/** Loads what {@link #toJson} wrote: being on comes back as it was, without switching anything ({@link #restore} lays its settings again). */

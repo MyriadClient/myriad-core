@@ -48,6 +48,9 @@ public final class SettingsShowcase extends Module {
 	private final BoolSetting greet = sgGeneral.bool("Greet On Enable").description("Say hello when enabled.").defaultValue(true).build();
 	// visible(...) hides a setting until it matters.
 	private final StringSetting message = sgGeneral.string("Message").defaultValue("Hello from an addon!").visible(greet::get).build();
+	// protect(): private to the player. Shared configs say it's there but never carry its value, and taking a share in
+	// leaves yours alone. Coordinates (BlockPosSetting, like Origin below) and file paths are protected already.
+	private final StringSetting webhook = sgGeneral.string("Webhook").description("A Discord webhook URL (never shared).").protect().build();
 	private final IntSetting count = sgGeneral.intSetting("Count").defaultValue(3).range(0, 10).build();
 	// range() is the hard limit; sliderRange() only narrows the slider, so typed values can go further.
 	private final DoubleSetting speed = sgGeneral.doubleSetting("Speed").defaultValue(1.5).range(0, 20).sliderRange(0, 5).decimals(2).build();

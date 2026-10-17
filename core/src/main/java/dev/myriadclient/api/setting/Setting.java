@@ -60,6 +60,17 @@ public abstract class Setting<T> {
 		this.visible = visible == null ? () -> true : visible;
 	}
 
+	/** Whether its value is never shared (see {@link Builder#protect()}). */
+	private boolean isProtected;
+
+	/**
+	 * Whether this setting's value is private to the player (a webhook URL, coordinates, a password a macro types):
+	 * shared configs leave it out, and taking one in leaves the player's own value as it is.
+	 */
+	public boolean isProtected() {
+		return isProtected;
+	}
+
 	public String name() {
 		return name;
 	}
@@ -276,6 +287,7 @@ public abstract class Setting<T> {
 		protected T defaultValue;
 		protected Supplier<Boolean> visible = () -> true;
 		protected Consumer<T> onChanged;
+		protected boolean protect;
 		SettingGroup group;
 
 		protected Builder(String name, T defaultValue) {
@@ -303,10 +315,31 @@ public abstract class Setting<T> {
 			return (B) this;
 		}
 
+		/**
+		 * Keeps the value out of shared configs: for anything private to the player (a webhook URL, a server address,
+		 * coordinates, a password). Shares say the setting is there, never what it's set to, and taking a share in
+		 * leaves the player's own value alone. Coordinates ({@link BlockPosSetting}) and file paths
+		 * ({@link FileSetting}) are protected unless you say otherwise.
+		 *
+		 * <pre>{@code
+		 * private final StringSetting webhook = sgGeneral.string("Webhook").description("Discord webhook URL.").protect().build();
+		 * }</pre>
+		 */
+		public B protect() {
+			return protect(true);
+		}
+
+		/** {@link #protect()}, or with {@code false} shareable (coordinates that are a public place, say). */
+		public B protect(boolean protect) {
+			this.protect = protect;
+			return (B) this;
+		}
+
 		protected abstract S create();
 
 		public S build() {
 			S s = create();
+			((Setting<?>) s).isProtected = protect;
 			if (onChanged != null) s.onChanged(onChanged);
 			if (group != null) group.add(s);
 			return s;

@@ -38,6 +38,7 @@ import dev.myriadclient.api.ui.widget.Widget;
 import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.command.CoreCommands;
+import dev.myriadclient.impl.share.ShareCommand;
 import dev.myriadclient.impl.macro.MacroManager;
 import dev.myriadclient.impl.ui.CoreThemes;
 import dev.myriadclient.impl.ui.FilePicker;
@@ -73,9 +74,11 @@ public final class CoreAddon implements MyriadAddon {
 		CorePanels.register(ctx, wm);
 		CoreBarWidgets.register(ctx, wm);
 		CoreCommands.register(ctx);
+		ctx.registerCommand(new ShareCommand());
 		// Before the profile loads, so the macros' settings and binds load with it.
 		MacroManager.load(ctx.storage());
 		MyriadImpl.get().hookManager().load(ctx.storage());
+		MyriadImpl.get().shareManager().load(ctx.storage());
 		// Unbound: mod+1..9 opens the menu on a workspace. For a single key (Right Shift, as other clients use), bind it.
 		ctx.registerKeyAction("Open Menu", Keybind.NONE, () -> Myriad.ui().open());
 	}

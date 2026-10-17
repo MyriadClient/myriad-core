@@ -75,6 +75,8 @@ public class FileSetting extends Setting<String> {
 
 		public Builder(String name) {
 			super(name, "");
+			// A path can name you (your home folder): private unless the addon says otherwise.
+			protect = true;
 		}
 
 		/** e.g. {@code extensions("litematic", "schem")}. */

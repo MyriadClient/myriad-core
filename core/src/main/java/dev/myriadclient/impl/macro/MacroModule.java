@@ -25,10 +25,11 @@ public final class MacroModule extends Module {
 
 	private final EnumSetting<Mode> mode = sgGeneral.enumSetting("Mode", Mode.RUN)
 		.description("Run: each press runs Commands once. Toggle: on runs Commands, off runs Off Commands.").build();
+	// Protected: a macro can type a password (/login) or say where you are.
 	private final StringListSetting commands = sgGeneral.stringList("Commands")
-		.description("One per line: .myriad commands, /server commands, wait <ticks>, or chat.").build();
+		.description("One per line: .myriad commands, /server commands, wait <ticks>, or chat.").protect().build();
 	private final StringListSetting offCommands = sgGeneral.stringList("Off Commands")
-		.description("Run when it's turned off, the same way.").visible(() -> mode.get() == Mode.TOGGLE).build();
+		.description("Run when it's turned off, the same way.").visible(() -> mode.get() == Mode.TOGGLE).protect().build();
 	{
 		sgGeneral.action("Delete Macro", () -> MacroManager.delete(this)).description("Remove this macro for good.").build();
 	}
