@@ -23,9 +23,9 @@ public class FileSetting extends Setting<String> {
 
 	/** The chosen file, or null if none is set or the path isn't valid. */
 	public @Nullable Path path() {
-		if (value.isBlank()) return null;
+		if (get().isBlank()) return null;
 		try {
-			return Path.of(value);
+			return Path.of(get());
 		} catch (InvalidPathException e) {
 			return null;
 		}

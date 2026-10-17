@@ -15,7 +15,7 @@ public class ColorSetting extends Setting<SettingColor> {
 
 	/** Shortcut for {@code get().argb()}. */
 	public int argb() {
-		return value.argb();
+		return get().argb();
 	}
 
 	@Override
@@ -67,7 +67,7 @@ public class ColorSetting extends Setting<SettingColor> {
 
 	@Override
 	public String valueString() {
-		return value.mode() == SettingColor.Mode.STATIC ? ColorUtil.toHex(value.color()) : value.mode().name().toLowerCase();
+		return get().mode() == SettingColor.Mode.STATIC ? ColorUtil.toHex(get().color()) : get().mode().name().toLowerCase();
 	}
 
 	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.ColorSetting.Builder, SettingColor, ColorSetting> {

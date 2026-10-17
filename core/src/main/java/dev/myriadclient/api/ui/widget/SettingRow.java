@@ -1,6 +1,7 @@
 package dev.myriadclient.api.ui.widget;
 
 import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.util.ColorUtil;
 
@@ -44,7 +45,20 @@ public class SettingRow extends Widget {
 		if (hover) c.roundRect(x - 2, y, width + 4, ROW, 3, ColorUtil.withAlpha(theme().surface.argb(), ColorUtil.alpha(theme().surface.argb()) / 2));
 		int color = setting.isDefault() ? theme().text.argb() : ColorUtil.lerp(theme().text.argb(), theme().accent.argb(), 0.6f);
 		float labelW = stacked ? width : width - split(width) - 4;
-		c.text(c.ellipsize(c.defaultFont(), c.defaultFontSize(), setting.name(), labelW), x + 2, y + (ROW - c.textHeight()) / 2, color);
+		String by = setting.overriddenBy();
+		float ty = y + (ROW - c.textHeight()) / 2;
+		String name = c.ellipsize(c.defaultFont(), c.defaultFontSize(), setting.name(), by == null ? labelW : labelW * 0.6f);
+		c.text(name, x + 2, ty, color);
+		if (by != null) {
+			// Who set the value in effect: a small tag after the name.
+			float s = c.defaultFontSize() * 0.7f, tx = x + 2 + c.textWidth(name) + 4;
+			String tag = c.ellipsize(FontFamily.SANS, s, by, Math.max(0, x + labelW - tx - 6));
+			float tw = c.textWidth(FontFamily.SANS, s, tag) + 6, th = c.textHeight(FontFamily.SANS, s) + 3, cy = y + ROW / 2;
+			c.roundRect(tx, cy - th / 2, tw, th, th / 2, ColorUtil.withAlpha(theme().accent.argb(), 50));
+			c.text(FontFamily.SANS, s, tag, tx + 3, cy - c.textHeight(FontFamily.SANS, s) / 2, theme().accent.argb());
+		}
+		tooltip = by == null ? setting.description()
+			: (setting.description().isEmpty() ? "" : setting.description() + "\n") + by + " sets this while it's on; your own value comes back after.";
 		editor.render(c, mx, my);
 		if (hover) offerTooltip(mx, my);
 	}

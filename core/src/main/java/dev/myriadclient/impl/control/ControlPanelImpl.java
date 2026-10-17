@@ -27,9 +27,10 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * A control panel: its own settings (name, modules, bind, hold), the settings it remembers for each module, and, while
- * it's on, what it changed so it can put it back. Remembered values are kept as the setting's own JSON (captured from
- * the module) or as text the way {@code .set} takes it (an addon's preset), whichever came last.
+ * A control panel: its own settings (name, modules, bind, hold) and the settings it saves for each module. While it's
+ * on, those lie over the modules' own as {@link Setting.Layer#CONTROL_PANEL} overrides (tuning one in the UI then
+ * tunes the panel's), and turning it off just takes them off. Saved values are kept as the setting's own JSON (saved
+ * from the module) or as text the way {@code .set} takes it (an addon's preset), whichever came last.
  */
 public final class ControlPanelImpl implements ControlPanel {
 	private static final Logger LOG = LoggerFactory.getLogger("Myriad/Controls");
@@ -47,15 +48,9 @@ public final class ControlPanelImpl implements ControlPanel {
 	/** Module id → setting key → {"json": value} or {"text": value}. */
 	private final Map<String, Map<String, JsonObject>> remembered = new LinkedHashMap<>();
 	private boolean active;
-	/** While on: what it did to each module, to undo it. */
-	private final Map<String, Undo> undo = new LinkedHashMap<>();
+	/** While on: the modules it's applied to, and whether it turned each on (so off turns only those off). */
+	private final Map<String, Boolean> applied = new LinkedHashMap<>();
 	private Set<MyriadId> lastMembers = new LinkedHashSet<>();
-
-	private static final class Undo {
-		boolean turnedOn;
-		final Map<String, JsonElement> previous = new LinkedHashMap<>();
-		final Map<String, JsonElement> applied = new LinkedHashMap<>();
-	}
 
 	ControlPanelImpl(MyriadId id, String name, @Nullable ControlPreset preset) {
 		this.id = id;
@@ -133,53 +128,64 @@ public final class ControlPanelImpl implements ControlPanel {
 		if (on) {
 			for (MyriadId m : members.get()) apply(m);
 		} else {
-			for (String m : List.copyOf(undo.keySet())) revert(m);
-			undo.clear();
+			for (String m : List.copyOf(applied.keySet())) revert(m);
+			applied.clear();
 		}
 		Myriad.notifications().send("Control panel", name() + (on ? " on" : " off"), on ? Notifications.Level.SUCCESS : Notifications.Level.INFO, 1500, "control:" + id);
 		Myriad.config().markDirty();
 	}
 
-	/** Gives the module the settings remembered for it and turns it on, noting what to undo. */
+	/** Lays the settings saved for the module over its own and turns it on, noting whether this turned it on. */
 	private void apply(MyriadId moduleId) {
 		Module m = Myriad.modules().get(moduleId).orElse(null);
-		if (m == null || undo.containsKey(moduleId.toString())) return;
-		Undo u = new Undo();
-		for (var e : remembered.getOrDefault(moduleId.toString(), Map.of()).entrySet()) {
-			Setting<?> s = m.settings.get(e.getKey()).orElse(null);
-			if (s == null) continue;
-			JsonElement before = s.toJson();
-			try {
-				if (e.getValue().has("json")) s.fromJson(e.getValue().get("json"));
-				else if (!s.parse(e.getValue().get("text").getAsString())) continue;
-			} catch (RuntimeException ex) {
-				LOG.warn("{}: couldn't set {} of {}", name(), e.getKey(), moduleId, ex);
-				continue;
-			}
-			u.previous.put(e.getKey(), before);
-			u.applied.put(e.getKey(), s.toJson());
-		}
+		if (m == null || applied.containsKey(moduleId.toString())) return;
+		lay(m);
+		boolean turnedOn = false;
 		if (!m.isEnabled()) {
 			m.setEnabled(true);
-			u.turnedOn = m.isEnabled();
+			turnedOn = m.isEnabled();
 		}
-		undo.put(moduleId.toString(), u);
+		applied.put(moduleId.toString(), turnedOn);
 	}
 
-	/** Turns the module off if this turned it on, and puts back each setting it changed that's still as it left it. */
+	/** Takes its settings off the module, and turns the module off if this turned it on. */
 	private void revert(String moduleId) {
-		Undo u = undo.remove(moduleId);
+		Boolean turnedOn = applied.remove(moduleId);
 		Module m = Myriad.modules().get(MyriadId.parse(moduleId)).orElse(null);
-		if (u == null || m == null) return;
-		if (u.turnedOn && m.isEnabled()) m.setEnabled(false);
-		u.previous.forEach((key, before) -> m.settings.get(key).ifPresent(s -> {
-			if (s.toJson().equals(u.applied.get(key))) s.fromJson(before);
-		}));
+		if (turnedOn == null || m == null) return;
+		m.settings.releaseAll(this);
+		if (turnedOn && m.isEnabled()) m.setEnabled(false);
+	}
+
+	/** Lays every setting saved for the module over its own (again, after they changed). */
+	private void lay(Module m) {
+		m.settings.releaseAll(this);
+		for (var e : remembered.getOrDefault(m.id().toString(), Map.of()).entrySet()) {
+			m.settings.get(e.getKey()).ifPresent(s -> lay(m, e.getKey(), s, e.getValue()));
+		}
+	}
+
+	private <T> void lay(Module m, String key, Setting<T> s, JsonObject saved) {
+		T value;
+		try {
+			value = saved.has("json") ? s.decode(saved.get("json")) : s.decode(saved.get("text").getAsString());
+		} catch (RuntimeException ex) {
+			LOG.warn("{}: couldn't read its {} for {}", name(), key, m.id(), ex);
+			return;
+		}
+		if (value == null) return;
+		// Tuning it in the UI while this is on tunes this panel's value.
+		s.override(this, Setting.Layer.CONTROL_PANEL, name(), value, edited -> {
+			JsonObject o = new JsonObject();
+			o.add("json", s.encode(edited));
+			remembered.computeIfAbsent(m.id().toString(), k -> new LinkedHashMap<>()).put(key, o);
+			Myriad.config().markDirty();
+		});
 	}
 
 	// ---- remembering settings -----------------------------------------------------------------------------------------
 
-	/** Remembers every setting the module has now (except its keybind and other module options) for when this is on. */
+	/** Saves every setting the module has in effect now (except its keybind and other module options) for when this is on. */
 	public void remember(Module m) {
 		Map<String, JsonObject> values = new LinkedHashMap<>();
 		SettingGroup own = m.keybind.group();
@@ -187,20 +193,23 @@ public final class ControlPanelImpl implements ControlPanel {
 			if (g == own) continue;
 			for (Setting<?> s : g.settings()) {
 				if (!s.isSerializable()) continue;
-				JsonObject o = new JsonObject();
-				o.add("json", s.toJson());
-				values.put(m.settings.keyOf(s), o);
+				values.put(m.settings.keyOf(s), saved(s));
 			}
 		}
 		remembered.put(m.id().toString(), values);
-		// Already on: what it would have set is what the module has now.
-		Undo u = undo.get(m.id().toString());
-		if (u != null) for (String key : values.keySet()) m.settings.get(key).ifPresent(s -> u.applied.put(key, s.toJson()));
+		if (applied.containsKey(m.id().toString())) lay(m);
 		Myriad.config().markDirty();
+	}
+
+	private static <T> JsonObject saved(Setting<T> s) {
+		JsonObject o = new JsonObject();
+		o.add("json", s.encode(s.get()));
+		return o;
 	}
 
 	public void forget(Module m) {
 		remembered.remove(m.id().toString());
+		if (applied.containsKey(m.id().toString())) m.settings.releaseAll(this);
 		Myriad.config().markDirty();
 	}
 
@@ -229,22 +238,13 @@ public final class ControlPanelImpl implements ControlPanel {
 		});
 		o.add("remembered", rem);
 		o.addProperty("active", active);
-		JsonObject un = new JsonObject();
-		undo.forEach((module, u) -> {
-			JsonObject j = new JsonObject();
-			j.addProperty("turnedOn", u.turnedOn);
-			JsonObject prev = new JsonObject(), applied = new JsonObject();
-			u.previous.forEach(prev::add);
-			u.applied.forEach(applied::add);
-			j.add("previous", prev);
-			j.add("applied", applied);
-			un.add(module, j);
-		});
-		o.add("undo", un);
+		JsonObject on = new JsonObject();
+		applied.forEach(on::addProperty);
+		o.add("applied", on);
 		return o;
 	}
 
-	/** Loads what {@link #toJson} wrote. Being on is restored as it was, with what it would undo, without switching anything. */
+	/** Loads what {@link #toJson} wrote: being on comes back as it was, without switching anything ({@link #restore} lays its settings again). */
 	void fromJson(JsonObject o) {
 		if (o.has("settings") && o.get("settings").isJsonObject()) settings.fromJson(o.getAsJsonObject("settings"));
 		lastMembers = new LinkedHashSet<>(members.get());
@@ -258,23 +258,22 @@ public final class ControlPanelImpl implements ControlPanel {
 			}
 		}
 		active = o.has("active") && o.get("active").getAsBoolean();
-		undo.clear();
-		if (active && o.has("undo") && o.get("undo").isJsonObject()) {
-			for (var e : o.getAsJsonObject("undo").entrySet()) {
-				if (!e.getValue().isJsonObject()) continue;
-				JsonObject j = e.getValue().getAsJsonObject();
-				Undo u = new Undo();
-				u.turnedOn = j.has("turnedOn") && j.get("turnedOn").getAsBoolean();
-				if (j.has("previous")) for (var p : j.getAsJsonObject("previous").entrySet()) u.previous.put(p.getKey(), p.getValue());
-				if (j.has("applied")) for (var p : j.getAsJsonObject("applied").entrySet()) u.applied.put(p.getKey(), p.getValue());
-				undo.put(e.getKey(), u);
-			}
+		applied.clear();
+		if (active && o.has("applied") && o.get("applied").isJsonObject()) {
+			for (var e : o.getAsJsonObject("applied").entrySet()) applied.put(e.getKey(), e.getValue().getAsBoolean());
 		}
+	}
+
+	/** After a profile loads (its modules' own settings already in): lays this panel's settings again if it's on. */
+	void restore() {
+		if (!active) return;
+		for (String id : applied.keySet()) Myriad.modules().get(MyriadId.parse(id)).ifPresent(this::lay);
 	}
 
 	/** Forgets being on without switching anything back (the profile it belonged to is being unloaded). */
 	void drop() {
+		for (String id : applied.keySet()) Myriad.modules().get(MyriadId.parse(id)).ifPresent(m -> m.settings.releaseAll(this));
 		active = false;
-		undo.clear();
+		applied.clear();
 	}
 }

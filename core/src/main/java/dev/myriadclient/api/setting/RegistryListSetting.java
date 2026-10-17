@@ -40,7 +40,7 @@ public class RegistryListSetting<T> extends Setting<Set<T>> {
 	}
 
 	public boolean contains(T t) {
-		return value.contains(t);
+		return get().contains(t);
 	}
 
 	public void add(T t) {
@@ -114,8 +114,8 @@ public class RegistryListSetting<T> extends Setting<Set<T>> {
 	@Override
 	public String valueString() {
 		List<String> ids = new ArrayList<>();
-		for (T t : value) ids.add(String.valueOf(registry.getKey(t)));
-		return value.size() + " selected" + (ids.isEmpty() ? "" : ": " + String.join(", ", ids.subList(0, Math.min(5, ids.size()))) + (ids.size() > 5 ? ", …" : ""));
+		for (T t : get()) ids.add(String.valueOf(registry.getKey(t)));
+		return get().size() + " selected" + (ids.isEmpty() ? "" : ": " + String.join(", ", ids.subList(0, Math.min(5, ids.size()))) + (ids.size() > 5 ? ", …" : ""));
 	}
 
 	public static class Builder<T> extends Setting.Builder<dev.myriadclient.api.setting.RegistryListSetting.Builder<T>, Set<T>, RegistryListSetting<T>> {

@@ -33,7 +33,7 @@ public class EnumSetSetting<E extends Enum<E>> extends Setting<Set<E>> {
 	}
 
 	public boolean contains(E e) {
-		return value.contains(e);
+		return get().contains(e);
 	}
 
 	public void toggle(E e) {
@@ -115,8 +115,8 @@ public class EnumSetSetting<E extends Enum<E>> extends Setting<Set<E>> {
 
 	@Override
 	public String valueString() {
-		if (value.isEmpty()) return "none";
-		return String.join(", ", value.stream().map(EnumSetting::displayName).toList());
+		if (get().isEmpty()) return "none";
+		return String.join(", ", get().stream().map(EnumSetting::displayName).toList());
 	}
 
 	public static class Builder<E extends Enum<E>> extends Setting.Builder<dev.myriadclient.api.setting.EnumSetSetting.Builder<E>, Set<E>, EnumSetSetting<E>> {

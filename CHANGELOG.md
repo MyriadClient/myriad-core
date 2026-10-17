@@ -9,10 +9,16 @@ and may change in any release. Addons declare the oldest core they support in `f
 ## Unreleased (control-panels branch)
 
 - **Control panels**: a set of modules switched together by one bind or switch, each with settings the panel
-  remembers for it (Remember in its window). Off turns off only what it turned on and puts back the settings it changed
-  (unless changed again meanwhile). Saved per profile; made in the launcher or the Control Panels window;
+  saves for it (Save in the module's settings in its window). On lays those over the modules' own; off turns off only
+  what it turned on and takes its settings off again. Saved per profile; made in the launcher or the Control Panels window;
   `.control on|off|toggle <name>`. Addons ship ready-made ones with `AddonContext.registerControlPanel(ControlPreset)`;
   players can edit, delete or reset them. New API: `dev.myriadclient.api.control`, `Myriad.controls()`.
+- **Layered settings**: a setting's value is the player's own, with overrides laid on top while something needs them
+  (`Setting.override(owner, layer, label, value)`, `release(owner)`; layers: server profile, control panel, module).
+  `get()` is the top one; only the player's value is saved, so releasing an override puts nothing back and a crash
+  leaves nothing changed. Overridden settings show who set them. UI edits and `.set` go to the override in effect if
+  it takes edits (a control panel saving what you tune while it's on), otherwise to the player's value. Control panels
+  now work this way. `decode`/`encode` read and write values without touching the setting.
 - **Macros**: modules you make, whose Commands (Myriad commands, server commands, `wait <ticks>`, chat) run when
   pressed, once (Run) or on and off (Toggle, with Off Commands). In the Macros category; `.macro`.
 - **Launcher filters**: `@addon` and `#kind` / `#category` narrow the results (`@ess #render`, `#control`, `#panel`);

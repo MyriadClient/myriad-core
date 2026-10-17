@@ -43,7 +43,7 @@ public class EnumSetting<E extends Enum<E>> extends Setting<E> {
 
 	@Override
 	public String valueString() {
-		return displayName(value);
+		return displayName(get());
 	}
 
 	@Override

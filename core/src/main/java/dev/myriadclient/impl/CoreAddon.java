@@ -79,21 +79,21 @@ public final class CoreAddon implements MyriadAddon {
 	}
 
 	private static <E extends Enum<E>> Widget enumDropdown(EnumSetting<E> s) {
-		return new Dropdown<>(() -> List.of(s.values()), s::get, s::set, EnumSetting::displayName);
+		return new Dropdown<>(() -> List.of(s.values()), s::get, s::edit, EnumSetting::displayName);
 	}
 
 	@SuppressWarnings({"unchecked", "rawtypes"})
 	private static void registerSettingWidgets(SettingWidgets w) {
-		w.register(BoolSetting.class, s -> new Toggle(s::get, s::set), false);
-		w.register(IntSetting.class, s -> new Slider(s::get, v -> s.set((int) Math.round(v)), s.sliderMin(), s.sliderMax(), 0), false);
-		w.register(DoubleSetting.class, s -> new Slider(s::get, s::set, s.sliderMin(), s.sliderMax(), s.decimals()), false);
+		w.register(BoolSetting.class, s -> new Toggle(s::get, s::edit), false);
+		w.register(IntSetting.class, s -> new Slider(s::get, v -> s.edit((int) Math.round(v)), s.sliderMin(), s.sliderMax(), 0), false);
+		w.register(DoubleSetting.class, s -> new Slider(s::get, s::edit, s.sliderMin(), s.sliderMax(), s.decimals()), false);
 		w.register(EnumSetting.class, s -> enumDropdown((EnumSetting) s), false);
-		w.register(StringSetting.class, s -> new TextField(s::get).onSubmit(s::set), false);
+		w.register(StringSetting.class, s -> new TextField(s::get).onSubmit(s::edit), false);
 		w.register(StringListSetting.class, StringListEditor::new, true);
 		w.register(IntListSetting.class, s -> new TextField(s::valueString).onSubmit(s::parse).placeholder("1, 2, 3"), false);
 		w.register(EnumSetSetting.class, s -> new RegistryPicker<>(enumSetSource((EnumSetSetting) s)), true);
-		w.register(ColorSetting.class, s -> new ColorPicker(s::get, s::set), false);
-		w.register(KeybindSetting.class, s -> new KeybindButton(s::get, s::set), false);
+		w.register(ColorSetting.class, s -> new ColorPicker(s::get, s::edit), false);
+		w.register(KeybindSetting.class, s -> new KeybindButton(s::get, s::edit), false);
 		w.register(ActionSetting.class, s -> new Button("Run", s::run), false);
 		w.register(RegistryListSetting.class, s -> new RegistryPicker<>(s), true);
 		w.register(RegistrySetting.class, s -> RegistryPicker.single(s), true);
@@ -110,7 +110,7 @@ public final class CoreAddon implements MyriadAddon {
 		}, false);
 		w.register(FileSetting.class, s -> {
 			HBox row = new HBox(3);
-			row.addWeighted(new TextField(s::get).onSubmit(s::set).placeholder("No file"), 1);
+			row.addWeighted(new TextField(s::get).onSubmit(s::edit).placeholder("No file"), 1);
 			row.addFixed(new Button("Browse", () -> FilePicker.open(s)), 40);
 			return row;
 		}, false);

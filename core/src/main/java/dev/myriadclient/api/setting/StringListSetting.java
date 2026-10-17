@@ -69,7 +69,7 @@ public class StringListSetting extends Setting<List<String>> {
 
 	@Override
 	public String valueString() {
-		return String.join(", ", value);
+		return String.join(", ", get());
 	}
 
 	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.StringListSetting.Builder, List<String>, StringListSetting> {

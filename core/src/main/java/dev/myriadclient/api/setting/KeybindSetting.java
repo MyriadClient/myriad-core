@@ -26,12 +26,12 @@ public class KeybindSetting extends Setting<Keybind> {
 
 	/** Whether {@code e} is a press of this bind in game (not while typing in a screen). */
 	public boolean wasPressed(KeyEvent e) {
-		return e.isPress() && !e.inScreen() && value.matchesKey(e.key(), e.modifiers());
+		return e.isPress() && !e.inScreen() && get().matchesKey(e.key(), e.modifiers());
 	}
 
 	/** Whether {@code e} is a press of this bind in game, for binds on a mouse button. */
 	public boolean wasPressed(MouseButtonEvent e) {
-		return e.isPress() && !e.inScreen() && value.matchesMouse(e.button(), e.modifiers());
+		return e.isPress() && !e.inScreen() && get().matchesMouse(e.button(), e.modifiers());
 	}
 
 	@Override
@@ -63,7 +63,7 @@ public class KeybindSetting extends Setting<Keybind> {
 
 	@Override
 	public String valueString() {
-		return value.displayName();
+		return get().displayName();
 	}
 
 	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.KeybindSetting.Builder, Keybind, KeybindSetting> {

@@ -158,6 +158,7 @@ public final class ControlManager implements Controls {
 		for (Preset p : presets) {
 			if (find(p.id()) == null && !deleted.contains(p.id())) panels.add(new ControlPanelImpl(p.id(), p.preset().name(), p.preset()));
 		}
+		for (ControlPanelImpl c : panels) c.restore();
 	}
 
 	/** A name not used yet, for a new panel: "Control panel 2" and so on. */

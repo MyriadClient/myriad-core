@@ -62,7 +62,7 @@ public class RegistrySetting<T> extends Setting<T> {
 
 	@Override
 	public String valueString() {
-		Identifier id = registry.getKey(value);
+		Identifier id = registry.getKey(get());
 		return id == null ? "" : id.getPath();
 	}
 

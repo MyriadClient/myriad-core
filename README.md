@@ -137,8 +137,9 @@ single key, like Right Shift, bind **Open Menu** there or under Keybindings → 
   `#render`, `#combat`…), alone or with text: `@ess #render` lists Essentials' render modules. Whatever you type can
   also become a **New macro** or a **New control panel** of that name (the last two results).
 - **Control panels** switch a set of modules together: one bind or switch turns them all on, each with settings the
-  panel remembers for it (open its window, set the module up, press Remember), and turning it off turns off only the
-  modules it turned on and gives them their own settings back (any you changed meanwhile are kept). Make them in the
+  panel saves for it (open its window, unfold a module, set it up, press Save). While it's on, those lie over the
+  module's own settings (tagged with the panel's name; tuning one tunes the panel's), and turning it off turns off only
+  the modules it turned on and uncovers their own settings. Make them in the
   launcher or the Control Panels window; `.control on|off|toggle <name>`. Addons can ship ready-made ones.
 - **Macros** are modules you make (launcher → New macro, or `.macro new <name>`) whose Commands run when pressed: one
   per line, a Myriad command (`.toggle esp`), a server command (`/home`), `wait <ticks>`, or chat. Run mode runs them
@@ -549,6 +550,10 @@ How the pieces fit the kinds of addons people build:
 - Panels can declare their own `settings`, which are saved with the window. Open one with
   `Myriad.ui().openPanel(id)`. Top-bar widgets extend `BarWidget`.
 - Add a `contact` block (`homepage`, `sources`, `issues`) to your fabric.mod.json and the Addons panel links to it.
+- **Layered settings**: `setting.override(owner, Setting.Layer.MODULE, "Your Module", value)` lays a value over the
+  player's while your code needs it, and `release(owner)` (or `settings.releaseAll(owner)`) takes it off; `get()` is
+  the value in effect, `playerValue()` the player's own (the only one saved). The UI shows who set an overridden
+  value. Use it instead of changing another module's settings and putting them back.
 - **Control panels**: ship ready-made ones with `ctx.registerControlPanel(ControlPreset.builder("Hunting").module(id)
   .setting(id, "spacing", "6").build())`: the modules it switches (by id, installed or not) and the settings they take
   while it's on, written as `.set` takes them. Players can edit, delete and reset it. `Myriad.controls()` lists and

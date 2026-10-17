@@ -111,11 +111,11 @@ public final class CoreCommands {
 						.then(argument("value", value()).executes(c -> {
 							Setting<?> s = dev.myriadclient.api.command.arguments.SettingArgumentType.get(c, "module", "setting");
 							String v = c.getArgument("value", String.class);
-							if (!s.parse(v)) {
+							if (!setOrEdit(s, v)) {
 								error("Invalid value '" + v + "' for " + s.name());
 								return 0;
 							}
-							info(s.name() + " set to " + s.valueString());
+							info(s.name() + " set to " + s.valueString() + (s.isOverridden() ? " (for " + s.overriddenBy() + ")" : ""));
 							return SINGLE_SUCCESS;
 						}))));
 			}
@@ -593,5 +593,14 @@ public final class CoreCommands {
 				});
 			}
 		});
+	}
+
+	/** Like the UI: while something lays a value over this setting (a control panel that's on), the edit is its. */
+	private static <T> boolean setOrEdit(Setting<T> s, String input) {
+		if (!s.isOverridden()) return s.parse(input);
+		T v = s.decode(input);
+		if (v == null) return false;
+		s.edit(v);
+		return true;
 	}
 }

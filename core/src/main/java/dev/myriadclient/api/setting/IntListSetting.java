@@ -29,7 +29,7 @@ public class IntListSetting extends Setting<List<Integer>> {
 	}
 
 	public boolean contains(int v) {
-		return value.contains(v);
+		return get().contains(v);
 	}
 
 	@Override
@@ -81,9 +81,9 @@ public class IntListSetting extends Setting<List<Integer>> {
 
 	@Override
 	public String valueString() {
-		if (value.isEmpty()) return "none";
+		if (get().isEmpty()) return "none";
 		StringBuilder sb = new StringBuilder();
-		for (int i : value) sb.append(sb.isEmpty() ? "" : ", ").append(i);
+		for (int i : get()) sb.append(sb.isEmpty() ? "" : ", ").append(i);
 		return sb.toString();
 	}
 

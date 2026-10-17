@@ -48,7 +48,7 @@ public class BlockPosSetting extends Setting<BlockPos> {
 
 	@Override
 	public String valueString() {
-		return value.getX() + " " + value.getY() + " " + value.getZ();
+		return get().getX() + " " + get().getY() + " " + get().getZ();
 	}
 
 	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.BlockPosSetting.Builder, BlockPos, BlockPosSetting> {

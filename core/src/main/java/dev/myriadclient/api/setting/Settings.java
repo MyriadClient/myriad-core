@@ -78,6 +78,11 @@ public class Settings {
 		}
 	}
 
+	/** Takes every override {@code owner} laid on these settings off. */
+	public void releaseAll(Object owner) {
+		for (Setting<?> s : all()) s.release(owner);
+	}
+
 	public void resetAll() {
 		for (Setting<?> s : all()) s.reset();
 	}

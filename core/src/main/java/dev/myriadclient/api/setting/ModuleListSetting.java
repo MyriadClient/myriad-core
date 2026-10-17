@@ -27,7 +27,7 @@ public class ModuleListSetting extends Setting<Set<MyriadId>> {
 	}
 
 	public boolean contains(Module module) {
-		return value.contains(module.id());
+		return get().contains(module.id());
 	}
 
 	public void toggle(Module module) {
@@ -38,7 +38,7 @@ public class ModuleListSetting extends Setting<Set<MyriadId>> {
 	/** The chosen modules that are installed. */
 	public List<Module> modules() {
 		List<Module> out = new ArrayList<>();
-		for (MyriadId id : value) Myriad.modules().get(id).ifPresent(out::add);
+		for (MyriadId id : get()) Myriad.modules().get(id).ifPresent(out::add);
 		return out;
 	}
 
@@ -79,7 +79,7 @@ public class ModuleListSetting extends Setting<Set<MyriadId>> {
 
 	@Override
 	public String valueString() {
-		return value.size() + " modules";
+		return get().size() + " modules";
 	}
 
 	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.ModuleListSetting.Builder, Set<MyriadId>, ModuleListSetting> {

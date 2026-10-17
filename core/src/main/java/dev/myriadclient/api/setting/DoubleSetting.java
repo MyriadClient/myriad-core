@@ -40,7 +40,7 @@ public class DoubleSetting extends Setting<Double> {
 	}
 
 	public float getFloat() {
-		return value.floatValue();
+		return get().floatValue();
 	}
 
 	@Override
@@ -72,7 +72,7 @@ public class DoubleSetting extends Setting<Double> {
 
 	@Override
 	public String valueString() {
-		return String.format("%." + decimals + "f", value);
+		return String.format("%." + decimals + "f", get());
 	}
 
 	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.DoubleSetting.Builder, Double, DoubleSetting> {
