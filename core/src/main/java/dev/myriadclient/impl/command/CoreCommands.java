@@ -357,6 +357,29 @@ public final class CoreCommands {
 			}
 		});
 
+		ctx.registerCommand(new Command("cape", "Turns Myriad's cape on or off (seen by Myriad players near you).") {
+			@Override
+			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
+				var cape = ((dev.myriadclient.impl.ui.WindowManager) Myriad.ui()).theme().myriadCape;
+				b.executes(c -> {
+					info(cape.get() ? "Wearing Myriad's cape: Myriad players near you see it. .cape off takes it off" : "Not wearing Myriad's cape. .cape on puts it on");
+					return SINGLE_SUCCESS;
+				});
+				b.then(literal("on").executes(c -> {
+					cape.set(true);
+					Myriad.config().markDirty();
+					info("Wearing Myriad's cape");
+					return SINGLE_SUCCESS;
+				}));
+				b.then(literal("off").executes(c -> {
+					cape.set(false);
+					Myriad.config().markDirty();
+					info("Myriad's cape is off: players near you see your own cape again");
+					return SINGLE_SUCCESS;
+				}));
+			}
+		});
+
 		ctx.registerCommand(new Command("theme", "Lists themes, or applies one by name.") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {

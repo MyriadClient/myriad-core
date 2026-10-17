@@ -199,11 +199,20 @@ Prefix `.` (change with `.prefix`). Commands autocomplete in chat and in the con
 addons, mods and enabled modules' changed settings for a bug report), `.panic`, `.help`, `.menu`,
 `.modules` (click one to toggle it), `.binds`, `.say <message>` (sends text starting with the prefix as chat),
 `.reload` (re-read the profile from disk), `.anticheat [auto|grim|vanilla]` and `.anticheat known add|remove <host>` (what the
-server checks; see below), `.profiler [on|off]` (where the time goes, by module), `.disconnect`, and `.fakeplayer add|remove|clear|list` (client-side
-dummies for testing).
+server checks; see below), `.profiler [on|off]` (where the time goes, by module), `.cape [on|off]` (Myriad's cape, below), `.disconnect`, and
+`.fakeplayer add|remove|clear|list` (client-side dummies for testing).
 
 Setting ids are scoped to their group. When two groups share a name, use `group.setting`, for example
 `.set esp colors.players #FF00FFAA`.
+
+### Myriad's cape
+
+Myriad players wear Myriad's cape and a matching elytra, in place of any other, and see it on each other. There's no
+server of Myriad's own behind it: the skin parts a client reports (cape, jacket, sleeves, hat) are one byte with a
+spare bit, which servers pass on to the players near you and vanilla clients ignore. Myriad sets that bit while the
+cape is on and draws the cape on players who have it, so only players already in range ever see it, and nothing about
+where anyone is goes anywhere. To take it off, turn off Theme → Preferences → Myriad Cape or run `.cape off`: players
+near you see your own cape again (you still see theirs).
 
 ## Anti-cheat profile
 

@@ -22,3 +22,5 @@ accessible field net/minecraft/client/model/geom/ModelPart cubes Ljava/util/List
 accessible field net/minecraft/client/model/geom/ModelPart children Ljava/util/Map;
 # Highlights read vanilla's entity outline target as their silhouette mask (HighlightRenderer).
 accessible field net/minecraft/client/renderer/LevelRenderer entityOutlineTarget Lcom/mojang/blaze3d/pipeline/RenderTarget;
+# Myriad's cape: the skin-parts byte other players report (impl/cosmetic/MyriadCape).
+accessible field net/minecraft/world/entity/Avatar DATA_PLAYER_MODE_CUSTOMISATION Lnet/minecraft/network/syncher/EntityDataAccessor;

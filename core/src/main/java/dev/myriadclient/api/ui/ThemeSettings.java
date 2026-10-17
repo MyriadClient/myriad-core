@@ -115,6 +115,15 @@ public final class ThemeSettings {
 	public final EnumSetting<BarPosition> barPosition = sgBar.enumSetting("Position", BarPosition.TOP).visible(bar::get).build();
 	public final IntSetting barHeight = sgBar.intSetting("Height").defaultValue(14).range(10, 40).visible(bar::get).build();
 
+	private final SettingGroup spCosmetics = preferences.group("Cosmetics");
+	public final BoolSetting myriadCape = spCosmetics.bool("Myriad Cape")
+		.description("Wear Myriad's cape and elytra in place of your own, seen by you and by Myriad players near you. Off: they see your own cape again; you still see theirs.")
+		.defaultValue(true).onChanged(v -> {
+			// Tell the server at once, so players near you see the change.
+			var mc = net.minecraft.client.Minecraft.getInstance();
+			if (mc.player != null) mc.options.broadcastOptions();
+		}).build();
+
 	private final SettingGroup sgInput = preferences.group("Input");
 	public final EnumSetting<ModKey> modKey = sgInput.enumSetting("Mod Key", ModKey.ALT)
 		.description("Modifier for menu shortcuts (Omarchy's Super). Hyprland keeps Super for itself, so Alt is the default.").build();

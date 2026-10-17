@@ -6,6 +6,16 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.3.3 (unreleased)
+
+- **Myriad's cape**: Myriad players wear Myriad's cape (the logo on dark, speckled cloth with a torn hem) and elytra
+  (Minecraft's own wings, or a resource pack's, in Myriad's dark colours with the logo), in place of any other, and see
+  it on each other, with no server of Myriad's own. The skin parts a client reports (cape, jacket, sleeves, hat) are one byte
+  with a spare bit: servers pass it to the players near you and vanilla clients ignore it, so Myriad sets it while
+  the cape is on, and a Myriad client draws the cape on players who have it. Only players already in range ever see
+  it. Theme → Preferences → Myriad Cape (new setting, `ThemeSettings.myriadCape`) or `.cape off` takes it off: players
+  near you see your own cape again, and you still see theirs.
+
 ## 0.3.2
 
 - **Opening the menu**: mod+1–9 (Alt by default) opens the menu on that workspace, in game and on the title screen,

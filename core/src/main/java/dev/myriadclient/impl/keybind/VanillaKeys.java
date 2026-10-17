@@ -41,7 +41,10 @@ public final class VanillaKeys {
 		InputConstants.Key bound = KeyMappingHelper.getBoundKeyOf(modKey);
 		if (shownMod != null && !bound.equals(shownMod)) {
 			ModKey picked = modKeyOf(bound);
-			if (picked != null) setting.set(picked);
+			if (picked != null) {
+				setting.set(picked);
+				Myriad.config().markDirty();
+			}
 			else Myriad.notifications().send("Mod key", "It can be Alt, Super or Ctrl: kept " + setting.get().name().charAt(0) + setting.get().name().substring(1).toLowerCase() + ".", Notifications.Level.WARNING, 4000, "mod-key");
 			shownMod = null;
 		}
