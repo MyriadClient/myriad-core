@@ -48,7 +48,7 @@ public final class KeybindsPanel extends WidgetPanel {
 		content.add(new Collapsible("Global", global));
 
 		VBox desktop = new VBox(2, 0);
-		desktop.add(new Label(() -> "These are pressed together with the mod key (" + wm.theme().modKey.get().name().toLowerCase() + ", change it in Theme → Preferences).").dim());
+		desktop.add(new Label(() -> "These are pressed together with the mod key (" + wm.theme().modKey.get().name().toLowerCase() + ", change it in Theme → Preferences). Workspaces 1–9, the HUD and the launcher also work in game, without the menu open.").dim());
 		for (WindowManager.WmBind b : wm.binds().values()) {
 			desktop.add(row(b.name, new KeybindButton(() -> b.bind, k -> {
 				b.bind = k;

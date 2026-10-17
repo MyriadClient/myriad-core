@@ -52,6 +52,8 @@ public final class ThemeSettings {
 
 	private final SettingGroup spGeneral = preferences.group("General");
 	public final DoubleSetting uiScale = spGeneral.doubleSetting("UI Scale").description("Multiplier on the automatic UI scale.").defaultValue(1.0).range(0.5, 3).decimals(2).build();
+	public final BoolSetting titleScreen = spGeneral.bool("Title Screen")
+		.description("Myriad's own title screen, in the theme's colours. Off: Minecraft's, with Myriad's logo and keys in a corner.").defaultValue(true).build();
 	public final BoolSetting pauseGame = spGeneral.bool("Pause Game").description("Pause singleplayer while the menu is open.").defaultValue(false).build();
 
 	private final SettingGroup sgGeneral = settings.group("General");

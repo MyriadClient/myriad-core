@@ -22,7 +22,8 @@ import net.minecraft.client.Minecraft;
 /**
  * A rofi/wofi-style launcher: fuzzy search over modules, panels, categories, themes, profiles and workspaces.
  * Enter runs the selection; Shift+Enter runs its alternate action (e.g. open a module's settings instead of
- * toggling it).
+ * toggling it). Mod+Space also opens it on its own over the game ({@link LauncherScreen}): what it runs there that
+ * needs the desktop (a panel, a category, settings) opens the menu first, the rest happens without it.
  */
 final class Launcher {
 	private static final float WIDTH = 260, ROW = 15, MAX_ROWS = 10;
@@ -31,15 +32,22 @@ final class Launcher {
 		MODULE, OTHER
 	}
 
-	private record Entry(String icon, String title, String hint, Runnable run, Runnable alt, Kind kind) {
+	/** {@code inPlace}: {@link #run} works without the desktop showing (toggling a module, applying a theme). */
+	private record Entry(String icon, String title, String hint, Runnable run, Runnable alt, Kind kind, boolean inPlace) {
 		Entry(String icon, String title, String hint, Runnable run, Runnable alt) {
-			this(icon, title, hint, run, alt, Kind.OTHER);
+			this(icon, title, hint, run, alt, Kind.OTHER, false);
+		}
+
+		Entry(String icon, String title, String hint, Runnable run, Runnable alt, boolean inPlace) {
+			this(icon, title, hint, run, alt, Kind.OTHER, inPlace);
 		}
 	}
 
 	private final WindowManager wm;
 	private final Animated open = new Animated(0);
 	private boolean visible;
+	/** Shown on its own over the game, not inside the desktop. */
+	private boolean standalone;
 	private String query = "";
 	private int selected;
 	private List<Entry> results = List.of();
@@ -58,7 +66,12 @@ final class Launcher {
 
 	/** Opens with the query already typed (the dev console uses it). */
 	void show(String query) {
+		show(query, false);
+	}
+
+	void show(String query, boolean standalone) {
 		visible = true;
+		this.standalone = standalone;
 		this.query = query;
 		selected = 0;
 		refresh();
@@ -66,6 +79,15 @@ final class Launcher {
 
 	void hide() {
 		visible = false;
+		// On its own its screen closes with it, so nothing would draw the fade out: it would play the next time the
+		// desktop draws instead, a launcher closing over a workspace that just opened.
+		if (standalone) open.snap(0);
+	}
+
+	/** Gone at once, with no fade left to play later (the screen showing it closed). */
+	void hideNow() {
+		visible = false;
+		open.snap(0);
 	}
 
 	void toggle() {
@@ -77,7 +99,7 @@ final class Launcher {
 		List<Entry> list = new ArrayList<>();
 		for (Module m : Myriad.modules()) {
 			list.add(new Entry(m.isEnabled() ? "" : "", m.name(), m.category().name() + " · " + (m.isEnabled() ? "on" : "off"),
-				m::toggle, () -> CorePanels.openModuleSettings(m, false), Kind.MODULE));
+				m::toggle, () -> CorePanels.openModuleSettings(m, false), Kind.MODULE, true));
 		}
 		for (PanelType t : Myriad.panels()) {
 			if (t.isHud()) {
@@ -86,7 +108,7 @@ final class Launcher {
 					() -> {
 						if (on) wm.removeHudElement(t);
 						else wm.addHudElement(t);
-					}, null));
+					}, null, true));
 			}
 			if (!t.isListed()) continue;
 			list.add(new Entry(t.icon() == null ? "" : t.icon(), t.name(), t.isHud() ? "HUD element" : "Panel",
@@ -98,11 +120,11 @@ final class Launcher {
 		}
 		for (ThemeManager.Entry t : wm.themes().all()) {
 			list.add(new Entry("\uf53f", "Theme: " + t.name(), t.isUser() ? "Your theme" : "Apply theme", () -> wm.applyTheme(t.id()),
-				() -> wm.openPanel(CorePanels.THEME, new JsonObject())));
+				() -> wm.openPanel(CorePanels.THEME, new JsonObject()), true));
 		}
 		for (String p : Myriad.config().profiles()) {
 			list.add(new Entry("", "Profile: " + p, p.equals(Myriad.config().activeProfile()) ? "active" : "Switch profile",
-				() -> Myriad.config().switchProfile(p), null));
+				() -> Myriad.config().switchProfile(p), null, true));
 		}
 		for (int i = 1; i <= 9; i++) {
 			int ws = i;
@@ -198,6 +220,8 @@ final class Launcher {
 	private void run(Entry e, boolean alt) {
 		hide();
 		Runnable r = alt && e.alt != null ? e.alt : e.run;
+		// On its own over the game: what needs the desktop opens it first, so the window it opens shows.
+		if (standalone && (r != e.run || !e.inPlace)) wm.open();
 		r.run();
 	}
 
@@ -240,7 +264,8 @@ final class Launcher {
 		if (!visible) return false;
 		long window = net.minecraft.client.Minecraft.getInstance().getWindow().handle();
 		boolean ctrl = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS;
-		if (chr >= 32 && chr != 127 && !ctrl) {
+		// Not the space of the mod+Space that opened it.
+		if (chr >= 32 && chr != 127 && !ctrl && !wm.modHeld()) {
 			query += chr;
 			selected = 0;
 			refresh();

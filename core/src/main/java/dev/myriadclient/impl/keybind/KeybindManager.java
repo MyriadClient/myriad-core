@@ -9,6 +9,8 @@ import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.impl.CoreAddon;
+import dev.myriadclient.impl.ui.MyriadTitleScreen;
+import dev.myriadclient.impl.ui.WindowManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
 import org.lwjgl.glfw.GLFW;
@@ -18,9 +20,17 @@ public final class KeybindManager {
 	@Subscribe(priority = Priority.HIGH)
 	private void onKey(KeyEvent e) {
 		if (e.action() == GLFW.GLFW_REPEAT) return;
+		var screen = Minecraft.getInstance().gui.screen();
+		boolean titleScreen = screen instanceof TitleScreen || screen instanceof MyriadTitleScreen;
+		// The desktop's shortcuts that open it (mod+1..9, mod+S, mod+Space), in game and on the title screen. Consumed,
+		// so mod+3 doesn't also pick hotbar slot 3 and mod+Space doesn't jump.
+		if (e.isPress() && (!e.inScreen() || titleScreen) && ((WindowManager) Myriad.ui()).globalKey(e.key(), e.modifiers())) {
+			e.cancel();
+			return;
+		}
 		if (e.inScreen()) {
 			// The menu can also be opened from the title screen.
-			if (e.isPress() && Minecraft.getInstance().gui.screen() instanceof TitleScreen) {
+			if (e.isPress() && titleScreen) {
 				for (KeyAction a : Myriad.keyActions()) {
 					if (a.id().equals(CoreAddon.OPEN_MENU) && a.bind().matchesKey(e.key(), e.modifiers())) {
 						// Consume it, or the freshly opened menu receives the same press and closes again.

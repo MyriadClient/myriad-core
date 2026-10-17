@@ -6,6 +6,24 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.3.2 (unreleased)
+
+- **Opening the menu**: mod+1–9 (Alt by default) opens the menu on that workspace, in game and on the title screen,
+  and pressing the number of the workspace that's showing closes it; mod+S opens it on the HUD. Right Shift no longer
+  opens it: **Open Menu** is unbound by default (bind it under Keybindings → Global for a single key). A Right Shift
+  saved by an earlier version is taken as the old default and dropped; one you bind from now on is kept. The keys are
+  consumed, so mod+3 doesn't also pick hotbar slot 3.
+- **Launcher anywhere**: mod+Space opens the launcher on its own, over the game or the title screen, without the
+  menu. Toggling a module, applying a theme or switching profile happens there and you're back where you were; a
+  panel, a category or settings open the menu.
+- **Title screen**: Myriad's own, in the theme's colours: the logo, the usual buttons plus one for the Myriad menu (and
+  Mod Menu's when it's installed), and the keys that open the menu. Arrow keys and Enter work. Theme → Preferences →
+  Title Screen turns it off (new setting, `ThemeSettings.titleScreen`); Minecraft's then shows Myriad's logo and keys
+  in a corner.
+- **Minecraft's Controls**: a Myriad category in Key Binds with the mod key and Open Menu, so they're where players
+  look. Changing them there changes Myriad's (the mod key can be Alt, Super or Ctrl) and the other way round.
+- The launcher no longer fades out over a workspace opened after it closed.
+
 ## 0.3.1
 
 - The default theme takes the logo's colours: its mint accent on a neutral near-black, with the window greys between.

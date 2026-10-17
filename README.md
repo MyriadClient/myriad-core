@@ -36,7 +36,7 @@ against the public API, so the client is whatever addons you put next to it.
 2. Put `myriad-<v>.jar` from the [latest release](https://github.com/MyriadClient/myriad-core/releases/latest) in `mods/`,
    with `myriad-essentials-<v>.jar` from [its releases](https://github.com/MyriadClient/myriad-essentials/releases/latest)
    and any other addons.
-3. In game, press **Right Shift**.
+3. In game, press **Alt+1** to open the menu (on workspace 1), or **Alt+Space** for the launcher.
 
 ### Updates
 
@@ -103,7 +103,12 @@ release from their own repositories, to the same maven.
 
 ## The menu
 
-Press **Right Shift** (rebindable) in game or on the title screen to open the Myriad menu.
+In game or on the title screen, **mod+1–9** opens the Myriad menu on that workspace (the mod key is Alt by default,
+changeable in Theme → Preferences), and pressing the number of the workspace that's showing closes it again; mod+S
+opens it on the HUD workspace. **mod+Space** opens the launcher on its own over the game: Enter toggles a module or
+applies a theme without opening the menu, and what needs the menu (a panel, settings) opens it. The title screen
+shows these keys under Myriad's logo, and they're also in Minecraft's Controls → Key Binds, under Myriad. For a
+single key, like Right Shift, bind **Open Menu** there or under Keybindings → Global.
 
 - **Workspaces 1–9** each tile their windows with a layout. **Dwindle** is the default, as in Hyprland: each new
   window splits the focused one, so a workspace grows into a grid. **Columns** (one window per module category, side
@@ -131,7 +136,7 @@ Press **Right Shift** (rebindable) in game or on the title screen to open the My
 - **Themes**: a theme holds the whole look: gaps, borders (gradient, optional rotation), rounding, blur, shadows,
   inactive dimming and opacity, animation curves and speeds (Hyprland-style), the bar, fonts, and every colour. Pick
   one in the Theme panel and edit it there; edits save into the active theme as you make them.
-  - **Presets**: Myriad, Tokyo Night and Gruvbox. Editing a preset saves your changes on top of it (it shows
+  - **Presets**: Myriad (the logo's mint on near-black), Tokyo Night, Gruvbox and Catppuccin Mocha. Editing a preset saves your changes on top of it (it shows
     *Edited*), and **Reset** brings the original back.
   - **Your themes**: **New** or **Duplicate** makes a theme you can rename and give an author. Each one is a file in
     `.minecraft/myriad/themes/`. To share it, send the `.json`; the other person drops it in that folder and presses

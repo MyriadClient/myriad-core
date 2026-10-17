@@ -204,6 +204,19 @@ public final class DevConsole {
 					if (!how.equals("release")) mouseButton(button, GLFW.GLFW_PRESS);
 					if (!how.equals("press")) mouseButton(button, GLFW.GLFW_RELEASE);
 				}
+				// Real key presses through vanilla's KeyboardHandler: "key 1 alt", "key space alt", "key enter".
+				case "key" -> {
+					int key = keyCode(a[1]);
+					int mods = a.length > 2 ? modifiers(a[2]) : 0;
+					keyboard(GLFW.GLFW_PRESS, key, mods);
+					keyboard(GLFW.GLFW_RELEASE, key, mods);
+				}
+				case "type" -> {
+					for (int cp : line.substring(4).strip().codePoints().toArray()) {
+						invokeKeyboard("charTyped", new Class<?>[]{long.class, net.minecraft.client.input.CharacterEvent.class},
+							mc.getWindow().handle(), new net.minecraft.client.input.CharacterEvent(cp));
+					}
+				}
 				case "scroll" -> invokeMouse("onScroll", new Class<?>[]{long.class, double.class, double.class},
 					mc.getWindow().handle(), 0.0, Double.parseDouble(a[1]));
 				case "connect" -> {
@@ -255,6 +268,56 @@ public final class DevConsole {
 	}
 
 	/** Calls one of vanilla's (private) GLFW input callbacks on the mouse handler. */
+	private void keyboard(int action, int key, int mods) {
+		invokeKeyboard("keyPress", new Class<?>[]{long.class, int.class, net.minecraft.client.input.KeyEvent.class},
+			mc.getWindow().handle(), action, new net.minecraft.client.input.KeyEvent(key, GLFW.glfwGetKeyScancode(key), mods));
+	}
+
+	private static int keyCode(String name) {
+		String n = name.toLowerCase(Locale.ROOT);
+		return switch (n) {
+			case "space" -> GLFW.GLFW_KEY_SPACE;
+			case "enter" -> GLFW.GLFW_KEY_ENTER;
+			case "escape", "esc" -> GLFW.GLFW_KEY_ESCAPE;
+			case "tab" -> GLFW.GLFW_KEY_TAB;
+			case "backspace" -> GLFW.GLFW_KEY_BACKSPACE;
+			case "up" -> GLFW.GLFW_KEY_UP;
+			case "down" -> GLFW.GLFW_KEY_DOWN;
+			case "left" -> GLFW.GLFW_KEY_LEFT;
+			case "right" -> GLFW.GLFW_KEY_RIGHT;
+			default -> {
+				char c = n.charAt(0);
+				if (n.length() == 1 && c >= '0' && c <= '9') yield GLFW.GLFW_KEY_0 + (c - '0');
+				if (n.length() == 1 && c >= 'a' && c <= 'z') yield GLFW.GLFW_KEY_A + (c - 'a');
+				yield Integer.parseInt(n);
+			}
+		};
+	}
+
+	private static int modifiers(String names) {
+		int mods = 0;
+		for (String m : names.toLowerCase(Locale.ROOT).split("\\+")) {
+			mods |= switch (m) {
+				case "alt" -> GLFW.GLFW_MOD_ALT;
+				case "shift" -> GLFW.GLFW_MOD_SHIFT;
+				case "ctrl" -> GLFW.GLFW_MOD_CONTROL;
+				case "super" -> GLFW.GLFW_MOD_SUPER;
+				default -> throw new IllegalArgumentException("unknown modifier " + m);
+			};
+		}
+		return mods;
+	}
+
+	private void invokeKeyboard(String name, Class<?>[] types, Object... args) {
+		try {
+			Method m = net.minecraft.client.KeyboardHandler.class.getDeclaredMethod(name, types);
+			m.setAccessible(true);
+			m.invoke(mc.keyboardHandler, args);
+		} catch (ReflectiveOperationException ex) {
+			throw new IllegalStateException(ex);
+		}
+	}
+
 	private void invokeMouse(String name, Class<?>[] types, Object... args) {
 		try {
 			Method m = MouseHandler.class.getDeclaredMethod(name, types);

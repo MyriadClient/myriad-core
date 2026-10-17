@@ -4,7 +4,9 @@ import dev.myriadclient.api.event.events.GameReadyEvent;
 import dev.myriadclient.api.event.events.Render2DEvent;
 import dev.myriadclient.api.event.events.Render3DEvent;
 import dev.myriadclient.api.render.Projection;
+import dev.myriadclient.impl.keybind.VanillaKeys;
 import dev.myriadclient.impl.render.HighlightRenderer;
+import dev.myriadclient.impl.ui.MyriadTitleScreen;
 import dev.myriadclient.impl.render.MeshRenderer;
 import dev.myriadclient.impl.render.MyriadPipelines;
 import dev.myriadclient.impl.render.WorldRenderQueue;
@@ -19,6 +21,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.TitleScreen;
@@ -29,6 +32,7 @@ public class MyriadClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		MyriadImpl myriad = MyriadImpl.bootstrap();
+		VanillaKeys.register();
 		MyriadPipelines.init();
 		var bus = myriad.events();
 
@@ -39,6 +43,7 @@ public class MyriadClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(mc -> {
 			bus.post(TickEvent.Post.INSTANCE);
 			myriad.windowManager().tick();
+			VanillaKeys.sync();
 			myriad.configImpl().tick();
 		});
 
@@ -47,6 +52,19 @@ public class MyriadClient implements ClientModInitializer {
 				myriad.windowManager().draw(ctx, canvas -> bus.post(new Render2DEvent(ctx, canvas, tickCounter.getGameTimeDeltaPartialTick(false))));
 			}
 			myriad.windowManager().renderHud(ctx);
+		});
+
+		// Myriad's own title screen in place of Minecraft's (Theme → Preferences → Title Screen).
+		bus.listen(ScreenOpenEvent.class, e -> {
+			// Closing a screen with no world open is Minecraft's way back to its title screen too: it makes one after this.
+			boolean title = e.screen() == null ? Minecraft.getInstance().level == null : e.screen().getClass() == TitleScreen.class;
+			if (title && myriad.windowManager().theme().titleScreen.get()) {
+				e.setScreen(new MyriadTitleScreen(myriad.windowManager()));
+			}
+		});
+		// With it off, Minecraft's shows Myriad's logo, version and how to open the menu in a corner.
+		ScreenEvents.AFTER_INIT.register((mc, screen, w, h) -> {
+			if (screen instanceof TitleScreen) ScreenEvents.afterExtract(screen).register((s, ctx, mx, my, delta) -> myriad.windowManager().renderTitleScreen(ctx));
 		});
 
 		// The camera is settled once the level is extracted, before the HUD is: labels projected from the HUD use it.

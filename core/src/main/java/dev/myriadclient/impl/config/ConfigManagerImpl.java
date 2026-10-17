@@ -9,8 +9,10 @@ import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.impl.CoreAddon;
 import dev.myriadclient.impl.MyriadImpl;
 import net.fabricmc.loader.api.FabricLoader;
+import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -109,6 +111,12 @@ public final class ConfigManagerImpl implements ConfigManager {
 				if (o.has("checkUpdates")) myriad.updates().setCheckEnabled(o.get("checkUpdates").getAsBoolean());
 				if (o.has("keyActions") && o.get("keyActions").isJsonObject()) rawKeyActions = o.getAsJsonObject("keyActions");
 			});
+			// Before 0.3.2, Open Menu was Right Shift by default and saved as such; it's unbound now (mod+1..9 opens the
+			// menu), so a Right Shift saved before then is the old default, not a choice. Rebinding it later is kept.
+			if (intOr(rawKeyActions, "_version", 1) < 2) {
+				JsonElement open = rawKeyActions.get(CoreAddon.OPEN_MENU.toString());
+				if (open != null && Keybind.deserialize(open.getAsString()).equals(Keybind.key(GLFW.GLFW_KEY_RIGHT_SHIFT))) rawKeyActions.remove(CoreAddon.OPEN_MENU.toString());
+			}
 			for (KeyAction a : myriad.keyActions()) {
 				JsonElement e = rawKeyActions.get(a.id().toString());
 				if (e != null) a.setBind(Keybind.deserialize(e.getAsString()));
@@ -181,6 +189,7 @@ public final class ConfigManagerImpl implements ConfigManager {
 		global.add("knownGrimServers", known);
 		global.addProperty("checkUpdates", myriad.updates().checkEnabled());
 		JsonObject keys = rawKeyActions.deepCopy();
+		keys.addProperty("_version", 2);
 		for (KeyAction a : myriad.keyActions()) keys.addProperty(a.id().toString(), a.bind().serialize());
 		global.add("keyActions", keys);
 

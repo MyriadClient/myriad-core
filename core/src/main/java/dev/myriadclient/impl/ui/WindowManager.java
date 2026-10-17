@@ -46,6 +46,8 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.resources.Identifier;
 
 /**
  * The Hyprland-inspired window manager behind {@link Desktop}: workspaces with tiling layouts and floating windows,
@@ -346,6 +348,47 @@ public final class WindowManager implements Desktop {
 		launcher.toggle();
 	}
 
+	boolean launcherOpen() {
+		return launcher.isOpen();
+	}
+
+	/**
+	 * The desktop's shortcuts that work without the menu open, in game and on the title screen: mod+1..9 opens the menu
+	 * on that workspace, mod+S on the HUD, mod+Space the launcher (on its own over the game). True if the key was one.
+	 */
+	public boolean globalKey(int key, int mods) {
+		if ((mods & modMask()) == 0 || isOpen() || mc.gui.screen() instanceof LauncherScreen) return false;
+		int rest = mods & ~modMask() & ~GLFW.GLFW_MOD_NUM_LOCK & ~GLFW.GLFW_MOD_CAPS_LOCK;
+		for (WmBind b : binds.values()) {
+			if (b.bind.mouse() || b.bind.code() != key || (b.bind.modifiers() & ~GLFW.GLFW_MOD_NUM_LOCK & ~GLFW.GLFW_MOD_CAPS_LOCK) != rest) continue;
+			if (b.id.equals("launcher")) {
+				// On its own, over the game or the title screen: no workspace opens unless what it runs needs one.
+				Screen behind = mc.gui.screen();
+				launcher.show("", true);
+				mc.gui.setScreen(new LauncherScreen(this, behind));
+				return true;
+			}
+			int target = b.id.equals("hud") ? HUD_WORKSPACE : b.id.startsWith("workspace_") ? Integer.parseInt(b.id.substring(10)) : -1;
+			if (target < 0) continue;
+			// Straight onto it: no slide from the workspace the menu was last on.
+			switchWorkspace(target);
+			transition.snap(1);
+			open();
+			return true;
+		}
+		return false;
+	}
+
+	/** How to open the menu, for the title screen: mod+1, and the Open Menu key if one is set. */
+	public String openHint() {
+		String mod = modName();
+		String menu = mod + "+1";
+		for (var action : Myriad.keyActions()) {
+			if (action.id().equals(dev.myriadclient.impl.CoreAddon.OPEN_MENU) && action.bind().isSet()) menu = action.bind().displayName() + " or " + menu;
+		}
+		return menu + " opens the menu · " + mod + "+Space the launcher";
+	}
+
 	public Map<String, WmBind> binds() {
 		return binds;
 	}
@@ -644,6 +687,76 @@ public final class WindowManager implements Desktop {
 			c.end();
 		}
 	}
+
+	/** Draws in the desktop's units, at its scale, for screens of Myriad's own (the title screen). */
+	void paint(GuiGraphicsExtractor ctx, java.util.function.Consumer<UiRenderer> drawer) {
+		updateScale();
+		UiRenderer c = UiRenderer.get();
+		if (c.isActive()) return;
+		prepareRenderer(c);
+		c.begin(ctx, pixelScale);
+		try {
+			drawer.accept(c);
+		} finally {
+			c.end();
+		}
+	}
+
+	float unitsWide() {
+		return screenW;
+	}
+
+	float unitsHigh() {
+		return screenH;
+	}
+
+	/** A GUI coordinate (mouse) in the desktop's units. */
+	float units(double guiCoord) {
+		return toUnits(guiCoord);
+	}
+
+	/** The launcher on its own over the game ({@link LauncherScreen}). */
+	void renderLauncher(GuiGraphicsExtractor ctx, int guiMouseX, int guiMouseY) {
+		updateScale();
+		mouseX = toUnits(guiMouseX);
+		mouseY = toUnits(guiMouseY);
+		UiRenderer c = UiRenderer.get();
+		prepareRenderer(c);
+		c.begin(ctx, pixelScale);
+		try {
+			c.captureBlur();
+			launcher.render(c, screenW, screenH, mouseX, mouseY);
+		} finally {
+			c.end();
+		}
+	}
+
+	/**
+	 * Myriad's mark on the title screen: the logo, the version, and how to open the menu, in the bottom left corner
+	 * just above Minecraft's version line (the one corner every window shape leaves free).
+	 */
+	public void renderTitleScreen(GuiGraphicsExtractor ctx) {
+		updateScale();
+		UiRenderer c = UiRenderer.get();
+		if (c.isActive()) return;
+		prepareRenderer(c);
+		c.begin(ctx, pixelScale);
+		try {
+			float fs = c.defaultFontSize() * 1.25f;
+			float size = 16, x = 6, block = Math.max(size, 1 + c.textHeight(FontFamily.SANS, fs) + 2 + c.textHeight());
+			float y = screenH - toUnits(12) - 4 - block;
+			c.texture(TITLE_LOGO, x, y, size, size, 0, 0, 1, 1, theme.accent.argb());
+			c.text(FontFamily.SANS, fs, "Myriad", x + size + 5, y + 1, 0xFFFFFFFF);
+			float vx = x + size + 5 + c.textWidth(FontFamily.SANS, fs, "Myriad") + 4;
+			c.text(FontFamily.SANS, c.defaultFontSize(), Myriad.version(), vx, y + 1 + (c.textHeight(FontFamily.SANS, fs) - c.textHeight()) / 2, 0xB0FFFFFF);
+			c.text(openHint(), x + size + 5, y + 1 + c.textHeight(FontFamily.SANS, fs) + 2, 0xC8FFFFFF);
+		} finally {
+			c.end();
+		}
+	}
+
+	/** The logo, white on transparent, tinted with the accent. */
+	private static final Identifier TITLE_LOGO = Identifier.fromNamespaceAndPath("myriad", "textures/logo.png");
 
 	private dev.myriadclient.impl.service.NotificationManager notifications() {
 		return (dev.myriadclient.impl.service.NotificationManager) Myriad.notifications();
@@ -1070,7 +1183,7 @@ public final class WindowManager implements Desktop {
 	void onScreenRemoved() {
 		drag = null;
 		pressed = null;
-		launcher.hide();
+		launcher.hideNow();
 		markDirty();
 	}
 
@@ -1098,7 +1211,7 @@ public final class WindowManager implements Desktop {
 		return down(handle, GLFW.GLFW_KEY_LEFT_SHIFT) || down(handle, GLFW.GLFW_KEY_RIGHT_SHIFT);
 	}
 
-	private boolean modHeld() {
+	boolean modHeld() {
 		long handle = mc.getWindow().handle();
 		return switch (theme.modKey.get()) {
 			case ALT -> down(handle, GLFW.GLFW_KEY_LEFT_ALT) || down(handle, GLFW.GLFW_KEY_RIGHT_ALT);
@@ -1530,7 +1643,11 @@ public final class WindowManager implements Desktop {
 		bind("gaps", "Toggle window gaps", GLFW.GLFW_KEY_BACKSPACE, shift, WindowManager::toggleGaps);
 		for (int i = 1; i <= 9; i++) {
 			int ws = i;
-			bind("workspace_" + i, "Switch to workspace " + i, GLFW.GLFW_KEY_0 + i, 0, wm -> wm.switchWorkspace(ws));
+			bind("workspace_" + i, "Switch to workspace " + i, GLFW.GLFW_KEY_0 + i, 0, wm -> {
+				// The one showing: back to the game, so mod+N goes in and out of the menu on one key.
+				if (wm.active == ws) wm.close();
+				else wm.switchWorkspace(ws);
+			});
 			bind("move_" + i, "Move window to workspace " + i, GLFW.GLFW_KEY_0 + i, shift, wm -> wm.focused().ifPresent(w -> w.moveToWorkspace(ws)));
 		}
 		int[] keys = {GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN};

@@ -45,7 +45,6 @@ import dev.myriadclient.impl.ui.bar.CoreBarWidgets;
 import dev.myriadclient.impl.ui.layout.ColumnsLayout;
 import dev.myriadclient.impl.ui.layout.DwindleLayout;
 import dev.myriadclient.impl.ui.panels.CorePanels;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 import net.minecraft.client.Minecraft;
@@ -72,7 +71,8 @@ public final class CoreAddon implements MyriadAddon {
 		CorePanels.register(ctx, wm);
 		CoreBarWidgets.register(ctx, wm);
 		CoreCommands.register(ctx);
-		ctx.registerKeyAction("Open Menu", Keybind.key(GLFW.GLFW_KEY_RIGHT_SHIFT), () -> Myriad.ui().open());
+		// Unbound: mod+1..9 opens the menu on a workspace. For a single key (Right Shift, as other clients use), bind it.
+		ctx.registerKeyAction("Open Menu", Keybind.NONE, () -> Myriad.ui().open());
 	}
 
 	private static <E extends Enum<E>> Widget enumDropdown(EnumSetting<E> s) {
