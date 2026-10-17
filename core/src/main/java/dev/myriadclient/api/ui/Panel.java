@@ -93,6 +93,11 @@ public abstract class Panel {
 	public void load(JsonObject in) {
 	}
 
+	/** Controls for the window's title bar (a switch, icon buttons), right to left; see {@link TitleControl}. */
+	public java.util.List<TitleControl> titleControls() {
+		return java.util.List.of();
+	}
+
 	/** Tooltip for the hovered element, or null. Read after {@link #render}. */
 	public String tooltip() {
 		return null;

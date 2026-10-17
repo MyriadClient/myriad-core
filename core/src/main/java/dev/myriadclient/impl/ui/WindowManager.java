@@ -45,6 +45,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
+import dev.myriadclient.api.ui.TitleControl;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.resources.Identifier;
@@ -665,6 +666,7 @@ public final class WindowManager implements Desktop {
 		prepareRenderer(c);
 		c.begin(ctx, pixelScale);
 		try {
+			titleTip = null;
 			if (mc.level == null) c.gradientRect(0, 0, screenW, screenH, 0, 0xFF0C0C0C, 0xFF151816, 90);
 			c.captureBlur();
 			if (active != HUD_WORKSPACE) c.rect(0, 0, screenW, screenH, theme.desktopTint.argb());
@@ -914,7 +916,9 @@ public final class WindowManager implements Desktop {
 			c.text(FontFamily.MONO, c.defaultFontSize(), icon, x, ty, focused ? theme.accent.argb() : theme.textDim.argb());
 			x += 11;
 		}
+		var controls = titleControls(w, r);
 		float buttons = 26;
+		for (var e : controls) buttons += e.getKey().width() + 3;
 		float room = r.right() - buttons - x - 4;
 		String title = c.ellipsize(FontFamily.SANS_BOLD, c.defaultFontSize(), safeTitle(w), room);
 		c.text(FontFamily.SANS_BOLD, c.defaultFontSize(), title, x, ty, focused ? theme.text.argb() : theme.textDim.argb());
@@ -930,12 +934,50 @@ public final class WindowManager implements Desktop {
 			String m = "\uf0c1  Merge";
 			c.text(FontFamily.SANS_BOLD, c.defaultFontSize(), m, r.centerX() - c.textWidth(FontFamily.SANS_BOLD, c.defaultFontSize(), m) / 2, ty, theme.text.argb());
 		}
+		// The panel's own controls (a switch, icon buttons), then float and close.
+		float cy = r.y() + b + TITLE_H / 2;
+		for (var e : controls) {
+			TitleControl tc = e.getKey();
+			float cx = e.getValue();
+			boolean hover = interactive && mouseX >= cx && mouseX < cx + tc.width() && mouseY >= r.y() && mouseY < r.y() + TITLE_H;
+			if (hover) titleTip = tc.tooltip();
+			if (tc.isToggle()) {
+				tc.knob().animateTo(tc.isOn() ? 1 : 0, 160, theme.bezier());
+				float t = tc.knob().get(), sw = tc.width() - 2, sh = 8, sx = cx + 1, sy = cy - sh / 2, k = sh - 3;
+				c.roundRect(sx, sy, sw, sh, sh / 2, ColorUtil.lerp(hover ? theme.textDim.argb() : theme.surfaceHover.argb(), theme.accent.argb(), t));
+				c.circle(sx + 1.5f + k / 2 + (sw - 3 - k) * t, cy, k / 2, 0xFFFFFFFF);
+			} else {
+				c.text(FontFamily.MONO, c.defaultFontSize(), tc.icon(), cx + 1, ty, hover ? theme.text.argb() : theme.textDim.argb());
+			}
+		}
 		// Buttons: float toggle, close.
 		float bx = r.right() - b - 24;
 		boolean hoverFloat = interactive && mouseX >= bx && mouseX < bx + 11 && mouseY >= r.y() && mouseY < r.y() + TITLE_H;
 		boolean hoverClose = interactive && mouseX >= bx + 12 && mouseX < bx + 23 && mouseY >= r.y() && mouseY < r.y() + TITLE_H;
 		c.text(FontFamily.MONO, c.defaultFontSize(), w.floating ? "" : "", bx + 1, ty, hoverFloat ? theme.text.argb() : theme.textDim.argb());
 		c.text(FontFamily.MONO, c.defaultFontSize(), "", bx + 13, ty, hoverClose ? 0xFFF38BA8 : theme.textDim.argb());
+	}
+
+	/** A title-bar control hovered this frame, whose tooltip shows instead of the panel's. */
+	private String titleTip;
+
+	/** The panel's title-bar controls and the x of each, right to left from just before the float and close buttons. */
+	private List<Map.Entry<TitleControl, Float>> titleControls(WindowImpl w, Rect r) {
+		List<TitleControl> all;
+		try {
+			all = w.panel.titleControls();
+		} catch (Throwable t) {
+			return List.of();
+		}
+		List<Map.Entry<TitleControl, Float>> out = new ArrayList<>();
+		float x = r.right() - theme.borderSize.get() - 24 - 3;
+		for (TitleControl tc : all) {
+			if (!tc.isVisible()) continue;
+			x -= tc.width();
+			out.add(Map.entry(tc, x));
+			x -= 3;
+		}
+		return out;
 	}
 
 	private String safeSubtitle(WindowImpl w) {
@@ -993,9 +1035,9 @@ public final class WindowManager implements Desktop {
 		if (drag != null || launcher.isOpen()) return;
 		WindowImpl w = topWindowAt(mouseX, mouseY);
 		if (w == null) return;
-		String tip;
+		String tip = titleTip;
 		try {
-			tip = w.panel.tooltip();
+			if (tip == null) tip = w.panel.tooltip();
 		} catch (Throwable t) {
 			return;
 		}
@@ -1357,6 +1399,19 @@ public final class WindowManager implements Desktop {
 		}
 
 		if (theme.titleBars.get() && !w.fullscreen && my < r.y() + theme.borderSize.get() + TITLE_H) {
+			if (button == 0) {
+				for (var e : titleControls(w, r)) {
+					if (mx >= e.getValue() && mx < e.getValue() + e.getKey().width()) {
+						try {
+							e.getKey().click();
+						} catch (Throwable t) {
+							LOG.error("Title control of {} threw", w.type.id(), t);
+						}
+						markDirty();
+						return true;
+					}
+				}
+			}
 			float bx = r.right() - theme.borderSize.get() - 24;
 			if (button == 0 && mx >= bx + 12 && mx < bx + 23) {
 				closeWindow(w);

@@ -14,8 +14,8 @@ import java.util.Set;
  * A module inside a category window: clicking the header toggles the module, and its settings unfold underneath
  * (right-click, the chevron, or l/→ with the keyboard). Shift+right-click opens the settings in their own window.
  */
-final class ModuleEntry extends CardEntry {
-	private final Module module;
+class ModuleEntry extends CardEntry {
+	protected final Module module;
 	private final Set<Module> expandedSet;
 	private final String source;
 

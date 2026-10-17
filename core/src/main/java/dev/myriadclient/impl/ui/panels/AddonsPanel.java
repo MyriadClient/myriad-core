@@ -4,17 +4,18 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.Addon;
 import dev.myriadclient.api.addon.AddonState;
 import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.ui.TitleControl;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.SettingsView;
-import dev.myriadclient.api.ui.widget.Toggle;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.update.UpdateManager;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import net.minecraft.util.Util;
 
@@ -22,6 +23,26 @@ import net.minecraft.util.Util;
 public final class AddonsPanel extends WidgetPanel {
 	private final Set<String> unfolded = new HashSet<>();
 	private final UpdateManager updates = MyriadImpl.get().updates();
+	/** In the title bar: checking at start, checking now, and installing every update. */
+	private final List<TitleControl> titleControls = List.of(
+		TitleControl.toggle(updates::checkEnabled, updates::setCheckEnabled,
+			() -> "Check GitHub for new releases when the game starts: " + (updates.checkEnabled() ? "on" : "off")),
+		TitleControl.button(() -> updates.isChecking() ? "\uf110" : "\uf021", () -> updates.check(true),
+			() -> updates.isChecking() ? "Checking…" : "Check for updates now"),
+		TitleControl.button(() -> "\uf019", updates::updateAll, () -> "Update all " + updates.updatable().size() + " (they install when you quit)")
+			.visible(() -> updates.updatable().size() > 1));
+
+	@Override
+	public List<TitleControl> titleControls() {
+		return titleControls;
+	}
+
+	/** How many, and how many failed. */
+	@Override
+	public String subtitle() {
+		long failed = Myriad.addons().stream().filter(a -> a.state() == AddonState.FAILED).count();
+		return Myriad.addons().size() + " installed" + (failed > 0 ? ", " + failed + " failed" : "");
+	}
 
 	@Override
 	public String title() {
@@ -35,17 +56,6 @@ public final class AddonsPanel extends WidgetPanel {
 
 	@Override
 	protected void build(VBox content) {
-		long failed = Myriad.addons().stream().filter(a -> a.state() == AddonState.FAILED).count();
-		content.add(new Label(Myriad.addons().size() + " addons" + (failed > 0 ? ", " + failed + " failed" : "")
-			+ ". Myriad core ships no modules; everything here plugs in through the addon API.").dim());
-		HBox row = new HBox(4);
-		row.addFixed(new Toggle(updates::checkEnabled, updates::setCheckEnabled), 24);
-		row.addWeighted(new Label("Check for updates"), 1);
-		row.addFixed(new Button(() -> updates.isChecking() ? "Checking…" : "Check now", () -> updates.check(true)), 56)
-			.tooltip("Asks GitHub for newer releases of Myriad and every addon that names its repository");
-		row.addFixed(new Button("Update all", updates::updateAll).accent(), 56).visible(() -> updates.updatable().size() > 1)
-			.tooltip("Downloads every update; they install when you quit");
-		content.add(row);
 		for (Addon a : Myriad.addons()) content.add(new AddonEntry(a));
 	}
 
