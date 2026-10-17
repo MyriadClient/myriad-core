@@ -1,0 +1,23 @@
+# Asks Coolify to rebuild the website (myriadclient.dev), so its download button shows the latest release: after every
+# successful release, or by hand from the Actions tab. WEBSITE_DEPLOY_HOOK is the resource's deploy webhook URL, with
+# COOLIFY_TOKEN (a Coolify API token allowed to deploy) if the hook needs one; skipped until the hook is set.
+
+name: website
+on:
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: rebuild the website
+        env:
+          HOOK: ${{ secrets.WEBSITE_DEPLOY_HOOK }}
+          TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          [ -n "$HOOK" ] || { echo "WEBSITE_DEPLOY_HOOK not set, skipping"; exit 0; }
+          curl -fsS ${TOKEN:+-H "Authorization: Bearer $TOKEN"} "$HOOK"
