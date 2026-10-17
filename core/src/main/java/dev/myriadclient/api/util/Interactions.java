@@ -1,6 +1,7 @@
 package dev.myriadclient.api.util;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.service.Inventory;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -91,7 +92,7 @@ public final class Interactions {
 
 	/**
 	 * Attack charge, 0..1 (1 = a full-strength hit), of the item the server holds in your hand (a weapon a module holds
-	 * silently counts, not the one you see): see {@link dev.myriadclient.api.service.Inventory#attackCharge()}.
+	 * silently counts, not the one you see): see {@link Inventory#attackCharge()}.
 	 */
 	public static float attackCharge() {
 		return Myriad.inventory().attackCharge();

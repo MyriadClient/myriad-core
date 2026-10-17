@@ -5,38 +5,40 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.FontFamily;
-import dev.myriadclient.api.ui.BarWidget;
+import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.service.Notifications;
 import dev.myriadclient.api.ui.Desktop;
-import dev.myriadclient.api.ui.Direction;
 import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Rect;
 import dev.myriadclient.api.ui.SettingWidgets;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.ThemeSettings;
+import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.Window;
 import dev.myriadclient.api.ui.layout.Layout;
 import dev.myriadclient.api.ui.layout.LayoutState;
-import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.impl.CoreAddon;
 import dev.myriadclient.impl.render.UiRenderer;
+import dev.myriadclient.impl.service.NotificationManager;
 import dev.myriadclient.impl.ui.layout.DwindleLayout;
 import dev.myriadclient.impl.ui.panels.CorePanels;
 import dev.myriadclient.impl.ui.panels.DialogPanel;
 import dev.myriadclient.impl.ui.panels.ModuleGroup;
 import dev.myriadclient.impl.ui.panels.ModulesPanel;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -44,11 +46,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import net.minecraft.client.Minecraft;
-import dev.myriadclient.api.ui.TitleControl;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.resources.Identifier;
 
 /**
  * The Hyprland-inspired window manager behind {@link Desktop}: workspaces with tiling layouts and floating windows,
@@ -56,24 +53,26 @@ import net.minecraft.resources.Identifier;
  * windows are drawn in game.
  */
 public final class WindowManager implements Desktop {
-	private static final Logger LOG = LoggerFactory.getLogger("Myriad/Desktop");
+	static final Logger LOG = LoggerFactory.getLogger("Myriad/Desktop");
 	static final float TITLE_H = 13;
 	/** Bump to rebuild users' workspace layouts (theme and HUD are kept) after a default-layout change. */
 	private static final int LAYOUT_VERSION = 3;
 	private static final float SNAP = 4;
 
-	private final Minecraft mc = Minecraft.getInstance();
-	private final ThemeSettings theme = new ThemeSettings();
+	final Minecraft mc = Minecraft.getInstance();
+	final ThemeSettings theme = new ThemeSettings();
 	private final ThemeManager themes = new ThemeManager(theme);
 	private final SettingWidgetsImpl settingWidgets = new SettingWidgetsImpl();
-	private final Workspace[] workspaces = new Workspace[WORKSPACES + 1];
-	private final List<WindowImpl> windows = new ArrayList<>();
-	private final List<WindowImpl> closing = new ArrayList<>();
-	private final Launcher launcher = new Launcher(this);
-	private final Map<String, WmBind> binds = new LinkedHashMap<>();
-	private final Set<WindowImpl> failedPanels = new HashSet<>();
-	private final Animated transition = new Animated(1);
-	private final long borderEpoch = System.nanoTime();
+	final Workspace[] workspaces = new Workspace[WORKSPACES + 1];
+	final List<WindowImpl> windows = new ArrayList<>();
+	final List<WindowImpl> closing = new ArrayList<>();
+	final Launcher launcher = new Launcher(this);
+	private final DesktopPainter painter = new DesktopPainter(this);
+	private final CategoryWindows categories = new CategoryWindows(this);
+	private final DesktopBinds binds = new DesktopBinds(this);
+	final Set<WindowImpl> failedPanels = new HashSet<>();
+	final Animated transition = new Animated(1);
+	final long borderEpoch = System.nanoTime();
 	private Runnable dirtyHook = () -> {
 	};
 
@@ -82,21 +81,18 @@ public final class WindowManager implements Desktop {
 	private boolean modulesChanged;
 	/** Each workspace's tiling as loaded, so a window revived later (its modules came late) can take its old place. */
 	private final JsonObject[] savedTiling = new JsonObject[WORKSPACES + 1];
-	/** Addon + category groups this desktop has already placed, so a group whose window you closed stays closed. */
-	private final Set<String> seenGroups = new LinkedHashSet<>();
-	private int active = 1, previous = 1;
+	int active = 1, previous = 1;
 	private int nextUid = 1;
 
 	// Frame/input state
-	private float pixelScale = 2, screenW = 960, screenH = 540;
-	private float mouseX, mouseY;
-	private Drag drag;
+	float pixelScale = 2, screenW = 960, screenH = 540;
+	float mouseX, mouseY;
+	Drag drag;
 	private WindowImpl pressed;
-	private boolean snappedX, snappedY;
+	boolean snappedX, snappedY;
 
 	public WindowManager() {
 		for (int i = 0; i <= WORKSPACES; i++) workspaces[i] = new Workspace(i, new DwindleLayout());
-		registerBinds();
 	}
 
 	public void setDirtyHook(Runnable hook) {
@@ -118,8 +114,8 @@ public final class WindowManager implements Desktop {
 
 	/** Runs one of the desktop's own bindings by id ("launcher", "layout", "close", ...), for the dev console. */
 	public void runBind(String id) {
-		WmBind b = binds.get(id);
-		if (b == null) throw new IllegalArgumentException("no desktop binding '" + id + "'; one of " + binds.keySet());
+		DesktopBinds.Bind b = binds.get(id);
+		if (b == null) throw new IllegalArgumentException("no desktop binding '" + id + "'; one of " + binds.all().keySet());
 		b.action.accept(this);
 	}
 
@@ -139,7 +135,7 @@ public final class WindowManager implements Desktop {
 		modulesChanged = false;
 		reviveOrphans();
 		for (WindowImpl w : windows) if (w.panel instanceof ModulesPanel p) safe(w, p::rebuild);
-		placeNewGroups(true);
+		categories.placeNewGroups(true);
 	}
 
 	/**
@@ -247,7 +243,7 @@ public final class WindowManager implements Desktop {
 
 	/** Opens the HUD window as a floating window on the HUD workspace, unless it's already there. */
 	private void ensureHudEditor() {
-		MyriadId id = dev.myriadclient.impl.ui.panels.CorePanels.HUD_ELEMENTS;
+		MyriadId id = CorePanels.HUD_ELEMENTS;
 		if (find(id, new JsonObject()).isPresent()) return;
 		openPanel(id, new JsonObject(), HUD_WORKSPACE, true).ifPresent(win -> {
 			WindowImpl w = (WindowImpl) win;
@@ -332,7 +328,7 @@ public final class WindowManager implements Desktop {
 	@Override
 	public void applyTheme(MyriadId id) {
 		if (themes.apply(id)) {
-			Myriad.notifications().send("Theme", "Applied " + themes.active().name(), dev.myriadclient.api.service.Notifications.Level.SUCCESS, 2000, "theme");
+			Myriad.notifications().toast("Theme", "Applied " + themes.active().name()).level(Notifications.Level.SUCCESS).lasting(2000).replacing("theme").show();
 		}
 	}
 
@@ -360,7 +356,7 @@ public final class WindowManager implements Desktop {
 	public boolean globalKey(int key, int mods) {
 		if ((mods & modMask()) == 0 || isOpen() || mc.gui.screen() instanceof LauncherScreen) return false;
 		int rest = mods & ~modMask() & ~GLFW.GLFW_MOD_NUM_LOCK & ~GLFW.GLFW_MOD_CAPS_LOCK;
-		for (WmBind b : binds.values()) {
+		for (DesktopBinds.Bind b : binds.all().values()) {
 			if (b.bind.mouse() || b.bind.code() != key || (b.bind.modifiers() & ~GLFW.GLFW_MOD_NUM_LOCK & ~GLFW.GLFW_MOD_CAPS_LOCK) != rest) continue;
 			if (b.id.equals("launcher")) {
 				// On its own, over the game or the title screen: no workspace opens unless what it runs needs one.
@@ -385,13 +381,13 @@ public final class WindowManager implements Desktop {
 		String mod = modName();
 		String menu = mod + "+1";
 		for (var action : Myriad.keyActions()) {
-			if (action.id().equals(dev.myriadclient.impl.CoreAddon.OPEN_MENU) && action.bind().isSet()) menu = action.bind().displayName() + " or " + menu;
+			if (action.id().equals(CoreAddon.OPEN_MENU) && action.bind().isSet()) menu = action.bind().displayName() + " or " + menu;
 		}
 		return menu + " opens the menu · " + mod + "+Space the launcher";
 	}
 
-	public Map<String, WmBind> binds() {
-		return binds;
+	public Map<String, DesktopBinds.Bind> binds() {
+		return binds.all();
 	}
 
 	// ================================================================================================================
@@ -512,7 +508,7 @@ public final class WindowManager implements Desktop {
 	/** Re-creates panels of a type (e.g. after the module list changed). */
 	public void rebuildPanels(MyriadId type) {
 		for (WindowImpl w : windows) {
-			if (w.type.id().equals(type) && w.panel instanceof dev.myriadclient.api.ui.WidgetPanel wp) wp.rebuild();
+			if (w.type.id().equals(type) && w.panel instanceof WidgetPanel wp) wp.rebuild();
 		}
 	}
 
@@ -544,7 +540,7 @@ public final class WindowManager implements Desktop {
 	// ================================================================================================================
 	// Geometry
 
-	private void updateScale() {
+	void updateScale() {
 		if (mc.getWindow() == null) return;
 		int fbH = mc.getWindow().getHeight();
 		int fbW = mc.getWindow().getWidth();
@@ -553,21 +549,21 @@ public final class WindowManager implements Desktop {
 		screenH = fbH / pixelScale;
 	}
 
-	private float barHeight() {
+	float barHeight() {
 		return theme.bar.get() ? theme.barHeight.get() : 0;
 	}
 
-	private boolean barAtTop() {
+	boolean barAtTop() {
 		return theme.barPosition.get() == ThemeSettings.BarPosition.TOP;
 	}
 
 	/** Area available to windows (screen minus the bar). */
-	private Rect workArea() {
+	Rect workArea() {
 		float bh = barHeight();
 		return barAtTop() ? new Rect(0, bh, screenW, screenH - bh) : new Rect(0, 0, screenW, screenH - bh);
 	}
 
-	private void arrange(Workspace ws, boolean animate) {
+	void arrange(Workspace ws, boolean animate) {
 		Rect area = workArea();
 		float duration = theme.durationMs(theme.windowSpeed);
 		float out = theme.gapsOut.get();
@@ -582,7 +578,7 @@ public final class WindowManager implements Desktop {
 		}
 	}
 
-	private Rect contentRect(WindowImpl w, Rect r) {
+	Rect contentRect(WindowImpl w, Rect r) {
 		float b = theme.borderSize.get();
 		float title = theme.titleBars.get() && !w.fullscreen ? TITLE_H : 0;
 		return r.inset(b, b + title, b, b);
@@ -636,10 +632,10 @@ public final class WindowManager implements Desktop {
 	// Rendering
 
 	@Override
-	public void draw(GuiGraphicsExtractor ctx, java.util.function.Consumer<dev.myriadclient.api.render.Canvas> drawer) {
+	public void draw(GuiGraphicsExtractor ctx, Consumer<Canvas> drawer) {
 		UiRenderer c = UiRenderer.get();
 		if (c.isActive()) return;
-		prepareRenderer(c);
+		painter.prepareRenderer(c);
 		c.begin(ctx, (float) mc.getWindow().getGuiScale());
 		try {
 			drawer.accept(c);
@@ -648,61 +644,25 @@ public final class WindowManager implements Desktop {
 		}
 	}
 
-	private void prepareRenderer(UiRenderer r) {
-		r.setDefaults(theme.fontFamily(), theme.fontSize.get().floatValue());
-		// No world, nothing worth blurring: the desktop's own background is drawn as part of the GUI.
-		r.setBlur(theme.blur.get() && mc.level != null, theme.blurPasses.get(), theme.blurSize.get().floatValue());
+	/** Draws the desktop, the HUD and Myriad's own screens. */
+	DesktopPainter painter() {
+		return painter;
 	}
 
-	private float toUnits(double guiCoord) {
+	/** In game: HUD elements and notifications. */
+	public void renderHud(GuiGraphicsExtractor ctx) {
+		painter.renderHud(ctx);
+	}
+
+	/** Minecraft's own title screen (with Myriad's off): the logo, version and how to open the menu in a corner. */
+	public void renderTitleScreen(GuiGraphicsExtractor ctx) {
+		painter.renderTitleScreen(ctx);
+	}
+
+	float toUnits(double guiCoord) {
 		return (float) (guiCoord * mc.getWindow().getGuiScale() / pixelScale);
 	}
 
-	void renderDesktop(GuiGraphicsExtractor ctx, int guiMouseX, int guiMouseY) {
-		updateScale();
-		mouseX = toUnits(guiMouseX);
-		mouseY = toUnits(guiMouseY);
-		UiRenderer c = UiRenderer.get();
-		prepareRenderer(c);
-		c.begin(ctx, pixelScale);
-		try {
-			titleTip = null;
-			if (mc.level == null) c.gradientRect(0, 0, screenW, screenH, 0, 0xFF0C0C0C, 0xFF151816, 90);
-			c.captureBlur();
-			if (active != HUD_WORKSPACE) c.rect(0, 0, screenW, screenH, theme.desktopTint.argb());
-
-			float t = transition.get();
-			if (t < 1 && previous != active) {
-				drawWorkspaceLayer(c, workspaces[previous], t, true);
-				drawWorkspaceLayer(c, workspaces[active], t, false);
-			} else {
-				drawWorkspaceLayer(c, workspaces[active], 1, false);
-			}
-			drawClosing(c);
-			if (active == HUD_WORKSPACE) drawHudEditorOverlay(c);
-			if (theme.bar.get()) drawBar(c);
-			if (workspaces[active].isEmpty() && active != HUD_WORKSPACE) drawEmptyHint(c);
-			launcher.render(c, screenW, screenH, mouseX, mouseY);
-			drawTooltip(c);
-			notifications().render(c, screenW, screenH, barAtTop() ? 0 : barHeight());
-		} finally {
-			c.end();
-		}
-	}
-
-	/** Draws in the desktop's units, at its scale, for screens of Myriad's own (the title screen). */
-	void paint(GuiGraphicsExtractor ctx, java.util.function.Consumer<UiRenderer> drawer) {
-		updateScale();
-		UiRenderer c = UiRenderer.get();
-		if (c.isActive()) return;
-		prepareRenderer(c);
-		c.begin(ctx, pixelScale);
-		try {
-			drawer.accept(c);
-		} finally {
-			c.end();
-		}
-	}
 
 	float unitsWide() {
 		return screenW;
@@ -717,468 +677,13 @@ public final class WindowManager implements Desktop {
 		return toUnits(guiCoord);
 	}
 
-	/** The launcher on its own over the game ({@link LauncherScreen}). */
-	void renderLauncher(GuiGraphicsExtractor ctx, int guiMouseX, int guiMouseY) {
-		updateScale();
-		mouseX = toUnits(guiMouseX);
-		mouseY = toUnits(guiMouseY);
-		UiRenderer c = UiRenderer.get();
-		prepareRenderer(c);
-		c.begin(ctx, pixelScale);
-		try {
-			c.captureBlur();
-			launcher.render(c, screenW, screenH, mouseX, mouseY);
-		} finally {
-			c.end();
-		}
+	NotificationManager notifications() {
+		return (NotificationManager) Myriad.notifications();
 	}
 
-	/**
-	 * Myriad's mark on the title screen: the logo, the version, and how to open the menu, in the bottom left corner
-	 * just above Minecraft's version line (the one corner every window shape leaves free).
-	 */
-	public void renderTitleScreen(GuiGraphicsExtractor ctx) {
-		updateScale();
-		UiRenderer c = UiRenderer.get();
-		if (c.isActive()) return;
-		prepareRenderer(c);
-		c.begin(ctx, pixelScale);
-		try {
-			float fs = c.defaultFontSize() * 1.25f;
-			float size = 16, x = 6, block = Math.max(size, 1 + c.textHeight(FontFamily.SANS, fs) + 2 + c.textHeight());
-			float y = screenH - toUnits(12) - 4 - block;
-			c.texture(TITLE_LOGO, x, y, size, size, 0, 0, 1, 1, theme.accent.argb());
-			c.text(FontFamily.SANS, fs, "Myriad", x + size + 5, y + 1, 0xFFFFFFFF);
-			float vx = x + size + 5 + c.textWidth(FontFamily.SANS, fs, "Myriad") + 4;
-			c.text(FontFamily.SANS, c.defaultFontSize(), Myriad.version(), vx, y + 1 + (c.textHeight(FontFamily.SANS, fs) - c.textHeight()) / 2, 0xB0FFFFFF);
-			c.text(openHint(), x + size + 5, y + 1 + c.textHeight(FontFamily.SANS, fs) + 2, 0xC8FFFFFF);
-		} finally {
-			c.end();
-		}
-	}
-
-	/** The logo, white on transparent, tinted with the accent. */
-	private static final Identifier TITLE_LOGO = Identifier.fromNamespaceAndPath("myriad", "textures/logo.png");
-
-	private dev.myriadclient.impl.service.NotificationManager notifications() {
-		return (dev.myriadclient.impl.service.NotificationManager) Myriad.notifications();
-	}
-
-	/** In game: draw HUD elements and notifications. */
-	public void renderHud(GuiGraphicsExtractor ctx) {
-		if (mc.gui.hud.isHidden() || isOpen()) return;
-		updateScale();
-		UiRenderer c = UiRenderer.get();
-		if (c.isActive()) return;
-		prepareRenderer(c);
-		c.begin(ctx, pixelScale);
-		try {
-			for (WindowImpl w : new ArrayList<>(workspaces[HUD_WORKSPACE].floating)) {
-				if (!w.isHudElement()) continue;
-				Rect r = hudRect(w);
-				drawHudElement(c, w, r, false);
-			}
-			notifications().render(c, screenW, screenH, 0);
-		} finally {
-			c.end();
-		}
-	}
-
-	private void drawHudElement(UiRenderer c, WindowImpl w, Rect r, boolean editing) {
-		int depth = c.depth();
-		c.push();
-		try {
-			if (theme.hudBackground.get()) {
-				float rad = theme.rounding.get();
-				c.backdrop(r.x() - 3, r.y() - 3, r.w() + 6, r.h() + 6, rad, 1);
-				c.roundRect(r.x() - 3, r.y() - 3, r.w() + 6, r.h() + 6, rad, theme.windowBackground.argb());
-			}
-			c.translate(r.x(), r.y());
-			w.panel.render(c, r.w(), r.h(), editing ? -1000 : mouseX - r.x(), editing ? -1000 : mouseY - r.y());
-		} catch (Throwable t) {
-			if (failedPanels.add(w)) LOG.error("HUD panel {} threw while rendering", w.type.id(), t);
-		} finally {
-			c.restoreDepth(depth + 1);
-			c.pop();
-		}
-	}
-
-	private void drawWorkspaceLayer(UiRenderer c, Workspace ws, float t, boolean outgoing) {
-		// Follow the mouse directly while resizing; animate everything else.
-		boolean resizing = drag != null && (drag.kind == DragKind.SPLITTER || drag.kind == DragKind.TILE_RESIZE);
-		arrange(ws, !resizing);
-		c.push();
-		float dir = Integer.compare(active, previous);
-		switch (theme.workspaceAnimation.get()) {
-			case SLIDE -> c.translate((outgoing ? -t : 1 - t) * dir * screenW, 0);
-			case SLIDE_VERTICAL -> c.translate(0, (outgoing ? -t : 1 - t) * dir * screenH);
-			case FADE -> c.alpha(outgoing ? 1 - t : t);
-			case NONE -> {
-				if (outgoing) {
-					c.pop();
-					return;
-				}
-			}
-		}
-		boolean interactive = !outgoing && t >= 1;
-		for (WindowImpl w : ws.drawOrder()) {
-			if (ws.index == HUD_WORKSPACE && w.isHudElement()) {
-				drawHudElement(c, w, hudRect(w), true);
-				continue;
-			}
-			drawWindow(c, w, w.current(), w == ws.focused, interactive);
-		}
-		c.pop();
-	}
-
-	private void drawClosing(UiRenderer c) {
-		for (WindowImpl w : new ArrayList<>(closing)) {
-			if (w.opacity.get() <= 0.01f) {
-				closing.remove(w);
-				continue;
-			}
-			if (w.workspace == active) drawWindow(c, w, w.target, false, false);
-		}
-	}
-
-	private float borderAngle() {
-		float base = theme.borderAngle.get().floatValue();
-		if (!theme.animateBorder.get() || !theme.animations.get()) return base;
-		double secs = (System.nanoTime() - borderEpoch) / 1e9;
-		return (float) (base + secs / theme.borderSpeed.get() * 360 % 360);
-	}
-
-	private void drawWindow(UiRenderer c, WindowImpl w, Rect r, boolean focused, boolean interactive) {
-		if (r.w() < 1 || r.h() < 1) return;
-		float op = w.opacity.get();
-		float rad = w.fullscreen ? 0 : theme.rounding.get();
-		int depth = c.depth();
-		c.push();
-		try {
-			float alpha = op * (focused ? 1f : theme.inactiveOpacity.get().floatValue());
-			c.alpha(alpha);
-			if (op < 1) {
-				// Hyprland "popin": grow from the theme's popin scale around the centre.
-				float p = theme.popin.get().floatValue();
-				float s = p + (1 - p) * op;
-				c.translate(r.centerX(), r.centerY());
-				c.scale(s);
-				c.translate(-r.centerX(), -r.centerY());
-			}
-			if (theme.shadow.get() && !w.fullscreen) {
-				c.shadow(r.x(), r.y(), r.w(), r.h(), rad, theme.shadowRange.get(), theme.shadowColor.argb());
-			}
-			c.backdrop(r.x(), r.y(), r.w(), r.h(), rad, 1);
-			c.roundRect(r.x(), r.y(), r.w(), r.h(), rad, theme.windowBackground.argb());
-
-			Rect content = contentRect(w, r);
-			if (theme.titleBars.get() && !w.fullscreen) drawTitleBar(c, w, r, rad, focused, interactive);
-
-			c.push();
-			c.clip(content.x(), content.y(), content.w(), content.h());
-			c.translate(content.x(), content.y());
-			boolean hoverable = interactive && launcher.isOpen() == false && topWindowAt(mouseX, mouseY) == w;
-			float lmx = hoverable ? mouseX - content.x() : -10000, lmy = hoverable ? mouseY - content.y() : -10000;
-			int innerDepth = c.depth();
-			try {
-				w.panel.render(c, content.w(), content.h(), lmx, lmy);
-			} catch (Throwable t) {
-				c.restoreDepth(innerDepth);
-				if (failedPanels.add(w)) LOG.error("Panel {} threw while rendering", w.type.id(), t);
-				c.text(" " + t.getClass().getSimpleName() + ": " + t.getMessage(), 6, 6, 0xFFF38BA8);
-			}
-			c.pop();
-
-			if (!focused && theme.dimInactive.get() > 0) {
-				c.roundRect(r.x(), r.y(), r.w(), r.h(), rad, ColorUtil.argb((int) (theme.dimInactive.get() * 255), 0, 0, 0));
-			}
-			int bs = theme.borderSize.get();
-			if (bs > 0) {
-				if (focused) c.gradientOutline(r.x(), r.y(), r.w(), r.h(), rad, bs, theme.activeBorderFrom.argb(), theme.activeBorderTo.argb(), borderAngle());
-				else c.outline(r.x(), r.y(), r.w(), r.h(), rad, bs, theme.inactiveBorder.argb());
-			}
-			if (drag != null && drag.kind == DragKind.SWAP && drag.window != w && interactive && r.contains(mouseX, mouseY) && mergeTarget() == null) {
-				c.roundRect(r.x(), r.y(), r.w(), r.h(), rad, ColorUtil.withAlpha(theme.accent.argb(), 40));
-			}
-		} finally {
-			c.restoreDepth(depth + 1);
-			c.pop();
-		}
-	}
-
-	private void drawTitleBar(UiRenderer c, WindowImpl w, Rect r, float rad, boolean focused, boolean interactive) {
-		float b = theme.borderSize.get();
-		c.roundRect(r.x() + b, r.y() + b, r.w() - b * 2, TITLE_H, Math.max(0, rad - b), Math.max(0, rad - b), 0, 0, theme.titleBackground.argb());
-		float ty = r.y() + b + (TITLE_H - c.textHeight()) / 2;
-		float x = r.x() + b + 6;
-		String icon = w.panel.icon() != null ? w.panel.icon() : w.type.icon();
-		if (icon != null) {
-			c.text(FontFamily.MONO, c.defaultFontSize(), icon, x, ty, focused ? theme.accent.argb() : theme.textDim.argb());
-			x += 11;
-		}
-		var controls = titleControls(w, r);
-		float buttons = 26;
-		for (var e : controls) buttons += e.getKey().width() + 3;
-		float room = r.right() - buttons - x - 4;
-		String title = c.ellipsize(FontFamily.SANS_BOLD, c.defaultFontSize(), safeTitle(w), room);
-		c.text(FontFamily.SANS_BOLD, c.defaultFontSize(), title, x, ty, focused ? theme.text.argb() : theme.textDim.argb());
-		String sub = safeSubtitle(w);
-		if (sub != null && !sub.isEmpty()) {
-			float sx = x + c.textWidth(FontFamily.SANS_BOLD, c.defaultFontSize(), title) + 5;
-			String s = c.ellipsize(FontFamily.SANS, c.defaultFontSize(), sub, x + room - sx);
-			c.text(FontFamily.SANS, c.defaultFontSize(), s, sx, ty, ColorUtil.withAlpha(theme.textDim.argb(), focused ? 220 : 150));
-		}
-		if (mergeTarget() == w) {
-			// Dropping here merges the dragged category window into this one.
-			c.roundRect(r.x() + b, r.y() + b, r.w() - b * 2, TITLE_H, Math.max(0, rad - b), Math.max(0, rad - b), 0, 0, ColorUtil.withAlpha(theme.accent.argb(), 110));
-			String m = "\uf0c1  Merge";
-			c.text(FontFamily.SANS_BOLD, c.defaultFontSize(), m, r.centerX() - c.textWidth(FontFamily.SANS_BOLD, c.defaultFontSize(), m) / 2, ty, theme.text.argb());
-		}
-		// The panel's own controls (a switch, icon buttons), then float and close.
-		float cy = r.y() + b + TITLE_H / 2;
-		for (var e : controls) {
-			TitleControl tc = e.getKey();
-			float cx = e.getValue();
-			boolean hover = interactive && mouseX >= cx && mouseX < cx + tc.width() && mouseY >= r.y() && mouseY < r.y() + TITLE_H;
-			if (hover) titleTip = tc.tooltip();
-			if (tc.isToggle()) {
-				tc.knob().animateTo(tc.isOn() ? 1 : 0, 160, theme.bezier());
-				float t = tc.knob().get(), sw = tc.width() - 2, sh = 8, sx = cx + 1, sy = cy - sh / 2, k = sh - 3;
-				c.roundRect(sx, sy, sw, sh, sh / 2, ColorUtil.lerp(hover ? theme.textDim.argb() : theme.surfaceHover.argb(), theme.accent.argb(), t));
-				c.circle(sx + 1.5f + k / 2 + (sw - 3 - k) * t, cy, k / 2, 0xFFFFFFFF);
-			} else {
-				c.text(FontFamily.MONO, c.defaultFontSize(), tc.icon(), cx + 1, ty, hover ? theme.text.argb() : theme.textDim.argb());
-			}
-		}
-		// Buttons: float toggle, close.
-		float bx = r.right() - b - 24;
-		boolean hoverFloat = interactive && mouseX >= bx && mouseX < bx + 11 && mouseY >= r.y() && mouseY < r.y() + TITLE_H;
-		boolean hoverClose = interactive && mouseX >= bx + 12 && mouseX < bx + 23 && mouseY >= r.y() && mouseY < r.y() + TITLE_H;
-		c.text(FontFamily.MONO, c.defaultFontSize(), w.floating ? "" : "", bx + 1, ty, hoverFloat ? theme.text.argb() : theme.textDim.argb());
-		c.text(FontFamily.MONO, c.defaultFontSize(), "", bx + 13, ty, hoverClose ? 0xFFF38BA8 : theme.textDim.argb());
-	}
-
-	/** A title-bar control hovered this frame, whose tooltip shows instead of the panel's. */
-	private String titleTip;
-
-	/** The panel's title-bar controls and the x of each, right to left from just before the float and close buttons. */
-	private List<Map.Entry<TitleControl, Float>> titleControls(WindowImpl w, Rect r) {
-		List<TitleControl> all;
-		try {
-			all = w.panel.titleControls();
-		} catch (Throwable t) {
-			return List.of();
-		}
-		List<Map.Entry<TitleControl, Float>> out = new ArrayList<>();
-		float x = r.right() - theme.borderSize.get() - 24 - 3;
-		for (TitleControl tc : all) {
-			if (!tc.isVisible()) continue;
-			x -= tc.width();
-			out.add(Map.entry(tc, x));
-			x -= 3;
-		}
-		return out;
-	}
-
-	private String safeSubtitle(WindowImpl w) {
-		try {
-			return w.panel.subtitle();
-		} catch (Throwable t) {
-			return null;
-		}
-	}
-
-	private String safeTitle(WindowImpl w) {
-		try {
-			return w.panel.title();
-		} catch (Throwable t) {
-			return w.type.name();
-		}
-	}
-
-	private void drawHudEditorOverlay(UiRenderer c) {
-		int guide = ColorUtil.withAlpha(theme.accent.argb(), 90);
-		c.rect(screenW / 3, 0, 0.5f, screenH, ColorUtil.withAlpha(theme.textDim.argb(), 25));
-		c.rect(screenW * 2 / 3, 0, 0.5f, screenH, ColorUtil.withAlpha(theme.textDim.argb(), 25));
-		c.rect(0, screenH / 3, screenW, 0.5f, ColorUtil.withAlpha(theme.textDim.argb(), 25));
-		c.rect(0, screenH * 2 / 3, screenW, 0.5f, ColorUtil.withAlpha(theme.textDim.argb(), 25));
-		for (WindowImpl w : workspaces[HUD_WORKSPACE].floating) {
-			if (!w.isHudElement()) continue;
-			Rect r = hudRect(w);
-			boolean hover = r.inset(-2).contains(mouseX, mouseY);
-			boolean dragging = drag != null && drag.window == w;
-			c.outline(r.x() - 2, r.y() - 2, r.w() + 4, r.h() + 4, 3, 1, hover || dragging ? theme.accent.argb() : ColorUtil.withAlpha(theme.textDim.argb(), 80));
-			if (hover || dragging) {
-				String label = safeTitle(w) + "  ·  " + w.anchor.name().toLowerCase().replace('_', ' ');
-				float ly = r.y() - 2 - c.textHeight() - 2 < 0 ? r.bottom() + 3 : r.y() - 2 - c.textHeight() - 2;
-				c.text(FontFamily.SANS, c.defaultFontSize() * 0.85f, label, r.x(), ly, theme.accent.argb());
-			}
-			if (dragging) {
-				if (snappedX) c.rect(r.centerX(), 0, 0.5f, screenH, guide);
-				if (snappedY) c.rect(0, r.centerY(), screenW, 0.5f, guide);
-			}
-		}
-		String hint = "HUD · drag to move · right-click for settings · Alt+Space to add elements";
-		c.text(FontFamily.SANS, c.defaultFontSize() * 0.85f, hint, (screenW - c.textWidth(FontFamily.SANS, c.defaultFontSize() * 0.85f, hint)) / 2,
-			barAtTop() ? barHeight() + 6 : 6, theme.textDim.argb());
-	}
-
-	private void drawEmptyHint(UiRenderer c) {
-		String a = "Workspace " + active + " is empty";
-		String b = modName() + "+Space to open something · " + modName() + "+1-9 to switch";
-		float size = c.defaultFontSize();
-		c.text(FontFamily.SANS_BOLD, size * 1.4f, a, (screenW - c.textWidth(FontFamily.SANS_BOLD, size * 1.4f, a)) / 2, screenH / 2 - 14, theme.text.argb());
-		c.text(b, (screenW - c.textWidth(b)) / 2, screenH / 2 + 4, theme.textDim.argb());
-	}
-
-	private void drawTooltip(UiRenderer c) {
-		if (drag != null || launcher.isOpen()) return;
-		WindowImpl w = topWindowAt(mouseX, mouseY);
-		if (w == null) return;
-		String tip = titleTip;
-		try {
-			if (tip == null) tip = w.panel.tooltip();
-		} catch (Throwable t) {
-			return;
-		}
-		if (tip == null || tip.isBlank()) return;
-		float max = 180;
-		float lh = c.textHeight() + 1;
-		float bs = c.defaultFontSize() * 0.75f, bh = c.textHeight(FontFamily.SANS, bs) + 4;
-		// Plain lines wrap; badge lines (Widget.badgeLine) become a row of pills.
-		List<Object> rows = new ArrayList<>();
-		float tw = 0, th = 6;
-		for (String part : tip.split("\n", -1)) {
-			if (part.startsWith(dev.myriadclient.api.ui.widget.Widget.BADGE_LINE)) {
-				String[] labels = part.substring(dev.myriadclient.api.ui.widget.Widget.BADGE_LINE.length()).split("\t");
-				float rw = 0;
-				for (String l : labels) rw += c.textWidth(FontFamily.SANS_BOLD, bs, badgeText(l)) + 12;
-				tw = Math.max(tw, rw - 4);
-				th += bh + 2;
-				rows.add(labels);
-				continue;
-			}
-			for (String l : dev.myriadclient.api.ui.widget.Label.wrap(c, c.defaultFont(), c.defaultFontSize(), part, max)) {
-				tw = Math.max(tw, c.textWidth(l));
-				th += lh;
-				rows.add(l);
-			}
-		}
-		float x = Math.min(mouseX + 8, screenW - tw - 10), y = Math.min(mouseY + 10, screenH - th - 4);
-		c.roundRect(x, y, tw + 8, th, 4, 0xF0181825);
-		c.outline(x, y, tw + 8, th, 4, 1, ColorUtil.withAlpha(theme.accent.argb(), 120));
-		float ly = y + 3;
-		for (Object row : rows) {
-			if (row instanceof String l) {
-				c.text(l, x + 4, ly, theme.text.argb());
-				ly += lh;
-				continue;
-			}
-			float bx = x + 4;
-			ly += 1;
-			for (String label : (String[]) row) {
-				String text = badgeText(label);
-				Integer tint = badgeTint(label);
-				float pw = c.textWidth(FontFamily.SANS_BOLD, bs, text) + 8;
-				if (tint != null) {
-					c.roundRect(bx, ly, pw, bh, bh / 2, ColorUtil.withAlpha(tint, 50));
-					c.outline(bx, ly, pw, bh, bh / 2, 1, ColorUtil.withAlpha(tint, 110));
-					c.text(FontFamily.SANS_BOLD, bs, text, bx + 4, ly + 2, ColorUtil.lerp(tint, theme.text.argb(), 0.35f));
-				} else {
-					c.outline(bx, ly, pw, bh, bh / 2, 1, ColorUtil.withAlpha(theme.textDim.argb(), 90));
-					c.text(FontFamily.SANS, bs, text, bx + 4, ly + 2, theme.textDim.argb());
-				}
-				bx += pw + 4;
-			}
-			ly += bh + 1;
-		}
-	}
-
-	private static String badgeText(String label) {
-		int at = label.lastIndexOf('@');
-		return at > 0 && label.length() - at == 9 ? label.substring(0, at) : label;
-	}
-
-	private static Integer badgeTint(String label) {
-		int at = label.lastIndexOf('@');
-		if (at <= 0 || label.length() - at != 9) return null;
-		try {
-			return (int) Long.parseLong(label.substring(at + 1), 16);
-		} catch (NumberFormatException e) {
-			return null;
-		}
-	}
-
-	// ---- bar ------------------------------------------------------------------------------------------------------
-
-	private record BarSlot(BarWidget widget, float x, float w) {
-	}
-
-	private List<BarSlot> barLayout(UiRenderer c) {
-		float h = barHeight();
-		List<BarSlot> slots = new ArrayList<>();
-		Map<BarWidget.Side, List<BarWidget>> sides = new java.util.EnumMap<>(BarWidget.Side.class);
-		for (BarWidget w : Myriad.barWidgets()) sides.computeIfAbsent(w.side(), k -> new ArrayList<>()).add(w);
-		for (List<BarWidget> l : sides.values()) l.sort(Comparator.comparingInt(BarWidget::order));
-		float pad = 6, spacing = 8;
-		float x = pad;
-		for (BarWidget w : sides.getOrDefault(BarWidget.Side.LEFT, List.of())) {
-			float ww = widthOf(w, c, h);
-			if (ww <= 0) continue;
-			slots.add(new BarSlot(w, x, ww));
-			x += ww + spacing;
-		}
-		float right = screenW - pad;
-		List<BarWidget> rightList = new ArrayList<>(sides.getOrDefault(BarWidget.Side.RIGHT, List.of()));
-		Collections.reverse(rightList);
-		for (BarWidget w : rightList) {
-			float ww = widthOf(w, c, h);
-			if (ww <= 0) continue;
-			right -= ww;
-			slots.add(new BarSlot(w, right, ww));
-			right -= spacing;
-		}
-		List<BarWidget> center = sides.getOrDefault(BarWidget.Side.CENTER, List.of());
-		float total = 0;
-		for (BarWidget w : center) total += Math.max(0, widthOf(w, c, h)) + spacing;
-		float cx = (screenW - total + spacing) / 2;
-		for (BarWidget w : center) {
-			float ww = widthOf(w, c, h);
-			if (ww <= 0) continue;
-			slots.add(new BarSlot(w, cx, ww));
-			cx += ww + spacing;
-		}
-		return slots;
-	}
-
-	private static float widthOf(BarWidget w, UiRenderer c, float h) {
-		try {
-			return w.width(c, h);
-		} catch (Throwable t) {
-			return 0;
-		}
-	}
-
-	private void drawBar(UiRenderer c) {
-		float h = barHeight();
-		float y = barAtTop() ? 0 : screenH - h;
-		c.backdrop(0, y, screenW, h, 0, 1);
-		c.rect(0, y, screenW, h, theme.barBackground.argb());
-		for (BarSlot s : barLayout(c)) {
-			int depth = c.depth();
-			try {
-				s.widget.render(c, s.x, y, s.w, h, mouseX, mouseY);
-			} catch (Throwable t) {
-				c.restoreDepth(depth);
-			}
-		}
-	}
 
 	// ================================================================================================================
 	// Ticking
-
-	void tickDesktop() {
-	}
 
 	private int livePoll;
 	private String liveSignature = "";
@@ -1266,7 +771,7 @@ public final class WindowManager implements Desktop {
 		return GLFW.glfwGetKey(handle, key) == GLFW.GLFW_PRESS;
 	}
 
-	private WindowImpl topWindowAt(float x, float y) {
+	WindowImpl topWindowAt(float x, float y) {
 		Workspace ws = workspaces[active];
 		List<WindowImpl> order = ws.drawOrder();
 		for (int i = order.size() - 1; i >= 0; i--) {
@@ -1281,7 +786,7 @@ public final class WindowManager implements Desktop {
 	 * The category window whose title bar the dragged category window is over (dropping it there merges the two), or
 	 * null.
 	 */
-	private WindowImpl mergeTarget() {
+	WindowImpl mergeTarget() {
 		if (drag == null || (drag.kind != DragKind.SWAP && drag.kind != DragKind.MOVE) || !theme.titleBars.get()) return null;
 		if (!(drag.window.panel instanceof ModulesPanel from) || !from.isCategoryWindow()) return null;
 		List<WindowImpl> order = workspaces[active].drawOrder();
@@ -1304,11 +809,11 @@ public final class WindowManager implements Desktop {
 		markDirty();
 	}
 
-	private enum DragKind {
+	enum DragKind {
 		MOVE, RESIZE, SWAP, SPLITTER, TILE_RESIZE, HUD, PANEL
 	}
 
-	private static final class Drag {
+	static final class Drag {
 		DragKind kind;
 		WindowImpl window;
 		LayoutState.Splitter splitter;
@@ -1332,12 +837,12 @@ public final class WindowManager implements Desktop {
 		if (theme.bar.get()) {
 			float h = barHeight(), by = barAtTop() ? 0 : screenH - h;
 			if (my >= by && my < by + h) {
-				for (BarSlot s : barLayout(UiRenderer.get())) {
-					if (mx >= s.x && mx < s.x + s.w) {
+				for (DesktopPainter.BarSlot s : painter.barLayout(UiRenderer.get())) {
+					if (mx >= s.x() && mx < s.x() + s.w()) {
 						try {
-							s.widget.mouseClicked(mx - s.x, my - by, button);
+							s.widget().mouseClicked(mx - s.x(), my - by, button);
 						} catch (Throwable t) {
-							LOG.error("Bar widget {} threw", s.widget.id(), t);
+							LOG.error("Bar widget {} threw", s.widget().id(), t);
 						}
 						return true;
 					}
@@ -1400,7 +905,7 @@ public final class WindowManager implements Desktop {
 
 		if (theme.titleBars.get() && !w.fullscreen && my < r.y() + theme.borderSize.get() + TITLE_H) {
 			if (button == 0) {
-				for (var e : titleControls(w, r)) {
+				for (var e : painter.titleControls(w, r)) {
 					if (mx >= e.getValue() && mx < e.getValue() + e.getKey().width()) {
 						try {
 							e.getKey().click();
@@ -1498,7 +1003,7 @@ public final class WindowManager implements Desktop {
 		if (w.panel.settings.all().isEmpty()) return;
 		JsonObject args = new JsonObject();
 		args.addProperty("window", w.uid);
-		openPanel(dev.myriadclient.impl.ui.panels.CorePanels.PANEL_SETTINGS, args, active, true);
+		openPanel(CorePanels.PANEL_SETTINGS, args, active, true);
 	}
 
 	boolean mouseDragged(double gx, double gy, int button) {
@@ -1577,7 +1082,7 @@ public final class WindowManager implements Desktop {
 		float mx = toUnits(gx), my = toUnits(gy);
 		if (launcher.mouseScrolled((float) amount)) return true;
 		if (modHeld()) {
-			cycleWorkspace(amount > 0 ? -1 : 1);
+			binds.cycleWorkspace(amount > 0 ? -1 : 1);
 			return true;
 		}
 		WindowImpl w = topWindowAt(mx, my);
@@ -1603,7 +1108,7 @@ public final class WindowManager implements Desktop {
 		if (typing && panelKey(focused, key, scancode, mods)) return true;
 		if ((mods & modMask()) != 0) {
 			int rest = mods & ~modMask();
-			for (WmBind b : binds.values()) {
+			for (DesktopBinds.Bind b : binds.all().values()) {
 				if (b.bind.code() == key && !b.bind.mouse() && (b.bind.modifiers() & ~GLFW.GLFW_MOD_NUM_LOCK & ~GLFW.GLFW_MOD_CAPS_LOCK) == (rest & ~GLFW.GLFW_MOD_NUM_LOCK & ~GLFW.GLFW_MOD_CAPS_LOCK)) {
 					b.action.accept(this);
 					return true;
@@ -1624,7 +1129,7 @@ public final class WindowManager implements Desktop {
 			return true;
 		}
 		for (var action : Myriad.keyActions()) {
-			if (action.id().equals(dev.myriadclient.impl.CoreAddon.OPEN_MENU) && action.bind().matchesKey(key, mods)) {
+			if (action.id().equals(CoreAddon.OPEN_MENU) && action.bind().matchesKey(key, mods)) {
 				close();
 				return true;
 			}
@@ -1655,149 +1160,6 @@ public final class WindowManager implements Desktop {
 	}
 
 	// ================================================================================================================
-	// Window manager actions (bound to mod+key)
-
-	public static final class WmBind {
-		public final String id, name;
-		public final Keybind defaultBind;
-		public Keybind bind;
-		final Consumer<WindowManager> action;
-
-		WmBind(String id, String name, Keybind bind, Consumer<WindowManager> action) {
-			this.id = id;
-			this.name = name;
-			this.defaultBind = bind;
-			this.bind = bind;
-			this.action = action;
-		}
-	}
-
-	private void bind(String id, String name, int key, int mods, Consumer<WindowManager> action) {
-		binds.put(id, new WmBind(id, name, Keybind.key(key, mods), action));
-	}
-
-	/** Omarchy's tiling bindings, with the mod key standing in for Super (Hyprland keeps Super for itself). */
-	private void registerBinds() {
-		int shift = GLFW.GLFW_MOD_SHIFT, ctrl = GLFW.GLFW_MOD_CONTROL;
-		bind("launcher", "Launcher", GLFW.GLFW_KEY_SPACE, 0, wm -> wm.launcher.toggle());
-		bind("console", "Console", GLFW.GLFW_KEY_ENTER, 0, wm -> wm.openPanel(dev.myriadclient.impl.ui.panels.CorePanels.CONSOLE));
-		bind("keybinds", "Keybindings", GLFW.GLFW_KEY_K, 0, wm -> wm.openPanel(dev.myriadclient.impl.ui.panels.CorePanels.KEYBINDS));
-		bind("close", "Close window", GLFW.GLFW_KEY_W, 0, wm -> wm.focused().ifPresent(Window::close));
-		bind("togglesplit", "Toggle window split", GLFW.GLFW_KEY_J, 0, wm -> wm.focused().ifPresent(w -> wm.workspaces[wm.active].tiling.toggleSplit((WindowImpl) w)));
-		bind("float", "Toggle floating/tiling", GLFW.GLFW_KEY_T, 0, wm -> wm.focused().ifPresent(w -> w.setFloating(!w.isFloating())));
-		bind("fullscreen", "Full screen", GLFW.GLFW_KEY_F, 0, wm -> wm.focused().ifPresent(w -> w.setFullscreen(!w.isFullscreen())));
-		bind("layout", "Toggle workspace layout", GLFW.GLFW_KEY_L, 0, WindowManager::cycleLayout);
-		bind("hud", "Toggle HUD (scratchpad)", GLFW.GLFW_KEY_S, 0, wm -> wm.switchWorkspace(wm.active == HUD_WORKSPACE ? wm.previous : HUD_WORKSPACE));
-		bind("move_hud", "Move window to HUD", GLFW.GLFW_KEY_S, shift, wm -> wm.focused().ifPresent(w -> w.moveToWorkspace(HUD_WORKSPACE)));
-		bind("next_workspace", "Next workspace", GLFW.GLFW_KEY_TAB, 0, wm -> wm.cycleWorkspace(1));
-		bind("prev_workspace", "Previous workspace", GLFW.GLFW_KEY_TAB, shift, wm -> wm.cycleWorkspace(-1));
-		bind("former_workspace", "Former workspace", GLFW.GLFW_KEY_TAB, ctrl, wm -> wm.switchWorkspace(wm.previous));
-		bind("shrink", "Shrink window", GLFW.GLFW_KEY_MINUS, 0, wm -> wm.resizeFocused(-0.05f));
-		bind("grow", "Grow window", GLFW.GLFW_KEY_EQUAL, 0, wm -> wm.resizeFocused(0.05f));
-		bind("bar", "Toggle top bar", GLFW.GLFW_KEY_SPACE, shift, wm -> wm.theme.bar.toggle());
-		bind("gaps", "Toggle window gaps", GLFW.GLFW_KEY_BACKSPACE, shift, WindowManager::toggleGaps);
-		for (int i = 1; i <= 9; i++) {
-			int ws = i;
-			bind("workspace_" + i, "Switch to workspace " + i, GLFW.GLFW_KEY_0 + i, 0, wm -> {
-				// The one showing: back to the game, so mod+N goes in and out of the menu on one key.
-				if (wm.active == ws) wm.close();
-				else wm.switchWorkspace(ws);
-			});
-			bind("move_" + i, "Move window to workspace " + i, GLFW.GLFW_KEY_0 + i, shift, wm -> wm.focused().ifPresent(w -> w.moveToWorkspace(ws)));
-		}
-		int[] keys = {GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_DOWN};
-		Direction[] dirs = {Direction.LEFT, Direction.RIGHT, Direction.UP, Direction.DOWN};
-		for (int i = 0; i < 4; i++) {
-			Direction d = dirs[i];
-			String n = d.name().toLowerCase();
-			bind("focus_" + n, "Focus on " + n + " window", keys[i], 0, wm -> wm.neighbor(d).ifPresent(wm::focus));
-			bind("swap_" + n, "Swap window " + n, keys[i], shift, wm -> wm.swapDirection(d));
-		}
-	}
-
-	private int savedGapsIn = -1, savedGapsOut = -1;
-
-	private void toggleGaps() {
-		if (savedGapsIn < 0) {
-			savedGapsIn = theme.gapsIn.get();
-			savedGapsOut = theme.gapsOut.get();
-			theme.gapsIn.set(0);
-			theme.gapsOut.set(0);
-		} else {
-			theme.gapsIn.set(savedGapsIn);
-			theme.gapsOut.set(savedGapsOut);
-			savedGapsIn = savedGapsOut = -1;
-		}
-	}
-
-	/** Next/previous workspace among 1-9 (wrapping), like Omarchy's Super+Tab. */
-	private void cycleWorkspace(int dir) {
-		int from = active == HUD_WORKSPACE ? previous : active;
-		switchWorkspace(Math.floorMod(from - 1 + dir, WORKSPACES) + 1);
-	}
-
-	private void resizeFocused(float amount) {
-		WindowImpl w = workspaces[active].focused;
-		if (w == null) return;
-		if (w.floating && w.floatRect != null) {
-			float d = amount * 400;
-			Rect r = w.floatRect;
-			w.floatRect = new Rect(r.x() - d / 2, r.y() - d / 2, Math.max(80, r.w() + d), Math.max(40, r.h() + d));
-		} else {
-			workspaces[active].tiling.resize(w, amount);
-		}
-		markDirty();
-	}
-
-	private void cycleLayout() {
-		Workspace ws = workspaces[active];
-		List<Layout> layouts = new ArrayList<>(Myriad.layouts().values());
-		if (layouts.isEmpty()) return;
-		int i = layouts.indexOf(ws.layout);
-		Layout next = layouts.get((i + 1) % layouts.size());
-		ws.setLayout(next);
-		Myriad.notifications().send("Menu", "Layout: " + next.name(), dev.myriadclient.api.service.Notifications.Level.INFO, 1500, "layout");
-		markDirty();
-	}
-
-	private Optional<WindowImpl> neighbor(Direction d) {
-		Workspace ws = workspaces[active];
-		WindowImpl from = ws.focused;
-		if (from == null) return Optional.empty();
-		Rect a = from.current();
-		WindowImpl best = null;
-		float bestScore = Float.MAX_VALUE;
-		for (WindowImpl w : ws.drawOrder()) {
-			if (w == from) continue;
-			Rect b = w.current();
-			float dx = b.centerX() - a.centerX(), dy = b.centerY() - a.centerY();
-			boolean ok = switch (d) {
-				case LEFT -> dx < -1 && Math.abs(dy) < Math.abs(dx) * 2;
-				case RIGHT -> dx > 1 && Math.abs(dy) < Math.abs(dx) * 2;
-				case UP -> dy < -1 && Math.abs(dx) < Math.abs(dy) * 2;
-				case DOWN -> dy > 1 && Math.abs(dx) < Math.abs(dy) * 2;
-			};
-			if (!ok) continue;
-			float score = dx * dx + dy * dy;
-			if (score < bestScore) {
-				bestScore = score;
-				best = w;
-			}
-		}
-		return Optional.ofNullable(best);
-	}
-
-	private void swapDirection(Direction d) {
-		Workspace ws = workspaces[active];
-		WindowImpl from = ws.focused;
-		if (from == null || from.floating) return;
-		neighbor(d).filter(w -> !w.floating).ifPresent(to -> {
-			ws.tiling.swap(from, to);
-			markDirty();
-		});
-	}
-
-	// ================================================================================================================
 	// Persistence
 
 	public JsonObject save() {
@@ -1808,7 +1170,7 @@ public final class WindowManager implements Desktop {
 		o.addProperty("theme", themes.active().id().toString());
 		o.add("preferences", theme.preferences.toJson());
 		JsonObject b = new JsonObject();
-		for (WmBind bind : binds.values()) b.addProperty(bind.id, bind.bind.serialize());
+		for (DesktopBinds.Bind bind : binds.all().values()) b.addProperty(bind.id, bind.bind.serialize());
 		o.add("binds", b);
 		JsonArray ws = new JsonArray();
 		for (Workspace w : workspaces) {
@@ -1820,42 +1182,11 @@ public final class WindowManager implements Desktop {
 			ws.add(j);
 		}
 		o.add("workspaces", ws);
-		JsonArray seen = new JsonArray();
-		for (String g : seenGroups) seen.add(g);
-		o.add("seen_groups", seen);
+		o.add("seen_groups", categories.saveSeen());
 		JsonArray wins = new JsonArray();
 		for (WindowImpl w : windows) {
 			// Dialogs hold callbacks that don't survive a restart.
-			if (w.panel instanceof DialogPanel) continue;
-			JsonObject j = new JsonObject();
-			j.addProperty("uid", w.uid);
-			j.addProperty("type", w.type.id().toString());
-			j.add("args", w.args);
-			j.addProperty("workspace", w.workspace);
-			j.addProperty("floating", w.floating);
-			j.addProperty("fullscreen", w.fullscreen);
-			if (w.floatRect != null) {
-				JsonArray r = new JsonArray();
-				r.add(w.floatRect.x());
-				r.add(w.floatRect.y());
-				r.add(w.floatRect.w());
-				r.add(w.floatRect.h());
-				j.add("rect", r);
-			}
-			JsonObject hud = new JsonObject();
-			hud.addProperty("anchor", w.anchor.name());
-			hud.addProperty("x", w.anchorX);
-			hud.addProperty("y", w.anchorY);
-			j.add("hud", hud);
-			JsonObject state = new JsonObject();
-			try {
-				w.panel.save(state);
-			} catch (Throwable t) {
-				LOG.error("Panel {} failed to save", w.type.id(), t);
-			}
-			j.add("state", state);
-			j.add("settings", w.panel.settings.toJson());
-			wins.add(j);
+			if (!(w.panel instanceof DialogPanel)) wins.add(w.save());
 		}
 		// Windows of panel types that aren't installed right now are kept for when they come back.
 		for (JsonElement e : orphanWindows) wins.add(e);
@@ -1874,18 +1205,18 @@ public final class WindowManager implements Desktop {
 			savedTiling[i] = null;
 		}
 		themes.reload();
-		seenGroups.clear();
+		categories.reset();
 		if (o == null) {
 			firstRun();
-			placeNewGroups(false);
+			categories.placeNewGroups(false);
 			modulesChanged = false;
 			return;
 		}
-		if (o.has("seen_groups")) for (JsonElement e : o.getAsJsonArray("seen_groups")) seenGroups.add(e.getAsString());
+		if (o.has("seen_groups")) categories.loadSeen(o.getAsJsonArray("seen_groups"));
 		loadTheme(o);
 		if (o.has("binds")) {
 			JsonObject b = o.getAsJsonObject("binds");
-			for (WmBind bind : binds.values()) if (b.has(bind.id)) bind.bind = Keybind.deserialize(b.get(bind.id).getAsString());
+			for (DesktopBinds.Bind bind : binds.all().values()) if (b.has(bind.id)) bind.bind = Keybind.deserialize(b.get(bind.id).getAsString());
 		}
 		Map<String, WindowImpl> byUid = new LinkedHashMap<>();
 		if (o.has("windows")) {
@@ -1939,123 +1270,17 @@ public final class WindowManager implements Desktop {
 			}
 			defaultWorkspaces();
 		}
-		placeNewGroups(true);
+		categories.placeNewGroups(true);
 		modulesChanged = false;
 	}
 
-	/** The addon + category groups a window shows (empty for anything but a category window). */
-	private static List<ModuleGroup> groupsOf(WindowImpl w) {
-		return w.panel instanceof ModulesPanel p ? p.groups() : List.of();
-	}
 
-	/** Narrowest a tiled window is readable at (a category window's module names fit); see {@link #capacity()}. */
-	static final float MIN_TILE_WIDTH = dev.myriadclient.impl.ui.layout.ColumnsLayout.MIN_WIDTH;
 
-	/** How many tiled windows a workspace takes before new addons go elsewhere: as many as fit side by side. */
-	private int capacity() {
-		Rect area = workArea().inset(theme.gapsOut.get());
-		float gap = theme.gapsIn.get();
-		return Math.max(2, (int) ((area.w() + gap) / (MIN_TILE_WIDTH + gap)));
-	}
 
-	/**
-	 * Gives each addon + category group the desktop hasn't seen yet a window, one addon at a time, by
-	 * {@link GroupPlacement}: beside its categories' windows when they have room, otherwise together on a workspace of
-	 * its own (spilling onto the next empty one when there are more than fit). Groups already on screen, or placed
-	 * before and since closed or moved, are left alone.
-	 */
-	private void placeNewGroups(boolean announce) {
-		Set<ModuleGroup> shown = new HashSet<>();
-		for (WindowImpl w : windows) shown.addAll(groupsOf(w));
-		Map<String, List<ModuleGroup>> byAddon = new LinkedHashMap<>();
-		for (dev.myriadclient.api.addon.Addon a : Myriad.addons()) byAddon.put(a.id(), new ArrayList<>());
-		for (ModuleGroup g : ModuleGroup.all()) {
-			if (!seenGroups.add(g.key()) || shown.contains(g)) continue;
-			byAddon.computeIfAbsent(g.addon(), k -> new ArrayList<>()).add(g);
-		}
-		int capacity = capacity();
-		for (List<ModuleGroup> groups : byAddon.values()) {
-			if (groups.isEmpty()) continue;
-			int[] counts = new int[WORKSPACES + 1];
-			for (int i = 1; i <= WORKSPACES; i++) counts[i] = workspaces[i].tiling.windows().size();
-			int[] siblings = new int[groups.size()];
-			for (int i = 0; i < groups.size(); i++) {
-				WindowImpl s = sibling(groups.get(i), -1);
-				siblings[i] = s == null ? -1 : s.workspace;
-			}
-			int[] targets = GroupPlacement.place(siblings, counts, capacity);
-			java.util.TreeSet<Integer> used = new java.util.TreeSet<>();
-			for (int ws : targets) used.add(ws);
-			for (int ws : used) {
-				List<ModuleGroup> batch = new ArrayList<>();
-				for (int i = 0; i < groups.size(); i++) if (targets[i] == ws) batch.add(groups.get(i));
-				openGroups(ws, batch);
-			}
-			if (announce) {
-				ModuleGroup first = groups.getFirst();
-				String what = groups.size() == 1 ? first.category().name() + " modules" : groups.size() + " windows";
-				Myriad.notifications().send("Menu", first.addonName() + " added " + what + " to " + workspacesText(used),
-					dev.myriadclient.api.service.Notifications.Level.INFO, 5000, "groups");
-			}
-		}
-		markDirty();
-	}
 
-	/** "workspace 2", "workspaces 2 and 3", "workspaces 2, 3 and 5". */
-	private static String workspacesText(java.util.SortedSet<Integer> used) {
-		if (used.size() == 1) return "workspace " + used.first();
-		List<String> names = new ArrayList<>();
-		for (int ws : used) names.add(String.valueOf(ws));
-		return "workspaces " + String.join(", ", names.subList(0, names.size() - 1)) + " and " + names.getLast();
-	}
 
-	/** The last window (on {@code workspace}, or any if it's -1) showing a group of {@code g}'s category. */
-	private WindowImpl sibling(ModuleGroup g, int workspace) {
-		WindowImpl found = null;
-		for (WindowImpl w : windows) {
-			if (w.workspace == HUD_WORKSPACE || (workspace >= 0 && w.workspace != workspace)) continue;
-			for (ModuleGroup other : groupsOf(w)) if (other.category().equals(g.category())) found = w;
-		}
-		return found;
-	}
 
-	/**
-	 * Opens a window for each group on {@code workspace}. Each goes right after its category's window there, if it has
-	 * one. On an empty workspace, Dwindle splits the least recently split window each time, for an even grid rather
-	 * than ever thinner slivers.
-	 */
-	private void openGroups(int workspace, List<ModuleGroup> groups) {
-		Workspace ws = workspaces[workspace];
-		WindowImpl keepFocus = ws.focused;
-		boolean grid = ws.tiling.windows().isEmpty() && ws.layout instanceof dev.myriadclient.impl.ui.layout.DwindleLayout;
-		java.util.ArrayDeque<WindowImpl> toSplit = new java.util.ArrayDeque<>();
-		WindowImpl last = null;
-		for (ModuleGroup g : groups) {
-			WindowImpl target = grid ? toSplit.poll() : sibling(g, workspace);
-			if (target == null && !grid) target = last;
-			ws.focused = target != null && !target.floating ? target : null;
-			Optional<Window> opened = openPanel(CorePanels.CATEGORY, ModuleGroup.args(List.of(g)), workspace, false);
-			if (opened.isEmpty()) continue;
-			WindowImpl w = (WindowImpl) opened.get();
-			w.opacity.snap(1);
-			last = w;
-			if (grid && target != null) toSplit.add(target);
-			if (grid) toSplit.add(w);
-			if (keepFocus == null) keepFocus = w;
-		}
-		ws.focused = keepFocus;
-	}
 
-	/** Shows the window holding {@code group}, opening one (on the current workspace) if none does. */
-	public void openGroup(ModuleGroup group) {
-		for (WindowImpl w : windows) {
-			if (!groupsOf(w).contains(group)) continue;
-			if (isOpen() && w.workspace != active) switchWorkspace(w.workspace);
-			focus(w);
-			return;
-		}
-		openPanel(CorePanels.CATEGORY, ModuleGroup.args(List.of(group)));
-	}
 
 	/** The active theme and personal preferences. */
 	private void loadTheme(JsonObject o) {
@@ -2079,27 +1304,7 @@ public final class WindowManager implements Desktop {
 		int uid = j.get("uid").getAsInt();
 		WindowImpl w = new WindowImpl(this, uid, type.get(), args, panel, Math.clamp(j.get("workspace").getAsInt(), 0, WORKSPACES));
 		nextUid = Math.max(nextUid, uid + 1);
-		w.floating = j.has("floating") && j.get("floating").getAsBoolean();
-		w.fullscreen = j.has("fullscreen") && j.get("fullscreen").getAsBoolean();
-		if (w.workspace == HUD_WORKSPACE) w.floating = true;
-		if (j.has("rect")) {
-			JsonArray r = j.getAsJsonArray("rect");
-			w.floatRect = new Rect(r.get(0).getAsFloat(), r.get(1).getAsFloat(), r.get(2).getAsFloat(), r.get(3).getAsFloat());
-		}
-		if (j.has("hud")) {
-			JsonObject h = j.getAsJsonObject("hud");
-			try {
-				w.anchor = PanelType.Anchor.valueOf(h.get("anchor").getAsString());
-			} catch (RuntimeException ignored) {
-			}
-			w.anchorX = h.get("x").getAsFloat();
-			w.anchorY = h.get("y").getAsFloat();
-		}
-		if (j.has("settings")) panel.settings.fromJson(j.getAsJsonObject("settings"));
-		if (j.has("state")) {
-			WindowImpl ww = w;
-			safe(w, () -> ww.panel.load(j.getAsJsonObject("state")));
-		}
+		w.restore(j);
 		return w;
 	}
 
@@ -2119,10 +1324,15 @@ public final class WindowManager implements Desktop {
 	 */
 	private void defaultWorkspaces() {
 		active = 1;
-		seenGroups.clear();
-		placeNewGroups(false);
-		if (workspaces[1].isEmpty()) openPanel(dev.myriadclient.impl.ui.panels.CorePanels.MODULES, new JsonObject(), 1, false);
+		categories.reset();
+		categories.placeNewGroups(false);
+		if (workspaces[1].isEmpty()) openPanel(CorePanels.MODULES, new JsonObject(), 1, false);
 		for (WindowImpl w : windows) w.opacity.snap(1);
+	}
+
+	/** Shows the window holding {@code group}, opening one (on the current workspace) if none does. */
+	public void openGroup(ModuleGroup group) {
+		categories.openGroup(group);
 	}
 
 	/** Windows on {@code workspace} (for bar widgets). */

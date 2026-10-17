@@ -3,6 +3,7 @@ package dev.myriadclient.impl.control;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.control.ControlPanel;
 import dev.myriadclient.api.control.ControlPreset;
 import dev.myriadclient.api.control.Controls;
@@ -80,7 +81,7 @@ public final class ControlManager implements Controls {
 		while (find(MyriadId.of("myriad", "control_" + n)) != null) n++;
 		ControlPanelImpl c = new ControlPanelImpl(MyriadId.of("myriad", "control_" + n), name.isBlank() ? "Control panel " + n : name.trim(), null);
 		panels.add(c);
-		dev.myriadclient.api.Myriad.config().markDirty();
+		Myriad.config().markDirty();
 		return c;
 	}
 
@@ -89,7 +90,7 @@ public final class ControlManager implements Controls {
 		if (!(panel instanceof ControlPanelImpl c) || !panels.remove(c)) return;
 		c.setActive(false);
 		if (c.isPreset()) deleted.add(c.id());
-		dev.myriadclient.api.Myriad.config().markDirty();
+		Myriad.config().markDirty();
 	}
 
 	/** Puts an addon's panel back as the addon made it (and brings it back if it was deleted). */
@@ -104,7 +105,7 @@ public final class ControlManager implements Controls {
 			c.setActive(false);
 			c.seed(p.preset());
 		}
-		dev.myriadclient.api.Myriad.config().markDirty();
+		Myriad.config().markDirty();
 	}
 
 	/** Whether any addon panel is missing from this profile (deleted), for a "bring them back" button. */

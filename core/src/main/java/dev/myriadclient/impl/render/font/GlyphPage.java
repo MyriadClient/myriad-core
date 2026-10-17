@@ -7,6 +7,7 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import dev.myriadclient.impl.render.GpuGarbage;
 import org.lwjgl.system.MemoryUtil;
 
+import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
@@ -75,7 +76,7 @@ final class GlyphPage {
 		BufferedImage img = new BufferedImage(ATLAS_WIDTH, height, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = img.createGraphics();
 		hints(g);
-		g.setColor(java.awt.Color.WHITE);
+		g.setColor(Color.WHITE);
 		for (int i = 0; i < 256; i++) {
 			if (chosen[i] == null || bounds[i].isEmpty()) continue;
 			g.setFont(chosen[i]);

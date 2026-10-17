@@ -3,6 +3,7 @@ package dev.myriadclient.impl.ui.panels;
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.AddonContext;
+import dev.myriadclient.api.control.ControlPanel;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Window;
@@ -28,6 +29,7 @@ public final class CorePanels {
 	public static final MyriadId HUD_ELEMENTS = MyriadId.of("myriad", "hud_elements");
 	public static final MyriadId PROFILER = MyriadId.of("myriad", "profiler");
 	public static final MyriadId CONTROLS = MyriadId.of("myriad", "controls");
+	public static final MyriadId HOOKS = MyriadId.of("myriad", "hooks");
 	public static final MyriadId CONTROL = MyriadId.of("myriad", "control");
 
 	private CorePanels() {
@@ -55,6 +57,7 @@ public final class CorePanels {
 		ctx.registerPanel(PanelType.builder(HUD_ELEMENTS, "HUD").icon("\uf2d2").factory(() -> new HudElementsPanel(wm)).build());
 		ctx.registerPanel(PanelType.builder(KEYBINDS, "Keybinds").icon("").factory(() -> new KeybindsPanel(wm)).build());
 		ctx.registerPanel(PanelType.builder(PROFILER, "Profiler").icon("\uf0e4").factory(ProfilerPanel::new).build());
+		ctx.registerPanel(PanelType.builder(HOOKS, "Hooks").icon("\uf1e6").factory(HooksPanel::new).build());
 		ctx.registerPanel(PanelType.builder(CONTROLS, "Control Panels").icon("\uf1de").factory(ControlPanelsPanel::new).build());
 		// One control panel's window; not listed on its own (the launcher lists each control panel).
 		ctx.registerPanel(PanelType.builder(CONTROL, "Control Panel").icon("\uf1de").listed(false).factory(args -> {
@@ -69,7 +72,7 @@ public final class CorePanels {
 	 * (an "inspector"), so browsing modules doesn't pile up windows; {@code newWindow} always opens another one.
 	 */
 	/** Opens a control panel's window. */
-	public static void openControl(dev.myriadclient.api.control.ControlPanel c) {
+	public static void openControl(ControlPanel c) {
 		ControlPanelsPanel.open(c);
 	}
 

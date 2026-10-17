@@ -10,6 +10,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 
 /** Sending packets to the server. All of these do nothing outside a world. */
 public final class Packets {
@@ -47,7 +48,7 @@ public final class Packets {
 	/**
 	 * Like {@link #sendSequenced(PredictiveAction)}, and tells you what the server made of it: the future completes
 	 * with the server's block state at {@code pos} once it has answered (air after a break it accepted, the old block
-	 * if it refused). It fails with a {@link java.util.concurrent.TimeoutException} if the server never answers, and
+	 * if it refused). It fails with a {@link TimeoutException} if the server never answers, and
 	 * with a {@link CancellationException} if you leave the world or aren't in one. Completes on the render thread.
 	 *
 	 * <pre>{@code

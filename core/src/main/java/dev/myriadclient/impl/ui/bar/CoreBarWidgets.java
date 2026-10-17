@@ -4,18 +4,20 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.AddonContext;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.render.MyriadLogo;
 import dev.myriadclient.api.ui.BarWidget;
 import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.ThemeSettings;
 import dev.myriadclient.api.util.ColorUtil;
-import dev.myriadclient.api.render.MyriadLogo;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.ui.panels.CorePanels;
 import dev.myriadclient.impl.update.UpdateManager;
+import net.minecraft.client.Minecraft;
+
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import net.minecraft.client.Minecraft;
+import java.util.Arrays;
 
 /**
  * The stock bar: launcher button and workspaces on the left, focused window in the middle, clock on the right (with a
@@ -63,7 +65,7 @@ public final class CoreBarWidgets {
 					if (ws <= ALWAYS || ws == active || wm.windowCount(ws) > 0) out[n++] = ws;
 				}
 				out[n++] = Desktop.HUD_WORKSPACE;
-				return java.util.Arrays.copyOf(out, n);
+				return Arrays.copyOf(out, n);
 			}
 
 			@Override

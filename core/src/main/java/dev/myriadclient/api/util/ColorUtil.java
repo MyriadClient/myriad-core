@@ -1,5 +1,7 @@
 package dev.myriadclient.api.util;
 
+import java.awt.Color;
+
 /** Helpers for packed ARGB ints, the colour format used throughout Myriad. */
 public final class ColorUtil {
 	private ColorUtil() {
@@ -54,11 +56,11 @@ public final class ColorUtil {
 
 	/** hue/saturation/brightness in 0..1. */
 	public static int hsb(float h, float s, float b, int alpha) {
-		return withAlpha(java.awt.Color.HSBtoRGB(h, s, b), alpha);
+		return withAlpha(Color.HSBtoRGB(h, s, b), alpha);
 	}
 
 	public static float[] toHsb(int c) {
-		return java.awt.Color.RGBtoHSB(red(c), green(c), blue(c), null);
+		return Color.RGBtoHSB(red(c), green(c), blue(c), null);
 	}
 
 	/** A hue cycling colour; {@code offset} in 0..1 shifts the phase (e.g. per list row). */

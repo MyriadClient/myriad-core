@@ -1,5 +1,6 @@
 package dev.myriadclient.api.render;
 
+import dev.myriadclient.api.event.events.HighlightEvent;
 import dev.myriadclient.impl.render.HighlightRenderer;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.ApiStatus;
@@ -21,7 +22,7 @@ import java.util.Map;
  * HighlightStyle style = HighlightStyle.OUTLINE.withGlow(6).withFill(HighlightStyle.Fill.DOTS);
  * }</pre>
  *
- * @see dev.myriadclient.api.event.events.HighlightEvent
+ * @see HighlightEvent
  */
 public final class HighlightStyle {
 	/** A crisp 2 px outline, through walls. */

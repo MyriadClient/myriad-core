@@ -57,7 +57,7 @@ public class IntSetting extends Setting<Integer> {
 		}
 	}
 
-	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.IntSetting.Builder, Integer, IntSetting> {
+	public static class Builder extends Setting.Builder<IntSetting.Builder, Integer, IntSetting> {
 		private int min = Integer.MIN_VALUE, max = Integer.MAX_VALUE;
 		private Integer sliderMin, sliderMax;
 
@@ -66,14 +66,14 @@ public class IntSetting extends Setting<Integer> {
 		}
 
 		/** Hard bounds. Also used as slider bounds unless {@link #sliderRange} is set. */
-		public dev.myriadclient.api.setting.IntSetting.Builder range(int min, int max) {
+		public IntSetting.Builder range(int min, int max) {
 			this.min = min;
 			this.max = max;
 			return this;
 		}
 
 		/** Slider bounds; typed values may still go up to {@link #range}. */
-		public dev.myriadclient.api.setting.IntSetting.Builder sliderRange(int min, int max) {
+		public IntSetting.Builder sliderRange(int min, int max) {
 			this.sliderMin = min;
 			this.sliderMax = max;
 			return this;

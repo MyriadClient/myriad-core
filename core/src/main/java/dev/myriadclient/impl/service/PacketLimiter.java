@@ -1,6 +1,7 @@
 package dev.myriadclient.impl.service;
 
 import dev.myriadclient.api.service.PacketLimits;
+import dev.myriadclient.api.util.RateCounter;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.network.protocol.game.ServerboundInteractPacket;
@@ -8,10 +9,9 @@ import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 
-import dev.myriadclient.api.util.RateCounter;
 import java.util.EnumMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Sliding-window packet budget. The limits sit under what strict servers (2b2t, Grim setups) tolerate in bursts while

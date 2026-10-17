@@ -1,8 +1,9 @@
 package dev.myriadclient.api.service;
 
-import java.util.Collection;
 import net.minecraft.world.entity.player.Player;
 import org.jetbrains.annotations.ApiStatus;
+
+import java.util.Collection;
 
 @ApiStatus.NonExtendable
 public interface Friends {

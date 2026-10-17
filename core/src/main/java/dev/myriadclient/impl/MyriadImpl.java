@@ -3,12 +3,18 @@ package dev.myriadclient.impl;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.MyriadApi;
 import dev.myriadclient.api.addon.Addon;
+import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.command.Command;
 import dev.myriadclient.api.config.ConfigManager;
+import dev.myriadclient.api.control.Controls;
+import dev.myriadclient.api.elytra.Elytra;
 import dev.myriadclient.api.event.EventBus;
+import dev.myriadclient.api.hook.Hooks;
+import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.registry.Registry;
+import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Building;
 import dev.myriadclient.api.service.Containers;
@@ -17,44 +23,54 @@ import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.service.Notifications;
 import dev.myriadclient.api.service.PacketLimits;
+import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
+import dev.myriadclient.api.service.ServerStats;
 import dev.myriadclient.api.service.Tasks;
 import dev.myriadclient.api.service.TickSpeed;
 import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.ui.BarWidget;
 import dev.myriadclient.api.ui.Desktop;
+import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.layout.Layout;
 import dev.myriadclient.impl.addon.AddonLoader;
 import dev.myriadclient.impl.command.CommandManager;
 import dev.myriadclient.impl.config.ConfigManagerImpl;
+import dev.myriadclient.impl.control.ControlManager;
+import dev.myriadclient.impl.elytra.ElytraManager;
 import dev.myriadclient.impl.event.MyriadEventBus;
+import dev.myriadclient.impl.hook.HookManager;
 import dev.myriadclient.impl.keybind.KeybindManager;
+import dev.myriadclient.impl.network.ActionTiming;
+import dev.myriadclient.impl.network.BlockAckTracker;
+import dev.myriadclient.impl.service.AntiCheatTracker;
 import dev.myriadclient.impl.service.BreakManager;
 import dev.myriadclient.impl.service.BuildManager;
 import dev.myriadclient.impl.service.ContainerTracker;
-import dev.myriadclient.impl.service.MenuSync;
 import dev.myriadclient.impl.service.FriendsManager;
 import dev.myriadclient.impl.service.InventoryManager;
-import dev.myriadclient.impl.network.BlockAckTracker;
+import dev.myriadclient.impl.service.MenuSync;
 import dev.myriadclient.impl.service.NotificationManager;
 import dev.myriadclient.impl.service.PacketLimiter;
+import dev.myriadclient.impl.service.PlacementManager;
 import dev.myriadclient.impl.service.RotationManager;
+import dev.myriadclient.impl.service.ServerStatsTracker;
 import dev.myriadclient.impl.service.TaskScheduler;
 import dev.myriadclient.impl.service.TickSpeedManager;
 import dev.myriadclient.impl.ui.WindowManager;
-import dev.myriadclient.impl.update.UpdateManager;
 import dev.myriadclient.impl.ui.panels.ConsoleLog;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.List;
+import dev.myriadclient.impl.update.UpdateManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.TextColor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
 
 /** Owns every Myriad service and drives startup. */
 public final class MyriadImpl implements MyriadApi {
@@ -71,7 +87,7 @@ public final class MyriadImpl implements MyriadApi {
 	private final Registry<Theme> themes = new Registry<>("theme");
 	private final Registry<BarWidget> barWidgets = new Registry<>("bar widget");
 	private final Registry<KeyAction> keyActions = new Registry<>("key action");
-	private final Registry<dev.myriadclient.api.addon.AddonSettings> addonSettings = new Registry<>("addon settings");
+	private final Registry<AddonSettings> addonSettings = new Registry<>("addon settings");
 	private final ConfigManagerImpl config = new ConfigManagerImpl(this);
 	private final NotificationManager notifications = new NotificationManager();
 	private final RotationManager rotations = new RotationManager();
@@ -79,20 +95,21 @@ public final class MyriadImpl implements MyriadApi {
 	private final BlockAckTracker blockAcks = new BlockAckTracker();
 	private final PacketLimiter packetLimiter = new PacketLimiter();
 	private final TickSpeedManager tickSpeed = new TickSpeedManager();
-	private final dev.myriadclient.impl.service.AntiCheatTracker antiCheat = new dev.myriadclient.impl.service.AntiCheatTracker();
-	private final dev.myriadclient.impl.service.PlacementManager placement = new dev.myriadclient.impl.service.PlacementManager(blockAcks);
+	private final AntiCheatTracker antiCheat = new AntiCheatTracker();
+	private final PlacementManager placement = new PlacementManager(blockAcks);
 	private final BreakManager breaking = new BreakManager();
-	private final dev.myriadclient.impl.elytra.ElytraManager elytra = new dev.myriadclient.impl.elytra.ElytraManager();
-	private final dev.myriadclient.impl.control.ControlManager controls = new dev.myriadclient.impl.control.ControlManager();
+	private final ElytraManager elytra = new ElytraManager();
+	private final ControlManager controls = new ControlManager();
 	private final BuildManager building = new BuildManager();
 	private final FriendsManager friends = new FriendsManager(config.root());
-	private final dev.myriadclient.impl.service.ServerStatsTracker serverStats = new dev.myriadclient.impl.service.ServerStatsTracker();
+	private final ServerStatsTracker serverStats = new ServerStatsTracker();
 	private final MenuSync menuSync = new MenuSync();
 	private final ContainerTracker containers = new ContainerTracker(menuSync);
 	private final TaskScheduler tasks = new TaskScheduler();
 	private final WindowManager windowManager = new WindowManager();
 	private final CommandManager commandManager = new CommandManager(commands);
 	private final KeybindManager keybindManager = new KeybindManager();
+	private final HookManager hooks = new HookManager(events);
 	private final AddonLoader addonLoader = new AddonLoader(this);
 	private final UpdateManager updates = new UpdateManager(config.root());
 
@@ -106,10 +123,10 @@ public final class MyriadImpl implements MyriadApi {
 	/** Creates and installs Myriad, then loads every addon. */
 	public static MyriadImpl bootstrap() {
 		// Addon classes can load before the client exists (e.g. from an early mixin); make sure they see it.
-		net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
+		Minecraft client = Minecraft.getInstance();
 		dev.myriadclient.api.module.Module.bindClient(client);
-		dev.myriadclient.api.ui.Panel.bindClient(client);
-		dev.myriadclient.api.command.Command.bindClient(client);
+		Panel.bindClient(client);
+		Command.bindClient(client);
 		instance = new MyriadImpl();
 		Myriad.install(instance);
 		instance.start();
@@ -128,7 +145,13 @@ public final class MyriadImpl implements MyriadApi {
 		modules.onAdd(m -> windowManager.modulesChanged());
 		modules.onRemove(m -> windowManager.modulesChanged());
 
-		events.subscribe(dev.myriadclient.impl.network.ActionTiming.get());
+		events.subscribe(ActionTiming.get());
+		hooks.registerCore(Service.ROTATIONS, rotations);
+		hooks.registerCore(Service.INVENTORY, inventory);
+		hooks.registerCore(Service.PLACEMENT, placement);
+		hooks.registerCore(Service.BREAKING, breaking);
+		hooks.setOwnerResolver(addonLoader::ownerOf);
+		events.subscribe(hooks);
 		events.subscribe(rotations);
 		events.subscribe(inventory);
 		events.subscribe(placement);
@@ -156,7 +179,7 @@ public final class MyriadImpl implements MyriadApi {
 	}
 
 	public List<Registry<?>> registries() {
-		return List.of(categories, modules, commands, panels, layouts, themes, barWidgets, keyActions, addonSettings, controls.presets());
+		return List.of(categories, modules, commands, panels, layouts, themes, barWidgets, keyActions, addonSettings, controls.presets(), hooks.registry());
 	}
 
 	public ConfigManagerImpl configImpl() {
@@ -237,17 +260,22 @@ public final class MyriadImpl implements MyriadApi {
 
 	@Override
 	public Rotations rotations() {
-		return rotations;
+		return hooks.router(Service.ROTATIONS);
 	}
 
 	@Override
 	public Inventory inventory() {
+		return hooks.router(Service.INVENTORY);
+	}
+
+	/** Core's own, whatever replacement is in use: for core's internals. */
+	public InventoryManager inventoryManager() {
 		return inventory;
 	}
 
 	@Override
-	public dev.myriadclient.api.service.Placement placement() {
-		return placement;
+	public Placement placement() {
+		return hooks.router(Service.PLACEMENT);
 	}
 
 	@Override
@@ -256,7 +284,7 @@ public final class MyriadImpl implements MyriadApi {
 	}
 
 	@Override
-	public dev.myriadclient.api.service.ServerStats server() {
+	public ServerStats server() {
 		return serverStats;
 	}
 
@@ -266,16 +294,16 @@ public final class MyriadImpl implements MyriadApi {
 	}
 
 	@Override
-	public dev.myriadclient.api.elytra.Elytra elytra() {
+	public Elytra elytra() {
 		return elytra;
 	}
 
 	@Override
-	public dev.myriadclient.api.control.Controls controls() {
+	public Controls controls() {
 		return controls;
 	}
 
-	public dev.myriadclient.impl.control.ControlManager controlManager() {
+	public ControlManager controlManager() {
 		return controls;
 	}
 
@@ -286,7 +314,16 @@ public final class MyriadImpl implements MyriadApi {
 
 	@Override
 	public Breaking breaking() {
-		return breaking;
+		return hooks.router(Service.BREAKING);
+	}
+
+	@Override
+	public Hooks hooks() {
+		return hooks;
+	}
+
+	public HookManager hookManager() {
+		return hooks;
 	}
 
 	@Override
@@ -305,15 +342,15 @@ public final class MyriadImpl implements MyriadApi {
 	}
 
 	@Override
-	public dev.myriadclient.api.service.AntiCheat antiCheat() {
+	public AntiCheat antiCheat() {
 		return antiCheat;
 	}
 
-	public dev.myriadclient.impl.service.ServerStatsTracker serverStatsTracker() {
+	public ServerStatsTracker serverStatsTracker() {
 		return serverStats;
 	}
 
-	public Registry<dev.myriadclient.api.addon.AddonSettings> addonSettings() {
+	public Registry<AddonSettings> addonSettings() {
 		return addonSettings;
 	}
 

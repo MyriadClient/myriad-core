@@ -10,6 +10,7 @@ import dev.myriadclient.api.setting.IntSetting;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.Settings;
+import net.minecraft.client.Minecraft;
 
 /**
  * The live look of the menu, modelled on Hyprland's {@code general}, {@code decoration} and {@code animations}
@@ -120,7 +121,7 @@ public final class ThemeSettings {
 		.description("Wear Myriad's cape and elytra in place of your own, seen by you and by Myriad players near you. Off: they see your own cape again; you still see theirs.")
 		.defaultValue(true).onChanged(v -> {
 			// Tell the server at once, so players near you see the change.
-			var mc = net.minecraft.client.Minecraft.getInstance();
+			var mc = Minecraft.getInstance();
 			if (mc.player != null) mc.options.broadcastOptions();
 		}).build();
 

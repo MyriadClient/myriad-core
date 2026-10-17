@@ -1,10 +1,11 @@
 package dev.myriadclient.api.event.events;
 
-import java.util.List;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import org.jetbrains.annotations.ApiStatus;
+
+import java.util.List;
 
 /** An item's tooltip lines were built. Add, remove or change {@link #lines()}; the first line is the item's name. */
 public final class ItemTooltipEvent {

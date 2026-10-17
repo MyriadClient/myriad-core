@@ -6,13 +6,13 @@ import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.registry.Identified;
 import dev.myriadclient.api.util.MyriadId;
-import org.jetbrains.annotations.ApiStatus;
-
-import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.ApiStatus;
+
+import java.util.List;
 
 /**
  * A chat command (run with the prefix, {@code .} by default) built on Brigadier.
@@ -90,7 +90,7 @@ public abstract class Command implements Identified {
 		Myriad.chat(Component.literal(message).withStyle(ChatFormatting.RED));
 	}
 
-	@org.jetbrains.annotations.ApiStatus.Internal
+	@ApiStatus.Internal
 	public static void bindClient(Minecraft client) {
 		mc = client;
 	}

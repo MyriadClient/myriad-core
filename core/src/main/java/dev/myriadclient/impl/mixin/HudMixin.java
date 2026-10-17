@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.util.Slots;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Hud;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
@@ -32,7 +33,7 @@ public abstract class HudMixin {
 	/** Nor does the selected item's name flash up for a masked swap. */
 	@ModifyExpressionValue(method = "tick()V", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Inventory;getSelectedItem()Lnet/minecraft/world/item/ItemStack;"))
 	private ItemStack myriad$shownSelected(ItemStack stack) {
-		var player = net.minecraft.client.Minecraft.getInstance().player;
+		var player = Minecraft.getInstance().player;
 		return Myriad.isReady() && player != null ? Myriad.inventory().shown(player.getInventory().getSelectedSlot()) : stack;
 	}
 }

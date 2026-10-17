@@ -2,14 +2,15 @@ package dev.myriadclient.api.setting;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
-import java.util.List;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
+
+import java.util.List;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /** One entry of a game registry: a single item (what to place), block (what to mine), and so on. */
 public class RegistrySetting<T> extends Setting<T> {
@@ -66,7 +67,7 @@ public class RegistrySetting<T> extends Setting<T> {
 		return id == null ? "" : id.getPath();
 	}
 
-	public static class Builder<T> extends Setting.Builder<dev.myriadclient.api.setting.RegistrySetting.Builder<T>, T, RegistrySetting<T>> {
+	public static class Builder<T> extends Setting.Builder<RegistrySetting.Builder<T>, T, RegistrySetting<T>> {
 		private final Registry<T> registry;
 		private Predicate<T> filter;
 
@@ -76,7 +77,7 @@ public class RegistrySetting<T> extends Setting<T> {
 		}
 
 		/** Only entries passing {@code filter} can be picked. */
-		public dev.myriadclient.api.setting.RegistrySetting.Builder<T> filter(Predicate<T> filter) {
+		public RegistrySetting.Builder<T> filter(Predicate<T> filter) {
 			this.filter = filter;
 			return this;
 		}
@@ -87,11 +88,11 @@ public class RegistrySetting<T> extends Setting<T> {
 		}
 	}
 
-	static dev.myriadclient.api.setting.RegistrySetting.Builder<Item> item(String name, Item defaultValue) {
-		return new dev.myriadclient.api.setting.RegistrySetting.Builder<>(name, BuiltInRegistries.ITEM, defaultValue);
+	static RegistrySetting.Builder<Item> item(String name, Item defaultValue) {
+		return new RegistrySetting.Builder<>(name, BuiltInRegistries.ITEM, defaultValue);
 	}
 
-	static dev.myriadclient.api.setting.RegistrySetting.Builder<Block> block(String name, Block defaultValue) {
-		return new dev.myriadclient.api.setting.RegistrySetting.Builder<>(name, BuiltInRegistries.BLOCK, defaultValue);
+	static RegistrySetting.Builder<Block> block(String name, Block defaultValue) {
+		return new RegistrySetting.Builder<>(name, BuiltInRegistries.BLOCK, defaultValue);
 	}
 }

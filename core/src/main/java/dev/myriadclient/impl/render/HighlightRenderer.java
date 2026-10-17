@@ -1,6 +1,7 @@
 package dev.myriadclient.impl.render;
 
 import com.mojang.blaze3d.GpuFormat;
+import com.mojang.blaze3d.IndexType;
 import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
@@ -14,6 +15,7 @@ import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.ListenerFlag;
 import dev.myriadclient.api.event.events.HighlightEvent;
@@ -21,7 +23,9 @@ import dev.myriadclient.api.render.HighlightStyle;
 import dev.myriadclient.api.render.WorldMesh;
 import dev.myriadclient.impl.compat.EntityCullingCompat;
 import it.unimi.dsi.fastutil.floats.FloatArrayList;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntRBTreeSet;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
@@ -32,6 +36,7 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -43,6 +48,7 @@ import org.joml.Vector4f;
 
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -160,11 +166,11 @@ public final class HighlightRenderer {
 	private MappableRingBuffer buffer;
 
 	/** Addons' fills: shader id number to its composite pass. */
-	private static final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<RenderPipeline> FILLS = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>();
+	private static final Int2ObjectOpenHashMap<RenderPipeline> FILLS = new Int2ObjectOpenHashMap<>();
 	private static final long START = System.nanoTime();
 
 	/** Registers an addon's fill (see {@link HighlightStyle.Fill#custom}): its shader becomes one more composite pass. */
-	public static void registerFill(int shaderId, net.minecraft.resources.Identifier shader) {
+	public static void registerFill(int shaderId, Identifier shader) {
 		FILLS.put(shaderId, MyriadPipelines.highlightFill(shaderId, shader));
 	}
 
@@ -173,7 +179,7 @@ public final class HighlightRenderer {
 		final String name;
 		TextureTarget resolved, spread;
 		/** Addons' fills used by this layer's highlights this frame. */
-		final it.unimi.dsi.fastutil.ints.IntRBTreeSet customFills = new it.unimi.dsi.fastutil.ints.IntRBTreeSet();
+		final IntRBTreeSet customFills = new IntRBTreeSet();
 		int count;
 		boolean anyDepthTested, prepared;
 		int[] area;
@@ -245,12 +251,21 @@ public final class HighlightRenderer {
 		} else if (!EntityCullingCompat.ACTIVE) {
 			return true;
 		}
-		HighlightEvent.Entity e = Myriad.events().post(entityEvent.reset(entity, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false)));
+		HighlightEvent.EntityHighlight e = ask(entity, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false));
 		asked.put(entity, e.style());
 		askedColor.put(entity, e.color());
 		if (e.style() == null || !e.style().throughWalls()) return shown;
 		EntityCullingCompat.keepVisible(entity);
 		return true;
+	}
+
+	/** Who highlights {@code entity}: the listeners, then the {@link HighlightEvent#ENTITY_HIGHLIGHT} hook if it's hooked. */
+	private HighlightEvent.EntityHighlight ask(Entity entity, float tickDelta) {
+		HighlightEvent.Entity e = Myriad.events().post(entityEvent.reset(entity, tickDelta));
+		HighlightEvent.EntityHighlight asked = new HighlightEvent.EntityHighlight(entity, e.style(), e.color());
+		if (!HighlightEvent.ENTITY_HIGHLIGHT.hooked()) return asked;
+		HighlightEvent.EntityHighlight h = HighlightEvent.ENTITY_HIGHLIGHT.call(null, asked, x -> x);
+		return h == null || h.style() == null || (h.color() >>> 24) == 0 ? new HighlightEvent.EntityHighlight(entity, null, 0) : h;
 	}
 
 	/** An entity's render state was just built: ask who highlights it, and point its outline colour at the highlight. */
@@ -262,7 +277,7 @@ public final class HighlightRenderer {
 			style = asked.get(entity);
 			color = askedColor.getInt(entity);
 		} else if (entityListeners.isSet()) {
-			HighlightEvent.Entity e = Myriad.events().post(entityEvent.reset(entity, tickDelta));
+			HighlightEvent.EntityHighlight e = ask(entity, tickDelta);
 			style = e.style();
 			color = e.color();
 		}
@@ -327,7 +342,7 @@ public final class HighlightRenderer {
 		return masks[BELOW];
 	}
 
-	private static void quad(com.mojang.blaze3d.vertex.VertexConsumer buf, PoseStack.Pose pose, int c, float ax, float ay, float az, float bx, float by, float bz,
+	private static void quad(VertexConsumer buf, PoseStack.Pose pose, int c, float ax, float ay, float az, float bx, float by, float bz,
 							 float cx, float cy, float cz, float dx, float dy, float dz) {
 		buf.addVertex(pose, ax, ay, az).setColor(c);
 		buf.addVertex(pose, bx, by, bz).setColor(c);
@@ -364,7 +379,7 @@ public final class HighlightRenderer {
 		if (!armed || style == null || palette.length == 0 || mesh == null || mesh.isEmpty()) return;
 		if (frustum != null && !frustum.isVisible(mesh.bounds())) return;
 		int layer = below ? BELOW : SHAPES;
-		List<Integer> key = new java.util.ArrayList<>(palette.length);
+		List<Integer> key = new ArrayList<>(palette.length);
 		for (int c : palette) key.add(c);
 		PaletteKey pk = new PaletteKey(style, key);
 		int base = paletteIds[layer].getOrDefault(pk, -1);
@@ -589,7 +604,7 @@ public final class HighlightRenderer {
 	}
 
 	private void drawMeshes(CommandEncoder encoder, GpuBuffer gpuData, int layer, GpuBufferSlice[] transforms, GpuBuffer indexBuffer,
-							com.mojang.blaze3d.IndexType indexType) {
+							IndexType indexType) {
 		boolean any = false;
 		for (MeshDraw d : meshes) any |= d.layer() == layer;
 		if (!any) return;

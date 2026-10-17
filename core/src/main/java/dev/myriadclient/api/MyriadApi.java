@@ -7,6 +7,7 @@ import dev.myriadclient.api.config.ConfigManager;
 import dev.myriadclient.api.control.Controls;
 import dev.myriadclient.api.elytra.Elytra;
 import dev.myriadclient.api.event.EventBus;
+import dev.myriadclient.api.hook.Hooks;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.registry.Registry;
@@ -18,10 +19,10 @@ import dev.myriadclient.api.service.Friends;
 import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.service.Notifications;
+import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.service.ServerStats;
-import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.service.Tasks;
 import dev.myriadclient.api.service.TickSpeed;
 import dev.myriadclient.api.ui.BarWidget;
@@ -29,9 +30,10 @@ import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.layout.Layout;
-import java.util.List;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.ApiStatus;
+
+import java.util.List;
 
 /** The services behind the {@link Myriad} facade. */
 @ApiStatus.NonExtendable
@@ -81,6 +83,8 @@ public interface MyriadApi {
 	Elytra elytra();
 
 	Controls controls();
+
+	Hooks hooks();
 
 	Tasks tasks();
 

@@ -17,6 +17,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.List;
+
 /** One place that maps raw input to module toggles and key actions, outside of screens. */
 public final class KeybindManager {
 	@Subscribe(priority = Priority.HIGH)
@@ -70,7 +72,7 @@ public final class KeybindManager {
 		}
 	}
 
-	private static java.util.List<ControlPanelImpl> controls() {
+	private static List<ControlPanelImpl> controls() {
 		return MyriadImpl.get().controlManager().impls();
 	}
 

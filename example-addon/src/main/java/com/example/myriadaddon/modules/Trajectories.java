@@ -14,6 +14,7 @@ import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.api.util.TickCached;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -43,7 +44,7 @@ public final class Trajectories extends Module {
 		List<Trajectory.Path> out = new ArrayList<>();
 		for (Entity e : mc.level.entitiesForRendering()) {
 			if (!(e instanceof Projectile p) || p.getDeltaMovement().lengthSqr() < 1e-6) continue;
-			Trajectory.Ballistics b = e instanceof net.minecraft.world.entity.projectile.arrow.AbstractArrow ? Trajectory.Ballistics.ARROW : Trajectory.Ballistics.THROWN;
+			Trajectory.Ballistics b = e instanceof AbstractArrow ? Trajectory.Ballistics.ARROW : Trajectory.Ballistics.THROWN;
 			out.add(Trajectory.simulate(new Trajectory.Launch(p.position(), p.getDeltaMovement(), b), 200, p));
 		}
 		return out;

@@ -6,8 +6,9 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import dev.myriadclient.api.Myriad;
-import java.util.concurrent.CompletableFuture;
 import net.minecraft.commands.SharedSuggestionProvider;
+
+import java.util.concurrent.CompletableFuture;
 
 /** A config profile name; suggests existing profiles. */
 public class ProfileArgumentType implements ArgumentType<String> {

@@ -6,9 +6,10 @@ import dev.myriadclient.api.setting.BoolSetting;
 import dev.myriadclient.api.ui.hud.HudStyle;
 import dev.myriadclient.api.ui.hud.TextHudPanel;
 import dev.myriadclient.api.util.Format;
-import java.util.Optional;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.Optional;
 
 /** The closest waypoint, how far it is, and an arrow pointing to it relative to where you're looking. */
 public final class NearestWaypointHud extends TextHudPanel {

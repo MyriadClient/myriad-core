@@ -2,6 +2,7 @@ package com.example.myriadaddon;
 
 import com.example.myriadaddon.bar.TpsBarWidget;
 import com.example.myriadaddon.commands.WaypointCommand;
+import com.example.myriadaddon.hooks.CountingPlacement;
 import com.example.myriadaddon.hud.NearestWaypointHud;
 import com.example.myriadaddon.hud.SessionStatsHud;
 import com.example.myriadaddon.modules.AutoTool;
@@ -19,8 +20,11 @@ import com.example.myriadaddon.stats.SessionStats;
 import com.example.myriadaddon.waypoints.WaypointStore;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.AddonContext;
-import dev.myriadclient.api.control.ControlPreset;
 import dev.myriadclient.api.addon.MyriadAddon;
+import dev.myriadclient.api.control.ControlPreset;
+import dev.myriadclient.api.event.events.HighlightEvent;
+import dev.myriadclient.api.hook.Match;
+import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.render.HighlightStyle;
 import dev.myriadclient.api.setting.SettingColor;
@@ -32,6 +36,7 @@ import dev.myriadclient.api.util.Keybind;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.player.Player;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -73,13 +78,16 @@ public final class ExampleAddon implements MyriadAddon {
 		SessionStats stats = new SessionStats();
 
 		// 2. Modules, in menu order. Each gets what it needs through its constructor.
+		Tunnel tunnel = new Tunnel();
+		AutoTool autoTool = new AutoTool();
+		HoleEsp holeEsp = new HoleEsp();
 		ctx.registerModules(
 			new Waypoints(waypoints),
 			new BlockSearch(),
-			new AutoTool(),
-			new Tunnel(),
+			autoTool,
+			tunnel,
 			new Trajectories(),
-			new HoleEsp(),
+			holeEsp,
 			new LogoEsp(),
 			new ChatTimestamps(),
 			new SettingsShowcase(showcase)
@@ -102,7 +110,7 @@ public final class ExampleAddon implements MyriadAddon {
 		});
 		ctx.registerKeyAction("Open Waypoints", Keybind.NONE, () -> {
 			Myriad.ui().open();
-			Myriad.ui().openPanel(waypointsWindow.id());
+			Myriad.ui().openPanel(waypointsWindow);
 		});
 
 		// 6. Something on the menu's top bar.
@@ -116,11 +124,12 @@ public final class ExampleAddon implements MyriadAddon {
 		}));
 
 		// 8. A ready-made control panel: one bind (or switch) turns these modules on together, each with the settings
-		// given here while it's on. Players find it in their Control Panels and can change it or delete it.
+		// given here while it's on. Players find it in their Control Panels and can change it or delete it. Your own
+		// modules' settings are typed; another addon's module goes in by id, its settings as .set takes them.
 		ctx.registerControlPanel(ControlPreset.builder("Digging")
-			.module("myriad-example:tunnel").setting("myriad-example:tunnel", "width", "3").setting("myriad-example:tunnel", "height", "3")
-			.module("myriad-example:auto_tool")
-			.module("myriad-example:hole_esp")
+			.module(tunnel, m -> m.set(tunnel.width, 3).set(tunnel.height, 3))
+			.module(autoTool)
+			.module(holeEsp)
 			.build());
 
 		// 9. A custom setting type needs an editor widget; every settings view then uses it (see SettingsShowcase).
@@ -133,6 +142,24 @@ public final class ExampleAddon implements MyriadAddon {
 
 		// 10. An always-on listener that isn't a module. Its @Subscribe methods run until the game closes.
 		ctx.events().subscribe(stats);
+
+		// 11. Hooks: changing how Myriad itself works. A hook is one decision others can make (here: how each entity is
+		// highlighted, after every module had its say); a replacement takes over a whole service (rotations, inventory,
+		// placement, breaking) for everyone. Both show in the Hooks window, where players can turn them off, and a
+		// Match narrows them to a module, an anti-cheat or a server.
+		ctx.hook(HighlightEvent.ENTITY_HIGHLIGHT).named("Friends in green").handle(call -> {
+			HighlightEvent.EntityHighlight h = call.proceed();
+			boolean friend = h.style() != null && h.entity() instanceof Player p && Myriad.friends().isFriend(p);
+			// Keep the alpha: it fades the highlight in and out.
+			int green = SettingColor.role(SettingColor.Mode.GREEN).argb() & 0xFFFFFF;
+			return friend ? new HighlightEvent.EntityHighlight(h.entity(), h.style(), h.color() & 0xFF000000 | green) : h;
+		});
+		// Scoped to this addon: Tunnel and the other example modules place through it, while Essentials and every other
+		// addon keep core's placement. Leave out .when(...) to replace it for everyone.
+		ctx.replace(Service.PLACEMENT)
+			.named("Counting placement")
+			.when(Match.addon(ctx.namespace()))
+			.with(CountingPlacement::new);
 	}
 
 	/** Every addon has initialised and config is loaded: the place to look for optional integrations. */

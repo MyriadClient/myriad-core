@@ -6,7 +6,6 @@ import dev.myriadclient.api.event.events.BlockBrokenEvent;
 import dev.myriadclient.api.event.events.InteractEvent;
 import dev.myriadclient.api.event.events.ItemUseEvent;
 import dev.myriadclient.impl.MyriadImpl;
-import dev.myriadclient.impl.service.InventoryManager;
 import dev.myriadclient.impl.service.RotationManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
@@ -51,12 +50,12 @@ public abstract class ClientPlayerInteractionManagerMixin {
 	/** After the cancellable hook above, so only a use that goes ahead is marked (see RotationManager.usingItem). */
 	@Inject(method = "useItem", at = @At("HEAD"))
 	private void myriad$useItemStart(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
-		if (Myriad.isReady() && Myriad.rotations() instanceof RotationManager rotations) rotations.usingItem(hand);
+		if (Myriad.isReady()) MyriadImpl.get().rotationManager().usingItem(hand);
 	}
 
 	@Inject(method = "useItem", at = @At("RETURN"))
 	private void myriad$useItemEnd(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
-		if (Myriad.isReady() && Myriad.rotations() instanceof RotationManager rotations) rotations.usingItem(null);
+		if (Myriad.isReady()) MyriadImpl.get().rotationManager().usingItem(null);
 	}
 
 	@Inject(method = "interact", at = @At("HEAD"), cancellable = true)
@@ -68,7 +67,7 @@ public abstract class ClientPlayerInteractionManagerMixin {
 	/** Your own click while a module holds a slot: the server gets your visible slot for it (see Inventory.hold). */
 	@Inject(method = "ensureHasSentCarriedItem", at = @At("HEAD"))
 	private void myriad$userSlot(CallbackInfo ci) {
-		if (Myriad.isReady() && Myriad.inventory() instanceof InventoryManager inventory) inventory.beforeCarriedSync();
+		if (Myriad.isReady()) MyriadImpl.get().inventoryManager().beforeCarriedSync();
 	}
 
 	/** Counts every click made, whichever way it then reaches the server (see PacketLimiter.recordClick). */

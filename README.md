@@ -462,7 +462,7 @@ Shared services keep addons from fighting over the same state:
 | `Myriad.server()` | TPS, ping, address, lag (`isLagging(ms)`), rubberbands (`rubberbandedWithin(ms)`), packets per second, totem pops, `reconnect()` to the last server |
 | `Myriad.runCommand(line)` | runs a Myriad command from code (macros, binds, clickable chat) |
 | `Myriad.chat(text, id)` | a chat line that replaces the previous one with the same id (progress, status) |
-| `Myriad.friends()`, `Myriad.notifications()` | friends list; toasts |
+| `Myriad.friends()`, `Myriad.notifications()` | friends list; toasts (`info`/`warn`/..., or `toast(title, message).replacing(key).lasting(ms).show()` for a status that updates) |
 | `Myriad.ui().confirm(...)` | a yes/no dialog |
 | `ctx.storage()` | your addon's own folder: atomic JSON reads and writes with backups, and versioned data that upgrades itself (`writeJson(name, json, version)`, `readJson(name, version, upgrade)`) |
 
@@ -535,6 +535,53 @@ How the pieces fit the kinds of addons people build:
   placements, rotates through `rotations()`, swaps with `inventory()`, pauses with `Interactions.shouldPause`, and
   checks `Reach` before every action. `AttackEvent` lets separate modules react to the same hit, and `.fakeplayer`
   gives you someone to test against in singleplayer.
+
+### Hooks: changing how core works
+
+Two levels, both registered as builders on the context, both shown in the **Hooks** window (and `.hooks`) where the
+player can turn any of them off:
+
+- **Replace a service.** Bring your own rotations, inventory handling, placement or breaking and keep Myriad's menu,
+  binds and modules. Extend the service's `Forwarding` class and override what you do differently; everything else,
+  including methods later versions add, still goes to core's.
+
+  ```java
+  ctx.replace(Service.ROTATIONS)
+      .named("Humanised rotations")
+      .when(Match.addon(ctx.namespace()))    // only your modules; leave out to replace it for everyone
+      .with(MyRotations::new);              // gets core's, returns yours
+
+  final class MyRotations extends Rotations.Forwarding {
+      MyRotations(Rotations core) { super(core); }
+      @Override public void request(Object owner, float yaw, float pitch, int priority, Options options, Runnable afterSent) {
+          super.request(owner, yaw + jitter(), pitch, priority, options, afterSent);
+      }
+  }
+  ```
+
+  `Myriad.rotations()` and the rest route every call that names an owner to the implementation for that owner, so
+  your modules can use yours while Essentials keeps core's, with no conflict. There's still one player and one
+  movement packet: a replacement scoped to some modules should change what they ask for and hand it on to core's
+  (`super`), which arbitrates; only one for everyone should take over sending things itself.
+- **Handle a hook.** One decision inside a service, without rewriting it: `Rotations.TURN` (how a rotation turns
+  each tick), `Placement.AIM` (where a placement clicks), `Inventory.CLICK_READY` (whether a click may go out now),
+  `HighlightEvent.ENTITY_HIGHLIGHT` (how each entity ends up highlighted).
+
+  ```java
+  ctx.hook(Rotations.TURN)
+      .named("Eased turns")
+      .when(Match.caller(MyAura.class).on(AntiCheat.Profile.GRIM))
+      .handle(call -> call.input().speed() > 0 ? ease(call.input()) : call.proceed());
+  ```
+
+  The most specific match runs first (a module, then an addon, then a server, then a profile) and can hand over with
+  `call.proceed()`. A handler that throws is turned off for the session and the call goes on to the next.
+
+`Match` says when: `Match.caller(module id or class)`, `Match.addon(modId)`, `.on(AntiCheat.Profile.GRIM)`,
+`.server("2b2t.org")`. Your addon can declare hooks of its own for others to build on:
+`Hook<SwapMoment, Boolean> MAY_SWAP = Hook.of("my-addon:may_swap", "May swap", "...")`, called with
+`MAY_SWAP.call(this, moment, m -> yourDefault(m))`; an unhooked hook runs the default straight away. Use an event to
+react alongside everyone; use a hook when there's one answer to give. The example addon has one of each.
 
 ### UI
 

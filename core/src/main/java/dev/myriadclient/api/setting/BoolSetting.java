@@ -43,7 +43,7 @@ public class BoolSetting extends Setting<Boolean> {
 		return List.of("true", "false", "toggle");
 	}
 
-	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.BoolSetting.Builder, Boolean, BoolSetting> {
+	public static class Builder extends Setting.Builder<BoolSetting.Builder, Boolean, BoolSetting> {
 		public Builder(String name) {
 			super(name, false);
 		}

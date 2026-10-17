@@ -9,6 +9,7 @@ import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.KeybindButton;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.VBox;
+import dev.myriadclient.impl.ui.DesktopBinds;
 import dev.myriadclient.impl.ui.WindowManager;
 
 /** Every binding in one place: global actions, desktop shortcuts (with the mod key) and module toggles. */
@@ -49,7 +50,7 @@ public final class KeybindsPanel extends WidgetPanel {
 
 		VBox desktop = new VBox(2, 0);
 		desktop.add(new Label(() -> "These are pressed together with the mod key (" + wm.theme().modKey.get().name().toLowerCase() + ", change it in Theme → Preferences). Workspaces 1–9, the HUD and the launcher also work in game, without the menu open.").dim());
-		for (WindowManager.WmBind b : wm.binds().values()) {
+		for (DesktopBinds.Bind b : wm.binds().values()) {
 			desktop.add(row(b.name, new KeybindButton(() -> b.bind, k -> {
 				b.bind = k;
 				Myriad.config().markDirty();

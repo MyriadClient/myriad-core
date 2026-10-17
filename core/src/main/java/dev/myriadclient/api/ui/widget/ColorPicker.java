@@ -6,6 +6,7 @@ import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.util.ColorUtil;
 
+import java.util.Arrays;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -148,7 +149,7 @@ public class ColorPicker extends Widget {
 	@Override
 	public boolean adjust(int direction) {
 		SettingColor cur = getter.get();
-		int i = java.util.Arrays.asList(ROLES).indexOf(cur.mode());
+		int i = Arrays.asList(ROLES).indexOf(cur.mode());
 		int next = Math.floorMod((i < 0 ? (direction > 0 ? -1 : 0) : i) + direction, ROLES.length);
 		setter.accept(new SettingColor(ColorUtil.withAlpha(0xFFFFFF, ColorUtil.alpha(cur.color())), ROLES[next]));
 		return true;

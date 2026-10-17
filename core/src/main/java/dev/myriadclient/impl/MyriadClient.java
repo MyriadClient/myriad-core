@@ -3,17 +3,19 @@ package dev.myriadclient.impl;
 import dev.myriadclient.api.event.events.GameReadyEvent;
 import dev.myriadclient.api.event.events.Render2DEvent;
 import dev.myriadclient.api.event.events.Render3DEvent;
-import dev.myriadclient.api.render.Projection;
-import dev.myriadclient.impl.keybind.VanillaKeys;
-import dev.myriadclient.impl.render.HighlightRenderer;
-import dev.myriadclient.impl.ui.MyriadTitleScreen;
-import dev.myriadclient.impl.render.MeshRenderer;
-import dev.myriadclient.impl.render.MyriadPipelines;
-import dev.myriadclient.impl.render.WorldRenderQueue;
 import dev.myriadclient.api.event.events.ScreenOpenEvent;
 import dev.myriadclient.api.event.events.ShutdownEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.api.render.Projection;
+import dev.myriadclient.api.util.Ticks;
+import dev.myriadclient.impl.dev.DevConsole;
+import dev.myriadclient.impl.keybind.VanillaKeys;
+import dev.myriadclient.impl.render.HighlightRenderer;
+import dev.myriadclient.impl.render.MeshRenderer;
+import dev.myriadclient.impl.render.MyriadPipelines;
+import dev.myriadclient.impl.render.WorldRenderQueue;
+import dev.myriadclient.impl.ui.MyriadTitleScreen;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -26,6 +28,9 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.resources.Identifier;
+import org.spongepowered.asm.mixin.MixinEnvironment;
+
+import java.nio.file.Path;
 
 /** Fabric entrypoint: boots Myriad and bridges Fabric API callbacks onto the Myriad event bus. */
 public class MyriadClient implements ClientModInitializer {
@@ -37,7 +42,7 @@ public class MyriadClient implements ClientModInitializer {
 		var bus = myriad.events();
 
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> {
-			dev.myriadclient.api.util.Ticks.advance();
+			Ticks.advance();
 			bus.post(TickEvent.Pre.INSTANCE);
 		});
 		ClientTickEvents.END_CLIENT_TICK.register(mc -> {
@@ -118,12 +123,12 @@ public class MyriadClient implements ClientModInitializer {
 		// the game from outside it.
 		String devConsole = System.getProperty("myriad.devConsole");
 		if (devConsole != null && !devConsole.isBlank()) {
-			bus.subscribe(new dev.myriadclient.impl.dev.DevConsole(java.nio.file.Path.of(devConsole), myriad.commandManager()));
+			bus.subscribe(new DevConsole(Path.of(devConsole), myriad.commandManager()));
 		}
 		// Dev check: -Dmyriad.auditMixins=true applies every mixin (Myriad's and addons') once the game has started.
 		// Mixins into classes that load late (chat, screens) otherwise only fail when you first open them.
 		if (Boolean.getBoolean("myriad.auditMixins")) {
-			ClientLifecycleEvents.CLIENT_STARTED.register(mc -> org.spongepowered.asm.mixin.MixinEnvironment.getCurrentEnvironment().audit());
+			ClientLifecycleEvents.CLIENT_STARTED.register(mc -> MixinEnvironment.getCurrentEnvironment().audit());
 		}
 		ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> {
 			bus.post(ShutdownEvent.INSTANCE);

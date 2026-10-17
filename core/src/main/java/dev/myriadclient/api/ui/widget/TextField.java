@@ -2,11 +2,11 @@ package dev.myriadclient.api.ui.widget;
 
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.util.ColorUtil;
+import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import net.minecraft.client.Minecraft;
 
 /**
  * Single-line text input. {@code onChange} fires on every edit, {@code onSubmit} on Enter. While unfocused it shows

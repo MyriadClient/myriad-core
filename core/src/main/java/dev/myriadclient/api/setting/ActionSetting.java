@@ -40,7 +40,7 @@ public class ActionSetting extends Setting<Runnable> {
 		return "";
 	}
 
-	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.ActionSetting.Builder, Runnable, ActionSetting> {
+	public static class Builder extends Setting.Builder<ActionSetting.Builder, Runnable, ActionSetting> {
 		public Builder(String name, Runnable action) {
 			super(name, action);
 		}

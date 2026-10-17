@@ -4,9 +4,6 @@ import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.setting.RegistryListSetting;
 import dev.myriadclient.api.setting.RegistrySetting;
 import dev.myriadclient.api.util.ColorUtil;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.effect.MobEffect;
@@ -15,6 +12,10 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 /**
  * Inline searchable multi-select over a vanilla registry, instead of a separate picker screen. Selected

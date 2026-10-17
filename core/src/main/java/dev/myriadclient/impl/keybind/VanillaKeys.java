@@ -45,7 +45,8 @@ public final class VanillaKeys {
 				setting.set(picked);
 				Myriad.config().markDirty();
 			}
-			else Myriad.notifications().send("Mod key", "It can be Alt, Super or Ctrl: kept " + setting.get().name().charAt(0) + setting.get().name().substring(1).toLowerCase() + ".", Notifications.Level.WARNING, 4000, "mod-key");
+			else Myriad.notifications().toast("Mod key", "It can be Alt, Super or Ctrl: kept " + setting.get().name().charAt(0) + setting.get().name().substring(1).toLowerCase() + ".")
+				.level(Notifications.Level.WARNING).lasting(4000).replacing("mod-key").show();
 			shownMod = null;
 		}
 		if (shownMod == null || modKeyOf(shownMod) != setting.get()) {

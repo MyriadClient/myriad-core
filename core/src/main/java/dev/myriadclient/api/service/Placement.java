@@ -1,10 +1,16 @@
 package dev.myriadclient.api.service;
 
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import dev.myriadclient.api.hook.Hook;
+import dev.myriadclient.api.hook.Replacement;
+import dev.myriadclient.api.hook.Service;
+import dev.myriadclient.api.util.Reach;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.ApiStatus;
+
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Shared block placement for modules like Scaffold, Surround or Auto Trap: finds a solid neighbour face to click,
@@ -76,7 +82,7 @@ public interface Placement {
 		/**
 		 * How far a click may reach: from the eyes to the point clicked, as the server measures it (Grim also takes the
 		 * eye heights of the other poses it can't rule out, which reach farther below you). Use
-		 * {@link dev.myriadclient.api.util.Reach#blockRange()} for all the server allows.
+		 * {@link Reach#blockRange()} for all the server allows.
 		 */
 		public double range() {
 			return range;
@@ -118,7 +124,7 @@ public interface Placement {
 
 		@Override
 		public int hashCode() {
-			return java.util.Objects.hash(rotate, airPlace, swing, range, visibleFaces);
+			return Objects.hash(rotate, airPlace, swing, range, visibleFaces);
 		}
 
 		@Override
@@ -210,4 +216,60 @@ public interface Placement {
 
 	/** True while a placement at {@code pos} is waiting to be sent or for the server's answer. */
 	boolean isPending(BlockPos pos);
+
+	/** A block to place, for {@link #AIM}. */
+	record Target(BlockPos pos, Options options) {
+	}
+
+	/**
+	 * Where to click to place a block: the face and point (core: the best face you can reach and see, near the point
+	 * nearest your eyes; for an air placement, the empty space itself), or null if there's nowhere it may click.
+	 * Called with the placement's owner as caller. A click elsewhere than core would pick is aimed at from your eyes.
+	 */
+	Hook<Target, BlockHitResult> AIM = Hook.of("myriad:placement_aim", "Placement aim",
+		"Where a placement clicks.");
+
+	/**
+	 * The base for a replacement of this service ({@link Service#PLACEMENT}): hands every call
+	 * to the service it wraps (core's), so override only what you do differently. While it's in use it gets Myriad's
+	 * events and {@link #activated()}/{@link #deactivated()}.
+	 */
+	abstract class Forwarding implements Placement, Replacement {
+		/** The service this one wraps: core's own. */
+		protected final Placement core;
+
+		protected Forwarding(Placement core) {
+			this.core = Objects.requireNonNull(core);
+		}
+
+		@Override
+		public Check check(BlockPos pos, Options options) {
+			return core.check(pos, options);
+		}
+
+		@Override
+		public Attempt place(Object owner, BlockPos pos, int hotbarSlot, Options options) {
+			return core.place(owner, pos, hotbarSlot, options);
+		}
+
+		@Override
+		public Attempt place(Object owner, BlockHitResult hit, int hotbarSlot, Options options) {
+			return core.place(owner, hit, hotbarSlot, options);
+		}
+
+		@Override
+		public void cancel(Object owner) {
+			core.cancel(owner);
+		}
+
+		@Override
+		public List<BlockHitResult> clickTargets(BlockPos pos) {
+			return core.clickTargets(pos);
+		}
+
+		@Override
+		public boolean isPending(BlockPos pos) {
+			return core.isPending(pos);
+		}
+	}
 }

@@ -1,16 +1,18 @@
 package dev.myriadclient.impl.config;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.config.ConfigManager;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.CoreAddon;
 import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.service.AntiCheatTracker;
 import net.fabricmc.loader.api.FabricLoader;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
@@ -22,6 +24,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Stream;
@@ -93,17 +98,17 @@ public final class ConfigManagerImpl implements ConfigManager {
 	public void load() {
 		loading = true;
 		try {
-			java.util.Optional.ofNullable(readObject(root.resolve("myriad.json"))).ifPresent(o -> {
+			Optional.ofNullable(readObject(root.resolve("myriad.json"))).ifPresent(o -> {
 				if (o.has("profile")) profile = sanitize(o.get("profile").getAsString());
 				if (o.has("prefix")) prefix = o.get("prefix").getAsString();
 				if (o.has("knownGrimServers") && o.get("knownGrimServers").isJsonArray()) {
 					List<String> hosts = new ArrayList<>();
 					for (JsonElement e : o.getAsJsonArray("knownGrimServers")) if (e.isJsonPrimitive()) hosts.add(e.getAsString());
-					((dev.myriadclient.impl.service.AntiCheatTracker) myriad.antiCheat()).setKnownServers(hosts);
+					((AntiCheatTracker) myriad.antiCheat()).setKnownServers(hosts);
 				}
 				if (o.has("antiCheat")) {
 					try {
-						myriad.antiCheat().setMode(AntiCheat.Mode.valueOf(o.get("antiCheat").getAsString().toUpperCase(java.util.Locale.ROOT)));
+						myriad.antiCheat().setMode(AntiCheat.Mode.valueOf(o.get("antiCheat").getAsString().toUpperCase(Locale.ROOT)));
 					} catch (RuntimeException ignored) {
 						// An unknown value (from a newer version) keeps the default.
 					}
@@ -129,7 +134,7 @@ public final class ConfigManagerImpl implements ConfigManager {
 
 	private void loadProfile(String name) {
 		Path dir = profileDir(name);
-		rawModules = java.util.Objects.requireNonNullElseGet(readObject(dir.resolve("modules.json")), JsonObject::new);
+		rawModules = Objects.requireNonNullElseGet(readObject(dir.resolve("modules.json")), JsonObject::new);
 		for (Module m : myriad.modules()) {
 			if (m.isMirror()) continue;
 			JsonElement e = savedEntry(m);
@@ -153,7 +158,7 @@ public final class ConfigManagerImpl implements ConfigManager {
 			}
 			m.setEnabledSilently(o.has("enabled") && o.get("enabled").getAsBoolean());
 		}
-		rawAddonSettings = java.util.Objects.requireNonNullElseGet(readObject(dir.resolve("addons.json")), JsonObject::new);
+		rawAddonSettings = Objects.requireNonNullElseGet(readObject(dir.resolve("addons.json")), JsonObject::new);
 		for (AddonSettings a : myriad.addonSettings()) {
 			JsonElement e = rawAddonSettings.get(a.id().toString());
 			if (e != null && e.isJsonObject()) a.settings().fromJson(e.getAsJsonObject());
@@ -185,8 +190,8 @@ public final class ConfigManagerImpl implements ConfigManager {
 		global.addProperty(FORMAT_KEY, FORMAT);
 		global.addProperty("profile", profile);
 		global.addProperty("prefix", prefix);
-		global.addProperty("antiCheat", myriad.antiCheat().mode().name().toLowerCase(java.util.Locale.ROOT));
-		com.google.gson.JsonArray known = new com.google.gson.JsonArray();
+		global.addProperty("antiCheat", myriad.antiCheat().mode().name().toLowerCase(Locale.ROOT));
+		JsonArray known = new JsonArray();
 		for (String h : myriad.antiCheat().knownServers()) known.add(h);
 		global.add("knownGrimServers", known);
 		global.addProperty("checkUpdates", myriad.updates().checkEnabled());

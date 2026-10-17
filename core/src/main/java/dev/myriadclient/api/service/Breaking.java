@@ -1,8 +1,12 @@
 package dev.myriadclient.api.service;
 
+import dev.myriadclient.api.hook.Replacement;
+import dev.myriadclient.api.hook.Service;
+import dev.myriadclient.api.util.Reach;
 import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.ApiStatus;
 
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -78,7 +82,7 @@ public interface Breaking {
 		private final double range;
 
 		private Options(Mode mode, boolean rotate, boolean swing, double range, boolean autoTool, boolean doubleBreak, boolean waitForServer) {
-			this.mode = java.util.Objects.requireNonNull(mode);
+			this.mode = Objects.requireNonNull(mode);
 			this.rotate = rotate;
 			this.swing = swing;
 			this.range = range;
@@ -115,7 +119,7 @@ public interface Breaking {
 
 		/**
 		 * Maximum distance from the eyes to the nearest point of the block, as the server and Grim measure (see
-		 * {@link dev.myriadclient.api.util.Reach#canReach(BlockPos, double)}).
+		 * {@link Reach#canReach(BlockPos, double)}).
 		 */
 		public double range() {
 			return range;
@@ -180,7 +184,7 @@ public interface Breaking {
 
 		@Override
 		public int hashCode() {
-			return java.util.Objects.hash(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
+			return Objects.hash(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
 		@Override
@@ -245,4 +249,53 @@ public interface Breaking {
 
 	/** Whether a block at {@code pos} can be broken now by packet mining's rebreak (a single finish packet). */
 	boolean canRebreak(BlockPos pos);
+
+	/**
+	 * The base for a replacement of this service ({@link Service#BREAKING}): hands every call
+	 * to the service it wraps (core's), so override only what you do differently. While it's in use it gets Myriad's
+	 * events and {@link #activated()}/{@link #deactivated()}.
+	 */
+	abstract class Forwarding implements Breaking, Replacement {
+		/** The service this one wraps: core's own. */
+		protected final Breaking core;
+
+		protected Forwarding(Breaking core) {
+			this.core = Objects.requireNonNull(core);
+		}
+
+		@Override
+		public Check check(BlockPos pos, Options options) {
+			return core.check(pos, options);
+		}
+
+		@Override
+		public Attempt breakBlock(Object owner, BlockPos pos, int priority, Options options) {
+			return core.breakBlock(owner, pos, priority, options);
+		}
+
+		@Override
+		public void cancel(Object owner) {
+			core.cancel(owner);
+		}
+
+		@Override
+		public void cancel(BlockPos pos) {
+			core.cancel(pos);
+		}
+
+		@Override
+		public boolean isPending(BlockPos pos) {
+			return core.isPending(pos);
+		}
+
+		@Override
+		public float progress(BlockPos pos) {
+			return core.progress(pos);
+		}
+
+		@Override
+		public boolean canRebreak(BlockPos pos) {
+			return core.canRebreak(pos);
+		}
+	}
 }

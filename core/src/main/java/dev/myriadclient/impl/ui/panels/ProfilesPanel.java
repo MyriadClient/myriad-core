@@ -3,15 +3,16 @@ package dev.myriadclient.impl.ui.panels;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.ui.WidgetPanel;
-import dev.myriadclient.api.ui.widget.Dropdown;
-import dev.myriadclient.impl.command.CoreCommands;
-import java.util.List;
 import dev.myriadclient.api.ui.widget.Button;
+import dev.myriadclient.api.ui.widget.Dropdown;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.Spacer;
 import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.VBox;
+import dev.myriadclient.impl.command.CoreCommands;
+
+import java.util.List;
 
 /** Switch, create and delete config profiles. A profile holds module state and the desktop layout. */
 public final class ProfilesPanel extends WidgetPanel {

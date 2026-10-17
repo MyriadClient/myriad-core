@@ -1,7 +1,10 @@
 package dev.myriadclient.api.event.events;
 
+import dev.myriadclient.api.hook.Hook;
+import dev.myriadclient.api.render.HighlightSettings;
 import dev.myriadclient.api.render.HighlightStyle;
 import dev.myriadclient.api.render.WorldMesh;
+import dev.myriadclient.api.world.ChunkCache;
 import dev.myriadclient.impl.render.HighlightRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
@@ -21,7 +24,7 @@ import org.jetbrains.annotations.Nullable;
  * (as a highlight of the block under the crosshair should).
  * <p>
  * Colours are ARGB; the alpha fades the whole highlight (handy for fade-ins). The look comes from a
- * {@link HighlightStyle}; {@link dev.myriadclient.api.render.HighlightSettings} gives modules the standard options for one.
+ * {@link HighlightStyle}; {@link HighlightSettings} gives modules the standard options for one.
  *
  * <pre>{@code
  * @Subscribe
@@ -31,6 +34,18 @@ import org.jetbrains.annotations.Nullable;
  * }</pre>
  */
 public abstract class HighlightEvent {
+	/** How an entity is highlighted this frame, for {@link #ENTITY_HIGHLIGHT}: a null style for not at all. */
+	public record EntityHighlight(net.minecraft.world.entity.Entity entity, @Nullable HighlightStyle style, int color) {
+	}
+
+	/**
+	 * How each entity ends up highlighted, after the modules' {@link Entity} listeners had their say (the input): change
+	 * the style or colour, highlight what nobody did, or return a null style to not highlight it. Called on the render
+	 * thread, every frame, for each entity drawn while anything listens for highlights: keep it quick.
+	 */
+	public static final Hook<EntityHighlight, EntityHighlight> ENTITY_HIGHLIGHT = Hook.of(
+		"myriad:entity_highlight", "Entity highlight", "How each entity is highlighted.");
+
 	/**
 	 * An entity is being prepared for drawing this frame: call {@link #highlight} to highlight it. The highlight covers
 	 * everything drawn with the entity (armour, held items, capes); riders are asked about separately. The first
@@ -159,7 +174,7 @@ public abstract class HighlightEvent {
 
 		/**
 		 * Highlights the filled faces (quads) of a {@link WorldMesh}, which stays on the GPU: for highlights of many
-		 * blocks that change rarely, build a mesh when they change (or let a {@link dev.myriadclient.api.world.ChunkCache} do it
+		 * blocks that change rarely, build a mesh when they change (or let a {@link ChunkCache} do it
 		 * per chunk, see its {@code highlight}) instead of adding thousands of blocks every frame. Lines in the mesh are
 		 * ignored. Each vertex's colour picks a colour from {@code palette} by index: build the faces with
 		 * {@link #paletteColor}{@code (i)}. Up to 256 colours.

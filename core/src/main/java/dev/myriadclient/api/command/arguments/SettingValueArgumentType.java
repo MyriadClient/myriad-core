@@ -7,8 +7,9 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import dev.myriadclient.api.setting.Setting;
-import java.util.concurrent.CompletableFuture;
 import net.minecraft.commands.SharedSuggestionProvider;
+
+import java.util.concurrent.CompletableFuture;
 
 /** Greedy value text for the setting parsed by preceding {@code module} and {@code setting} arguments. */
 public class SettingValueArgumentType implements ArgumentType<String> {

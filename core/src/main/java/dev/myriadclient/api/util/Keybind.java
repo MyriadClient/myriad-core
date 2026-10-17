@@ -1,7 +1,9 @@
 package dev.myriadclient.api.util;
 
-import org.lwjgl.glfw.GLFW;
 import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.Minecraft;
+import org.lwjgl.glfw.GLFW;
+
 import java.util.Locale;
 
 /**
@@ -34,8 +36,8 @@ public record Keybind(int code, boolean mouse, int modifiers) {
 	/** Whether the key or button is held down right now (modifiers are not checked). */
 	public boolean isPressed() {
 		if (!isSet()) return false;
-		long window = net.minecraft.client.Minecraft.getInstance().getWindow().handle();
-		return mouse ? GLFW.glfwGetMouseButton(window, code) == GLFW.GLFW_PRESS : InputConstants.isKeyDown(net.minecraft.client.Minecraft.getInstance().getWindow(), code);
+		long window = Minecraft.getInstance().getWindow().handle();
+		return mouse ? GLFW.glfwGetMouseButton(window, code) == GLFW.GLFW_PRESS : InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), code);
 	}
 
 	public boolean matchesMouse(int button, int mods) {

@@ -1,9 +1,9 @@
 package dev.myriadclient.api.event.events;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.Camera;
 import dev.myriadclient.api.render.Renderer3D;
 import dev.myriadclient.api.render.ShapeBuilder;
+import net.minecraft.client.Camera;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import org.jetbrains.annotations.ApiStatus;
 

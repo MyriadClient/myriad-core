@@ -9,6 +9,7 @@ import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.ThemeSettings;
 import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.config.JsonFiles;
+import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -303,7 +304,7 @@ public final class ThemeManager {
 		commit();
 		String slug = uniqueSlug(name);
 		Entry e = new Entry(MyriadId.of(USER_NAMESPACE, slug), null, name);
-		e.author = Optional.ofNullable(net.minecraft.client.Minecraft.getInstance().getUser()).map(s -> s.getName()).orElse("");
+		e.author = Optional.ofNullable(Minecraft.getInstance().getUser()).map(s -> s.getName()).orElse("");
 		e.values = snapshot(theme);
 		entries.put(e.id, e);
 		active = e.id;

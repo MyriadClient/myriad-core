@@ -3,6 +3,7 @@ package dev.myriadclient.api.service;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -25,7 +26,7 @@ import java.util.function.Supplier;
  * }</pre>
  *
  * A sequence fails when a step throws, a {@link Sequence#require} check is false, an {@link Sequence#await}ed
- * future fails or a wait times out (with a {@link java.util.concurrent.TimeoutException}).
+ * future fails or a wait times out (with a {@link TimeoutException}).
  */
 @ApiStatus.NonExtendable
 public interface Tasks {

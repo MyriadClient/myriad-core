@@ -49,7 +49,7 @@ public class ChoiceSetting extends Setting<String> {
 		return options();
 	}
 
-	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.ChoiceSetting.Builder, String, ChoiceSetting> {
+	public static class Builder extends Setting.Builder<ChoiceSetting.Builder, String, ChoiceSetting> {
 		private final Supplier<List<String>> options;
 
 		public Builder(String name, Supplier<List<String>> options) {

@@ -14,11 +14,12 @@ import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.api.world.BlockScan;
 import dev.myriadclient.api.world.ChunkCache;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
-import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.LevelChunk;
+
+import java.util.Set;
 
 /**
  * Highlights every block of the kinds you pick (ores, spawners, portals…) in the chunks around you.

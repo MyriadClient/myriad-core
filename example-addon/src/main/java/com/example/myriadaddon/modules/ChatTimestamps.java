@@ -6,10 +6,11 @@ import dev.myriadclient.api.module.Modules;
 import dev.myriadclient.api.setting.ColorSetting;
 import dev.myriadclient.api.setting.EnumSetting;
 import dev.myriadclient.api.setting.SettingColor;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextColor;
+
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Prefixes chat messages with the time they arrived.

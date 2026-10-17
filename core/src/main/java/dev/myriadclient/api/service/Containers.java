@@ -1,16 +1,17 @@
 package dev.myriadclient.api.service;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
-import net.minecraft.world.item.ItemStack;
 
 /**
  * Containers (chests, barrels, shulkers, furnaces, …): opening one at a position, reading it once its contents have
@@ -42,7 +43,7 @@ public interface Containers {
 
 	/**
 	 * Right-clicks the block at {@code pos} (on the nearest face in reach) and completes once the container's
-	 * contents have arrived. Fails with a {@link java.util.concurrent.TimeoutException} after {@code timeoutTicks}, or
+	 * contents have arrived. Fails with a {@link TimeoutException} after {@code timeoutTicks}, or
 	 * an {@link IllegalStateException} if the block is out of reach. Opening another replaces a pending one.
 	 */
 	CompletableFuture<View> open(BlockPos pos, int timeoutTicks);

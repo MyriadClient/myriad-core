@@ -4,6 +4,8 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.ui.ThemeSettings;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Supplier;
 
 /**
@@ -90,7 +92,7 @@ public abstract class Widget {
 	}
 
 	/** Adds the navigable widgets currently on screen, in visual order. Containers recurse into shown children. */
-	public void collectNavigable(java.util.List<Widget> out) {
+	public void collectNavigable(List<Widget> out) {
 		if (isVisible() && isNavigable() && height > 0) out.add(this);
 	}
 
@@ -166,7 +168,7 @@ public abstract class Widget {
 		for (Widget child : ownedChildren) child.attach(root, this);
 	}
 
-	private final java.util.List<Widget> ownedChildren = new java.util.ArrayList<>(0);
+	private final List<Widget> ownedChildren = new ArrayList<>(0);
 
 	/**
 	 * For custom composite widgets (outside of {@link Container}): registers a child so it shares this widget's root

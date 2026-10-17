@@ -1,6 +1,5 @@
 package dev.myriadclient.impl.control;
 
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.control.ControlPanel;
@@ -77,14 +76,16 @@ public final class ControlPanelImpl implements ControlPanel {
 		hold.set(false);
 		name.set(p.name());
 		remembered.clear();
-		p.settings().forEach((module, values) -> {
-			Map<String, JsonObject> m = remembered.computeIfAbsent(module, k -> new LinkedHashMap<>());
-			values.forEach((key, value) -> {
-				JsonObject o = new JsonObject();
-				o.addProperty("text", value);
-				m.put(key, o);
-			});
-		});
+		p.settings().forEach((module, values) -> values.forEach((key, value) -> {
+			JsonObject o = new JsonObject();
+			o.addProperty("text", value);
+			remembered.computeIfAbsent(module, k -> new LinkedHashMap<>()).put(key, o);
+		}));
+		p.values().forEach((module, values) -> values.forEach((key, value) -> {
+			JsonObject o = new JsonObject();
+			o.add("json", value.deepCopy());
+			remembered.computeIfAbsent(module, k -> new LinkedHashMap<>()).put(key, o);
+		}));
 	}
 
 	@Override
@@ -131,7 +132,8 @@ public final class ControlPanelImpl implements ControlPanel {
 			for (String m : List.copyOf(applied.keySet())) revert(m);
 			applied.clear();
 		}
-		Myriad.notifications().send("Control panel", name() + (on ? " on" : " off"), on ? Notifications.Level.SUCCESS : Notifications.Level.INFO, 1500, "control:" + id);
+		Myriad.notifications().toast("Control panel", name() + (on ? " on" : " off"))
+			.level(on ? Notifications.Level.SUCCESS : Notifications.Level.INFO).lasting(1500).replacing("control:" + id).show();
 		Myriad.config().markDirty();
 	}
 

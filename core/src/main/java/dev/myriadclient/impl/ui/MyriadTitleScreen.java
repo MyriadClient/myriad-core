@@ -18,8 +18,10 @@ import net.minecraft.client.gui.screens.options.OptionsScreen;
 import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.sounds.SoundEvents;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -124,7 +126,7 @@ public final class MyriadTitleScreen extends Screen {
 	public void extractRenderState(GuiGraphicsExtractor context, int guiX, int guiY, float delta) {
 		ThemeSettings theme = wm.theme();
 		intro.animateTo(1, 700, theme.bezier());
-		wm.paint(context, c -> {
+		wm.painter().paint(context, c -> {
 			float w = wm.unitsWide(), h = wm.unitsHigh();
 			buttonsTop = buttonsTop(c);
 			float mx = wm.units(guiX), my = wm.units(guiY);
@@ -223,7 +225,7 @@ public final class MyriadTitleScreen extends Screen {
 	private void run(int i) {
 		Entry e = entries.get(i);
 		if (e.enabled.getAsBoolean()) {
-			minecraft.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(net.minecraft.sounds.SoundEvents.UI_BUTTON_CLICK, 1));
+			minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1));
 			e.run.run();
 		}
 	}

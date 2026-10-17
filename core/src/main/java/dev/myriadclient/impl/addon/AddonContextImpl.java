@@ -5,10 +5,17 @@ import dev.myriadclient.api.addon.AddonContext;
 import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.addon.AddonStorage;
 import dev.myriadclient.api.command.Command;
+import dev.myriadclient.api.control.ControlPreset;
 import dev.myriadclient.api.event.EventBus;
+import dev.myriadclient.api.hook.Hook;
+import dev.myriadclient.api.hook.HookBuilder;
+import dev.myriadclient.api.hook.ReplacementBuilder;
+import dev.myriadclient.api.hook.Service;
+import dev.myriadclient.api.module.Categories;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.service.KeyAction;
+import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.ui.BarWidget;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.SettingWidgets;
@@ -17,6 +24,7 @@ import dev.myriadclient.api.ui.layout.Layout;
 import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.control.ControlManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,12 +53,12 @@ final class AddonContextImpl implements AddonContext {
 
 	@Override
 	public Category registerCategory(String name, String icon, int color) {
-		return registerCategory(name, icon, dev.myriadclient.api.setting.SettingColor.of(color));
+		return registerCategory(name, icon, SettingColor.of(color));
 	}
 
 	@Override
-	public Category registerCategory(String name, String icon, dev.myriadclient.api.setting.SettingColor color) {
-		for (Category core : dev.myriadclient.api.module.Categories.DEFAULTS) {
+	public Category registerCategory(String name, String icon, SettingColor color) {
+		for (Category core : Categories.DEFAULTS) {
 			if (core.name().equalsIgnoreCase(name)) {
 				logger.warn("Registering a category named '{}', which duplicates Myriad's shared one; use Categories.{} instead "
 					+ "so your modules share a window with other addons'", name, core.id().path().toUpperCase());
@@ -98,10 +106,20 @@ final class AddonContextImpl implements AddonContext {
 	}
 
 	@Override
-	public MyriadId registerControlPanel(dev.myriadclient.api.control.ControlPreset preset) {
+	public MyriadId registerControlPanel(ControlPreset preset) {
 		MyriadId id = id(MyriadId.toPath(preset.name()));
-		myriad.controlManager().presets().register(new dev.myriadclient.impl.control.ControlManager.Preset(id, preset), addon.id());
+		myriad.controlManager().presets().register(new ControlManager.Preset(id, preset), addon.id());
 		return id;
+	}
+
+	@Override
+	public <I, O> HookBuilder<I, O> hook(Hook<I, O> hook) {
+		return myriad.hookManager().hookBuilder(addon.id(), hook);
+	}
+
+	@Override
+	public <S> ReplacementBuilder<S> replace(Service<S> service) {
+		return myriad.hookManager().replacementBuilder(addon.id(), service);
 	}
 
 	@Override

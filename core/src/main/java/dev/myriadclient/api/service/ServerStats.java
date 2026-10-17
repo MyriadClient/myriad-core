@@ -1,10 +1,10 @@
 package dev.myriadclient.api.service;
 
+import net.minecraft.world.entity.player.Player;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
-import net.minecraft.world.entity.player.Player;
 
 /**
  * Facts about the current server and connection that several features want, tracked once by Myriad instead of by

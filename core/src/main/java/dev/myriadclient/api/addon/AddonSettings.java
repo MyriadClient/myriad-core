@@ -1,6 +1,7 @@
 package dev.myriadclient.api.addon;
 
 import dev.myriadclient.api.registry.Identified;
+import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.Settings;
 import dev.myriadclient.api.util.MyriadId;
 
@@ -38,7 +39,7 @@ public final class AddonSettings implements Identified {
 	}
 
 	/** Shortcut for {@code settings().group(name)}. */
-	public dev.myriadclient.api.setting.SettingGroup group(String name) {
+	public SettingGroup group(String name) {
 		return settings.group(name);
 	}
 }

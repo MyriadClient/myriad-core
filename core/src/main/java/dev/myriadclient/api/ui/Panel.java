@@ -6,6 +6,8 @@ import dev.myriadclient.api.setting.Settings;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.ApiStatus;
 
+import java.util.List;
+
 /**
  * The content of a window. Panels draw in local coordinates: (0,0) is the top-left of the content area and
  * {@code width}/{@code height} is its size, in UI units. For widget-based panels extend {@link WidgetPanel}.
@@ -94,8 +96,8 @@ public abstract class Panel {
 	}
 
 	/** Controls for the window's title bar (a switch, icon buttons), right to left; see {@link TitleControl}. */
-	public java.util.List<TitleControl> titleControls() {
-		return java.util.List.of();
+	public List<TitleControl> titleControls() {
+		return List.of();
 	}
 
 	/** Tooltip for the hovered element, or null. Read after {@link #render}. */
@@ -112,7 +114,7 @@ public abstract class Panel {
 		this.window = window;
 	}
 
-	@org.jetbrains.annotations.ApiStatus.Internal
+	@ApiStatus.Internal
 	public static void bindClient(Minecraft client) {
 		mc = client;
 	}

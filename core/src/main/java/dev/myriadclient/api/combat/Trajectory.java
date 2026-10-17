@@ -1,5 +1,6 @@
 package dev.myriadclient.api.combat;
 
+import dev.myriadclient.api.util.TickCached;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.tags.FluidTags;
@@ -48,7 +49,7 @@ import java.util.function.Predicate;
  *
  * Each simulated tick raycasts against blocks and entities, so a path costs about as much as a hundred raycasts.
  * Simulating one path per frame is fine; several (every arrow in the air) should be simulated once per tick
- * ({@link dev.myriadclient.api.util.TickCached}) and drawn from that.
+ * ({@link TickCached}) and drawn from that.
  */
 public final class Trajectory {
 	private Trajectory() {

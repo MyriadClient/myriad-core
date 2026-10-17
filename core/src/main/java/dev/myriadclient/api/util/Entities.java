@@ -1,9 +1,6 @@
 package dev.myriadclient.api.util;
 
 import dev.myriadclient.api.Myriad;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
@@ -15,6 +12,9 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.function.Predicate;
 
 /**
  * Entity helpers for combat and render features: classifying entities the same way everywhere (so "hostiles" means

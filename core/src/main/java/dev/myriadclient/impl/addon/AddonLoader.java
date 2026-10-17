@@ -2,6 +2,7 @@ package dev.myriadclient.impl.addon;
 
 import dev.myriadclient.api.addon.Addon;
 import dev.myriadclient.api.addon.AddonContext;
+import dev.myriadclient.api.addon.AddonState;
 import dev.myriadclient.api.addon.MyriadAddon;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.registry.Registry;
@@ -90,7 +91,7 @@ public final class AddonLoader {
 
 	private void runPhase(String phase, BiConsumer<MyriadAddon, AddonContext> action) {
 		for (Addon addon : addons) {
-			if (addon.state() == dev.myriadclient.api.addon.AddonState.FAILED) continue;
+			if (addon.state() == AddonState.FAILED) continue;
 			long start = System.nanoTime();
 			try {
 				action.accept(addon.entrypoint(), contexts.get(addon));

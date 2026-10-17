@@ -18,7 +18,7 @@ public final class DesktopScreen extends Screen {
 
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
-		wm.renderDesktop(context, mouseX, mouseY);
+		wm.painter().renderDesktop(context, mouseX, mouseY);
 	}
 
 	@Override
@@ -70,10 +70,5 @@ public final class DesktopScreen extends Screen {
 	@Override
 	public void removed() {
 		wm.onScreenRemoved();
-	}
-
-	@Override
-	public void tick() {
-		wm.tickDesktop();
 	}
 }

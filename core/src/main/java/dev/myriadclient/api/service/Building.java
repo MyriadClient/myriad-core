@@ -5,6 +5,7 @@ import dev.myriadclient.api.build.Build;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Builds a {@link Blueprint}: describe the shape you want, and the planner works out each tick, for what's in reach,
@@ -45,8 +46,8 @@ public interface Building {
 
 		private Options(Placement.Options placing, Breaking.Options breaking, boolean breakWrong, boolean avoidFluids, int placesPerTick,
 		                int priority, boolean keepUp) {
-			this.placing = java.util.Objects.requireNonNull(placing);
-			this.breaking = java.util.Objects.requireNonNull(breaking);
+			this.placing = Objects.requireNonNull(placing);
+			this.breaking = Objects.requireNonNull(breaking);
 			this.breakWrong = breakWrong;
 			this.avoidFluids = avoidFluids;
 			this.placesPerTick = Math.max(1, placesPerTick);
@@ -136,7 +137,7 @@ public interface Building {
 
 		@Override
 		public int hashCode() {
-			return java.util.Objects.hash(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp);
+			return Objects.hash(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp);
 		}
 
 		@Override

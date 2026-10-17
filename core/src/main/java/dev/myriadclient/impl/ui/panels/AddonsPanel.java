@@ -2,22 +2,23 @@ package dev.myriadclient.impl.ui.panels;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.Addon;
+import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.addon.AddonState;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.ui.TitleControl;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
-import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.SettingsView;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.update.UpdateManager;
+import net.minecraft.util.Util;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import net.minecraft.util.Util;
 
 /** Every addon Myriad found, as cards: what it adds, who made it, where to find it, and why it failed if it did. */
 public final class AddonsPanel extends WidgetPanel {

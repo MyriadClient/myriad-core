@@ -73,7 +73,7 @@ public class EnumSetting<E extends Enum<E>> extends Setting<E> {
 		return Arrays.stream(values).map(e -> displayName(e).replace(" ", "")).toList();
 	}
 
-	public static class Builder<E extends Enum<E>> extends Setting.Builder<dev.myriadclient.api.setting.EnumSetting.Builder<E>, E, EnumSetting<E>> {
+	public static class Builder<E extends Enum<E>> extends Setting.Builder<EnumSetting.Builder<E>, E, EnumSetting<E>> {
 		public Builder(String name, E defaultValue) {
 			super(name, defaultValue);
 		}

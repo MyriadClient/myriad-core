@@ -12,6 +12,7 @@ import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.util.BlockInfo;
 import dev.myriadclient.api.util.MathUtil;
 import dev.myriadclient.api.util.Reach;
+import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.network.BlockAckTracker;
 import dev.myriadclient.impl.network.JoinedVersion;
 import net.minecraft.client.Minecraft;
@@ -19,6 +20,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -110,7 +112,13 @@ public final class PlacementManager implements Placement {
 	public Check check(BlockPos pos, Options o) {
 		Check space = spaceCheck(pos, o);
 		if (!space.ok()) return space;
-		return target(pos, o) != null ? Check.OK : supportCheck(pos, o);
+		return target(null, pos, o) != null ? Check.OK : refusal(pos, o);
+	}
+
+	/** Why there's no click: {@link #supportCheck}, or unavailable when a hook refused one core would make. */
+	private Check refusal(BlockPos pos, Options o) {
+		Check c = supportCheck(pos, o);
+		return c.ok() ? Check.UNAVAILABLE : c;
 	}
 
 	/** Why no face qualified: nothing to click (and no air face you can see, for air placements), or only faces you can't see. */
@@ -126,7 +134,7 @@ public final class PlacementManager implements Placement {
 		BlockState state = mc.level.getBlockState(pos);
 		if (!state.canBeReplaced()) return Check.OCCUPIED;
 		if (Double.isNaN(eyeHeightFor(new AABB(pos), o.range()))) return Check.OUT_OF_RANGE;
-		boolean blocked = !mc.level.getEntities((net.minecraft.world.entity.Entity) null, new AABB(pos),
+		boolean blocked = !mc.level.getEntities((Entity) null, new AABB(pos),
 			e -> e.isAlive() && e.isPickable() || e == mc.player && e.getBoundingBox().intersects(new AABB(pos))).isEmpty();
 		if (blocked) return Check.ENTITY_IN_WAY;
 		if (!Myriad.limits().canSend(PacketLimits.Kind.INTERACT, 1)) return Check.RATE_LIMITED;
@@ -137,6 +145,15 @@ public final class PlacementManager implements Placement {
 	 * The click for {@code pos}: on the best visible face you can reach, any reachable one unless visible faces are
 	 * required, or the empty space itself for an air placement.
 	 */
+	private Aim target(Object owner, BlockPos pos, Options o) {
+		Aim own = target(pos, o);
+		if (!AIM.hooked()) return own;
+		BlockHitResult hit = AIM.call(owner, new Target(pos.immutable(), o), t -> own == null ? null : own.hit);
+		if (hit == null) return null;
+		if (own != null && hit == own.hit) return own;
+		return new Aim(hit, mc.player.getEyeHeight());
+	}
+
 	private Aim target(BlockPos pos, Options o) {
 		List<BlockHitResult> targets = clickTargets(pos);
 		if (targets.isEmpty()) return o.airPlace() ? airHit(pos, o.range(), o.rotate()) : null;
@@ -313,8 +330,8 @@ public final class PlacementManager implements Placement {
 		if (hotbarSlot < 0 || hotbarSlot > 8) return Attempt.refused(pos, Check.UNAVAILABLE);
 		Check space = spaceCheck(pos, o);
 		if (!space.ok()) return Attempt.refused(pos, space);
-		Aim aim = target(pos, o);
-		if (aim == null) return Attempt.refused(pos, supportCheck(pos, o));
+		Aim aim = target(owner, pos, o);
+		if (aim == null) return Attempt.refused(pos, refusal(pos, o));
 		return submit(owner, pos, aim, hotbarSlot, o);
 	}
 
@@ -357,7 +374,7 @@ public final class PlacementManager implements Placement {
 		// Clicking the empty space itself: an air placement.
 		boolean air = target.getBlockPos().equals(pos);
 		Myriad.inventory().silentSwap(slot, () -> {
-			if (air && Myriad.inventory() instanceof InventoryManager inventory) {
+			if (air && MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory) {
 				// Swap the block to the off hand, place it from there, swing that hand, and swap back: how 2b2t clients
 				// place against air there, past its Grim. Back first thing next tick: Grim (PacketOrderG) cancels an off
 				// hand swap after a placement in the same tick, which would leave the block in your off hand. Meanwhile

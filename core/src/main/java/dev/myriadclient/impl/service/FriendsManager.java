@@ -8,6 +8,7 @@ import dev.myriadclient.impl.config.JsonFiles;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
@@ -46,7 +47,7 @@ public final class FriendsManager implements Friends {
 	@Override
 	public Collection<String> all() {
 		synchronized (friends) {
-			return java.util.List.copyOf(friends);
+			return List.copyOf(friends);
 		}
 	}
 

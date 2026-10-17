@@ -5,10 +5,13 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.InputEvent;
 import dev.myriadclient.api.event.events.MovementPacketsEvent;
 import dev.myriadclient.api.event.events.PlayerMoveEvent;
+import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.elytra.ElytraManager;
 import dev.myriadclient.impl.network.JoinedVersion;
-import dev.myriadclient.impl.service.InventoryManager;
 import net.minecraft.client.player.ClientInput;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.phys.Vec2;
@@ -105,7 +108,7 @@ public abstract class ClientPlayerEntityMixin {
 	/** After vanilla (or ViaFabricPlus, from the sprint key) has started sprinting this tick, before the player moves. */
 	@Inject(method = "aiStep", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/AbstractClientPlayer;aiStep()V"))
 	private void myriad$beforeTravel(CallbackInfo ci) {
-		if (Myriad.isReady() && Myriad.inventory() instanceof InventoryManager inventory) inventory.beforeTravel();
+		if (Myriad.isReady()) MyriadImpl.get().inventoryManager().beforeTravel();
 	}
 
 	@ModifyExpressionValue(method = "sendPosition", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;getX()D"))
@@ -140,9 +143,9 @@ public abstract class ClientPlayerEntityMixin {
 
 	/** Glide hold: the server stopping the glide is undone on the client while it's held. */
 	@Inject(method = "onSyncedDataUpdated", at = @At("TAIL"))
-	private void myriad$keepGliding(net.minecraft.network.syncher.EntityDataAccessor<?> accessor, CallbackInfo ci) {
+	private void myriad$keepGliding(EntityDataAccessor<?> accessor, CallbackInfo ci) {
 		LocalPlayer self = (LocalPlayer) (Object) this;
-		if (!accessor.equals(net.minecraft.world.entity.Entity.DATA_SHARED_FLAGS_ID) || (self.getEntityData().get(net.minecraft.world.entity.Entity.DATA_SHARED_FLAGS_ID) & 0x80) != 0) return;
-		if (dev.myriadclient.impl.elytra.ElytraManager.keepGliding()) self.startFallFlying();
+		if (!accessor.equals(Entity.DATA_SHARED_FLAGS_ID) || (self.getEntityData().get(Entity.DATA_SHARED_FLAGS_ID) & 0x80) != 0) return;
+		if (ElytraManager.keepGliding()) self.startFallFlying();
 	}
 }

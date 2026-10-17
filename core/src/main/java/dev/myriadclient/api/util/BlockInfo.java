@@ -9,6 +9,7 @@ import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.BrewingStandBlock;
 import net.minecraft.world.level.block.ButtonBlock;
 import net.minecraft.world.level.block.CrafterBlock;
@@ -36,7 +37,7 @@ public final class BlockInfo {
 
 	private static BlockState state(BlockPos pos) {
 		var world = Minecraft.getInstance().level;
-		return world == null ? net.minecraft.world.level.block.Blocks.AIR.defaultBlockState() : world.getBlockState(pos);
+		return world == null ? Blocks.AIR.defaultBlockState() : world.getBlockState(pos);
 	}
 
 	/** Bedrock, barriers, end portal frames and the like: nothing a survival player can mine. */

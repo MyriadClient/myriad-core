@@ -69,7 +69,7 @@ public class FileSetting extends Setting<String> {
 		return p == null ? "" : String.valueOf(p.getFileName());
 	}
 
-	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.FileSetting.Builder, String, FileSetting> {
+	public static class Builder extends Setting.Builder<FileSetting.Builder, String, FileSetting> {
 		private List<String> extensions = List.of();
 		private Supplier<Path> directory;
 
@@ -78,13 +78,13 @@ public class FileSetting extends Setting<String> {
 		}
 
 		/** e.g. {@code extensions("litematic", "schem")}. */
-		public dev.myriadclient.api.setting.FileSetting.Builder extensions(String... extensions) {
+		public FileSetting.Builder extensions(String... extensions) {
 			this.extensions = List.of(extensions);
 			return this;
 		}
 
 		/** Where the picker opens, e.g. the game's schematics folder. */
-		public dev.myriadclient.api.setting.FileSetting.Builder directory(Supplier<Path> directory) {
+		public FileSetting.Builder directory(Supplier<Path> directory) {
 			this.directory = directory;
 			return this;
 		}

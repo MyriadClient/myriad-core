@@ -1,11 +1,11 @@
 package dev.myriadclient.api.util;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 

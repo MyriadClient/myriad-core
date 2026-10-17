@@ -1,7 +1,13 @@
 package dev.myriadclient.api.service;
 
+import dev.myriadclient.api.hook.Hook;
+import dev.myriadclient.api.hook.Replacement;
+import dev.myriadclient.api.hook.Service;
+import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.ApiStatus;
+
+import java.util.Objects;
 
 /**
  * Server-side rotation arbitration. Modules {@link #request} a rotation every tick they need one; each tick the
@@ -157,10 +163,70 @@ public interface Rotations {
 
 	/** Whether the server already believes you face {@code yaw}/{@code pitch}, within {@code tolerance} degrees per axis. */
 	default boolean isFacing(float yaw, float pitch, float tolerance) {
-		float dy = Math.abs(net.minecraft.util.Mth.wrapDegrees(yaw - serverYaw()));
+		float dy = Math.abs(Mth.wrapDegrees(yaw - serverYaw()));
 		return dy <= tolerance && Math.abs(pitch - serverPitch()) <= tolerance;
 	}
 
 	/** Yaw and pitch from the player's eyes to {@code target}. */
 	float[] anglesTo(Vec3 target);
+
+	/** One step of a rotation turning towards its target, for {@link #TURN}: angles in degrees, speed 0 = snap. */
+	record Turn(float from, float to, float speed, boolean yaw) {
+	}
+
+	/**
+	 * Where a rotation is this tick, turning from the last one sent towards its target (core: at most the request's
+	 * turn speed, the short way round for yaw). Called for the request winning each axis, with its owner as caller.
+	 */
+	Hook<Turn, Float> TURN = Hook.of("myriad:rotation_turn", "Rotation turn",
+		"How a rotation turns towards its target each tick.");
+
+	/**
+	 * The base for a replacement of this service ({@link Service#ROTATIONS}): hands every call
+	 * to the service it wraps (core's), so override only what you do differently. While it's in use it gets Myriad's
+	 * events and {@link #activated()}/{@link #deactivated()}.
+	 */
+	abstract class Forwarding implements Rotations, Replacement {
+		/** The service this one wraps: core's own. */
+		protected final Rotations core;
+
+		protected Forwarding(Rotations core) {
+			this.core = Objects.requireNonNull(core);
+		}
+
+		@Override
+		public void request(Object owner, float yaw, float pitch, int priority, Options options, Runnable afterSent) {
+			core.request(owner, yaw, pitch, priority, options, afterSent);
+		}
+
+		@Override
+		public void sendRotationThisTick() {
+			core.sendRotationThisTick();
+		}
+
+		@Override
+		public float[] rotationForAction() {
+			return core.rotationForAction();
+		}
+
+		@Override
+		public boolean isRotating() {
+			return core.isRotating();
+		}
+
+		@Override
+		public float serverYaw() {
+			return core.serverYaw();
+		}
+
+		@Override
+		public float serverPitch() {
+			return core.serverPitch();
+		}
+
+		@Override
+		public float[] anglesTo(Vec3 target) {
+			return core.anglesTo(target);
+		}
+	}
 }

@@ -4,7 +4,6 @@ import com.mojang.blaze3d.platform.Window;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.WindowResizeEvent;
 import dev.myriadclient.impl.MyriadImpl;
-import dev.myriadclient.impl.service.InventoryManager;
 import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -34,7 +33,7 @@ public abstract class MinecraftClientMixin {
 
 	@Unique
 	private static void myriad$click(boolean active) {
-		if (Myriad.isReady() && Myriad.inventory() instanceof InventoryManager inventory) inventory.userClick(active);
+		if (Myriad.isReady()) MyriadImpl.get().inventoryManager().userClick(active);
 	}
 
 	/** Your own attacks and mining, so a silent swap still waiting to go back does before them (see Inventory.silentSwap). */
@@ -60,7 +59,7 @@ public abstract class MinecraftClientMixin {
 
 	@Unique
 	private static void myriad$attack(boolean active) {
-		if (Myriad.isReady() && Myriad.inventory() instanceof InventoryManager inventory) inventory.userAttack(active);
+		if (Myriad.isReady()) MyriadImpl.get().inventoryManager().userAttack(active);
 	}
 
 	@Inject(method = "resizeGui", at = @At("TAIL"))

@@ -1,11 +1,12 @@
 package dev.myriadclient.api.render;
 
-import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Player;
+
+import java.util.UUID;
 
 /**
  * Players' faces drawn on the canvas, with their hat layer, for radars, target HUDs, nametags and lists. Skins come

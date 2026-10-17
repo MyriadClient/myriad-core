@@ -4,7 +4,9 @@ import dev.myriadclient.api.render.Animated;
 import dev.myriadclient.api.render.Bezier;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.util.ColorUtil;
 
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -85,7 +87,7 @@ public class Collapsible extends Widget {
 			if (t < 1) c.alpha(t);
 			// The guide line ties the indented body to its header.
 			if (indent > 0) {
-				c.roundRect(x + 3, y + ROW + 1, 1.5f, height - ROW - 3, 0.75f, dev.myriadclient.api.util.ColorUtil.withAlpha(theme().accent.argb(), 120));
+				c.roundRect(x + 3, y + ROW + 1, 1.5f, height - ROW - 3, 0.75f, ColorUtil.withAlpha(theme().accent.argb(), 120));
 			}
 			body.render(c, mx, my);
 			c.pop();
@@ -131,7 +133,7 @@ public class Collapsible extends Widget {
 	}
 
 	@Override
-	public void collectNavigable(java.util.List<Widget> out) {
+	public void collectNavigable(List<Widget> out) {
 		if (!isVisible()) return;
 		out.add(this);
 		if (expandedGetter.get()) body.collectNavigable(out);

@@ -12,8 +12,10 @@ import net.minecraft.network.protocol.common.ClientboundPingPacket;
 import net.minecraft.network.protocol.common.ServerboundPongPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
+import net.minecraft.world.entity.Entity;
 
 import java.util.ArrayDeque;
+import java.util.Arrays;
 
 /**
  * Keeps the local player gliding through a moment the server stops the glide, without Grim (2b2t) noticing: the
@@ -63,7 +65,7 @@ final class GlideHolder {
 	private int answeredNext;
 
 	private GlideHolder() {
-		java.util.Arrays.fill(answered, NONE);
+		Arrays.fill(answered, NONE);
 	}
 
 	/** Holds the next glide clear for {@code owner}; false if another owner has it. */
@@ -153,7 +155,7 @@ final class GlideHolder {
 	private static int ownGlideBit(ClientboundSetEntityDataPacket data) {
 		LocalPlayer p = Minecraft.getInstance().player;
 		if (p == null || data.id() != p.getId()) return -1;
-		int flagsId = net.minecraft.world.entity.Entity.DATA_SHARED_FLAGS_ID.id();
+		int flagsId = Entity.DATA_SHARED_FLAGS_ID.id();
 		for (var v : data.packedItems()) {
 			if (v.id() == flagsId && v.value() instanceof Byte flags) return (flags & GLIDING_BIT) != 0 ? 1 : 0;
 		}
@@ -191,7 +193,7 @@ final class GlideHolder {
 	private static boolean endsOwnGlide(ClientboundSetEntityDataPacket data) {
 		LocalPlayer p = Minecraft.getInstance().player;
 		if (p == null || data.id() != p.getId() || !p.isFallFlying()) return false;
-		int flagsId = net.minecraft.world.entity.Entity.DATA_SHARED_FLAGS_ID.id();
+		int flagsId = Entity.DATA_SHARED_FLAGS_ID.id();
 		return data.packedItems().stream().anyMatch(v -> v.id() == flagsId && v.value() instanceof Byte flags && (flags & GLIDING_BIT) == 0);
 	}
 

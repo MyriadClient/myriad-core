@@ -9,9 +9,12 @@ import dev.myriadclient.api.addon.AddonContext;
 import dev.myriadclient.api.addon.AddonState;
 import dev.myriadclient.api.command.Command;
 import dev.myriadclient.api.command.arguments.Arguments;
+import dev.myriadclient.api.command.arguments.EnumArgumentType;
+import dev.myriadclient.api.command.arguments.SettingArgumentType;
+import dev.myriadclient.api.hook.Hook;
+import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.command.arguments.EnumArgumentType;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.setting.KeybindSetting;
@@ -19,21 +22,24 @@ import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.util.FakePlayers;
 import dev.myriadclient.api.util.Texts;
 import dev.myriadclient.impl.Diagnostics;
+import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.event.MyriadEventBus;
 import dev.myriadclient.impl.event.Profiler;
-import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.hook.HookManager;
+import dev.myriadclient.impl.macro.MacroManager;
 import dev.myriadclient.impl.network.JoinedVersion;
 import dev.myriadclient.impl.ui.ThemeManager;
 import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.update.UpdateManager;
-import net.minecraft.client.Minecraft;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 
 import java.util.List;
+import java.util.Locale;
 
 import static dev.myriadclient.api.command.arguments.ModuleArgumentType.module;
 import static dev.myriadclient.api.command.arguments.PlayerArgumentType.player;
@@ -104,12 +110,12 @@ public final class CoreCommands {
 					})
 					.then(argument("setting", setting())
 						.executes(c -> {
-							Setting<?> s = dev.myriadclient.api.command.arguments.SettingArgumentType.get(c, "module", "setting");
+							Setting<?> s = SettingArgumentType.get(c, "module", "setting");
 							info(s.name() + " = " + s.valueString() + (s.description().isEmpty() ? "" : "  (" + s.description() + ")"));
 							return SINGLE_SUCCESS;
 						})
 						.then(argument("value", value()).executes(c -> {
-							Setting<?> s = dev.myriadclient.api.command.arguments.SettingArgumentType.get(c, "module", "setting");
+							Setting<?> s = SettingArgumentType.get(c, "module", "setting");
 							String v = c.getArgument("value", String.class);
 							if (!setOrEdit(s, v)) {
 								error("Invalid value '" + v + "' for " + s.name());
@@ -339,7 +345,7 @@ public final class CoreCommands {
 					int n = 0;
 					for (Profiler.Entry e : p.snapshot()) {
 						if (n++ >= 10) break;
-						info(String.format(java.util.Locale.ROOT, "%s: %.2f ms/s (tick %.2f, render %.2f)", e.name(), e.totalMs(), e.tickMs(), e.renderMs()));
+						info(String.format(Locale.ROOT, "%s: %.2f ms/s (tick %.2f, render %.2f)", e.name(), e.totalMs(), e.tickMs(), e.renderMs()));
 					}
 					if (n == 0) info("Nothing measured yet");
 					return SINGLE_SUCCESS;
@@ -385,18 +391,73 @@ public final class CoreCommands {
 			}
 		});
 
+		ctx.registerCommand(new Command("hooks", "Lists what addons replaced or hooked, turns a contribution on or off, or shows which hooks a module's calls go through.") {
+			@Override
+			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
+				b.executes(c -> {
+					var hooks = MyriadImpl.get().hookManager();
+					for (var s : Service.all()) {
+						var used = hooks.active(s);
+						if (hooks.contributions(s.id()).isEmpty()) continue;
+						info(s.name() + ": " + used.map(u -> u.label() + " (" + hooks.ownerOf(u) + ")").orElse("core's own") + " for everyone");
+						for (var l : hooks.live(s)) if (l.match().hasCaller()) info("  " + l.label() + " " + l.match());
+					}
+					var all = hooks.contributions();
+					if (all.isEmpty()) info("No addon replaces a service or handles a hook.");
+					for (var k : all) {
+						info(Component.literal(k.id().toString()).withStyle(k.failed() ? ChatFormatting.RED : k.enabled() ? ChatFormatting.GREEN : ChatFormatting.GRAY)
+							.append(Component.literal("  " + HookManager.targetName(k) + ": " + k.label() + ", " + k.match()).withStyle(ChatFormatting.GRAY)));
+					}
+					return SINGLE_SUCCESS;
+				});
+				for (String how : List.of("on", "off")) {
+					b.then(literal(how).then(argument("id", StringArgumentType.greedyString()).executes(c -> {
+						String id = StringArgumentType.getString(c, "id").trim();
+						var k = Myriad.hooks().contributions().stream()
+							.filter(x -> x.id().toString().equalsIgnoreCase(id) || x.label().equalsIgnoreCase(id)).findFirst().orElse(null);
+						if (k == null) {
+							error("No hook contribution " + id + " (.hooks lists them)");
+							return 0;
+						}
+						k.setEnabled(how.equals("on"));
+						info(k.label() + (k.enabled() ? " on" : " off"));
+						return SINGLE_SUCCESS;
+					})));
+				}
+				b.then(literal("why").then(argument("module", module()).executes(c -> {
+					Module m = c.getArgument("module", Module.class);
+					boolean any = false;
+					for (var h : Hook.all()) {
+						var chain = Myriad.hooks().chain(h, m);
+						if (chain.isEmpty()) continue;
+						any = true;
+						info(h.name() + ": " + String.join(" → ", chain.stream().map(x -> x.label()).toList()) + " → default");
+					}
+					var hooksImpl = MyriadImpl.get().hookManager();
+					for (var s : Service.all()) {
+						var by = hooksImpl.serving(s, m);
+						if (by.isEmpty()) continue;
+						any = true;
+						info(s.name() + ": " + by.get().label() + " (" + hooksImpl.ownerOf(by.get()) + ")");
+					}
+					if (!any) info(m.name() + "'s calls go through no hook contributions or replacements here.");
+					return SINGLE_SUCCESS;
+				})));
+			}
+		});
+
 		ctx.registerCommand(new Command("macro", "Lists macros, or runs, makes or deletes one by name.") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				b.executes(c -> {
-					var all = dev.myriadclient.impl.macro.MacroManager.all();
+					var all = MacroManager.all();
 					if (all.isEmpty()) info("No macros: .macro new <name>, or New macro in the launcher.");
 					for (var m : all) info(m.name() + (m.keybind.get().isSet() ? "  " + m.keybind.get().displayName() : ""));
 					return SINGLE_SUCCESS;
 				});
 				b.then(literal("run").then(argument("name", StringArgumentType.greedyString()).executes(c -> {
 					String name = StringArgumentType.getString(c, "name");
-					var m = dev.myriadclient.impl.macro.MacroManager.byName(name).orElse(null);
+					var m = MacroManager.byName(name).orElse(null);
 					if (m == null) {
 						error("No macro called " + name);
 						return 0;
@@ -405,18 +466,18 @@ public final class CoreCommands {
 					return SINGLE_SUCCESS;
 				})));
 				b.then(literal("new").then(argument("name", StringArgumentType.greedyString()).executes(c -> {
-					var m = dev.myriadclient.impl.macro.MacroManager.create(StringArgumentType.getString(c, "name"));
+					var m = MacroManager.create(StringArgumentType.getString(c, "name"));
 					info("Macro " + m.name() + ": give it commands in its settings (.set \"" + m.name() + "\" commands …) or the menu.");
 					return SINGLE_SUCCESS;
 				})));
 				b.then(literal("delete").then(argument("name", StringArgumentType.greedyString()).executes(c -> {
 					String name = StringArgumentType.getString(c, "name");
-					var m = dev.myriadclient.impl.macro.MacroManager.byName(name).orElse(null);
+					var m = MacroManager.byName(name).orElse(null);
 					if (m == null) {
 						error("No macro called " + name);
 						return 0;
 					}
-					dev.myriadclient.impl.macro.MacroManager.delete(m);
+					MacroManager.delete(m);
 					info("Deleted macro " + m.name());
 					return SINGLE_SUCCESS;
 				})));
@@ -426,7 +487,7 @@ public final class CoreCommands {
 		ctx.registerCommand(new Command("cape", "Turns Myriad's cape on or off (seen by Myriad players near you).") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				var cape = ((dev.myriadclient.impl.ui.WindowManager) Myriad.ui()).theme().myriadCape;
+				var cape = ((WindowManager) Myriad.ui()).theme().myriadCape;
 				b.executes(c -> {
 					info(cape.get() ? "Wearing Myriad's cape: Myriad players near you see it. .cape off takes it off" : "Not wearing Myriad's cape. .cape on puts it on");
 					return SINGLE_SUCCESS;

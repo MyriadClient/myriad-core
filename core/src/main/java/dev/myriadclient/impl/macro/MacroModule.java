@@ -6,6 +6,8 @@ import dev.myriadclient.api.service.Tasks;
 import dev.myriadclient.api.setting.EnumSetting;
 import dev.myriadclient.api.setting.StringListSetting;
 import dev.myriadclient.impl.MyriadImpl;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 import java.util.List;
 import java.util.Locale;
@@ -61,7 +63,7 @@ public final class MacroModule extends Module {
 				try {
 					seq.wait(Math.max(0, Integer.parseInt(line.substring(5).strip())));
 				} catch (NumberFormatException e) {
-					seq.run(() -> Myriad.chat(net.minecraft.network.chat.Component.literal("Macro: '" + line + "' isn't a number of ticks")));
+					seq.run(() -> Myriad.chat(Component.literal("Macro: '" + line + "' isn't a number of ticks")));
 				}
 				continue;
 			}
@@ -72,7 +74,7 @@ public final class MacroModule extends Module {
 	}
 
 	private static void line(String line) {
-		var mc = net.minecraft.client.Minecraft.getInstance();
+		var mc = Minecraft.getInstance();
 		String prefix = Myriad.config().commandPrefix();
 		if (line.startsWith(prefix)) {
 			MyriadImpl.get().commandManager().execute(line.substring(prefix.length()));

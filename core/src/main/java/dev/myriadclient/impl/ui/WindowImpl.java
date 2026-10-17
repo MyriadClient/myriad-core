@@ -1,7 +1,9 @@
 package dev.myriadclient.impl.ui;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.render.Animated;
+import dev.myriadclient.api.render.Bezier;
 import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.ui.PanelType;
@@ -40,13 +42,74 @@ public final class WindowImpl implements Window {
 		panel.attach(this);
 	}
 
+	/** Where it is and what its panel holds, for the desktop's save; read back by {@link #restore}. */
+	JsonObject save() {
+		JsonObject j = new JsonObject();
+		j.addProperty("uid", uid);
+		j.addProperty("type", type.id().toString());
+		j.add("args", args);
+		j.addProperty("workspace", workspace);
+		j.addProperty("floating", floating);
+		j.addProperty("fullscreen", fullscreen);
+		if (floatRect != null) {
+			JsonArray r = new JsonArray();
+			r.add(floatRect.x());
+			r.add(floatRect.y());
+			r.add(floatRect.w());
+			r.add(floatRect.h());
+			j.add("rect", r);
+		}
+		JsonObject hud = new JsonObject();
+		hud.addProperty("anchor", anchor.name());
+		hud.addProperty("x", anchorX);
+		hud.addProperty("y", anchorY);
+		j.add("hud", hud);
+		JsonObject state = new JsonObject();
+		try {
+			panel.save(state);
+		} catch (Throwable t) {
+			WindowManager.LOG.error("Panel {} failed to save", type.id(), t);
+		}
+		j.add("state", state);
+		j.add("settings", panel.settings.toJson());
+		return j;
+	}
+
+	/** Takes back what {@link #save} wrote (the uid, type, args and workspace made the window). */
+	void restore(JsonObject j) {
+		floating = workspace == Desktop.HUD_WORKSPACE || j.has("floating") && j.get("floating").getAsBoolean();
+		fullscreen = j.has("fullscreen") && j.get("fullscreen").getAsBoolean();
+		if (j.has("rect")) {
+			JsonArray r = j.getAsJsonArray("rect");
+			floatRect = new Rect(r.get(0).getAsFloat(), r.get(1).getAsFloat(), r.get(2).getAsFloat(), r.get(3).getAsFloat());
+		}
+		if (j.has("hud")) {
+			JsonObject h = j.getAsJsonObject("hud");
+			try {
+				anchor = PanelType.Anchor.valueOf(h.get("anchor").getAsString());
+			} catch (RuntimeException ignored) {
+				// An anchor this version doesn't know: keep the default.
+			}
+			anchorX = h.get("x").getAsFloat();
+			anchorY = h.get("y").getAsFloat();
+		}
+		if (j.has("settings")) panel.settings.fromJson(j.getAsJsonObject("settings"));
+		if (j.has("state")) {
+			try {
+				panel.load(j.getAsJsonObject("state"));
+			} catch (Throwable t) {
+				if (wm.failedPanels.add(this)) WindowManager.LOG.error("Panel {} threw", type.id(), t);
+			}
+		}
+	}
+
 	/** True for HUD elements: HUD-capable panels living on the HUD workspace (drawn in game). */
 	boolean isHudElement() {
 		return workspace == Desktop.HUD_WORKSPACE && type.isHud();
 	}
 
 	/** Sets where the window should be; animates there unless it is being placed for the first time. */
-	void setTarget(Rect r, float durationMs, dev.myriadclient.api.render.Bezier curve, boolean animate) {
+	void setTarget(Rect r, float durationMs, Bezier curve, boolean animate) {
 		target = r;
 		if (!placed || !animate) {
 			ax.snap(r.x());

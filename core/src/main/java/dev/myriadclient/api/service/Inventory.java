@@ -1,11 +1,18 @@
 package dev.myriadclient.api.service;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Predicate;
-import java.util.function.ToDoubleFunction;
+import dev.myriadclient.api.hook.Hook;
+import dev.myriadclient.api.hook.Replacement;
+import dev.myriadclient.api.hook.Service;
+import dev.myriadclient.api.util.Mining;
+import dev.myriadclient.api.util.Slots;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
+import java.util.function.ToDoubleFunction;
 
 /** Hotbar helpers that track the slot the server thinks is selected. */
 @ApiStatus.NonExtendable
@@ -76,7 +83,7 @@ public interface Inventory {
 	/**
 	 * Asks for items {@code spared} accepts to be left alone, e.g. gear about to break that's been put away to be
 	 * mended later: {@link #bestInHotbar}, {@link #bestInInventory} and the tools breaks pick (see
-	 * {@link dev.myriadclient.api.util.Mining#fastestSlot}) pass them over, and modules choosing gear should too
+	 * {@link Mining#fastestSlot}) pass them over, and modules choosing gear should too
 	 * ({@link #isSpared}). One predicate per {@code owner}; null withdraws it.
 	 */
 	void spare(Object owner, @Nullable Predicate<ItemStack> spared);
@@ -88,7 +95,7 @@ public interface Inventory {
 	int count(Predicate<ItemStack> predicate);
 
 	/**
-	 * Swaps the item at {@code inventoryIndex} (0-35, see {@link dev.myriadclient.api.util.Slots}) into hotbar slot
+	 * Swaps the item at {@code inventoryIndex} (0-35, see {@link Slots}) into hotbar slot
 	 * {@code hotbarSlot}, as pressing a number key over it would. Only works while no container is open; returns
 	 * false otherwise.
 	 */
@@ -237,4 +244,212 @@ public interface Inventory {
 	 * than 1.17 (through ViaFabricPlus) can't be asked: it completes at once.
 	 */
 	CompletableFuture<Void> refresh();
+
+	/**
+	 * The last movement the server saw, for {@link #CLICK_READY}: whether it had sprint on, a movement key or jump
+	 * down, and sneak.
+	 */
+	record ClickMoment(boolean sprinting, boolean keys, boolean sneaking) {
+	}
+
+	/**
+	 * Whether an inventory click may go out now ({@link #safeToClick()}). Core: always, except where the anti-cheat
+	 * refuses clicks while you move (Grim), then only once the input the server last saw allows it.
+	 */
+	Hook<ClickMoment, Boolean> CLICK_READY = Hook.of("myriad:click_ready", "Click ready",
+		"Whether an inventory click may be sent now.");
+
+	/**
+	 * The base for a replacement of this service ({@link Service#INVENTORY}): hands every call
+	 * to the service it wraps (core's), so override only what you do differently. While it's in use it gets Myriad's
+	 * events and {@link #activated()}/{@link #deactivated()}.
+	 */
+	abstract class Forwarding implements Inventory, Replacement {
+		/** The service this one wraps: core's own. */
+		protected final Inventory core;
+
+		protected Forwarding(Inventory core) {
+			this.core = Objects.requireNonNull(core);
+		}
+
+		@Override
+		public int serverSlot() {
+			return core.serverSlot();
+		}
+
+		@Override
+		public void select(int hotbarSlot) {
+			core.select(hotbarSlot);
+		}
+
+		@Override
+		public void silentSwap(int hotbarSlot, Runnable action) {
+			core.silentSwap(hotbarSlot, action);
+		}
+
+		@Override
+		public boolean hold(Object owner, int hotbarSlot, int maxTicks) {
+			return core.hold(owner, hotbarSlot, maxTicks);
+		}
+
+		@Override
+		public boolean holdWeakly(Object owner, int hotbarSlot, int maxTicks) {
+			return core.holdWeakly(owner, hotbarSlot, maxTicks);
+		}
+
+		@Override
+		public void release(Object owner) {
+			core.release(owner);
+		}
+
+		@Override
+		public boolean isHolding() {
+			return core.isHolding();
+		}
+
+		@Override
+		public ItemStack serverItem() {
+			return core.serverItem();
+		}
+
+		@Override
+		public float attackCharge() {
+			return core.attackCharge();
+		}
+
+		@Override
+		public int findInHotbar(Predicate<ItemStack> predicate) {
+			return core.findInHotbar(predicate);
+		}
+
+		@Override
+		public int findInInventory(Predicate<ItemStack> predicate) {
+			return core.findInInventory(predicate);
+		}
+
+		@Override
+		public int bestInHotbar(ToDoubleFunction<ItemStack> score) {
+			return core.bestInHotbar(score);
+		}
+
+		@Override
+		public int bestInInventory(ToDoubleFunction<ItemStack> score) {
+			return core.bestInInventory(score);
+		}
+
+		@Override
+		public void spare(Object owner, @Nullable Predicate<ItemStack> spared) {
+			core.spare(owner, spared);
+		}
+
+		@Override
+		public boolean isSpared(ItemStack stack) {
+			return core.isSpared(stack);
+		}
+
+		@Override
+		public int count(Predicate<ItemStack> predicate) {
+			return core.count(predicate);
+		}
+
+		@Override
+		public boolean moveToHotbar(int inventoryIndex, int hotbarSlot) {
+			return core.moveToHotbar(inventoryIndex, hotbarSlot);
+		}
+
+		@Override
+		public int ensureInHotbar(Predicate<ItemStack> predicate, int preferredSlot) {
+			return core.ensureInHotbar(predicate, preferredSlot);
+		}
+
+		@Override
+		public boolean safeToClick() {
+			return core.safeToClick();
+		}
+
+		@Override
+		public boolean prepareClick() {
+			return core.prepareClick();
+		}
+
+		@Override
+		public boolean clickWaiting() {
+			return core.clickWaiting();
+		}
+
+		@Override
+		public void keepKeys() {
+			core.keepKeys();
+		}
+
+		@Override
+		public int pullToHotbar(int inventoryIndex, Predicate<ItemStack> replaceable) {
+			return core.pullToHotbar(inventoryIndex, replaceable);
+		}
+
+		@Override
+		public int borrow(Object owner, int inventoryIndex, Predicate<ItemStack> replaceable) {
+			return core.borrow(owner, inventoryIndex, replaceable);
+		}
+
+		@Override
+		public void giveBack(Object owner) {
+			core.giveBack(owner);
+		}
+
+		@Override
+		public ItemStack shownInHotbar(int hotbarSlot) {
+			return core.shownInHotbar(hotbarSlot);
+		}
+
+		@Override
+		public void mask(Object owner, long holdMs, int... inventoryIndexes) {
+			core.mask(owner, holdMs, inventoryIndexes);
+		}
+
+		@Override
+		public void unmask(Object owner) {
+			core.unmask(owner);
+		}
+
+		@Override
+		public ItemStack shown(int inventoryIndex) {
+			return core.shown(inventoryIndex);
+		}
+
+		@Override
+		public int shownArmor() {
+			return core.shownArmor();
+		}
+
+		@Override
+		public boolean move(int from, int to) {
+			return core.move(from, to);
+		}
+
+		@Override
+		public boolean merge(int from, int to) {
+			return core.merge(from, to);
+		}
+
+		@Override
+		public boolean swapWithOffhand(int inventoryIndex) {
+			return core.swapWithOffhand(inventoryIndex);
+		}
+
+		@Override
+		public boolean quickMove(int inventoryIndex) {
+			return core.quickMove(inventoryIndex);
+		}
+
+		@Override
+		public boolean drop(int inventoryIndex, boolean wholeStack) {
+			return core.drop(inventoryIndex, wholeStack);
+		}
+
+		@Override
+		public CompletableFuture<Void> refresh() {
+			return core.refresh();
+		}
+	}
 }

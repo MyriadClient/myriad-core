@@ -8,11 +8,11 @@ import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.impl.MyriadImpl;
+import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.client.Minecraft;
 
 /** A terminal for Myriad commands: output above, prompt below, Up/Down history, Tab completion. */
 public final class ConsolePanel extends Panel {

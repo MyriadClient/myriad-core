@@ -28,7 +28,7 @@ final class LauncherScreen extends Screen {
 			parent.extractBackground(context, -1, -1, delta);
 			parent.extractRenderState(context, -1, -1, delta);
 		}
-		wm.renderLauncher(context, mouseX, mouseY);
+		wm.painter().renderLauncher(context, mouseX, mouseY);
 	}
 
 	@Override

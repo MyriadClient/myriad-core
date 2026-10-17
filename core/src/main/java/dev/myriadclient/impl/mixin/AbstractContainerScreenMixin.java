@@ -1,12 +1,17 @@
 package dev.myriadclient.impl.mixin;
 
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.sugar.Local;
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.impl.service.InventoryManager;
 import dev.myriadclient.api.event.events.ContainerScreenEvent;
+import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.service.InventoryManager;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -26,18 +31,18 @@ public abstract class AbstractContainerScreenMixin {
 	}
 
 	/** Your inventory's slots show what masks keep them showing (see Inventory.mask). */
-	@com.llamalad7.mixinextras.injector.ModifyExpressionValue(method = "extractSlot", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/inventory/Slot;getItem()Lnet/minecraft/world/item/ItemStack;", ordinal = 0))
-	private net.minecraft.world.item.ItemStack myriad$shownSlot(net.minecraft.world.item.ItemStack stack, @com.llamalad7.mixinextras.sugar.Local(argsOnly = true) Slot slot) {
+	@ModifyExpressionValue(method = "extractSlot", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/inventory/Slot;getItem()Lnet/minecraft/world/item/ItemStack;", ordinal = 0))
+	private ItemStack myriad$shownSlot(ItemStack stack, @Local(argsOnly = true) Slot slot) {
 		return shownIn(slot, stack);
 	}
 
-	@com.llamalad7.mixinextras.injector.ModifyExpressionValue(method = "extractTooltip", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/inventory/Slot;getItem()Lnet/minecraft/world/item/ItemStack;"))
-	private net.minecraft.world.item.ItemStack myriad$shownTooltip(net.minecraft.world.item.ItemStack stack) {
+	@ModifyExpressionValue(method = "extractTooltip", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/inventory/Slot;getItem()Lnet/minecraft/world/item/ItemStack;"))
+	private ItemStack myriad$shownTooltip(ItemStack stack) {
 		return hoveredSlot == null ? stack : shownIn(hoveredSlot, stack);
 	}
 
-	private static net.minecraft.world.item.ItemStack shownIn(Slot slot, net.minecraft.world.item.ItemStack stack) {
-		var player = net.minecraft.client.Minecraft.getInstance().player;
+	private static ItemStack shownIn(Slot slot, ItemStack stack) {
+		var player = Minecraft.getInstance().player;
 		if (!Myriad.isReady() || player == null || slot.container != player.getInventory()) return stack;
 		return Myriad.inventory().shown(slot.getContainerSlot());
 	}
@@ -59,7 +64,7 @@ public abstract class AbstractContainerScreenMixin {
 		}
 		// While you move (Inventory Move), the click waits for a tick the server takes it on (see InventoryManager).
 		int id = slot != null ? slot.index : slotId;
-		if (Myriad.inventory() instanceof InventoryManager inventory
+		if (MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory
 			&& inventory.holdScreenClick(((AbstractContainerScreen<?>) (Object) this).getMenu().containerId, id, button, input)) ci.cancel();
 	}
 }

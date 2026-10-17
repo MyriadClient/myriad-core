@@ -19,6 +19,19 @@ and may change in any release. Addons declare the oldest core they support in `f
   leaves nothing changed. Overridden settings show who set them. UI edits and `.set` go to the override in effect if
   it takes edits (a control panel saving what you tune while it's on), otherwise to the player's value. Control panels
   now work this way. `decode`/`encode` read and write values without touching the setting.
+- **Hooks**: addons change how core works without changing core. A service can be replaced (`ctx.replace(Service.ROTATIONS)`,
+  `INVENTORY`, `PLACEMENT`, `BREAKING`), for everyone or only an addon's own modules (`Match.addon`), by extending the
+  service's new `Forwarding` class; `Myriad.rotations()` and the rest route each call to the implementation for its
+  owner. One decision can be hooked instead (`ctx.hook(Rotations.TURN)`, `Placement.AIM`, `Inventory.CLICK_READY`,
+  `HighlightEvent.ENTITY_HIGHLIGHT`), most specific match first, each able to hand over to the next; addons declare
+  hooks of their own with `Hook.of`. `Match` narrows either to a module, an addon, an anti-cheat profile or a server.
+  The Hooks window and `.hooks` (`on|off <name>`, `why <module>`) show what's in effect; the player can turn any off, and
+  one that throws is turned off for the session. New API: `dev.myriadclient.api.hook`, `Myriad.hooks()`.
+- **Typed control panel presets**: `ControlPreset.builder(name).module(tunnel, m -> m.set(tunnel.width, 3))` takes your
+  own modules and their settings typed; modules of other addons still go in by id.
+- `Notifications.toast(title, message)` builds a notification (`level`, `lasting`, `replacing`, `show`);
+  `Desktop.openPanel(PanelType)` and `applyTheme(Theme)` take what you registered.
+- Internal: the window manager is split into its painter, binds and category windows; imports tidied across core.
 - **Macros**: modules you make, whose Commands (Myriad commands, server commands, `wait <ticks>`, chat) run when
   pressed, once (Run) or on and off (Toggle, with Off Commands). In the Macros category; `.macro`.
 - **Launcher filters**: `@addon` and `#kind` / `#category` narrow the results (`@ess #render`, `#control`, `#panel`);

@@ -3,6 +3,7 @@ package dev.myriadclient.impl.service;
 import net.minecraft.world.entity.player.Input;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Set;
 
@@ -35,7 +36,7 @@ public enum ClickRules {
 	 * More such hosts, comma-separated, from {@code -Dmyriad.noInputRuleHosts}: dev runs pass "localhost" so the Grim
 	 * test server, set up like 2b2t's, is clicked on as 2b2t is.
 	 */
-	private static final Set<String> EXTRA_HOSTS = Set.copyOf(java.util.Arrays.asList(System.getProperty("myriad.noInputRuleHosts", "").toLowerCase(Locale.ROOT).split("\\s*,\\s*")));
+	private static final Set<String> EXTRA_HOSTS = Set.copyOf(Arrays.asList(System.getProperty("myriad.noInputRuleHosts", "").toLowerCase(Locale.ROOT).split("\\s*,\\s*")));
 
 	/** Protocol numbers of the versions the rules change at. */
 	static final int V1_15 = 573, V1_21_2 = 768, V1_21_9 = 773;

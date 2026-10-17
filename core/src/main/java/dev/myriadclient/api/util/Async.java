@@ -1,11 +1,12 @@
 package dev.myriadclient.api.util;
 
+import net.minecraft.client.Minecraft;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import net.minecraft.client.Minecraft;
 
 /**
  * A shared pool of background threads for slow work (files, network, heavy searches) so addons don't each start

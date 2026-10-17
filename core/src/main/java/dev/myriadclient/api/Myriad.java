@@ -1,12 +1,14 @@
 package dev.myriadclient.api;
 
 import dev.myriadclient.api.addon.Addon;
+import dev.myriadclient.api.addon.AddonContext;
 import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.command.Command;
 import dev.myriadclient.api.config.ConfigManager;
 import dev.myriadclient.api.control.Controls;
 import dev.myriadclient.api.elytra.Elytra;
 import dev.myriadclient.api.event.EventBus;
+import dev.myriadclient.api.hook.Hooks;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.registry.Registry;
@@ -18,10 +20,10 @@ import dev.myriadclient.api.service.Friends;
 import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.service.Notifications;
+import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.service.ServerStats;
-import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.service.Tasks;
 import dev.myriadclient.api.service.TickSpeed;
 import dev.myriadclient.api.ui.BarWidget;
@@ -32,10 +34,10 @@ import dev.myriadclient.api.ui.layout.Layout;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.Version;
 import net.fabricmc.loader.api.VersionParsingException;
+import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
-import net.minecraft.network.chat.Component;
 
 /**
  * Static entry point to everything Myriad exposes to addons.
@@ -125,7 +127,7 @@ public final class Myriad {
 		return api().keyActions();
 	}
 
-	/** Every addon's own settings (see {@link dev.myriadclient.api.addon.AddonContext#settings}). */
+	/** Every addon's own settings (see {@link AddonContext#settings}). */
 	public static Registry<AddonSettings> addonSettings() {
 		return api().addonSettings();
 	}
@@ -191,6 +193,11 @@ public final class Myriad {
 	/** Control panels: sets of modules switched together by one bind, each with the settings it takes while on. */
 	public static Controls controls() {
 		return api().controls();
+	}
+
+	/** Hook contributions and service replacements (see {@link dev.myriadclient.api.hook}). */
+	public static Hooks hooks() {
+		return api().hooks();
 	}
 
 	/** The shared budget for packets servers count (block actions, interactions, inventory clicks). */

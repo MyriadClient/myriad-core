@@ -2,8 +2,8 @@ package dev.myriadclient.impl.service;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.build.Blueprint;
-import dev.myriadclient.api.build.Build;
 import dev.myriadclient.api.build.Build.Status;
+import dev.myriadclient.api.build.Build;
 import dev.myriadclient.api.build.Target;
 import dev.myriadclient.api.event.Priority;
 import dev.myriadclient.api.event.Subscribe;
@@ -14,6 +14,7 @@ import dev.myriadclient.api.service.Building;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.util.MathUtil;
 import dev.myriadclient.api.util.Reach;
+import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.mixin.BlockItemAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -135,7 +136,7 @@ public final class BuildManager implements Building {
 			try {
 				tick(b);
 			} catch (RuntimeException ex) {
-				dev.myriadclient.impl.MyriadImpl.LOG.error("Build for {} failed", b.owner, ex);
+				MyriadImpl.LOG.error("Build for {} failed", b.owner, ex);
 				b.stop();
 			}
 		}

@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -106,7 +107,7 @@ public class Registry<T extends Identified> implements Iterable<T> {
 	}
 
 	@Override
-	public java.util.Iterator<T> iterator() {
+	public Iterator<T> iterator() {
 		return values().iterator();
 	}
 }

@@ -7,19 +7,24 @@ import dev.myriadclient.api.event.events.InputEvent;
 import dev.myriadclient.api.event.events.MouseButtonEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.command.CommandManager;
 import dev.myriadclient.impl.service.InventoryManager;
 import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.ui.panels.CorePanels;
+import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.ConnectScreen;
-import net.minecraft.client.gui.screens.TitleScreen;
-import net.minecraft.client.multiplayer.ServerData;
-import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.Screenshot;
+import net.minecraft.client.gui.screens.ConnectScreen;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonInfo;
+import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.client.multiplayer.resolver.ServerAddress;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -36,6 +41,7 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
@@ -184,9 +190,9 @@ public final class DevConsole {
 				case "move" -> LOG.info("[dev] move {}", Myriad.inventory().move(Integer.parseInt(a[1]), Integer.parseInt(a[2])));
 				case "uclick" -> {
 					// As your own click in the inventory screen: it waits for a tick the server takes it, as those do.
-					var inv = (dev.myriadclient.impl.service.InventoryManager) Myriad.inventory();
+					var inv = (InventoryManager) Myriad.inventory();
 					int menu = mc.player.inventoryMenu.containerId, slot = Integer.parseInt(a[1]), button = Integer.parseInt(a[2]);
-					var type = net.minecraft.world.inventory.ContainerInput.valueOf(a[3].toUpperCase(Locale.ROOT));
+					var type = ContainerInput.valueOf(a[3].toUpperCase(Locale.ROOT));
 					boolean waits = inv.holdScreenClick(menu, slot, button, type);
 					if (!waits) mc.gameMode.handleContainerInput(menu, slot, button, type, mc.player);
 					LOG.info("[dev] uclick {}", waits ? "waits" : "sent");
@@ -213,8 +219,8 @@ public final class DevConsole {
 				}
 				case "type" -> {
 					for (int cp : line.substring(4).strip().codePoints().toArray()) {
-						invokeKeyboard("charTyped", new Class<?>[]{long.class, net.minecraft.client.input.CharacterEvent.class},
-							mc.getWindow().handle(), new net.minecraft.client.input.CharacterEvent(cp));
+						invokeKeyboard("charTyped", new Class<?>[]{long.class, CharacterEvent.class},
+							mc.getWindow().handle(), new CharacterEvent(cp));
 					}
 				}
 				case "scroll" -> invokeMouse("onScroll", new Class<?>[]{long.class, double.class, double.class},
@@ -233,7 +239,7 @@ public final class DevConsole {
 				}
 				case "selftest" -> {
 					int ticks = 20;
-					Set<String> skip = new java.util.HashSet<>();
+					Set<String> skip = new HashSet<>();
 					for (int i = 1; i < a.length; i++) {
 						if (a[i].startsWith("-")) skip.add(a[i].substring(1));
 						else ticks = Integer.parseInt(a[i]);
@@ -269,8 +275,8 @@ public final class DevConsole {
 
 	/** Calls one of vanilla's (private) GLFW input callbacks on the mouse handler. */
 	private void keyboard(int action, int key, int mods) {
-		invokeKeyboard("keyPress", new Class<?>[]{long.class, int.class, net.minecraft.client.input.KeyEvent.class},
-			mc.getWindow().handle(), action, new net.minecraft.client.input.KeyEvent(key, GLFW.glfwGetKeyScancode(key), mods));
+		invokeKeyboard("keyPress", new Class<?>[]{long.class, int.class, KeyEvent.class},
+			mc.getWindow().handle(), action, new KeyEvent(key, GLFW.glfwGetKeyScancode(key), mods));
 	}
 
 	private static int keyCode(String name) {
@@ -310,7 +316,7 @@ public final class DevConsole {
 
 	private void invokeKeyboard(String name, Class<?>[] types, Object... args) {
 		try {
-			Method m = net.minecraft.client.KeyboardHandler.class.getDeclaredMethod(name, types);
+			Method m = KeyboardHandler.class.getDeclaredMethod(name, types);
 			m.setAccessible(true);
 			m.invoke(mc.keyboardHandler, args);
 		} catch (ReflectiveOperationException ex) {
@@ -329,7 +335,7 @@ public final class DevConsole {
 	}
 
 	private static void asClick(Runnable click) {
-		var inventory = (InventoryManager) Myriad.inventory();
+		var inventory = MyriadImpl.get().inventoryManager();
 		inventory.userClick(true);
 		try {
 			click.run();

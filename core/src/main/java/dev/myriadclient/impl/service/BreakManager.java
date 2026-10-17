@@ -8,18 +8,22 @@ import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.service.Breaking;
+import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.util.BlockInfo;
+import dev.myriadclient.api.util.MathUtil;
 import dev.myriadclient.api.util.Mining;
 import dev.myriadclient.api.util.Packets;
 import dev.myriadclient.api.util.Reach;
+import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.network.BlockAckTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
-import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action;
+import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.Block;
@@ -59,7 +63,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * Everything happens at the start of a tick, before the movement packet, where vanilla sends break packets; with
  * {@code rotate} the server has been told where you look in the tick before. Results come from the server's acknowledgements (see
- * {@link dev.myriadclient.impl.network.BlockAckTracker}).
+ * {@link BlockAckTracker}).
  */
 public final class BreakManager implements Breaking {
 	static final float PACKET_THRESHOLD = 0.7f;
@@ -287,7 +291,7 @@ public final class BreakManager implements Breaking {
 			break;
 		}
 		if (focus == null || focus.aim == null || mc.player == null) return;
-		float[] r = dev.myriadclient.api.util.MathUtil.anglesTo(mc.player.getEyePosition(), focus.aim);
+		float[] r = MathUtil.anglesTo(mc.player.getEyePosition(), focus.aim);
 		Myriad.rotations().request(this, r[0], r[1], PlacementManager.REFINED_PRIORITY, PlacementManager.MOVE_FIX, null);
 	}
 
@@ -393,7 +397,7 @@ public final class BreakManager implements Breaking {
 		sampleEfficiency();
 		if (jobs.isEmpty() && !holding) return;
 		// Another module's swap still to go back is its own business: only ours go back early.
-		boolean othersPending = Myriad.inventory() instanceof InventoryManager inv && inv.restorePending();
+		boolean othersPending = MyriadImpl.get().inventoryManager() instanceof InventoryManager inv && inv.restorePending();
 		swapBackNow = false;
 		if (serverDelayedPos != null && !mc.level.getBlockState(serverDelayedPos).is(serverDelayedBlock)) serverDelayedPos = null;
 		validate();
@@ -402,7 +406,7 @@ public final class BreakManager implements Breaking {
 		instants();
 		mine();
 		updateHold();
-		if (swapBackNow && !othersPending && Myriad.inventory() instanceof InventoryManager inv) inv.restoreNow();
+		if (swapBackNow && !othersPending && MyriadImpl.get().inventoryManager() instanceof InventoryManager inv) inv.restoreNow();
 	}
 
 	/** Drops finished and impossible jobs, and completes the ones the server has dealt with. */
@@ -779,7 +783,7 @@ public final class BreakManager implements Breaking {
 
 	/**
 	 * Auto tool from the inventory: when the best tool for the block being mined, or the next one, is outside the
-	 * hotbar, it's borrowed in (see {@link dev.myriadclient.api.service.Inventory#borrow}, which waits while you move, since
+	 * hotbar, it's borrowed in (see {@link Inventory#borrow}, which waits while you move, since
 	 * Grim cancels clicks then, and puts it back once no break needs it); until then the best hotbar tool does. A
 	 * packet-mode break already started is timed by the tool it started with, so then it's fetched for the next block
 	 * instead.

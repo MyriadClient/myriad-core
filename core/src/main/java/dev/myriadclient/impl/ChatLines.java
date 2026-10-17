@@ -1,11 +1,12 @@
 package dev.myriadclient.impl;
 
-import java.util.HashMap;
-import java.util.Map;
-import net.minecraft.client.multiplayer.chat.GuiMessage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.client.multiplayer.chat.GuiMessage;
 import net.minecraft.network.chat.Component;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /** Chat lines sent with an id, so a newer message with the same id replaces the old one. Render thread only. */
 public final class ChatLines {

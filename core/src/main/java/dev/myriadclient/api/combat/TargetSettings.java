@@ -4,12 +4,12 @@ import dev.myriadclient.api.setting.BoolSetting;
 import dev.myriadclient.api.setting.EnumSetting;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.Settings;
+import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
-import net.minecraft.world.entity.Entity;
 
 /**
  * The standard "Targets" settings group, so every combat module offers players the same choices with the same names.

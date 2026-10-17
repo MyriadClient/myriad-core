@@ -87,7 +87,7 @@ public class IntListSetting extends Setting<List<Integer>> {
 		return sb.toString();
 	}
 
-	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.IntListSetting.Builder, List<Integer>, IntListSetting> {
+	public static class Builder extends Setting.Builder<IntListSetting.Builder, List<Integer>, IntListSetting> {
 		private int min = Integer.MIN_VALUE, max = Integer.MAX_VALUE;
 
 		public Builder(String name) {

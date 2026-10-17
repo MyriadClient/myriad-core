@@ -7,6 +7,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -41,7 +42,7 @@ public interface Blueprint {
 		return new Blueprint() {
 			@Override
 			public void near(Vec3 center, double range, BiConsumer<BlockPos, Target> action) {
-				Map<BlockPos, Target> merged = new java.util.LinkedHashMap<>();
+				Map<BlockPos, Target> merged = new LinkedHashMap<>();
 				self.near(center, range, merged::put);
 				other.near(center, range, merged::put);
 				merged.forEach(action);
@@ -49,7 +50,7 @@ public interface Blueprint {
 
 			@Override
 			public void forEach(BiConsumer<BlockPos, Target> action) {
-				Map<BlockPos, Target> merged = new java.util.LinkedHashMap<>();
+				Map<BlockPos, Target> merged = new LinkedHashMap<>();
 				self.forEach(merged::put);
 				other.forEach(merged::put);
 				merged.forEach(action);

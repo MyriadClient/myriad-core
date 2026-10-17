@@ -1,6 +1,7 @@
 package dev.myriadclient.api.event.events;
 
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 
@@ -30,7 +31,7 @@ public final class DisconnectEvent {
 
 	/** Whether the server said so (a kick, a ban, a restart), rather than the connection dropping. */
 	public boolean isKick() {
-		String key = reason.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents t ? t.getKey() : "";
+		String key = reason.getContents() instanceof TranslatableContents t ? t.getKey() : "";
 		return !key.startsWith("disconnect.timeout") && !key.startsWith("disconnect.lost") && !key.startsWith("disconnect.genericReason");
 	}
 }

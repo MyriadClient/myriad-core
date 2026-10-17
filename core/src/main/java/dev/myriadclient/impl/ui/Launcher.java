@@ -2,6 +2,7 @@ package dev.myriadclient.impl.ui;
 
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.control.ControlPanel;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.Animated;
 import dev.myriadclient.api.render.Canvas;
@@ -10,21 +11,19 @@ import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.ThemeSettings;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.api.util.FuzzyMatch;
-import dev.myriadclient.impl.ui.panels.CorePanels;
-import dev.myriadclient.impl.ui.panels.ModuleGroup;
-import org.lwjgl.glfw.GLFW;
-
-import dev.myriadclient.api.control.ControlPanel;
 import dev.myriadclient.impl.macro.MacroManager;
 import dev.myriadclient.impl.ui.panels.AddonNames;
+import dev.myriadclient.impl.ui.panels.CorePanels;
+import dev.myriadclient.impl.ui.panels.ModuleGroup;
+import net.minecraft.client.Minecraft;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.Comparator;
-import java.util.List;
-import net.minecraft.client.Minecraft;
 
 /**
  * A rofi/wofi-style launcher: fuzzy search over modules, panels, categories, themes, profiles and workspaces.
@@ -324,7 +323,7 @@ final class Launcher {
 
 	boolean charTyped(char chr) {
 		if (!visible) return false;
-		long window = net.minecraft.client.Minecraft.getInstance().getWindow().handle();
+		long window = Minecraft.getInstance().getWindow().handle();
 		boolean ctrl = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS;
 		// Not the space of the mod+Space that opened it.
 		if (chr >= 32 && chr != 127 && !ctrl && !wm.modHeld()) {

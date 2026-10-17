@@ -22,11 +22,12 @@ import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.ThemeSettings;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.api.util.Format;
-import java.util.ArrayList;
-import java.util.List;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Draws your waypoints in the world: a box and a beam on the block, and a label with the name and distance that stays

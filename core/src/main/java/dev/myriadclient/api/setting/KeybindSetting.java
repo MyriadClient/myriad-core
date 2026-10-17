@@ -6,6 +6,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.event.events.KeyEvent;
 import dev.myriadclient.api.event.events.MouseButtonEvent;
 import dev.myriadclient.api.util.Keybind;
+
 import java.util.Locale;
 import java.util.function.Supplier;
 
@@ -66,7 +67,7 @@ public class KeybindSetting extends Setting<Keybind> {
 		return get().displayName();
 	}
 
-	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.KeybindSetting.Builder, Keybind, KeybindSetting> {
+	public static class Builder extends Setting.Builder<KeybindSetting.Builder, Keybind, KeybindSetting> {
 		public Builder(String name) {
 			super(name, Keybind.NONE);
 		}

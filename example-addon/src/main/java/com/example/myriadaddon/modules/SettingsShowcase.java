@@ -22,7 +22,6 @@ import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.StringListSetting;
 import dev.myriadclient.api.setting.StringSetting;
-import java.util.List;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.BlockItem;
@@ -30,6 +29,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+
+import java.util.List;
 
 /**
  * Every built-in setting type, plus this addon's own {@link RangeSetting}, in one place to look things up. It lives

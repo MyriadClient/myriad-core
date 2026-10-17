@@ -7,8 +7,11 @@ import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.service.AntiCheat;
 import net.minecraft.network.protocol.common.ClientboundPingPacket;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Locale;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * The anti-cheat profile: the player's choice, or (Auto) a guess from the server. Anti-cheats that simulate the player
@@ -79,9 +82,9 @@ public final class AntiCheatTracker implements AntiCheat {
 	public boolean addKnownServer(String host) {
 		String h = normalize(host);
 		if (h.isEmpty() || known.contains(h)) return false;
-		Set<String> next = new java.util.TreeSet<>(known);
+		Set<String> next = new TreeSet<>(known);
 		next.add(h);
-		known = java.util.Collections.unmodifiableSet(next);
+		known = Collections.unmodifiableSet(next);
 		if (Myriad.isReady()) Myriad.config().markDirty();
 		return true;
 	}
@@ -90,21 +93,21 @@ public final class AntiCheatTracker implements AntiCheat {
 	public boolean removeKnownServer(String host) {
 		String h = normalize(host);
 		if (!known.contains(h)) return false;
-		Set<String> next = new java.util.TreeSet<>(known);
+		Set<String> next = new TreeSet<>(known);
 		next.remove(h);
-		known = java.util.Collections.unmodifiableSet(next);
+		known = Collections.unmodifiableSet(next);
 		if (Myriad.isReady()) Myriad.config().markDirty();
 		return true;
 	}
 
 	/** Replaces the list (config load). */
-	public void setKnownServers(java.util.Collection<String> hosts) {
-		Set<String> next = new java.util.TreeSet<>();
+	public void setKnownServers(Collection<String> hosts) {
+		Set<String> next = new TreeSet<>();
 		for (String h : hosts) {
 			String n = normalize(h);
 			if (!n.isEmpty()) next.add(n);
 		}
-		known = java.util.Collections.unmodifiableSet(next);
+		known = Collections.unmodifiableSet(next);
 	}
 
 	private static String normalize(String host) {

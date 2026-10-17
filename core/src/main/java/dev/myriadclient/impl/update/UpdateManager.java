@@ -32,6 +32,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -284,7 +285,7 @@ public final class UpdateManager {
 	}
 
 	private static String reason(Throwable err) {
-		while ((err instanceof CompletionException || err instanceof java.util.concurrent.ExecutionException) && err.getCause() != null) err = err.getCause();
+		while ((err instanceof CompletionException || err instanceof ExecutionException) && err.getCause() != null) err = err.getCause();
 		return err.getMessage() != null ? err.getMessage() : err.getClass().getSimpleName();
 	}
 
@@ -301,7 +302,7 @@ public final class UpdateManager {
 
 	/** Shows a toast now if the menu or the HUD is up to draw it, otherwise when one of them next is. Render thread. */
 	private void toast(String title, String message, Notifications.Level level) {
-		Runnable post = () -> Myriad.notifications().send(title, message, level, 8000, TOAST_KEY + ":" + title);
+		Runnable post = () -> Myriad.notifications().toast(title, message).level(level).lasting(8000).replacing(TOAST_KEY + ":" + title).show();
 		Minecraft mc = Minecraft.getInstance();
 		// Startup runs before the game's GUI exists.
 		if (mc != null && mc.gui != null && (mc.gui.screen() instanceof DesktopScreen || mc.player != null)) post.run();

@@ -16,29 +16,10 @@ import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.mixin.LocalPlayerAccessor;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.JoinedVersion;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Predicate;
-import java.util.function.ToDoubleFunction;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.resources.Identifier;
-import net.minecraft.util.Mth;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.ai.attributes.AttributeInstance;
-import net.minecraft.world.entity.ai.attributes.AttributeModifier;
-import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.item.component.ItemAttributeModifiers;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.network.protocol.Packet;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.protocol.game.ClientboundLoginPacket;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
 import net.minecraft.network.protocol.game.ClientboundSetHeldSlotPacket;
@@ -56,12 +37,32 @@ import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.ItemAttributeModifiers;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
+import java.util.function.ToDoubleFunction;
 
 public final class InventoryManager implements Inventory {
 	private final Minecraft mc = Minecraft.getInstance();
@@ -578,6 +579,14 @@ public final class InventoryManager implements Inventory {
 	@Override
 	public boolean safeToClick() {
 		if (mc.player == null) return false;
+		if (!CLICK_READY.hooked()) return coreSafeToClick();
+		Input sent = sentInput;
+		boolean keys = sent.forward() || sent.backward() || sent.left() || sent.right() || sent.jump();
+		Boolean ready = CLICK_READY.call(null, new ClickMoment(sentSprinting, keys, sent.shift()), m -> coreSafeToClick());
+		return ready != null ? ready : coreSafeToClick();
+	}
+
+	private boolean coreSafeToClick() {
 		// Only anti-cheats that simulate movement (Grim) refuse clicks while you move.
 		if (!Myriad.antiCheat().isStrict()) return true;
 		return !rules().refusesKeys(sentInput) && (!sentSprinting || canBracket());
@@ -863,13 +872,13 @@ public final class InventoryManager implements Inventory {
 	private final Map<Object, Mask> masks = new IdentityHashMap<>();
 
 	private static final class Mask {
-		final Map<Integer, ItemStack> held = new java.util.HashMap<>();
+		final Map<Integer, ItemStack> held = new HashMap<>();
 		/**
 		 * What each slot shows: a copy, the same one for as long as the item is unchanged (the hand would take a new
 		 * stack for a new item), and kept while the item is in none of the slots (a swap's two slot updates can come a
 		 * tick apart). Never the live stack: moving an item empties the stack it leaves.
 		 */
-		final Map<Integer, ItemStack> last = new java.util.HashMap<>();
+		final Map<Integer, ItemStack> last = new HashMap<>();
 		long untilMs;
 		int armor;
 

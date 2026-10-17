@@ -281,7 +281,7 @@ public abstract class Module implements Identified {
 		return name;
 	}
 
-	@org.jetbrains.annotations.ApiStatus.Internal
+	@ApiStatus.Internal
 	public static void bindClient(Minecraft client) {
 		mc = client;
 	}

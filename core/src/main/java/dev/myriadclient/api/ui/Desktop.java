@@ -1,11 +1,14 @@
 package dev.myriadclient.api.ui;
 
 import com.google.gson.JsonObject;
+import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.util.MyriadId;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * Myriad's window manager: nine tiling workspaces plus a HUD workspace whose windows are drawn in game.
@@ -21,7 +24,7 @@ public interface Desktop {
 	 * Draws with Myriad's canvas inside any vanilla rendering (a screen, a tooltip, a HUD hook). One canvas unit is
 	 * one scaled GUI pixel, matching {@code context}. Does nothing if a canvas is already drawing.
 	 */
-	void draw(net.minecraft.client.gui.GuiGraphicsExtractor context, java.util.function.Consumer<dev.myriadclient.api.render.Canvas> drawer);
+	void draw(GuiGraphicsExtractor context, Consumer<Canvas> drawer);
 
 	void close();
 
@@ -46,6 +49,15 @@ public interface Desktop {
 		return openPanel(type, new JsonObject());
 	}
 
+	/** {@link #openPanel(MyriadId, JsonObject)} for a type you registered ({@code ctx.registerPanel} returns it). */
+	default Optional<Window> openPanel(PanelType type) {
+		return openPanel(type.id());
+	}
+
+	default Optional<Window> openPanel(PanelType type, JsonObject args) {
+		return openPanel(type.id(), args);
+	}
+
 	/** Like {@link #openPanel} but on a specific workspace. */
 	Optional<Window> openPanel(MyriadId type, JsonObject args, int workspace, boolean floating);
 
@@ -59,6 +71,10 @@ public interface Desktop {
 
 	/** Applies a registered theme preset. */
 	void applyTheme(MyriadId theme);
+
+	default void applyTheme(Theme theme) {
+		applyTheme(theme.id());
+	}
 
 	SettingWidgets settingWidgets();
 

@@ -1,6 +1,7 @@
 package dev.myriadclient.api.util;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.service.Inventory;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.FluidTags;
@@ -26,7 +27,7 @@ public final class Mining {
 
 	/**
 	 * The inventory slot in [from, to) whose item mines {@code state} fastest, or -1. Items a module
-	 * {@link dev.myriadclient.api.service.Inventory#spare spares} (gear about to break) don't count.
+	 * {@link Inventory#spare spares} (gear about to break) don't count.
 	 */
 	public static int fastestSlot(BlockState state, int from, int to) {
 		double best = -1;

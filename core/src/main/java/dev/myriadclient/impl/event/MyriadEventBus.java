@@ -3,9 +3,9 @@ package dev.myriadclient.impl.event;
 import dev.myriadclient.api.event.Cancellable;
 import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.event.ListenerFlag;
-import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.Subscription;
+import dev.myriadclient.api.event.events.PacketEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,6 +23,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -329,9 +330,9 @@ public final class MyriadEventBus implements EventBus {
 	}
 
 	/** Told of every handler failure (dev tooling: the self-test attributes them to the module under test). */
-	private volatile java.util.function.BiConsumer<String, Throwable> failureHook;
+	private volatile BiConsumer<String, Throwable> failureHook;
 
-	public void setFailureHook(java.util.function.BiConsumer<String, Throwable> hook) {
+	public void setFailureHook(BiConsumer<String, Throwable> hook) {
 		failureHook = hook;
 	}
 

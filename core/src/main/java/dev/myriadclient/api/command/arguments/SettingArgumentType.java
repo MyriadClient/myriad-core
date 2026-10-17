@@ -9,9 +9,10 @@ import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.setting.Setting;
-import java.util.concurrent.CompletableFuture;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+
+import java.util.concurrent.CompletableFuture;
 
 /**
  * A setting id of the module parsed by a preceding {@link ModuleArgumentType} argument named {@code module}.

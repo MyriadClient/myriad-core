@@ -2,6 +2,7 @@ package dev.myriadclient.impl.network;
 
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.TickEvent;
+import dev.myriadclient.api.event.events.WorldEvent;
 import io.netty.channel.ChannelFutureListener;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
@@ -101,7 +102,7 @@ public final class ActionTiming {
 
 	/** A new connection starts clean. */
 	@Subscribe
-	private void onLeave(dev.myriadclient.api.event.events.WorldEvent.Leave e) {
+	private void onLeave(WorldEvent.Leave e) {
 		reset();
 	}
 

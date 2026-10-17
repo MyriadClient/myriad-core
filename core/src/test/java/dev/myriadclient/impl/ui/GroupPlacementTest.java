@@ -2,6 +2,8 @@ package dev.myriadclient.impl.ui;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
+
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 /** New addons' windows go beside their categories while there's room, else onto workspaces of their own. */
@@ -17,7 +19,7 @@ class GroupPlacementTest {
 
 	private static int[] repeat(int value, int times) {
 		int[] a = new int[times];
-		java.util.Arrays.fill(a, value);
+		Arrays.fill(a, value);
 		return a;
 	}
 

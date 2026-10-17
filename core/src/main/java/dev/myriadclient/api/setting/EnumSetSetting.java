@@ -119,7 +119,7 @@ public class EnumSetSetting<E extends Enum<E>> extends Setting<Set<E>> {
 		return String.join(", ", get().stream().map(EnumSetting::displayName).toList());
 	}
 
-	public static class Builder<E extends Enum<E>> extends Setting.Builder<dev.myriadclient.api.setting.EnumSetSetting.Builder<E>, Set<E>, EnumSetSetting<E>> {
+	public static class Builder<E extends Enum<E>> extends Setting.Builder<EnumSetSetting.Builder<E>, Set<E>, EnumSetSetting<E>> {
 		private final Class<E> type;
 
 		public Builder(String name, Class<E> type) {

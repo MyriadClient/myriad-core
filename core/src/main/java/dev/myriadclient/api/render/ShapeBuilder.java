@@ -1,5 +1,6 @@
 package dev.myriadclient.api.render;
 
+import dev.myriadclient.api.event.events.Render3DEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -13,7 +14,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * The shapes Myriad can draw in the world, in absolute world coordinates. The same calls work on both kinds of
  * target:
  * <ul>
- * <li>{@link dev.myriadclient.api.event.events.Render3DEvent#shapes()}: drawn this frame only. For things that move every frame (entities, the
+ * <li>{@link Render3DEvent#shapes()}: drawn this frame only. For things that move every frame (entities, the
  * crosshair target).</li>
  * <li>{@link MeshBuilder} (from {@link WorldMesh#build} or a {@code ChunkCache} mesher): kept on the GPU and drawn every
  * frame until rebuilt. For things that rarely change (blocks, holes, storage), which then cost almost nothing per
@@ -21,7 +22,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * </ul>
  * Colours are ARGB. {@code throughWalls} draws without depth testing.
  *
- * @see dev.myriadclient.api.event.events.Render3DEvent
+ * @see Render3DEvent
  */
 public abstract class ShapeBuilder {
 	public static final float DEFAULT_LINE_WIDTH = 2f;

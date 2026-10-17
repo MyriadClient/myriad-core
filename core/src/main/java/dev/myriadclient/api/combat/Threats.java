@@ -1,8 +1,8 @@
 package dev.myriadclient.api.combat;
 
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.util.Ticks;
 import dev.myriadclient.api.combat.Damage;
+import dev.myriadclient.api.util.Ticks;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;

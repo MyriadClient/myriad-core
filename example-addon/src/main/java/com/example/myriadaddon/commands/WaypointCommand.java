@@ -9,12 +9,13 @@ import dev.myriadclient.api.command.arguments.Arguments;
 import dev.myriadclient.api.command.arguments.BlockPosArgumentType;
 import dev.myriadclient.api.util.Format;
 import dev.myriadclient.api.util.Texts;
-import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+
+import java.util.List;
 
 /**
  * {@code .waypoint} (or {@code .wp}): list, add, remove, hide and show waypoints. Commands are plain Brigadier, so

@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -31,7 +32,7 @@ class SettingsTest {
 	@Test
 	void onAnyChangedSeesEveryGroupOnlyOnRealChanges() {
 		Holder h = new Holder();
-		List<String> changed = new java.util.ArrayList<>();
+		List<String> changed = new ArrayList<>();
 		h.settings.onAnyChanged(s -> changed.add(s.id()));
 		h.count.set(5);
 		h.count.set(5); // unchanged: no call

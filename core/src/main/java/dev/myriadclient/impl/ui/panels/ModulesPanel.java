@@ -1,5 +1,7 @@
 package dev.myriadclient.impl.ui.panels;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
@@ -11,9 +13,6 @@ import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.VBox;
-
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
 import dev.myriadclient.api.util.FuzzyMatch;
 import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.ui.WindowManager;
@@ -22,10 +21,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.Set;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * A category window: one addon's modules in one category ("Combat · Essentials"), like a classic click-GUI frame, or
@@ -169,7 +169,7 @@ public final class ModulesPanel extends WidgetPanel {
 	private final class GroupSection extends Collapsible {
 		private final ModuleGroup group;
 
-		GroupSection(ModuleGroup group, java.util.function.Supplier<String> title, VBox body) {
+		GroupSection(ModuleGroup group, Supplier<String> title, VBox body) {
 			super(title, body, () -> expanded.getOrDefault(group.key(), true), v -> expanded.put(group.key(), v));
 			this.group = group;
 		}

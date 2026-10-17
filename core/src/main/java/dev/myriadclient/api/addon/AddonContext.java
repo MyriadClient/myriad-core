@@ -3,15 +3,21 @@ package dev.myriadclient.api.addon;
 import dev.myriadclient.api.command.Command;
 import dev.myriadclient.api.control.ControlPreset;
 import dev.myriadclient.api.event.EventBus;
+import dev.myriadclient.api.hook.Hook;
+import dev.myriadclient.api.hook.HookBuilder;
+import dev.myriadclient.api.hook.ReplacementBuilder;
+import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.service.KeyAction;
+import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.ui.BarWidget;
 import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.SettingWidgets;
 import dev.myriadclient.api.ui.Theme;
+import dev.myriadclient.api.ui.hud.HudPanel;
 import dev.myriadclient.api.ui.layout.Layout;
 import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.api.util.MyriadId;
@@ -67,7 +73,7 @@ public interface AddonContext {
 		return registerPanel(PanelType.builder(id(MyriadId.toPath(name)), name).icon(icon).factory(() -> factory.get()).build());
 	}
 
-	/** Registers a HUD element the user can add from the HUD workspace. See {@link dev.myriadclient.api.ui.hud.HudPanel}. */
+	/** Registers a HUD element the user can add from the HUD workspace. See {@link HudPanel}. */
 	default PanelType registerHud(String name, String icon, Supplier<? extends Panel> factory) {
 		return registerPanel(PanelType.builder(id(MyriadId.toPath(name)), name).icon(icon).factory(() -> factory.get()).hud().build());
 	}
@@ -89,6 +95,18 @@ public interface AddonContext {
 	 * Panels, can edit it (their edits are kept) or delete it, and get it back as made with Reset.
 	 */
 	MyriadId registerControlPanel(ControlPreset preset);
+
+	/**
+	 * Handles a hook (core's, like {@link Rotations#TURN}, or another addon's): see
+	 * {@link HookBuilder}. The player sees it in the Hooks window and can turn it off.
+	 */
+	<I, O> HookBuilder<I, O> hook(Hook<I, O> hook);
+
+	/**
+	 * Takes over a core service with your own, for everyone or only your own modules: see {@link ReplacementBuilder}
+	 * and {@link Service}.
+	 */
+	<S> ReplacementBuilder<S> replace(Service<S> service);
 
 	/** A global key action (works in game, outside the menu), rebindable in the Keybinds panel. */
 	KeyAction registerKeyAction(String name, Keybind defaultBind, Runnable action);

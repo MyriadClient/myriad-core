@@ -72,12 +72,12 @@ public class StringListSetting extends Setting<List<String>> {
 		return String.join(", ", get());
 	}
 
-	public static class Builder extends Setting.Builder<dev.myriadclient.api.setting.StringListSetting.Builder, List<String>, StringListSetting> {
+	public static class Builder extends Setting.Builder<StringListSetting.Builder, List<String>, StringListSetting> {
 		public Builder(String name) {
 			super(name, List.of());
 		}
 
-		public dev.myriadclient.api.setting.StringListSetting.Builder defaultValue(String... values) {
+		public StringListSetting.Builder defaultValue(String... values) {
 			return defaultValue(List.of(values));
 		}
 

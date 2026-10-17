@@ -5,6 +5,8 @@ import dev.myriadclient.api.render.Bezier;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.util.ColorUtil;
 
+import java.util.List;
+
 /**
  * Shows a child clipped to a viewport with smooth scrolling. With {@code fill} the viewport is the height it is
  * given by {@link #setViewportHeight}; otherwise it sizes to its content up to {@code maxHeight}.
@@ -84,7 +86,7 @@ public class ScrollView extends Widget {
 	}
 
 	@Override
-	public void collectNavigable(java.util.List<Widget> out) {
+	public void collectNavigable(List<Widget> out) {
 		if (isVisible()) child.collectNavigable(out);
 	}
 

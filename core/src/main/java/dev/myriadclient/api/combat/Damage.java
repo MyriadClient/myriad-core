@@ -17,11 +17,12 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ServerExplosion;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.phys.Vec3;
+
 import java.util.function.Predicate;
 
 /** Client-side estimates of damage the server would deal, for predicting lethal hits. */

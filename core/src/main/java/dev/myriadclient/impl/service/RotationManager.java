@@ -11,8 +11,8 @@ import dev.myriadclient.api.util.MathUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ProjectileItem;
@@ -67,10 +67,17 @@ public final class RotationManager implements Rotations {
 		float from = yawAxis ? serverYaw : serverPitch;
 		if (w != null) {
 			float target = yawAxis ? w.yaw : w.pitch;
-			return new Axis(step(from, target, w.options.turnSpeed(), yawAxis), w, w.options.turnSpeed());
+			return new Axis(turn(w.owner, from, target, w.options.turnSpeed(), yawAxis), w, w.options.turnSpeed());
 		}
-		if (returnSpeed > 0) return new Axis(step(from, real, returnSpeed, yawAxis), null, returnSpeed);
+		if (returnSpeed > 0) return new Axis(turn(null, from, real, returnSpeed, yawAxis), null, returnSpeed);
 		return new Axis(real, null, 0);
+	}
+
+	/** {@link #step}, or what the {@link Rotations#TURN} hook makes of it for {@code owner}'s request. */
+	private static float turn(Object owner, float from, float to, float speed, boolean yawAxis) {
+		if (!TURN.hooked()) return step(from, to, speed, yawAxis);
+		Float v = TURN.call(owner, new Turn(from, to, speed, yawAxis), t -> step(t.from(), t.to(), t.speed(), t.yaw()));
+		return v == null || v.isNaN() ? step(from, to, speed, yawAxis) : yawAxis ? v : Mth.clamp(v, -90, 90);
 	}
 
 	/** Moves {@code from} towards {@code to} by at most {@code speed} degrees (0 = all the way); yaw wraps around. */

@@ -14,8 +14,8 @@ import dev.myriadclient.api.setting.ColorSetting;
 import dev.myriadclient.api.setting.DoubleSetting;
 import dev.myriadclient.api.setting.EnumSetSetting;
 import dev.myriadclient.api.setting.EnumSetting;
-import dev.myriadclient.api.setting.IntListSetting;
 import dev.myriadclient.api.setting.FileSetting;
+import dev.myriadclient.api.setting.IntListSetting;
 import dev.myriadclient.api.setting.IntSetting;
 import dev.myriadclient.api.setting.KeybindSetting;
 import dev.myriadclient.api.setting.ModuleListSetting;
@@ -38,6 +38,7 @@ import dev.myriadclient.api.ui.widget.Widget;
 import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.command.CoreCommands;
+import dev.myriadclient.impl.macro.MacroManager;
 import dev.myriadclient.impl.ui.CoreThemes;
 import dev.myriadclient.impl.ui.FilePicker;
 import dev.myriadclient.impl.ui.WindowManager;
@@ -45,9 +46,9 @@ import dev.myriadclient.impl.ui.bar.CoreBarWidgets;
 import dev.myriadclient.impl.ui.layout.ColumnsLayout;
 import dev.myriadclient.impl.ui.layout.DwindleLayout;
 import dev.myriadclient.impl.ui.panels.CorePanels;
+import net.minecraft.client.Minecraft;
 
 import java.util.List;
-import net.minecraft.client.Minecraft;
 
 /**
  * Myriad core registers its own pieces through the same addon API everyone else uses: categories, layouts, themes,
@@ -59,7 +60,7 @@ public final class CoreAddon implements MyriadAddon {
 	@Override
 	public void registerCategories(AddonContext ctx) {
 		for (Category c : Categories.DEFAULTS) ctx.registerCategory(c);
-		ctx.registerCategory(dev.myriadclient.impl.macro.MacroManager.CATEGORY);
+		ctx.registerCategory(MacroManager.CATEGORY);
 	}
 
 	@Override
@@ -73,7 +74,8 @@ public final class CoreAddon implements MyriadAddon {
 		CoreBarWidgets.register(ctx, wm);
 		CoreCommands.register(ctx);
 		// Before the profile loads, so the macros' settings and binds load with it.
-		dev.myriadclient.impl.macro.MacroManager.load(ctx.storage());
+		MacroManager.load(ctx.storage());
+		MyriadImpl.get().hookManager().load(ctx.storage());
 		// Unbound: mod+1..9 opens the menu on a workspace. For a single key (Right Shift, as other clients use), bind it.
 		ctx.registerKeyAction("Open Menu", Keybind.NONE, () -> Myriad.ui().open());
 	}
