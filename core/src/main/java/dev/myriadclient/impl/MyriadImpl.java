@@ -83,6 +83,7 @@ public final class MyriadImpl implements MyriadApi {
 	private final dev.myriadclient.impl.service.PlacementManager placement = new dev.myriadclient.impl.service.PlacementManager(blockAcks);
 	private final BreakManager breaking = new BreakManager();
 	private final dev.myriadclient.impl.elytra.ElytraManager elytra = new dev.myriadclient.impl.elytra.ElytraManager();
+	private final dev.myriadclient.impl.control.ControlManager controls = new dev.myriadclient.impl.control.ControlManager();
 	private final BuildManager building = new BuildManager();
 	private final FriendsManager friends = new FriendsManager(config.root());
 	private final dev.myriadclient.impl.service.ServerStatsTracker serverStats = new dev.myriadclient.impl.service.ServerStatsTracker();
@@ -155,7 +156,7 @@ public final class MyriadImpl implements MyriadApi {
 	}
 
 	public List<Registry<?>> registries() {
-		return List.of(categories, modules, commands, panels, layouts, themes, barWidgets, keyActions, addonSettings);
+		return List.of(categories, modules, commands, panels, layouts, themes, barWidgets, keyActions, addonSettings, controls.presets());
 	}
 
 	public ConfigManagerImpl configImpl() {
@@ -267,6 +268,15 @@ public final class MyriadImpl implements MyriadApi {
 	@Override
 	public dev.myriadclient.api.elytra.Elytra elytra() {
 		return elytra;
+	}
+
+	@Override
+	public dev.myriadclient.api.control.Controls controls() {
+		return controls;
+	}
+
+	public dev.myriadclient.impl.control.ControlManager controlManager() {
+		return controls;
 	}
 
 	@Override

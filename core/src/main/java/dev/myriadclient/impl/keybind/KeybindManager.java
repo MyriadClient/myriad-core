@@ -9,6 +9,8 @@ import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.impl.CoreAddon;
+import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.control.ControlPanelImpl;
 import dev.myriadclient.impl.ui.MyriadTitleScreen;
 import dev.myriadclient.impl.ui.WindowManager;
 import net.minecraft.client.Minecraft;
@@ -55,13 +57,21 @@ public final class KeybindManager {
 		if (handle(e.button(), true, e.modifiers(), e.isPress())) e.cancel();
 	}
 
-	/** Turns off the hold-bound modules on this key or button: its release, wherever it happened. */
+	/** Turns off the hold-bound modules and control panels on this key or button: its release, wherever it happened. */
 	private static void releaseHolds(int code, boolean mouse) {
 		for (Module m : Myriad.modules()) {
 			if (m.isMirror() || !m.holdMode.get()) continue;
 			Keybind bind = m.keybind.get();
 			if (bind.isSet() && bind.mouse() == mouse && bind.code() == code && m.isEnabled()) m.setEnabled(false);
 		}
+		for (ControlPanelImpl c : controls()) {
+			Keybind bind = c.keybind.get();
+			if (c.hold.get() && bind.isSet() && bind.mouse() == mouse && bind.code() == code && c.isActive()) c.setActive(false);
+		}
+	}
+
+	private static java.util.List<ControlPanelImpl> controls() {
+		return MyriadImpl.get().controlManager().impls();
 	}
 
 	/** Returns true if a key action ran (its input is then consumed so nothing else sees it). */
@@ -77,8 +87,19 @@ public final class KeybindManager {
 				m.toggle();
 			}
 		}
-		if (!press) return false;
 		boolean ran = false;
+		for (ControlPanelImpl c : controls()) {
+			Keybind bind = c.keybind.get();
+			if (!bind.isSet() || bind.mouse() != mouse || bind.code() != code) continue;
+			if (c.hold.get()) {
+				c.setActive(press);
+				ran = true;
+			} else if (press && matches(bind, code, mouse, mods)) {
+				c.toggle();
+				ran = true;
+			}
+		}
+		if (!press) return ran;
 		for (KeyAction a : Myriad.keyActions()) {
 			if (matches(a.bind(), code, mouse, mods)) {
 				a.run();

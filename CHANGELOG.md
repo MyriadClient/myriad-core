@@ -6,6 +6,18 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## Unreleased (control-panels branch)
+
+- **Control panels**: a set of modules switched together by one bind or switch, each with settings the panel
+  remembers for it (Remember in its window). Off turns off only what it turned on and puts back the settings it changed
+  (unless changed again meanwhile). Saved per profile; made in the launcher or the Control Panels window;
+  `.control on|off|toggle <name>`. Addons ship ready-made ones with `AddonContext.registerControlPanel(ControlPreset)`;
+  players can edit, delete or reset them. New API: `dev.myriadclient.api.control`, `Myriad.controls()`.
+- **Macros**: modules you make, whose Commands (Myriad commands, server commands, `wait <ticks>`, chat) run when
+  pressed, once (Run) or on and off (Toggle, with Off Commands). In the Macros category; `.macro`.
+- **Launcher filters**: `@addon` and `#kind` / `#category` narrow the results (`@ess #render`, `#control`, `#panel`);
+  New macro and New control panel take what's typed as their name.
+
 ## 0.3.4
 
 - A hold-bound module let go while a screen was up (a portal's loading screen, the disconnect screen, the menu) now

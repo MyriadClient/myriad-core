@@ -132,7 +132,18 @@ single key, like Right Shift, bind **Open Menu** there or under Keybindings → 
   modules: click one to add or remove it, unfold it for its options. Delete removes the hovered element, and the
   launcher can also add and remove them.
 - The **launcher** (`Alt+Space`) fuzzy-searches modules (Enter toggles, Shift+Enter or right-click opens settings),
-  panels, categories, themes, profiles and workspaces.
+  control panels, macros, panels, categories, themes, profiles and workspaces. Narrow it with `@addon` (part of an
+  addon's id or name: `@ess`, `@stash`) and `#kind` or `#category` (`#panel`, `#control`, `#macro`, `#theme`,
+  `#render`, `#combat`…), alone or with text: `@ess #render` lists Essentials' render modules. Whatever you type can
+  also become a **New macro** or a **New control panel** of that name (the last two results).
+- **Control panels** switch a set of modules together: one bind or switch turns them all on, each with settings the
+  panel remembers for it (open its window, set the module up, press Remember), and turning it off turns off only the
+  modules it turned on and gives them their own settings back (any you changed meanwhile are kept). Make them in the
+  launcher or the Control Panels window; `.control on|off|toggle <name>`. Addons can ship ready-made ones.
+- **Macros** are modules you make (launcher → New macro, or `.macro new <name>`) whose Commands run when pressed: one
+  per line, a Myriad command (`.toggle esp`), a server command (`/home`), `wait <ticks>`, or chat. Run mode runs them
+  once per press; Toggle runs Commands when turned on and Off Commands when turned off. Being modules, they take a
+  bind, hold, the launcher and control panels like any other. `.macro [run|new|delete <name>]`.
 - **Themes**: a theme holds the whole look: gaps, borders (gradient, optional rotation), rounding, blur, shadows,
   inactive dimming and opacity, animation curves and speeds (Hyprland-style), the bar, fonts, and every colour. Pick
   one in the Theme panel and edit it there; edits save into the active theme as you make them.
@@ -538,6 +549,10 @@ How the pieces fit the kinds of addons people build:
 - Panels can declare their own `settings`, which are saved with the window. Open one with
   `Myriad.ui().openPanel(id)`. Top-bar widgets extend `BarWidget`.
 - Add a `contact` block (`homepage`, `sources`, `issues`) to your fabric.mod.json and the Addons panel links to it.
+- **Control panels**: ship ready-made ones with `ctx.registerControlPanel(ControlPreset.builder("Hunting").module(id)
+  .setting(id, "spacing", "6").build())`: the modules it switches (by id, installed or not) and the settings they take
+  while it's on, written as `.set` takes them. Players can edit, delete and reset it. `Myriad.controls()` lists and
+  switches a profile's control panels.
 
 ### Performance
 

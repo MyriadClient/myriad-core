@@ -98,6 +98,13 @@ final class AddonContextImpl implements AddonContext {
 	}
 
 	@Override
+	public MyriadId registerControlPanel(dev.myriadclient.api.control.ControlPreset preset) {
+		MyriadId id = id(MyriadId.toPath(preset.name()));
+		myriad.controlManager().presets().register(new dev.myriadclient.impl.control.ControlManager.Preset(id, preset), addon.id());
+		return id;
+	}
+
+	@Override
 	public KeyAction registerKeyAction(String name, Keybind defaultBind, Runnable action) {
 		return myriad.keyActions().register(new KeyAction(id(MyriadId.toPath(name)), name, defaultBind, action), addon.id());
 	}

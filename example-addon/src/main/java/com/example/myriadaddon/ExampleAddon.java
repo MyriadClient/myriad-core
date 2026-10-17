@@ -19,6 +19,7 @@ import com.example.myriadaddon.stats.SessionStats;
 import com.example.myriadaddon.waypoints.WaypointStore;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.AddonContext;
+import dev.myriadclient.api.control.ControlPreset;
 import dev.myriadclient.api.addon.MyriadAddon;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.render.HighlightStyle;
@@ -114,7 +115,15 @@ public final class ExampleAddon implements MyriadAddon {
 			t.windowBackground.set(SettingColor.of(0xD8241F31));
 		}));
 
-		// 8. A custom setting type needs an editor widget; every settings view then uses it (see SettingsShowcase).
+		// 8. A ready-made control panel: one bind (or switch) turns these modules on together, each with the settings
+		// given here while it's on. Players find it in their Control Panels and can change it or delete it.
+		ctx.registerControlPanel(ControlPreset.builder("Digging")
+			.module("myriad-example:tunnel").setting("myriad-example:tunnel", "width", "3").setting("myriad-example:tunnel", "height", "3")
+			.module("myriad-example:auto_tool")
+			.module("myriad-example:hole_esp")
+			.build());
+
+		// 9. A custom setting type needs an editor widget; every settings view then uses it (see SettingsShowcase).
 		ctx.settingWidgets().register(RangeSetting.class, s -> {
 			HBox row = new HBox(3);
 			row.add(new Slider(() -> s.get().min(), v -> s.set(new RangeSetting.Range(v, s.get().max())), s.lower(), s.upper(), 1));
@@ -122,7 +131,7 @@ public final class ExampleAddon implements MyriadAddon {
 			return row;
 		}, false);
 
-		// 9. An always-on listener that isn't a module. Its @Subscribe methods run until the game closes.
+		// 10. An always-on listener that isn't a module. Its @Subscribe methods run until the game closes.
 		ctx.events().subscribe(stats);
 	}
 

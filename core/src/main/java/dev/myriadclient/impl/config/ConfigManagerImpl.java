@@ -159,6 +159,8 @@ public final class ConfigManagerImpl implements ConfigManager {
 			if (e != null && e.isJsonObject()) a.settings().fromJson(e.getAsJsonObject());
 			else a.settings().resetAll();
 		}
+		// Before the windows: a control panel's window needs its panel.
+		myriad.controlManager().load(readObject(dir.resolve("controls.json")));
 		JsonObject ui = readObject(dir.resolve("ui.json"));
 		myriad.windowManager().load(ui);
 	}
@@ -216,12 +218,15 @@ public final class ConfigManagerImpl implements ConfigManager {
 			addons.add(a.id().toString(), a.settings().toJson(before != null && before.isJsonObject() ? before.getAsJsonObject() : null));
 		}
 		rawAddonSettings = addons;
+		JsonObject controls = myriad.controlManager().save();
+		controls.addProperty(FORMAT_KEY, FORMAT);
 		JsonObject ui = myriad.windowManager().save();
 		Path dir = profileDir(profile);
 		Runnable write = () -> {
 			JsonFiles.write(root.resolve("myriad.json"), global);
 			JsonFiles.write(dir.resolve("modules.json"), modules);
 			if (addons.size() > 1) JsonFiles.write(dir.resolve("addons.json"), addons);
+			JsonFiles.write(dir.resolve("controls.json"), controls);
 			if (ui != null) {
 				ui.addProperty(FORMAT_KEY, FORMAT);
 				JsonFiles.write(dir.resolve("ui.json"), ui);

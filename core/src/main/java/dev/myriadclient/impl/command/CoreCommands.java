@@ -357,6 +357,72 @@ public final class CoreCommands {
 			}
 		});
 
+		ctx.registerCommand(new Command("control", "Lists control panels, or turns one on or off by name.") {
+			@Override
+			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
+				b.executes(c -> {
+					var all = Myriad.controls().all();
+					if (all.isEmpty()) info("No control panels: make one in the launcher (New control panel) or the Control Panels window.");
+					for (var cp : all) {
+						info(Component.literal(cp.name()).withStyle(cp.isActive() ? ChatFormatting.GREEN : ChatFormatting.WHITE)
+							.append(Component.literal("  " + cp.modules().size() + " modules" + (cp.keybind().isSet() ? ", " + cp.keybind().displayName() : "")).withStyle(ChatFormatting.GRAY)));
+					}
+					return SINGLE_SUCCESS;
+				});
+				for (String how : List.of("on", "off", "toggle")) {
+					b.then(literal(how).then(argument("name", StringArgumentType.greedyString()).executes(c -> {
+						String name = StringArgumentType.getString(c, "name");
+						var cp = Myriad.controls().byName(name).orElse(null);
+						if (cp == null) {
+							error("No control panel called " + name);
+							return 0;
+						}
+						if (how.equals("toggle")) cp.toggle();
+						else cp.setActive(how.equals("on"));
+						return SINGLE_SUCCESS;
+					})));
+				}
+			}
+		});
+
+		ctx.registerCommand(new Command("macro", "Lists macros, or runs, makes or deletes one by name.") {
+			@Override
+			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
+				b.executes(c -> {
+					var all = dev.myriadclient.impl.macro.MacroManager.all();
+					if (all.isEmpty()) info("No macros: .macro new <name>, or New macro in the launcher.");
+					for (var m : all) info(m.name() + (m.keybind.get().isSet() ? "  " + m.keybind.get().displayName() : ""));
+					return SINGLE_SUCCESS;
+				});
+				b.then(literal("run").then(argument("name", StringArgumentType.greedyString()).executes(c -> {
+					String name = StringArgumentType.getString(c, "name");
+					var m = dev.myriadclient.impl.macro.MacroManager.byName(name).orElse(null);
+					if (m == null) {
+						error("No macro called " + name);
+						return 0;
+					}
+					m.toggle();
+					return SINGLE_SUCCESS;
+				})));
+				b.then(literal("new").then(argument("name", StringArgumentType.greedyString()).executes(c -> {
+					var m = dev.myriadclient.impl.macro.MacroManager.create(StringArgumentType.getString(c, "name"));
+					info("Macro " + m.name() + ": give it commands in its settings (.set \"" + m.name() + "\" commands …) or the menu.");
+					return SINGLE_SUCCESS;
+				})));
+				b.then(literal("delete").then(argument("name", StringArgumentType.greedyString()).executes(c -> {
+					String name = StringArgumentType.getString(c, "name");
+					var m = dev.myriadclient.impl.macro.MacroManager.byName(name).orElse(null);
+					if (m == null) {
+						error("No macro called " + name);
+						return 0;
+					}
+					dev.myriadclient.impl.macro.MacroManager.delete(m);
+					info("Deleted macro " + m.name());
+					return SINGLE_SUCCESS;
+				})));
+			}
+		});
+
 		ctx.registerCommand(new Command("cape", "Turns Myriad's cape on or off (seen by Myriad players near you).") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {

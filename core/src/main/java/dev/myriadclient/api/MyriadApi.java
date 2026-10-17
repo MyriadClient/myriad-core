@@ -4,6 +4,7 @@ import dev.myriadclient.api.addon.Addon;
 import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.command.Command;
 import dev.myriadclient.api.config.ConfigManager;
+import dev.myriadclient.api.control.Controls;
 import dev.myriadclient.api.elytra.Elytra;
 import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.module.Category;
@@ -78,6 +79,8 @@ public interface MyriadApi {
 	Containers containers();
 
 	Elytra elytra();
+
+	Controls controls();
 
 	Tasks tasks();
 

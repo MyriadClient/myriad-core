@@ -1,6 +1,7 @@
 package dev.myriadclient.api.addon;
 
 import dev.myriadclient.api.command.Command;
+import dev.myriadclient.api.control.ControlPreset;
 import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
@@ -82,6 +83,12 @@ public interface AddonContext {
 	Layout registerLayout(Layout layout);
 
 	Theme registerTheme(Theme theme);
+
+	/**
+	 * A ready-made control panel, with id {@code <your mod id>:<name in snake_case>}: players find it in their Control
+	 * Panels, can edit it (their edits are kept) or delete it, and get it back as made with Reset.
+	 */
+	MyriadId registerControlPanel(ControlPreset preset);
 
 	/** A global key action (works in game, outside the menu), rebindable in the Keybinds panel. */
 	KeyAction registerKeyAction(String name, Keybind defaultBind, Runnable action);

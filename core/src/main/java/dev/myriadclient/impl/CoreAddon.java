@@ -59,6 +59,7 @@ public final class CoreAddon implements MyriadAddon {
 	@Override
 	public void registerCategories(AddonContext ctx) {
 		for (Category c : Categories.DEFAULTS) ctx.registerCategory(c);
+		ctx.registerCategory(dev.myriadclient.impl.macro.MacroManager.CATEGORY);
 	}
 
 	@Override
@@ -71,6 +72,8 @@ public final class CoreAddon implements MyriadAddon {
 		CorePanels.register(ctx, wm);
 		CoreBarWidgets.register(ctx, wm);
 		CoreCommands.register(ctx);
+		// Before the profile loads, so the macros' settings and binds load with it.
+		dev.myriadclient.impl.macro.MacroManager.load(ctx.storage());
 		// Unbound: mod+1..9 opens the menu on a workspace. For a single key (Right Shift, as other clients use), bind it.
 		ctx.registerKeyAction("Open Menu", Keybind.NONE, () -> Myriad.ui().open());
 	}

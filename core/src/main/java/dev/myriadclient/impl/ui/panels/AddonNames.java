@@ -5,11 +5,11 @@ import dev.myriadclient.api.addon.Addon;
 import dev.myriadclient.api.module.Module;
 
 /** Short, human names for where things come from ("Essentials" rather than "Myriad Essentials"). */
-final class AddonNames {
+public final class AddonNames {
 	private AddonNames() {
 	}
 
-	static String of(String addonId) {
+	public static String of(String addonId) {
 		if (addonId == null) return "?";
 		for (Addon a : Myriad.addons()) {
 			if (!a.id().equals(addonId)) continue;
