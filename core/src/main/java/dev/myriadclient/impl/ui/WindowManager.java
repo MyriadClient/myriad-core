@@ -622,7 +622,7 @@ public final class WindowManager implements Desktop {
 		prepareRenderer(c);
 		c.begin(ctx, pixelScale);
 		try {
-			if (mc.level == null) c.gradientRect(0, 0, screenW, screenH, 0, 0xFF11111B, 0xFF1E1E2E, 90);
+			if (mc.level == null) c.gradientRect(0, 0, screenW, screenH, 0, 0xFF0C0C0C, 0xFF151816, 90);
 			c.captureBlur();
 			if (active != HUD_WORKSPACE) c.rect(0, 0, screenW, screenH, theme.desktopTint.argb());
 

@@ -11,7 +11,7 @@ import java.util.function.ToIntFunction;
  * whatever theme the user picks. Call {@link #argb()} every frame rather than caching the result.
  */
 public record SettingColor(int color, Mode mode) {
-	private static ToIntFunction<Mode> palette = m -> 0xFF89B4FA;
+	private static ToIntFunction<Mode> palette = m -> 0xFF7FD8AE;
 
 	public enum Mode {
 		STATIC, RAINBOW,

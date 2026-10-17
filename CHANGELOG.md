@@ -6,6 +6,12 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.3.1 (unreleased)
+
+- The default theme takes the logo's colours: its mint accent on a neutral near-black, with the window greys between.
+  The previous default is still a preset, Catppuccin Mocha.
+- The example addon has an icon.
+
 ## 0.3.0
 
 The packages and the maven coordinates move to `dev.myriadclient`, after Myriad's domain. Nothing else changes, but

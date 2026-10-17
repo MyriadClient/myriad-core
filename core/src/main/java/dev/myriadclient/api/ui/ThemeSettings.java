@@ -62,22 +62,23 @@ public final class ThemeSettings {
 	public final IntSetting borderSize = sgGeneral.intSetting("Border Size").defaultValue(1).range(0, 6).build();
 	public final BoolSetting titleBars = sgGeneral.bool("Title Bars").description("Show a title bar on windows (drag it to move floating windows).").defaultValue(true).build();
 
+	// The defaults are Myriad's own look, the logo's: its mint on its near-black, with neutral greys between.
 	private final SettingGroup sgColors = settings.group("Colors");
-	public final ColorSetting accent = sgColors.color("Accent").defaultValue(0xFF89B4FA).build();
-	public final ColorSetting secondary = sgColors.color("Secondary").description("Second accent, used for gradients.").defaultValue(0xFFCBA6F7).build();
+	public final ColorSetting accent = sgColors.color("Accent").defaultValue(0xFF7FD8AE).build();
+	public final ColorSetting secondary = sgColors.color("Secondary").description("Second accent, used for gradients.").defaultValue(0xFF4FA884).build();
 	public final ColorSetting activeBorderFrom = sgColors.color("Active Border").defaultValue(SettingColor.role(SettingColor.Mode.ACCENT)).build();
 	public final ColorSetting activeBorderTo = sgColors.color("Active Border End").description("Second gradient stop.").defaultValue(SettingColor.role(SettingColor.Mode.SECONDARY)).build();
 	public final DoubleSetting borderAngle = sgColors.doubleSetting("Border Angle").defaultValue(45).range(0, 360).decimals(0).build();
 	public final BoolSetting animateBorder = sgColors.bool("Animate Border").description("Rotate the active border gradient.").defaultValue(false).build();
-	public final ColorSetting inactiveBorder = sgColors.color("Inactive Border").defaultValue(0x60585B70).build();
-	public final ColorSetting windowBackground = sgColors.color("Window Background").defaultValue(0xD81E1E2E).build();
-	public final ColorSetting titleBackground = sgColors.color("Title Background").defaultValue(0x40181825).build();
-	public final ColorSetting surface = sgColors.color("Surface").description("Buttons, inputs and rows.").defaultValue(0x60313244).build();
-	public final ColorSetting surfaceHover = sgColors.color("Surface Hover").defaultValue(0x9045475A).build();
-	public final ColorSetting text = sgColors.color("Text").defaultValue(0xFFCDD6F4).build();
-	public final ColorSetting textDim = sgColors.color("Text Dim").defaultValue(0xFF9399B2).build();
-	public final ColorSetting desktopTint = sgColors.color("Menu Tint").description("Drawn over the game behind the menu.").defaultValue(0x7011111B).build();
-	public final ColorSetting barBackground = sgColors.color("Bar Background").defaultValue(0xE011111B).build();
+	public final ColorSetting inactiveBorder = sgColors.color("Inactive Border").defaultValue(0x60303633).build();
+	public final ColorSetting windowBackground = sgColors.color("Window Background").defaultValue(0xD8131514).build();
+	public final ColorSetting titleBackground = sgColors.color("Title Background").defaultValue(0x400C0C0C).build();
+	public final ColorSetting surface = sgColors.color("Surface").description("Buttons, inputs and rows.").defaultValue(0x60252A27).build();
+	public final ColorSetting surfaceHover = sgColors.color("Surface Hover").defaultValue(0x90343A37).build();
+	public final ColorSetting text = sgColors.color("Text").defaultValue(0xFFE9EEEB).build();
+	public final ColorSetting textDim = sgColors.color("Text Dim").defaultValue(0xFF8C9690).build();
+	public final ColorSetting desktopTint = sgColors.color("Menu Tint").description("Drawn over the game behind the menu.").defaultValue(0x700C0C0C).build();
+	public final ColorSetting barBackground = sgColors.color("Bar Background").defaultValue(0xE00C0C0C).build();
 
 	private final SettingGroup sgPalette = settings.group("Palette");
 	public final ColorSetting red = sgPalette.color("Red").description("Danger, hostile mobs, the Combat category.").defaultValue(0xFFF38BA8).build();
