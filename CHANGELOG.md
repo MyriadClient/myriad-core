@@ -6,7 +6,7 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
-## 0.4.0 (unreleased)
+## 0.4.0
 
 - **Control panels**: a set of modules switched together by one bind or switch, each with settings the panel
   saves for it (Save in the module's settings in its window). On lays those over the modules' own; off turns off only
@@ -39,11 +39,11 @@ and may change in any release. Addons declare the oldest core they support in `f
   own modules and their settings typed; modules of other addons still go in by id.
 - `Notifications.toast(title, message)` builds a notification (`level`, `lasting`, `replacing`, `show`);
   `Desktop.openPanel(PanelType)` and `applyTheme(Theme)` take what you registered.
-- Internal: the window manager is split into its painter, binds and category windows; imports tidied across core.
 - **Macros**: modules you make, whose Commands (Myriad commands, server commands, `wait <ticks>`, chat) run when
   pressed, once (Run) or on and off (Toggle, with Off Commands). In the Macros category; `.macro`.
 - **Launcher filters**: `@addon` and `#kind` / `#category` narrow the results (`@ess #render`, `#control`, `#panel`);
   New macro and New control panel take what's typed as their name.
+- Internal: the window manager is split into its painter, binds and category windows; imports tidied across core.
 
 ## 0.3.4
 
