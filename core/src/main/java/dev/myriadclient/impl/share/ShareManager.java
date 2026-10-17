@@ -22,6 +22,8 @@ import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.control.ControlPanelImpl;
 import net.minecraft.SharedConstants;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -41,6 +43,7 @@ import java.util.regex.Pattern;
  * shares in.
  */
 public final class ShareManager implements ConfigShares {
+	private static final Logger LOG = LoggerFactory.getLogger("Myriad/Shares");
 	private static final String FILE = "shares.json";
 	private static final Pattern CODE = Pattern.compile("myriad_[A-Za-z0-9]{6}");
 	private static final String API = System.getProperty("myriad.api", "https://api.myriadclient.dev");
@@ -281,31 +284,24 @@ public final class ShareManager implements ConfigShares {
 	public Applied apply(ConfigShare share, Apply how) {
 		JsonObject doc = share.json();
 		List<String> applied = new ArrayList<>(), missing = new ArrayList<>();
-		ControlPanelImpl trial = how == Apply.AS_CONTROL_PANEL ? newPanel(share.title()) : null;
+		ControlPanelImpl trial = how == Apply.AS_CONTROL_PANEL ? newPanel(shortened(share.title())) : null;
 
 		for (JsonElement e : array(doc, "modules")) {
-			JsonObject entry = e.getAsJsonObject();
-			String id = entry.get("id").getAsString();
-			Module m = Myriad.modules().get(MyriadId.parse(id)).orElse(null);
-			if (m == null) {
-				missing.add(entry.has("view") ? entry.getAsJsonObject("view").get("name").getAsString() + " (" + id + ")" : id);
-				continue;
+			try {
+				applyModule(e.getAsJsonObject(), trial, applied, missing);
+			} catch (RuntimeException ex) {
+				LOG.warn("Skipped a shared module it couldn't read: {}", e, ex);
 			}
-			JsonObject settings = entry.has("settings") ? entry.getAsJsonObject("settings") : new JsonObject();
-			if (trial != null) {
-				trial.members.set(withMember(trial.members.get(), m.id()));
-				forEachShared(m, settings, (s, value) -> trial.remember(id, m.settings.keyOf(s), value));
-			} else {
-				replace(m, settings);
-				if (entry.has("enabled")) m.setEnabled(entry.get("enabled").getAsBoolean());
-			}
-			applied.add(m.name());
 		}
 
 		for (JsonElement e : array(doc, "controlPanels")) {
 			JsonObject cp = e.getAsJsonObject();
-			ControlPanelImpl panel = newPanel(cp.get("name").getAsString());
-			panel.takeShared(cp);
+			ControlPanelImpl panel = newPanel(shortened(cp.get("name").getAsString()));
+			try {
+				panel.takeShared(cp);
+			} catch (RuntimeException ex) {
+				LOG.warn("Couldn't read shared control panel {}", panel.name(), ex);
+			}
 			applied.add("control panel " + panel.name());
 		}
 
@@ -313,12 +309,38 @@ public final class ShareManager implements ConfigShares {
 			JsonObject t = doc.getAsJsonObject("theme");
 			ThemeSettings theme = Myriad.ui().theme();
 			theme.settings.resetAll();
-			if (t.has("settings")) theme.settings.fromJson(t.getAsJsonObject("settings"));
+			if (t.has("settings") && t.get("settings").isJsonObject()) {
+				for (Setting<?> setting : theme.settings.all()) {
+					JsonElement group = setting.group() == null ? null : t.getAsJsonObject("settings").get(setting.group().id());
+					if (group != null && group.isJsonObject() && group.getAsJsonObject().has(setting.id())) {
+						readSafely(setting, group.getAsJsonObject().get(setting.id()));
+					}
+				}
+			}
 			MyriadImpl.get().windowManager().themes().commit();
 			applied.add("theme");
 		}
 		Myriad.config().markDirty();
 		return new Applied(applied, missing);
+	}
+
+	/** One module of a share taken in: as the player's settings, or into {@code trial} (a control panel to try). */
+	private static void applyModule(JsonObject entry, @Nullable ControlPanelImpl trial, List<String> applied, List<String> missing) {
+		String id = entry.get("id").getAsString();
+		Module m = Myriad.modules().get(MyriadId.parse(id)).orElse(null);
+		if (m == null) {
+			missing.add(entry.has("view") ? entry.getAsJsonObject("view").get("name").getAsString() + " (" + id + ")" : id);
+			return;
+		}
+		JsonObject settings = entry.has("settings") ? entry.getAsJsonObject("settings") : new JsonObject();
+		if (trial != null) {
+			trial.members.set(withMember(trial.members.get(), m.id()));
+			forEachShared(m, settings, (s, value) -> trial.remember(id, m.settings.keyOf(s), value));
+		} else {
+			replace(m, settings);
+			if (entry.has("enabled")) m.setEnabled(entry.get("enabled").getAsBoolean());
+		}
+		applied.add(m.name());
 	}
 
 	/** {@code m}'s settings made the share's: shared values in, the rest back to default, protected ones (and binds the share leaves out) untouched. */
@@ -328,9 +350,9 @@ public final class ShareManager implements ConfigShares {
 			if (isModuleGroup(g) && !sharedGroup) continue;
 			for (Setting<?> s : g.settings()) {
 				if (!s.isSerializable() || s.isProtected()) continue;
-				JsonElement value = sharedGroup ? shared.getAsJsonObject(g.id()).get(s.id()) : null;
+				JsonElement value = sharedGroup && shared.get(g.id()).isJsonObject() ? shared.getAsJsonObject(g.id()).get(s.id()) : null;
 				if (value == null) s.reset();
-				else s.fromJson(value);
+				else readSafely(s, value);
 			}
 		}
 	}
@@ -342,8 +364,22 @@ public final class ShareManager implements ConfigShares {
 			JsonObject values = shared.getAsJsonObject(g.id());
 			for (Setting<?> s : g.settings()) {
 				JsonElement v = values.get(s.id());
-				if (v != null && !s.isProtected()) action.accept(s, reencode(s, v));
+				if (v == null || s.isProtected()) continue;
+				try {
+					action.accept(s, reencode(s, v));
+				} catch (RuntimeException e) {
+					LOG.warn("Skipped a shared value for {} it couldn't read", s.name(), e);
+				}
 			}
+		}
+	}
+
+	/** A shared value into {@code s}; one it can't read (from a newer version, or made up) leaves {@code s} as it was. */
+	private static void readSafely(Setting<?> s, JsonElement value) {
+		try {
+			s.fromJson(value);
+		} catch (RuntimeException e) {
+			LOG.warn("Skipped a shared value for {} it couldn't read", s.name(), e);
 		}
 	}
 
@@ -355,6 +391,12 @@ public final class ShareManager implements ConfigShares {
 		Set<MyriadId> out = new LinkedHashSet<>(members);
 		out.add(id);
 		return out;
+	}
+
+	/** A name from a share, kept to a length the menu shows (a share comes from anyone). */
+	private static String shortened(String name) {
+		String n = name.strip().replaceAll("\\p{Cntrl}", "");
+		return n.isEmpty() ? "Shared config" : n.length() > 48 ? n.substring(0, 48) : n;
 	}
 
 	/** A new control panel named {@code name}, or {@code name 2}, ... if that's taken. */

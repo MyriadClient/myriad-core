@@ -145,6 +145,10 @@ single key, like Right Shift, bind **Open Menu** there or under Keybindings → 
   per line, a Myriad command (`.toggle esp`), a server command (`/home`), `wait <ticks>`, or chat. Run mode runs them
   once per press; Toggle runs Commands when turned on and Off Commands when turned off. Being modules, they take a
   bind, hold, the launcher and control panels like any other. `.macro [run|new|delete <name>]`.
+- **Sharing**: the **Share** window (or `.share`) turns modules, menu windows, control panels and the theme into a
+  code like `myriad_JS3k4d`. Anyone can look at it on [myriadclient.dev/config/…](https://myriadclient.dev/docs/use/sharing),
+  or take it in: as their own settings, or as a control panel to try without losing theirs. Settings addons mark
+  private (webhooks, coordinates, macro commands) never leave your computer.
 - **Themes**: a theme holds the whole look: gaps, borders (gradient, optional rotation), rounding, blur, shadows,
   inactive dimming and opacity, animation curves and speeds (Hyprland-style), the bar, fonts, and every colour. Pick
   one in the Theme panel and edit it there; edits save into the active theme as you make them.

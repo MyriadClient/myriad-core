@@ -6,7 +6,7 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
-## Unreleased (control-panels branch)
+## 0.4.0 (unreleased)
 
 - **Control panels**: a set of modules switched together by one bind or switch, each with settings the panel
   saves for it (Save in the module's settings in its window). On lays those over the modules' own; off turns off only
@@ -27,6 +27,14 @@ and may change in any release. Addons declare the oldest core they support in `f
   hooks of their own with `Hook.of`. `Match` narrows either to a module, an addon, an anti-cheat profile or a server.
   The Hooks window and `.hooks` (`on|off <name>`, `why <module>`) show what's in effect; the player can turn any off, and
   one that throws is turned off for the session. New API: `dev.myriadclient.api.hook`, `Myriad.hooks()`.
+- **Shared configs**: share modules, whole menu windows, an addon's modules, control panels and the theme as a code
+  (`myriad_JS3k4d`) from the new Share window or `.share`; anyone can view it at `myriadclient.dev/config/<code>` or
+  take it in, as their settings or as a control panel to try (layered over theirs, nothing lost). Settings marked
+  private never leave the client: `Setting.Builder.protect()` for addons (coordinates, file paths and macro commands
+  are protected by default). Keybinds only go in when asked. Shares live on Myriad's new API
+  ([myriad-api](https://github.com/MyriadClient/myriad-api)); a share can be deleted from the computer that made it.
+  New API: `dev.myriadclient.api.share` (`Myriad.shares()`: `builder()`, `publish`, `fetch`, `apply`, `unpublish`),
+  `Http.delete`.
 - **Typed control panel presets**: `ControlPreset.builder(name).module(tunnel, m -> m.set(tunnel.width, 3))` takes your
   own modules and their settings typed; modules of other addons still go in by id.
 - `Notifications.toast(title, message)` builds a notification (`level`, `lasting`, `replacing`, `show`);
