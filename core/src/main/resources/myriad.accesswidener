@@ -11,6 +11,8 @@ accessible field net/minecraft/world/entity/LivingEntity attackStrengthTicker I
 # Replaceable chat lines (Myriad.chat with an id).
 accessible field net/minecraft/client/gui/components/ChatComponent allMessages Ljava/util/List;
 accessible method net/minecraft/client/gui/components/ChatComponent refreshTrimmedMessages ()V
+# The local player's entity flags (the gliding bit), for the glide hold.
+accessible field net/minecraft/world/entity/Entity DATA_SHARED_FLAGS_ID Lnet/minecraft/network/syncher/EntityDataAccessor;
 # Input changes from InputEvent.
 accessible field net/minecraft/client/player/ClientInput moveVector Lnet/minecraft/world/phys/Vec2;
 # The UI renderer writes its own vertex attributes after vanilla writes the position (UiBatch).

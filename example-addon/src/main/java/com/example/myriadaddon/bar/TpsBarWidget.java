@@ -1,10 +1,10 @@
 package com.example.myriadaddon.bar;
 
-import dev.myriad.api.Myriad;
-import dev.myriad.api.render.Canvas;
-import dev.myriad.api.render.FontFamily;
-import dev.myriad.api.ui.BarWidget;
-import dev.myriad.api.util.MyriadId;
+import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.ui.BarWidget;
+import dev.myriadclient.api.util.MyriadId;
 
 /**
  * A widget on the menu's top bar showing the server's TPS from {@code Myriad.server()}, coloured with the theme's

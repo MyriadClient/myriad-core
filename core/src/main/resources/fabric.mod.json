@@ -4,21 +4,20 @@
 	"version": "${version}",
 	"name": "Myriad",
 	"description": "An addon-first utility client with a tiling window manager UI. Ships with no modules of its own: everything plugs in through the Myriad API.",
-	"authors": ["fyzz"],
-	"contributors": ["Myriad contributors"],
+	"authors": ["Myriad"],
 	"license": "CC0-1.0",
 	"contact": {
-		"homepage": "https://github.com/fyzz-dev/myriad",
-		"sources": "https://github.com/fyzz-dev/myriad",
-		"issues": "https://github.com/fyzz-dev/myriad/issues"
+		"homepage": "https://github.com/MyriadClient/myriad-core",
+		"sources": "https://github.com/MyriadClient/myriad-core",
+		"issues": "https://github.com/MyriadClient/myriad-core/issues"
 	},
 	"icon": "assets/myriad/icon.png",
 	"environment": "client",
 	"accessWidener": "myriad.accesswidener",
 	"entrypoints": {
-		"client": ["dev.myriad.impl.MyriadClient"],
-		"myriad": ["dev.myriad.impl.CoreAddon"],
-		"modmenu": ["dev.myriad.impl.compat.ModMenuIntegration"]
+		"client": ["dev.myriadclient.impl.MyriadClient"],
+		"myriad": ["dev.myriadclient.impl.CoreAddon"],
+		"modmenu": ["dev.myriadclient.impl.compat.ModMenuIntegration"]
 	},
 	"mixins": ["myriad.mixins.json"],
 	"depends": {
@@ -26,5 +25,10 @@
 		"minecraft": "~${minecraft_version}",
 		"java": ">=25",
 		"fabric-api": "*"
+	},
+	"breaks": {
+		"myriad-essentials": "<0.3.0",
+		"myriad-boze": "<0.3.0",
+		"myriad-omarchy": "<0.2.0"
 	}
 }

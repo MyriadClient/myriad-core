@@ -1,0 +1,376 @@
+package dev.myriadclient.impl;
+
+import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.MyriadApi;
+import dev.myriadclient.api.addon.Addon;
+import dev.myriadclient.api.command.Command;
+import dev.myriadclient.api.config.ConfigManager;
+import dev.myriadclient.api.event.EventBus;
+import dev.myriadclient.api.module.Category;
+import dev.myriadclient.api.module.ModuleRegistry;
+import dev.myriadclient.api.registry.Registry;
+import dev.myriadclient.api.service.Breaking;
+import dev.myriadclient.api.service.Building;
+import dev.myriadclient.api.service.Containers;
+import dev.myriadclient.api.service.Friends;
+import dev.myriadclient.api.service.Inventory;
+import dev.myriadclient.api.service.KeyAction;
+import dev.myriadclient.api.service.Notifications;
+import dev.myriadclient.api.service.PacketLimits;
+import dev.myriadclient.api.service.Rotations;
+import dev.myriadclient.api.service.Tasks;
+import dev.myriadclient.api.service.TickSpeed;
+import dev.myriadclient.api.setting.Setting;
+import dev.myriadclient.api.setting.SettingColor;
+import dev.myriadclient.api.ui.BarWidget;
+import dev.myriadclient.api.ui.Desktop;
+import dev.myriadclient.api.ui.PanelType;
+import dev.myriadclient.api.ui.Theme;
+import dev.myriadclient.api.ui.layout.Layout;
+import dev.myriadclient.impl.addon.AddonLoader;
+import dev.myriadclient.impl.command.CommandManager;
+import dev.myriadclient.impl.config.ConfigManagerImpl;
+import dev.myriadclient.impl.event.MyriadEventBus;
+import dev.myriadclient.impl.keybind.KeybindManager;
+import dev.myriadclient.impl.service.BreakManager;
+import dev.myriadclient.impl.service.BuildManager;
+import dev.myriadclient.impl.service.ContainerTracker;
+import dev.myriadclient.impl.service.MenuSync;
+import dev.myriadclient.impl.service.FriendsManager;
+import dev.myriadclient.impl.service.InventoryManager;
+import dev.myriadclient.impl.network.BlockAckTracker;
+import dev.myriadclient.impl.service.NotificationManager;
+import dev.myriadclient.impl.service.PacketLimiter;
+import dev.myriadclient.impl.service.RotationManager;
+import dev.myriadclient.impl.service.TaskScheduler;
+import dev.myriadclient.impl.service.TickSpeedManager;
+import dev.myriadclient.impl.ui.WindowManager;
+import dev.myriadclient.impl.update.UpdateManager;
+import dev.myriadclient.impl.ui.panels.ConsoleLog;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.chat.TextColor;
+
+/** Owns every Myriad service and drives startup. */
+public final class MyriadImpl implements MyriadApi {
+	public static final Logger LOG = LoggerFactory.getLogger("Myriad");
+	private static MyriadImpl instance;
+
+	private final Minecraft mc = Minecraft.getInstance();
+	private final MyriadEventBus events = new MyriadEventBus();
+	private final Registry<Category> categories = new Registry<>("category");
+	private final ModuleRegistry modules = new ModuleRegistry();
+	private final Registry<Command> commands = new Registry<>("command");
+	private final Registry<PanelType> panels = new Registry<>("panel");
+	private final Registry<Layout> layouts = new Registry<>("layout");
+	private final Registry<Theme> themes = new Registry<>("theme");
+	private final Registry<BarWidget> barWidgets = new Registry<>("bar widget");
+	private final Registry<KeyAction> keyActions = new Registry<>("key action");
+	private final Registry<dev.myriadclient.api.addon.AddonSettings> addonSettings = new Registry<>("addon settings");
+	private final ConfigManagerImpl config = new ConfigManagerImpl(this);
+	private final NotificationManager notifications = new NotificationManager();
+	private final RotationManager rotations = new RotationManager();
+	private final InventoryManager inventory = new InventoryManager();
+	private final BlockAckTracker blockAcks = new BlockAckTracker();
+	private final PacketLimiter packetLimiter = new PacketLimiter();
+	private final TickSpeedManager tickSpeed = new TickSpeedManager();
+	private final dev.myriadclient.impl.service.AntiCheatTracker antiCheat = new dev.myriadclient.impl.service.AntiCheatTracker();
+	private final dev.myriadclient.impl.service.PlacementManager placement = new dev.myriadclient.impl.service.PlacementManager(blockAcks);
+	private final BreakManager breaking = new BreakManager();
+	private final dev.myriadclient.impl.elytra.ElytraManager elytra = new dev.myriadclient.impl.elytra.ElytraManager();
+	private final BuildManager building = new BuildManager();
+	private final FriendsManager friends = new FriendsManager(config.root());
+	private final dev.myriadclient.impl.service.ServerStatsTracker serverStats = new dev.myriadclient.impl.service.ServerStatsTracker();
+	private final MenuSync menuSync = new MenuSync();
+	private final ContainerTracker containers = new ContainerTracker(menuSync);
+	private final TaskScheduler tasks = new TaskScheduler();
+	private final WindowManager windowManager = new WindowManager();
+	private final CommandManager commandManager = new CommandManager(commands);
+	private final KeybindManager keybindManager = new KeybindManager();
+	private final AddonLoader addonLoader = new AddonLoader(this);
+	private final UpdateManager updates = new UpdateManager(config.root());
+
+	private MyriadImpl() {
+	}
+
+	public static MyriadImpl get() {
+		return instance;
+	}
+
+	/** Creates and installs Myriad, then loads every addon. */
+	public static MyriadImpl bootstrap() {
+		// Addon classes can load before the client exists (e.g. from an early mixin); make sure they see it.
+		net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
+		dev.myriadclient.api.module.Module.bindClient(client);
+		dev.myriadclient.api.ui.Panel.bindClient(client);
+		dev.myriadclient.api.command.Command.bindClient(client);
+		instance = new MyriadImpl();
+		Myriad.install(instance);
+		instance.start();
+		return instance;
+	}
+
+	private void start() {
+		long t0 = System.nanoTime();
+		events.setOwnerResolver(addonLoader::ownerOf);
+		events.setInGameCheck(() -> mc.level != null && mc.player != null);
+		Setting.setGlobalChangeHook(config::markDirty);
+		SettingColor.setPaletteProvider(windowManager.theme()::roleColor);
+		windowManager.setDirtyHook(config::markDirty);
+		modules.onRemove(m -> m.setEnabled(false));
+		// Modules registered after startup (a bridge whose other mod came up later) get their windows when the menu opens.
+		modules.onAdd(m -> windowManager.modulesChanged());
+		modules.onRemove(m -> windowManager.modulesChanged());
+
+		events.subscribe(dev.myriadclient.impl.network.ActionTiming.get());
+		events.subscribe(rotations);
+		events.subscribe(inventory);
+		events.subscribe(placement);
+		events.subscribe(breaking);
+		events.subscribe(building);
+		events.subscribe(blockAcks);
+		events.subscribe(serverStats);
+		events.subscribe(antiCheat);
+		events.subscribe(menuSync);
+		events.subscribe(containers);
+		events.subscribe(tasks);
+		events.subscribe(keybindManager);
+		events.subscribe(commandManager);
+
+		addonLoader.discover();
+		addonLoader.registerCategories();
+		addonLoader.initialize();
+		config.load();
+		addonLoader.postInitialize();
+		updates.start(events);
+		// Registries stay open: an addon that bridges another mod registers once that mod is ready, which may be later.
+
+		LOG.info("Myriad ready: {} addons, {} modules, {} panels, {} commands in {} ms", addonLoader.addons().size(), modules.size(),
+			panels.size(), commands.size(), (System.nanoTime() - t0) / 1_000_000);
+	}
+
+	public List<Registry<?>> registries() {
+		return List.of(categories, modules, commands, panels, layouts, themes, barWidgets, keyActions, addonSettings);
+	}
+
+	public ConfigManagerImpl configImpl() {
+		return config;
+	}
+
+	public WindowManager windowManager() {
+		return windowManager;
+	}
+
+	public CommandManager commandManager() {
+		return commandManager;
+	}
+
+	public UpdateManager updates() {
+		return updates;
+	}
+
+	@Override
+	public EventBus events() {
+		return events;
+	}
+
+	@Override
+	public List<Addon> addons() {
+		return addonLoader.addons();
+	}
+
+	@Override
+	public Registry<Category> categories() {
+		return categories;
+	}
+
+	@Override
+	public ModuleRegistry modules() {
+		return modules;
+	}
+
+	@Override
+	public Registry<Command> commands() {
+		return commands;
+	}
+
+	@Override
+	public Registry<PanelType> panels() {
+		return panels;
+	}
+
+	@Override
+	public Registry<Layout> layouts() {
+		return layouts;
+	}
+
+	@Override
+	public Registry<Theme> themes() {
+		return themes;
+	}
+
+	@Override
+	public Registry<BarWidget> barWidgets() {
+		return barWidgets;
+	}
+
+	@Override
+	public Registry<KeyAction> keyActions() {
+		return keyActions;
+	}
+
+	@Override
+	public ConfigManager config() {
+		return config;
+	}
+
+	@Override
+	public Notifications notifications() {
+		return notifications;
+	}
+
+	@Override
+	public Rotations rotations() {
+		return rotations;
+	}
+
+	@Override
+	public Inventory inventory() {
+		return inventory;
+	}
+
+	@Override
+	public dev.myriadclient.api.service.Placement placement() {
+		return placement;
+	}
+
+	@Override
+	public Friends friends() {
+		return friends;
+	}
+
+	@Override
+	public dev.myriadclient.api.service.ServerStats server() {
+		return serverStats;
+	}
+
+	@Override
+	public Containers containers() {
+		return containers;
+	}
+
+	@Override
+	public dev.myriadclient.api.elytra.Elytra elytra() {
+		return elytra;
+	}
+
+	@Override
+	public Tasks tasks() {
+		return tasks;
+	}
+
+	@Override
+	public Breaking breaking() {
+		return breaking;
+	}
+
+	@Override
+	public Building building() {
+		return building;
+	}
+
+	@Override
+	public PacketLimits limits() {
+		return packetLimiter;
+	}
+
+	@Override
+	public TickSpeed tickSpeed() {
+		return tickSpeed;
+	}
+
+	@Override
+	public dev.myriadclient.api.service.AntiCheat antiCheat() {
+		return antiCheat;
+	}
+
+	public dev.myriadclient.impl.service.ServerStatsTracker serverStatsTracker() {
+		return serverStats;
+	}
+
+	public Registry<dev.myriadclient.api.addon.AddonSettings> addonSettings() {
+		return addonSettings;
+	}
+
+	public BlockAckTracker blockAcks() {
+		return blockAcks;
+	}
+
+	public PacketLimiter packetLimiter() {
+		return packetLimiter;
+	}
+
+	public RotationManager rotationManager() {
+		return rotations;
+	}
+
+	public TickSpeedManager tickSpeedManager() {
+		return tickSpeed;
+	}
+
+	public ContainerTracker containerTracker() {
+		return containers;
+	}
+
+	public MenuSync menuSync() {
+		return menuSync;
+	}
+
+	@Override
+	public Desktop ui() {
+		return windowManager;
+	}
+
+	@Override
+	public void chat(Component message) {
+		ConsoleLog.add(message.getString());
+		if (!mc.isSameThread()) {
+			mc.execute(() -> sendChat(message));
+			return;
+		}
+		sendChat(message);
+	}
+
+	@Override
+	public void runCommand(String line) {
+		String prefix = config.commandPrefix();
+		commandManager.execute(line.startsWith(prefix) ? line.substring(prefix.length()) : line);
+	}
+
+	@Override
+	public void chat(Component message, String id) {
+		ConsoleLog.add(message.getString());
+		if (!mc.isSameThread()) {
+			mc.execute(() -> sendChat(message, id));
+			return;
+		}
+		sendChat(message, id);
+	}
+
+	private void sendChat(Component message) {
+		sendChat(message, null);
+	}
+
+	private void sendChat(Component message, String id) {
+		if (mc.gui == null || mc.player == null) return;
+		int accent = windowManager.theme().accent.get().color() & 0xFFFFFF;
+		MutableComponent line = Component.literal("[Myriad] ").withStyle(s -> s.withColor(TextColor.fromRgb(accent))).append(message);
+		if (id == null) mc.gui.hud.getChat().addClientSystemMessage(line);
+		else ChatLines.add(line, id);
+	}
+}

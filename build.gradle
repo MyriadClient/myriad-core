@@ -58,10 +58,10 @@ subprojects {
 		}
 	}
 
-	// dev.myriad:myriad (with sources and javadoc) for addons. Releases publish it to the public maven at
-	// https://fyzz-dev.github.io/myriad (the `maven` branch, served by GitHub Pages; Essentials' releases publish there too):
-	// `./gradlew publishAllPublicationsToSiteRepository` writes the repository layout to build/maven, which the release
-	// workflow pushes there. `./gradlew publishToMavenLocal` is for building an addon against unreleased changes.
+	// dev.myriadclient:myriad (with sources and javadoc) for addons. Releases publish it to Myriad's maven,
+	// https://maven.myriadclient.dev/releases, with `./gradlew publishAllPublicationsToMyriadRepository` and the
+	// myriadUsername and myriadPassword Gradle properties (the release workflow sets them from secrets).
+	// `./gradlew publishToMavenLocal` is for building an addon against unreleased changes.
 	publishing {
 		publications {
 			create("mavenJava", MavenPublication) {
@@ -70,8 +70,9 @@ subprojects {
 		}
 		repositories {
 			maven {
-				name = "site"
-				url = rootProject.layout.buildDirectory.dir("maven")
+				name = "myriad"
+				url = "https://maven.myriadclient.dev/releases"
+				credentials(PasswordCredentials)
 			}
 		}
 	}
@@ -80,24 +81,24 @@ subprojects {
 	}
 }
 
-// Addons (the example here, Essentials in its own repo) may only use Myriad's public API. dev.myriad.impl is internal and changes without
+// Addons (the example here, Essentials in its own repo) may only use Myriad's public API. dev.myriadclient.impl is internal and changes without
 // notice, so referencing it from an addon fails the build here rather than breaking players' games later.
 configure(subprojects.findAll { it.name != 'core' }) {
 	def sources = fileTree("src/main/java") { include "**/*.java" }
 	def root = rootDir
 	def checkApiOnly = tasks.register("checkApiOnly") {
 		group = "verification"
-		description = "Fails if this addon references Myriad internals (dev.myriad.impl)."
+		description = "Fails if this addon references Myriad internals (dev.myriadclient.impl)."
 		inputs.files(sources)
 		doLast {
 			def bad = []
 			sources.each { f ->
 				f.eachLine { line, n ->
-					if (line.contains("dev.myriad.impl")) bad << "${root.toPath().relativize(f.toPath())}:${n}: ${line.trim()}"
+					if (line.contains("dev.myriadclient.impl")) bad << "${root.toPath().relativize(f.toPath())}:${n}: ${line.trim()}"
 				}
 			}
 			if (!bad.isEmpty()) {
-				throw new GradleException("Addons may only use Myriad's API (dev.myriad.api.*), but these lines reference internals:\n  " + bad.join("\n  "))
+				throw new GradleException("Addons may only use Myriad's API (dev.myriadclient.api.*), but these lines reference internals:\n  " + bad.join("\n  "))
 			}
 		}
 	}

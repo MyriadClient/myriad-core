@@ -1,16 +1,16 @@
 package com.example.myriadaddon.modules;
 
-import dev.myriad.api.event.Subscribe;
-import dev.myriad.api.event.events.Render3DEvent;
-import dev.myriad.api.module.Categories;
-import dev.myriad.api.module.Module;
-import dev.myriad.api.render.Renderer3D;
-import dev.myriad.api.setting.ColorSetting;
-import dev.myriad.api.setting.IntSetting;
-import dev.myriad.api.setting.SettingColor;
-import dev.myriad.api.util.ColorUtil;
-import dev.myriad.api.world.ChunkCache;
-import dev.myriad.api.world.Holes;
+import dev.myriadclient.api.event.Subscribe;
+import dev.myriadclient.api.event.events.Render3DEvent;
+import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.render.Renderer3D;
+import dev.myriadclient.api.setting.ColorSetting;
+import dev.myriadclient.api.setting.IntSetting;
+import dev.myriadclient.api.setting.SettingColor;
+import dev.myriadclient.api.util.ColorUtil;
+import dev.myriadclient.api.world.ChunkCache;
+import dev.myriadclient.api.world.Holes;
 
 import java.util.List;
 

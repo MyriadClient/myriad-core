@@ -1,15 +1,15 @@
 package com.example.myriadaddon.modules;
 
-import dev.myriad.api.Myriad;
-import dev.myriad.api.event.Subscribe;
-import dev.myriad.api.event.events.BlockBreakEvent;
-import dev.myriad.api.event.events.TickEvent;
-import dev.myriad.api.module.Categories;
-import dev.myriad.api.module.Module;
-import dev.myriad.api.setting.BoolSetting;
-import dev.myriad.api.setting.IntSetting;
-import dev.myriad.api.util.Mining;
-import dev.myriad.api.util.MyriadId;
+import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.event.Subscribe;
+import dev.myriadclient.api.event.events.BlockBreakEvent;
+import dev.myriadclient.api.event.events.TickEvent;
+import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.setting.BoolSetting;
+import dev.myriadclient.api.setting.IntSetting;
+import dev.myriadclient.api.util.Mining;
+import dev.myriadclient.api.util.MyriadId;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 

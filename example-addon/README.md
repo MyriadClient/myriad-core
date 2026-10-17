@@ -1,7 +1,7 @@
 # Myriad example addon
 
 A small but complete addon, written as a reference for the Myriad API. It's meant to be read: every file explains
-the pattern it shows. To start your own addon, use the [myriad-addon-template](https://github.com/fyzz-dev/myriad-addon-template) repository instead, and come back
+the pattern it shows. To start your own addon, use the [myriad-addon-template](https://github.com/MyriadClient/myriad-addon-template) repository instead, and come back
 here to see how things are done.
 
 Start at [`ExampleAddon.java`](src/main/java/com/example/myriadaddon/ExampleAddon.java), which registers everything in

@@ -2,16 +2,16 @@ package com.example.myriadaddon.panels;
 
 import com.example.myriadaddon.waypoints.Waypoint;
 import com.example.myriadaddon.waypoints.WaypointStore;
-import dev.myriad.api.Myriad;
-import dev.myriad.api.ui.WidgetPanel;
-import dev.myriad.api.ui.widget.Button;
-import dev.myriad.api.ui.widget.Collapsible;
-import dev.myriad.api.ui.widget.HBox;
-import dev.myriad.api.ui.widget.Label;
-import dev.myriad.api.ui.widget.TextField;
-import dev.myriad.api.ui.widget.Toggle;
-import dev.myriad.api.ui.widget.VBox;
-import dev.myriad.api.util.Format;
+import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.ui.WidgetPanel;
+import dev.myriadclient.api.ui.widget.Button;
+import dev.myriadclient.api.ui.widget.Collapsible;
+import dev.myriadclient.api.ui.widget.HBox;
+import dev.myriadclient.api.ui.widget.Label;
+import dev.myriadclient.api.ui.widget.TextField;
+import dev.myriadclient.api.ui.widget.Toggle;
+import dev.myriadclient.api.ui.widget.VBox;
+import dev.myriadclient.api.util.Format;
 
 import java.util.List;
 import java.util.Objects;

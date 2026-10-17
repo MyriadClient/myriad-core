@@ -2,10 +2,10 @@ package com.example.myriadaddon.hud;
 
 import com.example.myriadaddon.waypoints.Waypoint;
 import com.example.myriadaddon.waypoints.WaypointStore;
-import dev.myriad.api.setting.BoolSetting;
-import dev.myriad.api.ui.hud.HudStyle;
-import dev.myriad.api.ui.hud.TextHudPanel;
-import dev.myriad.api.util.Format;
+import dev.myriadclient.api.setting.BoolSetting;
+import dev.myriadclient.api.ui.hud.HudStyle;
+import dev.myriadclient.api.ui.hud.TextHudPanel;
+import dev.myriadclient.api.util.Format;
 import java.util.Optional;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;

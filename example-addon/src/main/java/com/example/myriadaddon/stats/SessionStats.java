@@ -1,9 +1,9 @@
 package com.example.myriadaddon.stats;
 
-import dev.myriad.api.event.Subscribe;
-import dev.myriad.api.event.events.ScreenOpenEvent;
-import dev.myriad.api.event.events.TickEvent;
-import dev.myriad.api.event.events.WorldEvent;
+import dev.myriadclient.api.event.Subscribe;
+import dev.myriadclient.api.event.events.ScreenOpenEvent;
+import dev.myriadclient.api.event.events.TickEvent;
+import dev.myriadclient.api.event.events.WorldEvent;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.DeathScreen;
 import net.minecraft.world.phys.Vec3;

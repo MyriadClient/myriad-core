@@ -1,6 +1,6 @@
 # Builds a tagged version, attaches the core jar (with sources and javadoc) to a GitHub release, and publishes it to
-# the public maven: the `maven` branch, served by GitHub Pages at https://fyzz-dev.github.io/myriad. Essentials and
-# the other addons release from their own repositories; the example addon is a code sample and isn't released. Tag with the version in gradle.properties: `git tag v0.1.0 && git push --tags`.
+# Myriad's maven, https://maven.myriadclient.dev/releases, with the MAVEN_USERNAME and MAVEN_PASSWORD secrets (a maven
+# token allowed to write dev/myriadclient). Essentials and the other addons release from their own repositories; the example addon is a code sample and isn't released. Tag with the version in gradle.properties: `git tag v0.1.0 && git push --tags`.
 # Finally it asks Coolify to rebuild the website, so its download button shows the new version; that step is skipped
 # until the WEBSITE_DEPLOY_HOOK secret (the resource's deploy webhook URL) is set, with COOLIFY_TOKEN if the hook needs one.
 
@@ -32,7 +32,7 @@ jobs:
           version=$(grep '^version=' gradle.properties | cut -d= -f2)
           [ "v$version" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} but gradle.properties says $version"; exit 1; }
       - name: build and test
-        run: ./gradlew build :core:javadocJar
+        run: ./gradlew build :core:javadocJar -PnoEssentials
       - name: release notes from the changelog
         run: |
           version=${GITHUB_REF_NAME#v}
@@ -43,16 +43,11 @@ jobs:
         with:
           body_path: notes.md
           files: core/build/libs/*.jar
-      - name: publish to the maven branch
-        run: |
-          ./gradlew publishAllPublicationsToSiteRepository
-          git fetch origin maven
-          git worktree add maven-branch origin/maven
-          cp -r build/maven/. maven-branch/
-          cd maven-branch
-          git add -A
-          git -c user.name=github-actions -c user.email=github-actions@github.com commit -m "Publish ${GITHUB_REF_NAME#v}"
-          git push origin HEAD:maven
+      - name: publish to Myriad's maven
+        env:
+          ORG_GRADLE_PROJECT_myriadUsername: ${{ secrets.MAVEN_USERNAME }}
+          ORG_GRADLE_PROJECT_myriadPassword: ${{ secrets.MAVEN_PASSWORD }}
+        run: ./gradlew publishAllPublicationsToMyriadRepository -PnoEssentials
       - name: rebuild the website
         env:
           HOOK: ${{ secrets.WEBSITE_DEPLOY_HOOK }}

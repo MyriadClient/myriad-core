@@ -3,7 +3,7 @@ package com.example.myriadaddon.waypoints;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import dev.myriad.api.addon.AddonStorage;
+import dev.myriadclient.api.addon.AddonStorage;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;

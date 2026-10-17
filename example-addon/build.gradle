@@ -4,20 +4,24 @@ base {
 
 repositories {
 	// Essentials for the dev runtime comes from Myriad's maven.
-	maven {
-		name = "Myriad"
-		url = "https://fyzz-dev.github.io/myriad"
+	exclusiveContent {
+		forRepositories(maven {
+			name = "Myriad"
+			url = "https://maven.myriadclient.dev/releases"
+		})
+		filter { includeGroup "dev.myriadclient" }
 	}
 }
 
 dependencies {
 	implementation project(":core")
 	// Only so `:example-addon:runClient` also boots the stock modules; the addon does not depend on them. With
-	// -PessentialsDir=../myriad-essentials the jar built in that checkout is used instead of the released one.
+	// -PessentialsDir=../myriad-essentials the jar built in that checkout is used instead of the released one, and
+	// -PnoEssentials leaves it out (CI: core is released before the Essentials built on it).
 	if (project.hasProperty("essentialsDir")) {
 		localRuntime fileTree(dir: "${project.essentialsDir}/build/libs", include: "myriad-essentials-*.jar", exclude: ["*-sources.jar"])
-	} else {
-		localRuntime "dev.myriad:myriad-essentials:${rootProject.essentials_version}"
+	} else if (!project.hasProperty("noEssentials")) {
+		localRuntime "dev.myriadclient:myriad-essentials:${rootProject.essentials_version}"
 	}
 }
 

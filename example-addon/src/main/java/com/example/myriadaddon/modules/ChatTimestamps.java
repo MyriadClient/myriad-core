@@ -1,11 +1,11 @@
 package com.example.myriadaddon.modules;
 
-import dev.myriad.api.module.Categories;
-import dev.myriad.api.module.Module;
-import dev.myriad.api.module.Modules;
-import dev.myriad.api.setting.ColorSetting;
-import dev.myriad.api.setting.EnumSetting;
-import dev.myriad.api.setting.SettingColor;
+import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.Modules;
+import dev.myriadclient.api.setting.ColorSetting;
+import dev.myriadclient.api.setting.EnumSetting;
+import dev.myriadclient.api.setting.SettingColor;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import net.minecraft.network.chat.Component;

@@ -1,10 +1,10 @@
 package com.example.myriadaddon.hud;
 
 import com.example.myriadaddon.stats.SessionStats;
-import dev.myriad.api.setting.BoolSetting;
-import dev.myriad.api.ui.hud.HudStyle;
-import dev.myriad.api.ui.hud.TextHudPanel;
-import dev.myriad.api.util.Format;
+import dev.myriadclient.api.setting.BoolSetting;
+import dev.myriadclient.api.ui.hud.HudStyle;
+import dev.myriadclient.api.ui.hud.TextHudPanel;
+import dev.myriadclient.api.util.Format;
 
 /**
  * A HUD element built on {@link TextHudPanel}: it only supplies lines. Sizing, right-alignment when placed on the

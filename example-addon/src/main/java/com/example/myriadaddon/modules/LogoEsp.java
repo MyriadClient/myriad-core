@@ -1,14 +1,14 @@
 package com.example.myriadaddon.modules;
 
 import com.example.myriadaddon.ExampleAddon;
-import dev.myriad.api.event.Subscribe;
-import dev.myriad.api.event.events.HighlightEvent;
-import dev.myriad.api.module.Categories;
-import dev.myriad.api.module.Module;
-import dev.myriad.api.render.HighlightStyle;
-import dev.myriad.api.setting.ColorSetting;
-import dev.myriad.api.setting.DoubleSetting;
-import dev.myriad.api.setting.SettingColor;
+import dev.myriadclient.api.event.Subscribe;
+import dev.myriadclient.api.event.events.HighlightEvent;
+import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.render.HighlightStyle;
+import dev.myriadclient.api.setting.ColorSetting;
+import dev.myriadclient.api.setting.DoubleSetting;
+import dev.myriadclient.api.setting.SettingColor;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 

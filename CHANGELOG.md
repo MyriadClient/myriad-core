@@ -1,10 +1,34 @@
 # Changelog
 
-Myriad follows [semantic versioning](https://semver.org) for the public API (`dev.myriad.api`): while the major
+Myriad follows [semantic versioning](https://semver.org) for the public API (`dev.myriadclient.api`): while the major
 version is 0, a **minor** release may change the API, and anything removed is deprecated for at least one minor
-release first with its replacement in the javadoc; a **patch** release never changes it. `dev.myriad.impl` is internal
+release first with its replacement in the javadoc; a **patch** release never changes it. `dev.myriadclient.impl` is internal
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
+
+## 0.3.0
+
+The packages and the maven coordinates move to `dev.myriadclient`, after Myriad's domain. Nothing else changes, but
+every addon has to be rebuilt: the one exception to deprecating before removing.
+
+- Packages: `dev.myriad.api` is now `dev.myriadclient.api` (and `dev.myriad.impl` is `dev.myriadclient.impl`). In an
+  addon, replace `dev.myriad.` with `dev.myriadclient.` in imports and in the mixin config's `"plugin"`.
+- Maven: `dev.myriadclient:myriad` and `dev.myriadclient:myriad-essentials`, on Myriad's own maven at
+  `https://maven.myriadclient.dev/releases` (the old GitHub Pages maven isn't updated any more). The template's
+  `build.gradle` declares it as the only source of `dev.myriadclient`, so nothing of that name can come from anywhere else.
+- **Elytra flight in core**: `Myriad.elytra()` (package `dev.myriadclient.api.elytra`) with No Durability, chest
+  swaps, the glide hold and pilots, and `GlideEvent` for the glide's movement. Every flight module now shares one engine
+  and one set of hooks: before, Essentials and Stash Hunter each carried a copy (about 1,400 lines and five mixins), and
+  two of them would have held back the same pings. A pilot that `steers` moves the local player by the rotation sent to
+  the server (glide, walking, jumps) while the camera stays free, and setbacks no longer turn the camera to it.
+- `BlockRenderEvent.reloadChunks()` meshes every chunk again the way 26.2 wants it (F3+A's path), with vanilla and
+  Sodium alike. The old advice, `mc.levelRenderer.allChanged()`, no longer exists, and calling the renderer directly
+  left the terrain undrawn.
+- Removed what was only there for older versions: `Registry.freeze()` and `isFrozen()` (deprecated since 0.1.0), the
+  updater's special case for Essentials 0.1.0 (which named core's repository), and two settings migrations from before
+  the first release (the Open Desktop bind, themes saved per profile).
+- Core refuses to start next to the addons built for 0.2 (Essentials before 0.3.0, Boze before 0.3.0, Omarchy before
+  0.2.0) with Fabric's error naming them, instead of crashing; update them together.
 
 ## 0.2.12
 
@@ -282,7 +306,7 @@ Fixes and the repository split; no API changes.
 
 - Dwindle is the default layout for the first workspace too (it already was for the others); the first-run desktop
   splits the largest window each time, so the stock windows come up as a grid rather than ever thinner slivers.
-- Essentials has moved to its own repository, [myriad-essentials](https://github.com/fyzz-dev/myriad-essentials),
+- Essentials has moved to its own repository, [myriad-essentials](https://github.com/MyriadClient/myriad-essentials),
   with its own versions and releases; the Grim test server and suite went with it. This repository is core and the
   example addon, and `example-addon/` is a code sample now: it still builds and runs, but isn't released.
 - Desktop shortcuts (`mod+1`, `mod+K`, `mod+W`, ...) work while the console window is focused; it only keeps the keys
@@ -301,7 +325,7 @@ Everything below is in the README's *Writing an addon* section.
 
 ### Boze bridge
 
-- [myriad-boze](https://github.com/fyzz-dev/myriad-boze), a separate addon: every module of the Boze client in
+- [myriad-boze](https://github.com/MyriadClient/myriad-boze), a separate addon: every module of the Boze client in
   Myriad's menu, in the shared categories, with settings, keybinds and on/off state in sync both ways. Boze keeps its
   config and handles the keys. The API changes below are for it.
 

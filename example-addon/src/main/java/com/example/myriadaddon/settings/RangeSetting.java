@@ -2,7 +2,7 @@ package com.example.myriadaddon.settings;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import dev.myriad.api.setting.Setting;
+import dev.myriadclient.api.setting.Setting;
 
 import java.util.function.Supplier;
 

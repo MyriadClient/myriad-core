@@ -30,13 +30,13 @@ test {
 	}
 }
 
-// The published javadoc is the API addons build on (dev.myriad.api); the internals aren't part of it.
+// The published javadoc is the API addons build on (dev.myriadclient.api); the internals aren't part of it.
 java {
 	withJavadocJar()
 }
 
 javadoc {
-	include 'dev/myriad/api/**'
+	include 'dev/myriadclient/api/**'
 	options.addStringOption('Xdoclint:all,-missing', '-quiet')
 	options.addStringOption('encoding', 'UTF-8')
 }

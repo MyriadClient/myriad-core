@@ -3,8 +3,8 @@
 <p align="center">An addon-first utility client for Minecraft 26.2, with a menu that works like a tiling window manager.</p>
 <p align="center"><a href="https://myriadclient.dev/"><b>myriadclient.dev</b></a></p>
 <p align="center">
-  <a href="https://github.com/fyzz-dev/myriad/releases"><img src="https://img.shields.io/github/v/release/fyzz-dev/myriad?label=release" alt="Release"></a>
-  <a href="https://github.com/fyzz-dev/myriad/actions/workflows/build.yml"><img src="https://github.com/fyzz-dev/myriad/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/MyriadClient/myriad-core/releases"><img src="https://img.shields.io/github/v/release/MyriadClient/myriad-core?label=release" alt="Release"></a>
+  <a href="https://github.com/MyriadClient/myriad-core/actions/workflows/build.yml"><img src="https://github.com/MyriadClient/myriad-core/actions/workflows/build.yml/badge.svg" alt="Build"></a>
   <img src="https://img.shields.io/badge/Minecraft-26.2-5c9e4f" alt="Minecraft 26.2">
   <img src="https://img.shields.io/badge/Fabric-Mojang%20names-8e6fd6" alt="Fabric, Mojang names">
   <img src="https://img.shields.io/badge/license-CC0-3b7dd8" alt="CC0">
@@ -33,8 +33,8 @@ against the public API, so the client is whatever addons you put next to it.
 ## Install
 
 1. [Fabric Loader](https://fabricmc.net/use/) for Minecraft 26.2, and [Fabric API](https://modrinth.com/mod/fabric-api).
-2. Put `myriad-<v>.jar` from the [latest release](https://github.com/fyzz-dev/myriad/releases/latest) in `mods/`,
-   with `myriad-essentials-<v>.jar` from [its releases](https://github.com/fyzz-dev/myriad-essentials/releases/latest)
+2. Put `myriad-<v>.jar` from the [latest release](https://github.com/MyriadClient/myriad-core/releases/latest) in `mods/`,
+   with `myriad-essentials-<v>.jar` from [its releases](https://github.com/MyriadClient/myriad-essentials/releases/latest)
    and any other addons.
 3. In game, press **Right Shift**.
 
@@ -51,11 +51,11 @@ the Addons window.
 
 | Addon | What it adds | Where |
 |---|---|---|
-| **Myriad Essentials** | The stock modules: Offhand, Kill Aura, Elytra Fly, Packet Mine, Scaffold, ESP, Nametags and the rest, with the HUD elements. Built like any other addon, on the public API, versioned on its own; remove it and Myriad boots with an empty module list. | [fyzz-dev/myriad-essentials](https://github.com/fyzz-dev/myriad-essentials) |
-| **Myriad Boze** | Every module of the [Boze](https://boze.dev) client in Myriad's menu, with Boze installed alongside: Boze's modules appear in the shared categories (*Combat · Boze*) with their settings, keybinds and on/off state in sync both ways, and the two friend lists kept the same. Boze stays the owner of its config and keys; Myriad is a second front end. | [fyzz-dev/myriad-boze](https://github.com/fyzz-dev/myriad-boze) |
-| **Myriad Omarchy** | A theme that follows your [Omarchy](https://omarchy.org) system theme: switch themes on the desktop and the menu follows. | [fyzz-dev/myriad-omarchy](https://github.com/fyzz-dev/myriad-omarchy) |
+| **Myriad Essentials** | The stock modules: Offhand, Kill Aura, Elytra Fly, Packet Mine, Scaffold, ESP, Nametags and the rest, with the HUD elements. Built like any other addon, on the public API, versioned on its own; remove it and Myriad boots with an empty module list. | [MyriadClient/myriad-essentials](https://github.com/MyriadClient/myriad-essentials) |
+| **Myriad Boze** | Every module of the [Boze](https://boze.dev) client in Myriad's menu, with Boze installed alongside: Boze's modules appear in the shared categories (*Combat · Boze*) with their settings, keybinds and on/off state in sync both ways, and the two friend lists kept the same. Boze stays the owner of its config and keys; Myriad is a second front end. | [MyriadClient/myriad-boze](https://github.com/MyriadClient/myriad-boze) |
+| **Myriad Omarchy** | A theme that follows your [Omarchy](https://omarchy.org) system theme: switch themes on the desktop and the menu follows. | [MyriadClient/myriad-omarchy](https://github.com/MyriadClient/myriad-omarchy) |
 
-For writing your own: [myriad-addon-template](https://github.com/fyzz-dev/myriad-addon-template) to start from and
+For writing your own: [myriad-addon-template](https://github.com/MyriadClient/myriad-addon-template) to start from and
 [`example-addon/`](example-addon) to read. See [Writing an addon](#writing-an-addon).
 
 ## A look around
@@ -85,7 +85,7 @@ Requires JDK 25+.
 ./gradlew :example-addon:runClient -PquickPlay="New World"   # …or load straight into a singleplayer world
 ./gradlew :example-addon:runClient -PscreenshotEvery=10   # …saving a screenshot every 10 s (run/screenshots)
 ./gradlew :example-addon:runClient -PquickPlayServer=localhost:25565 -Pusername=GrimTester   # …or join a server
-./gradlew publishToMavenLocal            # dev.myriad:myriad in ~/.m2, to build an addon against unreleased changes
+./gradlew publishToMavenLocal            # dev.myriadclient:myriad in ~/.m2, to build an addon against unreleased changes
 ```
 
 ```
@@ -93,12 +93,12 @@ core/           mod id "myriad"             the platform: API, event bus, config
 example-addon/  mod id "myriad-example"     the reference addon: a complete feature set, written to be read (not released)
 ```
 
-The stock modules live in [myriad-essentials](https://github.com/fyzz-dev/myriad-essentials), with the Grim test
+The stock modules live in [myriad-essentials](https://github.com/MyriadClient/myriad-essentials), with the Grim test
 server and suite that check them against 2b2t's anti-cheat. The dev client takes script steps from
 `run/myriad-dev-inbox` (commands, movement, the menu, screenshots); the README's pictures are taken that way.
 
 Releases are tagged: `git tag v0.1.0 && git push origin v0.1.0` builds, tests, attaches the core jar to a GitHub
-release and publishes it to the maven at `https://fyzz-dev.github.io/myriad`. Essentials and the other addons
+release and publishes it to the maven at `https://maven.myriadclient.dev/releases`. Essentials and the other addons
 release from their own repositories, to the same maven.
 
 ## The menu
@@ -172,7 +172,7 @@ Every binding can be changed in the Keybinds panel.
 
 ## Essentials
 
-The stock modules are the [myriad-essentials](https://github.com/fyzz-dev/myriad-essentials) addon, released on its
+The stock modules are the [myriad-essentials](https://github.com/MyriadClient/myriad-essentials) addon, released on its
 own. In the standard categories (each module's settings explain its options):
 
 | | |
@@ -237,7 +237,7 @@ Updating Myriad or an addon, or going back to an older version, loses nothing:
 
 An addon is an ordinary Fabric mod with a `myriad` entrypoint. Two projects get you going:
 
-- [**myriad-addon-template**](https://github.com/fyzz-dev/myriad-addon-template) is the project to start from: a module, a mixin-driven module and
+- [**myriad-addon-template**](https://github.com/MyriadClient/myriad-addon-template) is the project to start from: a module, a mixin-driven module and
   a HUD element, wired up and building.
 - [`example-addon/`](example-addon) is the reference. It's a complete feature set (waypoints with a module, command,
   window, HUD element and versioned saved data, plus Auto Tool, Tunnel, Block Search, Trajectories, Hole ESP, Chat
@@ -251,15 +251,15 @@ An addon is an ordinary Fabric mod with a `myriad` entrypoint. Two projects get 
 2. `./gradlew runClient` starts the game with Myriad, Essentials and your addon, with the menu open.
    `./gradlew build` puts your jar in `build/libs/`.
 
-Released versions of `dev.myriad:myriad` (with sources and javadoc) and `dev.myriad:myriad-essentials` are on
-Myriad's maven, `https://fyzz-dev.github.io/myriad`, which the template's `build.gradle` already uses. Myriad is
+Released versions of `dev.myriadclient:myriad` (with sources and javadoc) and `dev.myriadclient:myriad-essentials` are on
+Myriad's maven, `https://maven.myriadclient.dev/releases`, which the template's `build.gradle` already uses. Myriad is
 `implementation`; Essentials is on the dev runtime only (`localRuntime`), so you can test next to the stock modules
 without depending on them. To build against changes that aren't released yet, run `./gradlew publishToMavenLocal`
-in this repository and add `mavenLocal()` to your repositories.
+in this repository and add `mavenLocal()` to the Myriad repository's `forRepositories(...)`.
 `fabric.mod.json` declares `"entrypoints": { "myriad": [...] }` and `"depends": { "myriad": ">=0.1.0" }`.
 
-`example-addon` here and Essentials in its repository are built the same way and may only use `dev.myriad.api`:
-the build fails if either references `dev.myriad.impl` (`./gradlew checkApiOnly`).
+`example-addon` here and Essentials in its repository are built the same way and may only use `dev.myriadclient.api`:
+the build fails if either references `dev.myriadclient.impl` (`./gradlew checkApiOnly`).
 
 ### The entrypoint
 
@@ -286,7 +286,7 @@ Registering later is allowed too, for an addon that bridges another mod and has 
 modules registered after startup the next time it opens. Such modules missed the config load, so they should mirror
 state kept elsewhere: a module whose `isMirror()` returns true is neither saved with the profile nor toggled on its
 keybind by Myriad (the other mod handles its key); `setEnabledSilently` follows the other side without chat feedback.
-[myriad-boze](https://github.com/fyzz-dev/myriad-boze) is one.
+[myriad-boze](https://github.com/MyriadClient/myriad-boze) is one.
 
 ### Conventions
 
@@ -311,7 +311,7 @@ Following these keeps addons consistent with each other and with the stock modul
   Essentials' `tools/grim-test/` checks a module against Grim.
 - **Mixins** stay thin. Put the logic in a static method on the module that starts with `Modules.active(...)`, and
   have the mixin call it. Prefix handler names with your mod id. Prefer an event over a mixin when one exists. For
-  hooks into other mods (Sodium, Iris), set `"plugin": "dev.myriad.api.mixin.CompatMixinPlugin"` in your mixin config
+  hooks into other mods (Sodium, Iris), set `"plugin": "dev.myriadclient.api.mixin.CompatMixinPlugin"` in your mixin config
   and put them under a `compat.<mod id>` package.
 - **Don't depend on Essentials.** Players can remove it. Everything general it used to keep to itself is in the
   core API now (below).
@@ -326,7 +326,7 @@ Following these keeps addons consistent with each other and with the stock modul
 
 An addon built against one version of Myriad keeps working on the next. What that takes from Myriad, and from you:
 
-- **`dev.myriad.api` is the contract.** Everything else (`dev.myriad.impl`) is internal: addons in this repository
+- **`dev.myriadclient.api` is the contract.** Everything else (`dev.myriadclient.impl`) is internal: addons in this repository
   fail the build if they touch it, and a test fails the build if any public API signature exposes it.
 - **Services change underneath, not at the surface.** How `placement()` clicks or `breaking()` times a break can change
   in any release to keep up with servers and anti-cheats; the calls you make stay the same.
@@ -428,6 +428,7 @@ Shared services keep addons from fighting over the same state:
 | `Myriad.breaking()` | breaking blocks for any number of modules: `breakBlock(owner, pos, priority, options)` queues by priority and returns an `Attempt` (asking again returns the same one). Picks and holds the fastest tool server-side, batches instant breaks by tool, shows the crack, rotates if asked, and settles from the server's answer. `Mode.VANILLA` mines like the attack button (strict servers); `Mode.PACKET` finishes the moment the server allows (70% of the time), re-breaks a block put back where the last one was instantly, and with `doubleBreak` mines a second block while the server finishes the first. Placements and breaks see each other's pending positions |
 | `Myriad.building()` | the planner: describe a shape as a `Blueprint` (`box`, `of(map)`, `dynamic(...)`) of `Target`s (`air()`, `solid()`, `anyOf(...)`, `state(...)` for orientation), and it breaks and places what's in reach each tick in a working order (top-down breaks, bottom-up placements, materials into the hotbar, oriented blocks clicked so they face the right way). `Build.steps()` says what's happening at each position or why it's stuck (`NO_ITEM`, `FLUID`, `WRONG_ANGLE`, ...); `keepUp` maintains the shape (surround) |
 | `Myriad.containers()` | `open(pos, timeout)` a chest/barrel/shulker and get a `View` once its contents arrive: `find`, `count`, `quickMove`, `swapWithHotbar`, `drop`, `close` |
+| `Myriad.elytra()` | elytra flight shared by every flight module: `noDurability(owner)` (glide without wearing the elytra: chestplate swaps where Grim simulates the glide, glide breaks elsewhere, and a catch for a glide dropped in mid-air), `chestSwap()`, `glideHold()` (ride out a moment the server stops the glide), and `addPilot` for a module flying by its own rotation (`steers`) or holding the glide open (`holdsGlide`); `GlideEvent` replaces the glide's movement |
 | `Myriad.tasks()` | work over ticks: `later`, `every`, and `sequence` (run / wait / waitUntil / `await` a future / `require` a condition, with timeouts, `retry(n)` and `onFail`). A module's tasks are cancelled when it's disabled |
 | `Myriad.limits()` | the shared packet budget for block actions, interactions and inventory clicks; `placement()` and `inventory()` respect it, `urgent(...)` skips it for must-happen actions (totems) |
 | `Myriad.antiCheat()` | the player's anti-cheat profile (Auto, Grim, Vanilla) and what Auto detected; the services' `forServer()` presets and `inventory().safeToClick()` follow it |
@@ -439,7 +440,7 @@ Shared services keep addons from fighting over the same state:
 | `Myriad.ui().confirm(...)` | a yes/no dialog |
 | `ctx.storage()` | your addon's own folder: atomic JSON reads and writes with backups, and versioned data that upgrades itself (`writeJson(name, json, version)`, `readJson(name, version, upgrade)`) |
 
-Helpers, so addons don't each re-derive them (`dev.myriad.api.*`):
+Helpers, so addons don't each re-derive them (`dev.myriadclient.api.*`):
 
 | | |
 |---|---|
