@@ -2,12 +2,14 @@ package dev.myriadclient.impl.ui.panels;
 
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.impl.control.ControlPanelImpl;
 
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -18,8 +20,8 @@ import java.util.Set;
 final class ControlMemberEntry extends ModuleEntry {
 	private final ControlPanelImpl control;
 
-	ControlMemberEntry(Module module, Set<Module> expanded, ControlPanelImpl control) {
-		super(module, expanded);
+	ControlMemberEntry(Module module, Set<Module> expanded, Map<SettingGroup, Boolean> groupsOpen, ControlPanelImpl control) {
+		super(module, expanded, groupsOpen);
 		this.control = control;
 	}
 

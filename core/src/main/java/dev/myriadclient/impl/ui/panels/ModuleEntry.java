@@ -3,11 +3,12 @@ package dev.myriadclient.impl.ui.panels;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.widget.Label;
-import dev.myriadclient.api.ui.widget.SettingsView;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.ui.widget.Widget;
 
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -17,12 +18,15 @@ import java.util.Set;
 class ModuleEntry extends CardEntry {
 	protected final Module module;
 	private final Set<Module> expandedSet;
+	/** Which of its settings groups are open in this window (another window showing the module folds them on its own). */
+	private final Map<SettingGroup, Boolean> groupsOpen;
 	private final String source;
 
-	ModuleEntry(Module module, Set<Module> expandedSet) {
+	ModuleEntry(Module module, Set<Module> expandedSet, Map<SettingGroup, Boolean> groupsOpen) {
 		super(module.isEnabled(), expandedSet.contains(module));
 		this.module = module;
 		this.expandedSet = expandedSet;
+		this.groupsOpen = groupsOpen;
 		this.source = AddonNames.of(module);
 		this.tooltip = tooltipText();
 	}
@@ -56,7 +60,7 @@ class ModuleEntry extends CardEntry {
 	@Override
 	protected void buildBody(VBox body) {
 		body.add(new Info());
-		body.add(SettingsView.build(module.settings));
+		body.add(FoldedSettings.build(module.settings, groupsOpen));
 	}
 
 	@Override

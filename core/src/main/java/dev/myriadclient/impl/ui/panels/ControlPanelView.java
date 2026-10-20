@@ -2,6 +2,7 @@ package dev.myriadclient.impl.ui.panels;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.TitleControl;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.Window;
@@ -15,8 +16,10 @@ import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.control.ControlPanelImpl;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -27,6 +30,8 @@ import java.util.Set;
 final class ControlPanelView extends WidgetPanel {
 	private final ControlPanelImpl control;
 	private final Set<Module> unfolded = new HashSet<>();
+	/** Which of the modules' settings groups are open in this window (others showing them fold them on their own). */
+	private final Map<SettingGroup, Boolean> groupsOpen = new HashMap<>();
 	private final List<TitleControl> titleControls;
 	private boolean editing;
 	/** The modules last built, to rebuild when they change. */
@@ -98,7 +103,7 @@ final class ControlPanelView extends WidgetPanel {
 		built = Set.copyOf(control.members.get());
 		List<Module> modules = control.modules();
 		if (modules.isEmpty()) content.add(new Label("No modules yet: pick some under Settings below.").dim());
-		for (Module m : modules) content.add(new ControlMemberEntry(m, unfolded, control));
+		for (Module m : modules) content.add(new ControlMemberEntry(m, unfolded, groupsOpen, control));
 
 		content.add(settingsSection());
 	}

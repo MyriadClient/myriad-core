@@ -7,6 +7,7 @@ import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.Window;
 import dev.myriadclient.api.ui.widget.Collapsible;
@@ -39,6 +40,8 @@ public final class ModulesPanel extends WidgetPanel {
 	private final Map<String, Boolean> expanded = new HashMap<>();
 	/** Modules whose settings are unfolded. */
 	private final Set<Module> unfolded = new HashSet<>();
+	/** Which settings groups are open, for the modules shown here (each window folds them on its own). */
+	private final Map<SettingGroup, Boolean> groupsOpen = new HashMap<>();
 
 	public ModulesPanel(List<ModuleGroup> groups) {
 		this.groups = groups == null ? null : List.copyOf(groups);
@@ -102,7 +105,7 @@ public final class ModulesPanel extends WidgetPanel {
 		List<ModuleGroup> shown = new ArrayList<>();
 		for (ModuleGroup g : groups) if (!g.modules().isEmpty()) shown.add(g);
 		if (shown.size() == 1) {
-			for (Module m : shown.getFirst().modules()) content.add(new ModuleEntry(m, unfolded));
+			for (Module m : shown.getFirst().modules()) content.add(new ModuleEntry(m, unfolded, groupsOpen));
 			return;
 		}
 		// Merged: a section per group. The category is only worth repeating when the window mixes categories.
@@ -110,7 +113,7 @@ public final class ModulesPanel extends WidgetPanel {
 		for (ModuleGroup g : shown) {
 			List<Module> modules = g.modules();
 			VBox body = new VBox(2, 0);
-			for (Module m : modules) body.add(new ModuleEntry(m, unfolded));
+			for (Module m : modules) body.add(new ModuleEntry(m, unfolded, groupsOpen));
 			String name = mixed ? g.category().icon() + "  " + g.category().name() + " · " + g.addonName() : g.addonName();
 			content.add(new GroupSection(g, () -> name + "  " + modules.stream().filter(Module::isEnabled).count() + "/" + modules.size(), body));
 		}
@@ -127,7 +130,7 @@ public final class ModulesPanel extends WidgetPanel {
 			List<Module> modules = Myriad.modules().inCategory(category);
 			if (modules.isEmpty()) continue;
 			VBox body = new VBox(2, 0);
-			for (Module m : modules) body.add(new ModuleEntry(m, unfolded)).visible(() -> matches(m));
+			for (Module m : modules) body.add(new ModuleEntry(m, unfolded, groupsOpen)).visible(() -> matches(m));
 			String key = category.id().toString();
 			Collapsible section = new Collapsible(
 				() -> category.icon() + "  " + category.name() + "  " + modules.stream().filter(Module::isEnabled).count() + "/" + modules.size(),
@@ -149,6 +152,8 @@ public final class ModulesPanel extends WidgetPanel {
 		ModulesPanel p = new ModulesPanel(merged);
 		p.unfolded.addAll(unfolded);
 		p.unfolded.addAll(other.unfolded);
+		p.groupsOpen.putAll(groupsOpen);
+		p.groupsOpen.putAll(other.groupsOpen);
 		return p;
 	}
 

@@ -18,6 +18,8 @@ and may change in any release. Addons declare the oldest core they support in `f
   gliding). Where nothing can be sent first (the connection drops, a kick), rejoining in the air, falling with no glide
   and no flight running, puts the elytra on and opens the glide (measured: open about 13 ticks after joining, 2.5
   blocks down, no Grim flags).
+- **Settings groups fold per window**: opening a module's settings group (a sub-section) in one window opened it
+  everywhere the module shows (its category window, every control panel with it). Each window now keeps its own.
 
 ## 0.4.1
 
