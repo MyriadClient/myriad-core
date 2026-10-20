@@ -6,7 +6,7 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
-## 0.4.2 (unreleased)
+## 0.4.2
 
 - **No Durability with two flights**: with two No Durability engines enabled at once (Essentials' Elytra Swap for
   you, and an addon flight's own, such as Stash Hunter's Search), both broke the glide, often in the same tick, where
