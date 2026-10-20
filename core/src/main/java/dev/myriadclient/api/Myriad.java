@@ -9,6 +9,7 @@ import dev.myriadclient.api.control.Controls;
 import dev.myriadclient.api.elytra.Elytra;
 import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.hook.Hooks;
+import dev.myriadclient.api.map.Maps;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.registry.Registry;
@@ -189,6 +190,11 @@ public final class Myriad {
 	 */
 	public static Elytra elytra() {
 		return api().elytra();
+	}
+
+	/** The map mods installed alongside Myriad (Xaero's Minimap): their waypoints, empty without one. */
+	public static Maps maps() {
+		return api().maps();
 	}
 
 	/** Control panels: sets of modules switched together by one bind, each with the settings it takes while on. */

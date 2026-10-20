@@ -10,6 +10,7 @@ import dev.myriadclient.api.control.Controls;
 import dev.myriadclient.api.elytra.Elytra;
 import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.hook.Hooks;
+import dev.myriadclient.api.map.Maps;
 import dev.myriadclient.api.share.ConfigShares;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.module.Category;
@@ -47,6 +48,7 @@ import dev.myriadclient.impl.event.MyriadEventBus;
 import dev.myriadclient.impl.hook.HookManager;
 import dev.myriadclient.impl.share.ShareManager;
 import dev.myriadclient.impl.keybind.KeybindManager;
+import dev.myriadclient.impl.map.MapsImpl;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
 import dev.myriadclient.impl.service.AntiCheatTracker;
@@ -102,6 +104,7 @@ public final class MyriadImpl implements MyriadApi {
 	private final PlacementManager placement = new PlacementManager(blockAcks);
 	private final BreakManager breaking = new BreakManager();
 	private final ElytraManager elytra = new ElytraManager();
+	private final MapsImpl maps = new MapsImpl();
 	private final ControlManager controls = new ControlManager();
 	private final BuildManager building = new BuildManager();
 	private final FriendsManager friends = new FriendsManager(config.root());
@@ -301,6 +304,11 @@ public final class MyriadImpl implements MyriadApi {
 	@Override
 	public Elytra elytra() {
 		return elytra;
+	}
+
+	@Override
+	public Maps maps() {
+		return maps;
 	}
 
 	@Override

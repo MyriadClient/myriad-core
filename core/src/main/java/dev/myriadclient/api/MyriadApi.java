@@ -8,6 +8,7 @@ import dev.myriadclient.api.control.Controls;
 import dev.myriadclient.api.elytra.Elytra;
 import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.hook.Hooks;
+import dev.myriadclient.api.map.Maps;
 import dev.myriadclient.api.share.ConfigShares;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.ModuleRegistry;
@@ -82,6 +83,8 @@ public interface MyriadApi {
 	Containers containers();
 
 	Elytra elytra();
+
+	Maps maps();
 
 	Controls controls();
 

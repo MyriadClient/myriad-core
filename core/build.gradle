@@ -11,11 +11,18 @@ repositories {
 		name = 'TerraformersMC'
 		url = 'https://maven.terraformersmc.com/releases/'
 	}
+	maven {
+		name = 'Modrinth'
+		url = 'https://api.modrinth.com/maven'
+		content { includeGroup 'maven.modrinth' }
+	}
 }
 
 dependencies {
 	// Mod Menu is optional: only its API is compiled against, and the integration loads only when it's installed.
 	compileOnly("com.terraformersmc:modmenu:${rootProject.modmenu_version}") { transitive = false }
+	// Xaero's Minimap likewise: its waypoints are read only when it's installed (impl/map).
+	compileOnly("maven.modrinth:xaeros-minimap:${rootProject.xaero_minimap_version}") { transitive = false }
 
 	testImplementation platform("org.junit:junit-bom:5.11.4")
 	testImplementation "org.junit.jupiter:junit-jupiter"
