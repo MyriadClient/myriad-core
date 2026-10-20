@@ -32,10 +32,18 @@ public interface PacketLimits {
 	/** Packets of {@code kind} sent in the current window. */
 	int used(Kind kind);
 
-	/** How many packets of {@code kind} the budget allows per window. */
+	/** How many packets of {@code kind} the budget allows per window ({@link #windowMs(Kind)}). */
 	int limit(Kind kind);
 
-	/** The length of the window the budget counts over, in milliseconds. */
+	/** The length of the window {@code kind}'s budget counts over, in milliseconds. */
+	int windowMs(Kind kind);
+
+	/**
+	 * The window block actions and inventory clicks count over, in milliseconds.
+	 *
+	 * @deprecated the windows differ by kind since 0.5.0 (interactions follow Paper's spam limiter); use {@link #windowMs(Kind)}.
+	 */
+	@Deprecated
 	int windowMs();
 
 	/** Runs {@code action} with the budget ignored, for actions that matter more than the risk. Packets still count. */
