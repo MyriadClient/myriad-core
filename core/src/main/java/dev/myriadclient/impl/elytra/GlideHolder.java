@@ -100,6 +100,16 @@ final class GlideHolder {
 		if (INSTANCE.owner == owner) INSTANCE.flush();
 	}
 
+	/** Whether the server's stop of the glide has come in (held or not), whoever holds: the glide needs starting again. */
+	static boolean stopCame() {
+		return INSTANCE.clearApplied || INSTANCE.exposed;
+	}
+
+	/** Sends any held answers, whoever holds them: for the moment before leaving, so Grim sees the stop before a start. */
+	static void releaseAll() {
+		INSTANCE.flush();
+	}
+
 	/** Whether the server has stopped the glide and the client kept gliding through it (Grim doesn't know yet). */
 	public static boolean clearHeld(Object owner) {
 		return INSTANCE.owner == owner && INSTANCE.clearApplied && !INSTANCE.exposed;

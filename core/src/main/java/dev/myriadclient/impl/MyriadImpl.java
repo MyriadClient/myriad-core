@@ -42,6 +42,7 @@ import dev.myriadclient.impl.command.CommandManager;
 import dev.myriadclient.impl.config.ConfigManagerImpl;
 import dev.myriadclient.impl.control.ControlManager;
 import dev.myriadclient.impl.elytra.ElytraManager;
+import dev.myriadclient.impl.elytra.LeavingGlide;
 import dev.myriadclient.impl.event.MyriadEventBus;
 import dev.myriadclient.impl.hook.HookManager;
 import dev.myriadclient.impl.share.ShareManager;
@@ -149,6 +150,7 @@ public final class MyriadImpl implements MyriadApi {
 		modules.onRemove(m -> windowManager.modulesChanged());
 
 		events.subscribe(ActionTiming.get());
+		events.subscribe(LeavingGlide.get());
 		hooks.registerCore(Service.ROTATIONS, rotations);
 		hooks.registerCore(Service.INVENTORY, inventory);
 		hooks.registerCore(Service.PLACEMENT, placement);

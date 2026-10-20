@@ -12,6 +12,12 @@ and may change in any release. Addons declare the oldest core they support in `f
   you, and an addon flight's own, such as Stash Hunter's Search), both broke the glide, often in the same tick, where
   the two starts cancel out, so the elytra wore. Now one runs at a time: the last one enabled for a pilot's flight,
   else the last one enabled. Seen live on 6b6t: every glide start went out twice; after it, one each and no wear.
+- **Leaving in mid-glide**: with No Durability's chestplate on, leaving (Auto Disconnect, a flight's own disconnect,
+  the pause menu) had you rejoin falling in the chestplate. Now the elytra goes back on just before the client leaves,
+  and the glide is started again if the server had stopped it, so the server saves you with the elytra on (and often
+  gliding). Where nothing can be sent first (the connection drops, a kick), rejoining in the air, falling with no glide
+  and no flight running, puts the elytra on and opens the glide (measured: open about 13 ticks after joining, 2.5
+  blocks down, no Grim flags).
 
 ## 0.4.1
 

@@ -6,12 +6,14 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.AttackEvent;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.elytra.LeavingGlide;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.PacketGate;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.Connection;
+import net.minecraft.network.DisconnectionDetails;
 import net.minecraft.network.protocol.BundlePacket;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
@@ -101,6 +103,17 @@ public abstract class ClientConnectionMixin {
 	private void myriad$held(Packet<?> packet, CallbackInfo ci) {
 		if (packet instanceof ServerboundSetCarriedItemPacket slot) myriad$lastSlot = slot.getSlot();
 		ci.cancel();
+	}
+
+	/**
+	 * The client closing the connection itself, on the render thread: gliding with No Durability's chestplate on, the
+	 * elytra goes back on and the glide is started first, so you rejoin gliding (see {@link LeavingGlide}).
+	 */
+	@Inject(method = "disconnect(Lnet/minecraft/network/DisconnectionDetails;)V", at = @At("HEAD"))
+	private void myriad$beforeDisconnect(DisconnectionDetails details, CallbackInfo ci) {
+		if (myriad$isClientSide() && ((Connection) (Object) this).isConnected() && Myriad.isReady() && Minecraft.getInstance().isSameThread()) {
+			LeavingGlide.beforeLeaving();
+		}
 	}
 
 	/** Counts what actually went out (after any rewrite or cancel) against the packet budget. */

@@ -86,6 +86,11 @@ public final class ActionTiming {
 	@Subscribe(priority = FLUSH_PRIORITY)
 	private void onTickStart(TickEvent.Pre e) {
 		afterMovement = false;
+		flushNow();
+	}
+
+	/** Sends what's held now, in order: for the moment before leaving, when there's no next tick to wait for. */
+	public void flushNow() {
 		Deque<Held> out;
 		synchronized (held) {
 			if (held.isEmpty()) return;

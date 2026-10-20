@@ -4,6 +4,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.DisconnectEvent;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.elytra.ElytraManager;
+import dev.myriadclient.impl.elytra.LeavingGlide;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientCommonPacketListenerImpl;
 import net.minecraft.network.DisconnectionDetails;
@@ -19,6 +20,7 @@ public abstract class ClientCommonPacketListenerMixin {
 	@Inject(method = "onDisconnect", at = @At("HEAD"))
 	private void myriad$disconnect(DisconnectionDetails details, CallbackInfo ci) {
 		if (!Myriad.isReady()) return;
+		LeavingGlide.left();
 		MyriadImpl.get().serverStatsTracker().rememberServer();
 		Myriad.events().post(new DisconnectEvent(details.reason(), Myriad.server().address()));
 	}
