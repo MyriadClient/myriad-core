@@ -1,13 +1,18 @@
 package dev.myriadclient.api.util;
 
+import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -32,6 +37,14 @@ public final class Baritone {
 	private static Method getSettings, getProvider, getPrimaryBaritone, getCommandManager, execute, getPathingBehavior, isPathing, cancelEverything,
 		getCustomGoalProcess, setGoalAndPath, isActive;
 	private static Class<?> goalBlock, goalXZ, goal;
+	/** Baritone's path and goal accessors, for drawing them; resolved on first use. */
+	private static Method getGoal, getCurrent, getNext, executorPath, executorPosition, positions, goalPos, goalX, goalZ, compositeGoals;
+	private static Class<?> goalRenderPos, goalXZType, goalComposite;
+	private static Boolean pathAccess;
+	/** Baritone's SettingsUtil and the Setting methods the settings list needs; resolved on first use. */
+	private static Method valueToString, defaultToString, parseAndApply, getName, getValueClass, getType, isJavaOnly;
+	private static Field defaultValue;
+	private static Boolean settingsAccess;
 
 	private Baritone() {
 	}
@@ -138,6 +151,185 @@ public final class Baritone {
 			fail(e);
 			return null;
 		}
+	}
+
+	/**
+	 * One place Baritone's goal names: a block ({@code column} false), or a column at any height ({@code column} true,
+	 * {@code y} meaningless), for drawing where it's going.
+	 */
+	public record GoalSpot(int x, int y, int z, boolean column) {
+	}
+
+	/**
+	 * Where Baritone's goal is: one spot for a goal at a block or a column, several for a goal of several, none for
+	 * goals with no place (a height to reach, running away) or when it has no goal.
+	 */
+	public static List<GoalSpot> goalSpots() {
+		Object b = primary();
+		if (b == null || !pathAccess()) return List.of();
+		try {
+			Object goal = getGoal.invoke(getPathingBehavior.invoke(b));
+			List<GoalSpot> out = new ArrayList<>();
+			addSpots(goal, out, 0);
+			return out;
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			fail(e);
+			return List.of();
+		}
+	}
+
+	private static void addSpots(Object goal, List<GoalSpot> out, int depth) throws ReflectiveOperationException {
+		if (goal == null || depth > 4) return;
+		if (goalRenderPos.isInstance(goal)) {
+			BlockPos pos = (BlockPos) goalPos.invoke(goal);
+			out.add(new GoalSpot(pos.getX(), pos.getY(), pos.getZ(), false));
+		} else if (goalXZType.isInstance(goal)) {
+			out.add(new GoalSpot((int) goalX.invoke(goal), 0, (int) goalZ.invoke(goal), true));
+		} else if (goalComposite.isInstance(goal)) {
+			for (Object g : (Object[]) compositeGoals.invoke(goal)) addSpots(g, out, depth + 1);
+		}
+	}
+
+	/**
+	 * The path Baritone is walking, from where it is along it now: the rest of the current segment, then the next one
+	 * it has planned. Empty while it isn't pathing.
+	 */
+	public static List<BlockPos> path() {
+		Object b = primary();
+		if (b == null || !pathAccess()) return List.of();
+		try {
+			Object behavior = getPathingBehavior.invoke(b);
+			List<BlockPos> out = new ArrayList<>();
+			Object current = getCurrent.invoke(behavior);
+			if (current != null) {
+				List<?> list = (List<?>) positions.invoke(executorPath.invoke(current));
+				int from = Math.max(0, Math.min(list.size(), (int) executorPosition.invoke(current)));
+				for (Object p : list.subList(from, list.size())) out.add((BlockPos) p);
+			}
+			Object next = getNext.invoke(behavior);
+			if (next != null) for (Object p : (List<?>) positions.invoke(executorPath.invoke(next))) out.add((BlockPos) p);
+			return out;
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			fail(e);
+			return List.of();
+		}
+	}
+
+	private static boolean pathAccess() {
+		if (pathAccess != null) return pathAccess;
+		if (!installed()) return pathAccess = false;
+		try {
+			Class<?> pathing = Class.forName("baritone.api.behavior.IPathingBehavior");
+			Class<?> executor = Class.forName("baritone.api.pathing.path.IPathExecutor");
+			Class<?> path = Class.forName("baritone.api.pathing.calc.IPath");
+			goalRenderPos = Class.forName("baritone.api.utils.interfaces.IGoalRenderPos");
+			goalXZType = Class.forName("baritone.api.pathing.goals.GoalXZ");
+			goalComposite = Class.forName("baritone.api.pathing.goals.GoalComposite");
+			getGoal = pathing.getMethod("getGoal");
+			getCurrent = pathing.getMethod("getCurrent");
+			getNext = pathing.getMethod("getNext");
+			executorPath = executor.getMethod("getPath");
+			executorPosition = executor.getMethod("getPosition");
+			positions = path.getMethod("positions");
+			goalPos = goalRenderPos.getMethod("getGoalPos");
+			goalX = goalXZType.getMethod("getX");
+			goalZ = goalXZType.getMethod("getZ");
+			compositeGoals = goalComposite.getMethod("goals");
+			pathAccess = true;
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			LOG.warn("Baritone's path and goal don't look as expected; drawing them is off", e);
+			pathAccess = false;
+		}
+		return pathAccess;
+	}
+
+	/**
+	 * One of Baritone's settings, as {@link #settings()} lists them: its name ({@code allowBreak}), the class of its value
+	 * ({@code Boolean.class}, {@code List.class} for a block list, with {@code genericType} saying of what) and its
+	 * default.
+	 */
+	public record SettingInfo(String name, Class<?> valueClass, Type genericType, Object defaultValue) {
+	}
+
+	/**
+	 * Every one of Baritone's settings that can be changed from outside its Java API (not its callbacks), in the order
+	 * Baritone declares them; empty without Baritone.
+	 */
+	public static List<SettingInfo> settings() {
+		if (!settingsAccess()) return List.of();
+		List<SettingInfo> out = new ArrayList<>();
+		try {
+			Object settings = getSettings.invoke(null);
+			for (Field f : settings.getClass().getFields()) {
+				if (Modifier.isStatic(f.getModifiers()) || !f.getType().getName().equals("baritone.api.Settings$Setting")) continue;
+				Object setting = f.get(settings);
+				if ((boolean) isJavaOnly.invoke(setting)) continue;
+				out.add(new SettingInfo((String) getName.invoke(setting), (Class<?>) getValueClass.invoke(setting), (Type) getType.invoke(setting),
+					defaultValue.get(setting)));
+			}
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			fail(e);
+		}
+		return out;
+	}
+
+	/** A setting's value as Baritone writes it in its settings file ({@code true}, {@code stone,dirt}), or null. */
+	public static @Nullable String settingText(String name) {
+		return settingString(name, valueToString);
+	}
+
+	/** A setting's default as Baritone writes it, or null. */
+	public static @Nullable String settingDefaultText(String name) {
+		return settingString(name, defaultToString);
+	}
+
+	/**
+	 * Changes a setting from text, read as Baritone's own {@code #set} reads it, for now (not saved to Baritone's
+	 * settings file). False if Baritone isn't installed, has no such setting, or can't read the text.
+	 */
+	public static boolean setSettingText(String name, String text) {
+		if (!settingsAccess() || setting(name) == null) return false;
+		try {
+			parseAndApply.invoke(null, getSettings.invoke(null), name.toLowerCase(Locale.ROOT), text);
+			return true;
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			// Baritone throws when the text doesn't parse for that setting's type.
+			return false;
+		}
+	}
+
+	private static @Nullable String settingString(String name, Method how) {
+		if (!settingsAccess()) return null;
+		Object setting = setting(name);
+		if (setting == null) return null;
+		try {
+			return (String) how.invoke(null, setting);
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			fail(e);
+			return null;
+		}
+	}
+
+	private static boolean settingsAccess() {
+		if (settingsAccess != null) return settingsAccess;
+		if (!installed()) return settingsAccess = false;
+		try {
+			Class<?> util = Class.forName("baritone.api.utils.SettingsUtil");
+			Class<?> setting = Class.forName("baritone.api.Settings$Setting");
+			valueToString = util.getMethod("settingValueToString", setting);
+			defaultToString = util.getMethod("settingDefaultToString", setting);
+			parseAndApply = util.getMethod("parseAndApply", Class.forName("baritone.api.Settings"), String.class, String.class);
+			getName = setting.getMethod("getName");
+			getValueClass = setting.getMethod("getValueClass");
+			getType = setting.getMethod("getType");
+			isJavaOnly = setting.getMethod("isJavaOnly");
+			defaultValue = setting.getField("defaultValue");
+			settingsAccess = true;
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			LOG.warn("Baritone's settings don't look as expected; listing and editing them is off", e);
+			settingsAccess = false;
+		}
+		return settingsAccess;
 	}
 
 	/** Baritone's setting object called {@code name}, or null. */

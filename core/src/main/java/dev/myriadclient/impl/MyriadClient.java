@@ -11,6 +11,7 @@ import dev.myriadclient.api.render.Projection;
 import dev.myriadclient.api.util.Ticks;
 import dev.myriadclient.impl.dev.DevConsole;
 import dev.myriadclient.impl.keybind.VanillaKeys;
+import dev.myriadclient.impl.render.GhostRenderer;
 import dev.myriadclient.impl.render.HighlightRenderer;
 import dev.myriadclient.impl.render.MeshRenderer;
 import dev.myriadclient.impl.render.MyriadPipelines;
@@ -81,6 +82,7 @@ public class MyriadClient implements ClientModInitializer {
 			Minecraft mc = Minecraft.getInstance();
 			var camera = mc.gameRenderer.mainCamera();
 			WorldRenderQueue.INSTANCE.begin(ctx.levelState().cameraRenderState.pos);
+			GhostRenderer.beginFrame(ctx.levelState().cameraRenderState);
 			// Same tick delta the entities were drawn with this frame.
 			float tickDelta = mc.getDeltaTracker().getGameTimeDeltaPartialTick(false);
 			if (bus.hasListeners(Render3DEvent.class)) {

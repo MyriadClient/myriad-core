@@ -495,7 +495,9 @@ Helpers, so addons don't each re-derive them (`dev.myriadclient.api.*`):
 | `util.Ticks`, `util.TickCached` | the client tick counter; a value computed at most once per tick however often a render handler reads it |
 | `util.Async`, `util.Http` | a shared worker pool (and a hop back to the render thread); GET/POST with JSON |
 | `util.FakePlayers` | client-side dummy players for testing combat and render features |
-| `util.Baritone` | drive Baritone when it's installed, without depending on it: `pathTo`, `isPathing`, `stop`, `command`, and `pause(owner)`/`resume(owner)` counted per module. Every call is a no-op without Baritone |
+| `util.Baritone` | drive Baritone when it's installed, without depending on it: `pathTo`, `isPathing`, `stop`, `command`, and `pause(owner)`/`resume(owner)` counted per module; its settings by name (`getSetting`/`setSetting`, any of them as text with `settingText`/`setSettingText`) and all of them with their types (`settings()`); where it walks and where it's going (`path()`, `goalSpots()`). Every call is a no-op without Baritone; `.b <command>` runs Baritone commands with Myriad's prefix |
+| `render.Ghosts` | a living entity's render state drawn again anywhere as a see-through copy: skin, armour, cape and elytra faded, posed as you set it |
+| `map.Maps` (`Myriad.maps()`) | waypoints from Xaero's Minimap when it's installed: `waypoints()` for the server you're on, every dimension (this one's first), `waypoint(name)`, `positionHere(w)` scaled across dimensions. Empty without it |
 | `setting.KeybindSetting` | a key or mouse bind; `wasPressed(event)` for a bind inside a module ("sub bind"), on `KeyEvent` and `MouseButtonEvent` |
 | `render.MyriadLogo` | the Myriad mark at any size |
 | `render.Renderer3D` / `ShapeBuilder` | boxes, real block shapes, single faces, lines, circles, tracers (this frame) |

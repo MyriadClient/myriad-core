@@ -235,7 +235,23 @@ public final class HighlightRenderer {
 			entityListeners = Myriad.events().flag(HighlightEvent.Entity.class);
 			shapeListeners = Myriad.events().flag(HighlightEvent.Shapes.class);
 		}
-		armed = entityListeners.isSet() || shapeListeners.isSet();
+		// A ghost highlighted last frame keeps the pipeline on, as listeners do.
+		armed = entityListeners.isSet() || shapeListeners.isSet() || frame - ghostFrame <= 2;
+	}
+
+	/** The frame a ghost last asked for a highlight in. */
+	private long ghostFrame = Long.MIN_VALUE / 2;
+
+	/**
+	 * A highlight for an entity drawn again where it isn't ({@link GhostRenderer}): an entity highlight around
+	 * {@code box}, its outline colour to give the render state so every layer draws its shape into the mask; 0 if
+	 * there's none this frame (the first frame a ghost asks, or too many highlights).
+	 */
+	public int ghost(HighlightStyle style, int color, AABB box) {
+		ghostFrame = frame;
+		if (!armed) return 0;
+		int id = add(ENTITIES, style, color, box, box.inflate(1));
+		return id < 0 ? 0 : encode(id, groupOf[id]);
 	}
 
 	/**

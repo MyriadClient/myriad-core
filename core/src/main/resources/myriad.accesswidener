@@ -24,3 +24,7 @@ accessible field net/minecraft/client/model/geom/ModelPart children Ljava/util/M
 accessible field net/minecraft/client/renderer/LevelRenderer entityOutlineTarget Lcom/mojang/blaze3d/pipeline/RenderTarget;
 # Myriad's cape: the skin-parts byte other players report (impl/cosmetic/MyriadCape).
 accessible field net/minecraft/world/entity/Avatar DATA_PLAYER_MODE_CUSTOMISATION Lnet/minecraft/network/syncher/EntityDataAccessor;
+accessible field net/minecraft/client/renderer/rendertype/RenderType state Lnet/minecraft/client/renderer/rendertype/RenderSetup;
+accessible field net/minecraft/client/renderer/rendertype/RenderSetup textures Ljava/util/Map;
+accessible class net/minecraft/client/renderer/rendertype/RenderSetup$TextureBinding
+accessible method net/minecraft/client/renderer/rendertype/RenderSetup$TextureBinding location ()Lnet/minecraft/resources/Identifier;

@@ -19,6 +19,7 @@ import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.setting.KeybindSetting;
 import dev.myriadclient.api.setting.Setting;
+import dev.myriadclient.api.util.Baritone;
 import dev.myriadclient.api.util.FakePlayers;
 import dev.myriadclient.api.util.Texts;
 import dev.myriadclient.impl.Diagnostics;
@@ -290,6 +291,21 @@ public final class CoreCommands {
 					info("Disabled " + n + " modules");
 					return SINGLE_SUCCESS;
 				});
+			}
+		});
+
+		ctx.registerCommand(new Command("baritone", "Runs a Baritone command, as its # prefix does: .b goto 0 64 0, .b mine diamond_ore, .b stop.", "b") {
+			@Override
+			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
+				b.executes(c -> baritone("help"));
+				b.then(argument("command", StringArgumentType.greedyString()).executes(c -> baritone(StringArgumentType.getString(c, "command"))));
+			}
+
+			/** Baritone answers in chat itself; this only says when it can't. */
+			private int baritone(String command) {
+				if (!Baritone.isAvailable()) error("Baritone isn't installed (or not ready until you're in a world).");
+				else if (!Baritone.command(command)) error("Baritone didn't take \"" + command + "\".");
+				return SINGLE_SUCCESS;
 			}
 		});
 

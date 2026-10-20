@@ -6,6 +6,29 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.5.0 (unreleased)
+
+- **Waypoints from Xaero's Minimap**: `Myriad.maps()` reads the waypoints of the server you're on, in every dimension,
+  when Xaero's Minimap is installed (empty when it isn't): `waypoints()`, `waypoint(name)`, and `positionHere(waypoint)`
+  scaled across dimensions (a Nether waypoint at 8 times its coordinates from the Overworld). For features that take a
+  place by name rather than coordinates; later, more of what the maps know.
+- **Baritone**: `.b <command>` (or `.baritone`) runs a Baritone command with Myriad's prefix, as Baritone's `#` does
+  (`.b goto 0 64 0`, `.b mine diamond_ore`, `.b stop`), so anything that runs Myriad commands can drive Baritone.
+  `Baritone.settings()` lists every setting Baritone has with its type and default, and `settingText`/`setSettingText`
+  read and change any of them as text, as `#set` takes it. `Baritone.path()` and `Baritone.goalSpots()` say where it's
+  walking and where it's going, for drawing them.
+- **Ghosts**: `Ghosts.submit(event, state, feet, alpha)` draws a living entity's render state again anywhere, as a
+  see-through copy of itself: skin, armour, cape and elytra faded (held items stay solid). With a `HighlightStyle` and
+  colour it's highlighted like an entity, traced around its exact silhouette.
+- **Placements no longer lost to Paper's spam limiter**: Paper (2b2t too) keeps only 9 use and place packets in any
+  300 ms and drops the rest without a word, so 30 a second at most. The shared interaction budget allowed 15 per 500 ms,
+  which let a burst of 10 to 15 through and lost the rest. It's now 9 in any 330 ms (the margin covers lag bunching
+  packets together): a surround's 9 still go at once, and a steady stream keeps to about 27 a second. Measured on Paper
+  1.21.4: everything kept up to 30 a second, about 29 a second kept whatever was sent above it, with or without Grim.
+  `PacketLimits.windowMs(Kind)` gives each kind's window; `windowMs()` is deprecated.
+- **Typed numbers**: `IntSetting`/`DoubleSetting` builders take `typed()` for a box to type the number in instead of a
+  slider, for coordinates and other numbers no slider range suits.
+
 ## 0.4.2
 
 - **No Durability with two flights**: with two No Durability engines enabled at once (Essentials' Elytra Swap for
