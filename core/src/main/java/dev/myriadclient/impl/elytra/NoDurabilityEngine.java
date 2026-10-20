@@ -1,6 +1,7 @@
 package dev.myriadclient.impl.elytra;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.elytra.Elytra;
 import dev.myriadclient.api.elytra.NoDurability;
 import dev.myriadclient.api.event.Priority;
 import dev.myriadclient.api.event.Subscribe;
@@ -24,6 +25,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * No Durability for an elytra, and its catch of a glide dropped in mid-air (on while Search flies). The same engine as
@@ -132,7 +136,8 @@ final class NoDurabilityEngine implements NoDurability {
 	@Override
 	public void enable() {
 		endBreaks();
-		breaking = this;
+		ENABLED.remove(this);
+		ENABLED.add(this);
 		Myriad.events().subscribe(this);
 		swapping = startNow = rocketWanted = stopForUse = finishing = equipping = recovering = confirming = setBack = false;
 		descent = 0;
@@ -155,7 +160,7 @@ final class NoDurabilityEngine implements NoDurability {
 		GrimChunks.stop();
 		endBreaks();
 		Myriad.events().unsubscribe(this);
-		if (breaking == this) breaking = null;
+		ENABLED.remove(this);
 	}
 
 	/** Whether the elytra and chestplate are being swapped (or the elytra put back for good) right now. */
@@ -173,8 +178,27 @@ final class NoDurabilityEngine implements NoDurability {
 			swapping = false;
 			return;
 		}
+		// Another engine runs (two would each send their starts, often in the same tick, where they cancel out).
+		if (active() != this) {
+			finish();
+			endBreaks();
+			return;
+		}
 		catchGlide(mc.player);
 		tickNoDurability();
+	}
+
+	/**
+	 * The engine that runs, of those enabled: the last enabled for a pilot's flight (a flight's own, such as an addon's
+	 * auto flight), else the last enabled (one that keeps the elytra whoever flies, like Essentials' Elytra Swap).
+	 */
+	private static @Nullable NoDurabilityEngine active() {
+		NoDurabilityEngine last = null, pilot = null;
+		for (NoDurabilityEngine n : ENABLED) {
+			last = n;
+			if (n.fly instanceof Elytra.Pilot p && ElytraManager.flying(p)) pilot = n;
+		}
+		return pilot != null ? pilot : last;
 	}
 
 	private static void pressJumpOnce() {
@@ -319,8 +343,8 @@ final class NoDurabilityEngine implements NoDurability {
 	/** Vanilla's gliding bit in the entity flag byte ({@code Entity.FLAG_FALL_FLYING}). */
 	private static final int GLIDING_BIT = 1 << 7;
 
-	/** The engine running (one owner flies at a time): what the movement and the gliding check ask about. */
-	private static volatile NoDurabilityEngine breaking;
+	/** The engines enabled, oldest first; one of them runs ({@link #active}). */
+	private static final CopyOnWriteArrayList<NoDurabilityEngine> ENABLED = new CopyOnWriteArrayList<>();
 	/** The glide is stopped for a break, and you hold still ({@link #breakStill} more ticks). */
 	private boolean breakStopped;
 	/** The client glides on through the breaks (until you land, or a setback). */
@@ -331,13 +355,13 @@ final class NoDurabilityEngine implements NoDurability {
 
 	/** Whether a break holds the local player still this tick: no movement, so none goes out. */
 	public static boolean holdsStill() {
-		NoDurabilityEngine n = breaking;
+		NoDurabilityEngine n = active();
 		return n != null && n.breakStopped;
 	}
 
 	/** Whether the local player counts as gliding through the breaks. */
 	public static boolean holdsGlide() {
-		NoDurabilityEngine n = breaking;
+		NoDurabilityEngine n = active();
 		return n != null && n.breakHold;
 	}
 

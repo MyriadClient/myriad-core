@@ -128,6 +128,11 @@ public final class ElytraManager implements Elytra {
 		return false;
 	}
 
+	/** Whether {@code pilot} is flying the local player. */
+	static boolean flying(Pilot pilot) {
+		return PILOTS.contains(pilot);
+	}
+
 	/** Whether a pilot holds the glide open. */
 	static boolean pilotHoldsGlide() {
 		for (Pilot p : PILOTS) if (p.holdsGlide()) return true;

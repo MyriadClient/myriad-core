@@ -4,7 +4,8 @@ import org.jetbrains.annotations.ApiStatus;
 
 /**
  * No Durability for an elytra, and a catch of a glide dropped in mid-air: one engine per flight
- * ({@link Elytra#noDurability}), enabled while it flies. Only one runs its swapping at a time.
+ * ({@link Elytra#noDurability}), enabled while it flies. Only one runs at a time: of those enabled, the last one
+ * enabled for a {@link Elytra.Pilot pilot}'s flight, else the last one enabled; the others wait meanwhile.
  * <p>
  * The server wears an elytra by one for every 20 ticks of gliding without a break. Where Grim simulates the glide
  * (2b2t), the elytra is swapped for a chestplate in the off hand or hotbar while you glide, so the server stops the
