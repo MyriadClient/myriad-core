@@ -8,6 +8,7 @@ import java.util.function.Supplier;
 public class DoubleSetting extends Setting<Double> {
 	private final double min, max, sliderMin, sliderMax;
 	private final int decimals;
+	private boolean typed;
 
 	public DoubleSetting(String name, String description, double defaultValue, Supplier<Boolean> visible,
 						 double min, double max, double sliderMin, double sliderMax, int decimals) {
@@ -37,6 +38,11 @@ public class DoubleSetting extends Setting<Double> {
 
 	public int decimals() {
 		return decimals;
+	}
+
+	/** Whether it's typed into a box rather than set with a slider (see {@link Builder#typed()}). */
+	public boolean typed() {
+		return typed;
 	}
 
 	public float getFloat() {
@@ -79,6 +85,7 @@ public class DoubleSetting extends Setting<Double> {
 		private double min = -Double.MAX_VALUE, max = Double.MAX_VALUE;
 		private Double sliderMin, sliderMax;
 		private int decimals = 2;
+		private boolean typed;
 
 		public Builder(String name) {
 			super(name, 0.0);
@@ -101,6 +108,12 @@ public class DoubleSetting extends Setting<Double> {
 			return this;
 		}
 
+		/** A box to type the number in instead of a slider: for coordinates and other numbers no slider range suits. */
+		public DoubleSetting.Builder typed() {
+			this.typed = true;
+			return this;
+		}
+
 		public DoubleSetting.Builder decimals(int decimals) {
 			this.decimals = decimals;
 			return this;
@@ -110,7 +123,9 @@ public class DoubleSetting extends Setting<Double> {
 		protected DoubleSetting create() {
 			double smin = sliderMin != null ? sliderMin : (min == -Double.MAX_VALUE ? 0 : min);
 			double smax = sliderMax != null ? sliderMax : (max == Double.MAX_VALUE ? Math.max(10, defaultValue * 2) : max);
-			return new DoubleSetting(name, description, defaultValue, visible, min, max, smin, smax, decimals);
+			DoubleSetting s = new DoubleSetting(name, description, defaultValue, visible, min, max, smin, smax, decimals);
+			s.typed = typed;
+			return s;
 		}
 	}
 }

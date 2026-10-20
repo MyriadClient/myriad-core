@@ -50,6 +50,8 @@ import dev.myriadclient.impl.ui.panels.CorePanels;
 import net.minecraft.client.Minecraft;
 
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Myriad core registers its own pieces through the same addon API everyone else uses: categories, layouts, themes,
@@ -83,6 +85,16 @@ public final class CoreAddon implements MyriadAddon {
 		ctx.registerKeyAction("Open Menu", Keybind.NONE, () -> Myriad.ui().open());
 	}
 
+	/** A box to type a number in: Enter sets it, anything that isn't a number is ignored (the box shows the value again). */
+	private static Widget numberField(Supplier<String> value, Consumer<String> set) {
+		return new TextField(value).onSubmit(t -> {
+			try {
+				set.accept(t.trim().replace(",", "").replace("_", ""));
+			} catch (NumberFormatException ignored) {
+			}
+		});
+	}
+
 	private static <E extends Enum<E>> Widget enumDropdown(EnumSetting<E> s) {
 		return new Dropdown<>(() -> List.of(s.values()), s::get, s::edit, EnumSetting::displayName);
 	}
@@ -90,8 +102,10 @@ public final class CoreAddon implements MyriadAddon {
 	@SuppressWarnings({"unchecked", "rawtypes"})
 	private static void registerSettingWidgets(SettingWidgets w) {
 		w.register(BoolSetting.class, s -> new Toggle(s::get, s::edit), false);
-		w.register(IntSetting.class, s -> new Slider(s::get, v -> s.edit((int) Math.round(v)), s.sliderMin(), s.sliderMax(), 0), false);
-		w.register(DoubleSetting.class, s -> new Slider(s::get, s::edit, s.sliderMin(), s.sliderMax(), s.decimals()), false);
+		w.register(IntSetting.class, s -> s.typed() ? numberField(s::valueString, t -> s.edit(Integer.parseInt(t)))
+			: new Slider(s::get, v -> s.edit((int) Math.round(v)), s.sliderMin(), s.sliderMax(), 0), false);
+		w.register(DoubleSetting.class, s -> s.typed() ? numberField(s::valueString, t -> s.edit(Double.parseDouble(t)))
+			: new Slider(s::get, s::edit, s.sliderMin(), s.sliderMax(), s.decimals()), false);
 		w.register(EnumSetting.class, s -> enumDropdown((EnumSetting) s), false);
 		w.register(StringSetting.class, s -> new TextField(s::get).onSubmit(s::edit), false);
 		w.register(StringListSetting.class, StringListEditor::new, true);

@@ -7,6 +7,7 @@ import java.util.function.Supplier;
 
 public class IntSetting extends Setting<Integer> {
 	private final int min, max, sliderMin, sliderMax;
+	private boolean typed;
 
 	public IntSetting(String name, String description, int defaultValue, Supplier<Boolean> visible, int min, int max, int sliderMin, int sliderMax) {
 		super(name, description, defaultValue, visible);
@@ -30,6 +31,11 @@ public class IntSetting extends Setting<Integer> {
 
 	public int sliderMax() {
 		return sliderMax;
+	}
+
+	/** Whether it's typed into a box rather than set with a slider (see {@link Builder#typed()}). */
+	public boolean typed() {
+		return typed;
 	}
 
 	@Override
@@ -60,6 +66,7 @@ public class IntSetting extends Setting<Integer> {
 	public static class Builder extends Setting.Builder<IntSetting.Builder, Integer, IntSetting> {
 		private int min = Integer.MIN_VALUE, max = Integer.MAX_VALUE;
 		private Integer sliderMin, sliderMax;
+		private boolean typed;
 
 		public Builder(String name) {
 			super(name, 0);
@@ -69,6 +76,15 @@ public class IntSetting extends Setting<Integer> {
 		public IntSetting.Builder range(int min, int max) {
 			this.min = min;
 			this.max = max;
+			return this;
+		}
+
+		/**
+		 * A box to type the number in instead of a slider: for coordinates, seeds and other numbers no slider range
+		 * suits.
+		 */
+		public IntSetting.Builder typed() {
+			this.typed = true;
 			return this;
 		}
 
@@ -83,7 +99,9 @@ public class IntSetting extends Setting<Integer> {
 		protected IntSetting create() {
 			int smin = sliderMin != null ? sliderMin : (min == Integer.MIN_VALUE ? 0 : min);
 			int smax = sliderMax != null ? sliderMax : (max == Integer.MAX_VALUE ? Math.max(10, defaultValue * 2) : max);
-			return new IntSetting(name, description, defaultValue, visible, min, max, smin, smax);
+			IntSetting s = new IntSetting(name, description, defaultValue, visible, min, max, smin, smax);
+			s.typed = typed;
+			return s;
 		}
 	}
 }
