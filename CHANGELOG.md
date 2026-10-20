@@ -6,7 +6,7 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
-## 0.5.0 (unreleased)
+## 0.5.0
 
 - **Waypoints from Xaero's Minimap**: `Myriad.maps()` reads the waypoints of the server you're on, in every dimension,
   when Xaero's Minimap is installed (empty when it isn't): `waypoints()`, `waypoint(name)`, and `positionHere(waypoint)`
