@@ -1,5 +1,6 @@
 package dev.myriadclient.api.service;
 
+import dev.myriadclient.api.util.ItemMatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
@@ -12,6 +13,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
 
 /**
  * Containers (chests, barrels, shulkers, furnaces, …): opening one at a position, reading it once its contents have
@@ -54,6 +56,15 @@ public interface Containers {
 	 * alone.
 	 */
 	CompletableFuture<View> open(Object owner, BlockPos pos, int timeoutTicks);
+
+	/**
+	 * {@link #open(Object, BlockPos, int)} with the click made as {@code options} say, through
+	 * {@link Placement#use}: with {@code Placement.Options.forServer()} on servers that check looks, the look turns
+	 * onto the block first (Grim checks a click on a block as a placement). The timeout counts from the click.
+	 */
+	default CompletableFuture<View> open(Object owner, BlockPos pos, int timeoutTicks, Placement.Options options) {
+		return open(owner, pos, timeoutTicks);
+	}
 
 	/**
 	 * Closes the open container (and its screen), if any, at a moment the server takes it: Grim flags a close made while
@@ -197,6 +208,147 @@ public interface Containers {
 		 */
 		CompletableFuture<View> refresh();
 
+		/**
+		 * Makes some of the menu's slots hold an exact layout (see {@link Arrangement}): sorting, filling a kit, putting
+		 * a hotbar back. Planned one click at a time from the menu as it is, so a click the server didn't take or a slot
+		 * that changed is planned around; once there's nothing more to click the server is asked what it has, and if
+		 * that isn't the layout it goes again, three rounds at most. Slots are put right in order: everything before the
+		 * first wrong one stays put and what's after it is room to work in, so a full container sorts without a free
+		 * slot of yours. Clicks wait for ticks the server takes them on, within the packet budget, queued with
+		 * {@link #take}/{@link #put} on this container so they never interleave.
+		 * <p>
+		 * Completes with whether the layout was reached; fails if the container closes, or another click moves the
+		 * cursor's items meanwhile.
+		 */
+		CompletableFuture<Boolean> arrange(Arrangement arrangement);
+
+		/**
+		 * Runs your own {@link Planner}'s clicks the way {@link #arrange} runs its own: at tick starts, within the budget
+		 * and the server's rules, then checked against the server, three rounds at most. Completes with
+		 * {@link Planner#done()}.
+		 */
+		CompletableFuture<Boolean> run(Planner planner);
+
 		void close();
+	}
+
+	/** One click in a menu: screen slot id, button, input, as {@code handleContainerInput} takes them. */
+	record Click(int slot, int button, ContainerInput input) {
+	}
+
+	/** Clicks worked out one at a time from the menu as it is, for {@link View#run}. */
+	interface Planner {
+		/** The next click, or null when there's nothing more to do (see {@link #stuck()}). */
+		@Nullable Click next();
+
+		/** Whether the goal is reached (asked again once the server has said what it has). */
+		boolean done();
+
+		/** Why the last {@link #next()} returned null short of the goal, if something's in the way; null otherwise. */
+		default @Nullable String stuck() {
+			return null;
+		}
+	}
+
+	/**
+	 * A layout for {@link View#arrange}: what each of some menu slots should hold, where the items may come from, and
+	 * where what doesn't belong goes. Slot numbers are the menu's (screen) ids: the container's own slots are
+	 * {@code 0..size()-1}, yours {@link View#playerSlot}.
+	 *
+	 * <pre>{@code
+	 * // Sort a chest: its own slots, from themselves, spilling into your inventory if it has to.
+	 * view.arrange(Containers.Arrangement.of(chestSlots, sortedLayout).dumpTo(mySlots));
+	 * }</pre>
+	 */
+	final class Arrangement {
+		private final int[] slots, sources, dumps;
+		private final @Nullable ItemStack[] layout;
+		private final ItemMatch match;
+		private final @Nullable ToIntFunction<ItemStack> allowance;
+		private final int @Nullable [] reserved;
+
+		private Arrangement(int[] slots, @Nullable ItemStack[] layout, int[] sources, int[] dumps, ItemMatch match,
+		                    @Nullable ToIntFunction<ItemStack> allowance, int @Nullable [] reserved) {
+			this.slots = slots;
+			this.layout = layout;
+			this.sources = sources;
+			this.dumps = dumps;
+			this.match = match;
+			this.allowance = allowance;
+			this.reserved = reserved;
+		}
+
+		/**
+		 * {@code layout.get(i)} is what slot {@code slots[i]} should hold: that item with that count, an empty stack for
+		 * nothing, or null to leave it be. Items come from the slots themselves and go back among them; widen that with
+		 * {@link #from} and {@link #dumpTo}.
+		 */
+		public static Arrangement of(int[] slots, List<ItemStack> layout) {
+			if (slots.length != layout.size()) throw new IllegalArgumentException("slots and layout differ in length");
+			ItemStack[] l = new ItemStack[slots.length];
+			for (int i = 0; i < l.length; i++) l[i] = layout.get(i) == null ? null : layout.get(i).copy();
+			return new Arrangement(slots.clone(), l, slots.clone(), slots.clone(), ItemMatch.EXACT, null, null);
+		}
+
+		/** Where the items come from (any of them may be in the layout's slots too: only what doesn't belong is taken). */
+		public Arrangement from(int... sources) {
+			return new Arrangement(slots, layout, sources.clone(), dumps, match, allowance, reserved);
+		}
+
+		/** Where what doesn't belong, or is in the way, goes. Defaults to {@link #from}'s slots. */
+		public Arrangement dumpTo(int... dumps) {
+			return new Arrangement(slots, layout, sources, dumps.clone(), match, allowance, reserved);
+		}
+
+		/** When a stack counts as the layout's item (default {@link ItemMatch#EXACT}). */
+		public Arrangement match(ItemMatch match) {
+			return new Arrangement(slots, layout, sources, dumps, match, allowance, reserved);
+		}
+
+		/**
+		 * Caps how many of each item may come into the layout's slots from sources outside them: {@code allowance}
+		 * says how many of an item (a layout's stack) may be taken, counted from the start. For using only what was
+		 * gathered for the job, not your own.
+		 */
+		public Arrangement limit(ToIntFunction<ItemStack> allowance) {
+			return new Arrangement(slots, layout, sources, dumps, match, allowance, reserved);
+		}
+
+		/**
+		 * Keeps {@code counts[slot]} items (by menu slot id) in each source slot that holds them at the start (the same
+		 * item and components): yours, not the job's. Only what's above them is taken.
+		 */
+		public Arrangement reserve(int[] counts) {
+			return new Arrangement(slots, layout, sources, dumps, match, allowance, counts.clone());
+		}
+
+		public int[] slots() {
+			return slots.clone();
+		}
+
+		/** What each slot should hold; null entries are left be. */
+		public @Nullable ItemStack[] layout() {
+			return layout.clone();
+		}
+
+		public int[] sources() {
+			return sources.clone();
+		}
+
+		public int[] dumps() {
+			return dumps.clone();
+		}
+
+		public ItemMatch match() {
+			return match;
+		}
+
+		public @Nullable ToIntFunction<ItemStack> allowance() {
+			return allowance;
+		}
+
+		public int @Nullable [] reserved() {
+			return reserved == null ? null : reserved.clone();
+		}
 	}
 }

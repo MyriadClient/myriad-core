@@ -24,7 +24,7 @@ import java.util.stream.IntStream;
  * each followed by asking the server what it has ({@link MenuSync}). What moved is counted from the server's answer, and
  * anything a round left undone (a click the server didn't take, a slot someone else changed) gets another round.
  */
-final class ContainerTransfer {
+final class ContainerTransfer implements MenuJob {
 	/** Rounds before settling for what moved. */
 	private static final int ROUNDS = 3;
 	/** Clicks one round may make: well past any real plan, so a plan that goes round in circles ends. */
@@ -67,8 +67,8 @@ final class ContainerTransfer {
 		shiftClicks = storage && (how.hotbar() || !take);
 	}
 
-	/** One tick's work; true once it's over (the result is complete). */
-	boolean tick(MenuSync sync) {
+	@Override
+	public boolean tick(MenuSync sync) {
 		if (mc.player == null || mc.gameMode == null || mc.player.containerMenu != menu) return fail("The container closed");
 		if (!started) {
 			if (!menu.getCarried().isEmpty()) return fail("Something is on the cursor");
@@ -132,6 +132,11 @@ final class ContainerTransfer {
 		int h = ItemStack.hashItemAndComponents(menu.getCarried()) * 31 + menu.getCarried().getCount();
 		for (Slot slot : menu.slots) h = (h * 31 + ItemStack.hashItemAndComponents(slot.getItem())) * 31 + slot.getItem().getCount();
 		return h;
+	}
+
+	@Override
+	public void abort(String why) {
+		result.completeExceptionally(new IllegalStateException(why));
 	}
 
 	private boolean fail(String why) {

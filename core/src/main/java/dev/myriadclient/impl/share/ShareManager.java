@@ -8,7 +8,8 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.Addon;
 import dev.myriadclient.api.addon.AddonStorage;
 import dev.myriadclient.api.control.ControlPanel;
-import dev.myriadclient.api.module.Category;
+import dev.myriadclient.api.module.ModuleGroup;
+import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.setting.SettingGroup;
@@ -139,19 +140,18 @@ public final class ShareManager implements ConfigShares {
 		}
 
 		@Override
-		public Builder category(Category category) {
-			return modules(Myriad.modules().inCategory(category));
+		public Builder tag(Tag tag) {
+			return modules(Myriad.modules().withTag(tag));
+		}
+
+		@Override
+		public Builder group(ModuleGroup group) {
+			return modules(Myriad.modules().inGroup(group));
 		}
 
 		@Override
 		public Builder addon(String modId) {
 			for (Module m : Myriad.modules()) if (m.id().namespace().equals(modId)) module(m);
-			return this;
-		}
-
-		@Override
-		public Builder addonCategory(String modId, Category category) {
-			for (Module m : Myriad.modules().inCategory(category)) if (m.id().namespace().equals(modId)) module(m);
 			return this;
 		}
 

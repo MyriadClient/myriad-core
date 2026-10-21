@@ -6,6 +6,58 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.7.0
+
+- **Groups replace category windows.** With several addons, every addon in the same six categories made a wall of
+  near-identical windows ("Combat · Essentials", "Combat · Boze", ...). Now each addon groups its modules as its author
+  thinks best, and each group is a window of its own, placed, merged and moved like any other (nothing ties an
+  addon's windows together):
+  - `ctx.registerGroup("Travel", Icons.PLANE)` declares one; `ctx.registerModule(group, module)` and
+    `registerModules(group, ...)` put modules in it. Modules registered without one go in the addon's own window,
+    named after it, so an addon that declares nothing gets one window.
+  - Window titles are the group's name, with the addon beside it; `Module.group()` says where a module shows,
+    `Myriad.groups()` and `Myriad.modules().groups()` / `inGroup(group)` list them.
+  - Layouts saved with category windows carry over on first load: each old window takes the group that replaced it
+    (one named like the category, else the one with most of its modules), windows left with nothing close, and new
+    groups open beside the rest. The Modules window and `.modules` list by group too.
+- **Categories are tags.** `Tag` and `Tags.COMBAT`... are what `Category` and `Categories` were: what a module is about,
+  its colour and icon, and `#combat` in the launcher (which also finds group windows, and modules by group:
+  `#travel`). A module can have more than one (`alsoTagged(Tags.COMBAT)` in its constructor); `Module.tag()`,
+  `tags()`, `hasTag()`, `Myriad.tags()`, `ctx.registerTag`, `MyriadAddon.registerTags`,
+  `ModuleRegistry.withTag`, `ConfigShares.Builder.tag/group`. **Deprecated, still working:** `Category`,
+  `Categories`, `Module(Category, ...)`, `category()`, `registerCategory`, `registerCategories`,
+  `Myriad.categories()`, `inCategory`, `ConfigShares.Builder.category/addonCategory`; addons built against 0.6.0 load
+  unchanged (checked with Essentials 0.6.0).
+- **Icons**: `Icons` holds about 190 ready-made glyphs from the bundled icon font (Font Awesome in the Nerd Font),
+  named and searchable, for groups, tags and panels; a test checks every one is in the font. `IconSetting`
+  (`sg.icon("Icon")`) gives players an inline picker: a search box over a grid, Default to clear. Wheels have an icon
+  (in the middle of the wheel, on their window and in the launcher), and each slot on a wheel can have its own icon and
+  name from the button at its left (a command line reads better as "Home" with a house); macros and control panels
+  have an icon too, used on wheels and in the launcher.
+- **For addons, more from Myriad Automation's notes:**
+  - `Placement.use(owner, hit, slot, options)`: a right click that uses a block (opens, toggles, uses the held item
+    on it), made the way placements are: with `rotate` the look turns onto the block first and the click goes next
+    tick where the look lands on it, sharing placements' one rotation a tick; unsneaked for the server even while you
+    sneak (or sneaked, with `withSneak`), so it uses the block rather than placing on it. Completes once the server
+    answered.
+  - `Containers.open(owner, pos, ticks, Placement.Options)`: opens through `use`, so on strict servers the look
+    turns onto the container first (Grim checks a click on a block as a placement).
+  - `View.arrange(Containers.Arrangement)`: makes slots hold an exact layout (item and count each, or empty): sorting,
+    kits, hotbar layouts. Planned one click at a time from the menu as it is, the cheapest move each time (a shift
+    click that lands exactly there, a number key, two clicks, or the fewest clicks for part of a stack), slots put
+    right in order so a full container sorts with no free slot of yours, checked against the server after, three
+    rounds at most. `from`, `dumpTo`, `match(ItemMatch)`, `limit` (only what was gathered) and `reserve` (your own
+    stacks stay). `View.run(Containers.Planner)` runs your own click planner the same way. Both queue with
+    `take`/`put` on the container. `ItemMatch` (item / loose / exact) is API now. Myriad Automation's tests pass
+    through core, in singleplayer with and without Grim's rules: a shuffled double chest sorted 7 times of 7, kits,
+    shulker loading and unloading.
+  - `Blueprint.of` stores positions the way chunks store blocks and visits only the cube in reach: 702 positions in
+    reach of a 19,000-position blueprint, 74.7 → 3.3 µs a tick. The build planner no longer builds two maps per tick.
+- The launcher's "New wheel …", "New macro …" and "New control panel …" make what's typed: "new wheel travel" made a
+  macro called "new wheel travel" before.
+- Windows of addons that aren't installed keep their ids, so a new window can't take one and confuse the tiling when
+  the addon is back.
+
 ## 0.6.0
 
 - **For addons, from Myriad Automation's notes** (what it did itself, now core's for everyone):

@@ -1,6 +1,6 @@
 package com.example.myriadaddon.modules;
 
-import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.MeshBuilder;
 import dev.myriadclient.api.render.Renderer3D;
@@ -51,7 +51,7 @@ public final class BlockSearch extends Module {
 		.build();
 
 	public BlockSearch() {
-		super(Categories.WORLD, "Block Search", "Highlights the blocks you pick through walls.");
+		super(Tags.WORLD, "Block Search", "Highlights the blocks you pick through walls.");
 		blocks.onChanged(v -> found.invalidateAll());
 		shape.onChanged(v -> found.remeshAll());
 		color.onChanged(v -> found.remeshAll());

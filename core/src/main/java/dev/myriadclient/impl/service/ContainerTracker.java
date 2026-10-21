@@ -7,6 +7,7 @@ import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.service.Containers;
+import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.util.Interactions;
 import dev.myriadclient.api.util.Reach;
 import dev.myriadclient.api.util.Slots;
@@ -39,7 +40,8 @@ public final class ContainerTracker implements Containers {
 	private final Minecraft mc = Minecraft.getInstance();
 	private final MenuSync sync;
 	/** Takes and puts on the open container, in the order asked; the first is under way. */
-	private final ArrayDeque<ContainerTransfer> transfers = new ArrayDeque<>();
+	/** Moves and arrangements on the open container, run one after another. */
+	private final ArrayDeque<MenuJob> transfers = new ArrayDeque<>();
 	private ViewImpl current;
 	private BlockPos lastClicked;
 	private long lastClickedAt;
@@ -105,7 +107,7 @@ public final class ContainerTracker implements Containers {
 			if (current == null || mc.player == null) closeWanted = false;
 			else if (Myriad.inventory().prepareClick()) closeNow();
 		}
-		ContainerTransfer t = transfers.peek();
+		MenuJob t = transfers.peek();
 		if (t != null && t.tick(sync)) transfers.poll();
 	}
 
@@ -126,7 +128,7 @@ public final class ContainerTracker implements Containers {
 		ViewImpl closed = current;
 		current = null;
 		closeWanted = false;
-		for (ContainerTransfer t : transfers) t.result.completeExceptionally(new IllegalStateException("The container closed"));
+		for (MenuJob t : transfers) t.abort("The container closed");
 		transfers.clear();
 		Myriad.events().post(new ContainerEvent.Closed(closed));
 	}
@@ -151,9 +153,15 @@ public final class ContainerTracker implements Containers {
 
 	@Override
 	public CompletableFuture<View> open(@Nullable Object owner, BlockPos pos, int timeoutTicks) {
+		return open(owner, pos, timeoutTicks, null);
+	}
+
+	@Override
+	public CompletableFuture<View> open(@Nullable Object owner, BlockPos pos, int timeoutTicks, @Nullable Placement.Options options) {
 		if (pending != null) fail(new IllegalStateException("Replaced by another open()"));
 		CompletableFuture<View> f = new CompletableFuture<>();
-		BlockHitResult hit = Reach.hitFor(pos, false);
+		double range = options == null ? Reach.blockRange() : options.range();
+		BlockHitResult hit = Reach.hitFor(pos, false, range);
 		if (mc.player == null || hit == null) {
 			f.completeExceptionally(new IllegalStateException("Can't reach " + pos));
 			return f;
@@ -167,12 +175,28 @@ public final class ContainerTracker implements Containers {
 		pending = f;
 		pendingOwner = owner;
 		pendingPos = pos.immutable();
-		pendingTicks = Math.max(1, timeoutTicks);
-		// Sneaking with an item in hand would place it instead of opening the container.
-		boolean sneaking = mc.player.isShiftKeyDown();
-		if (sneaking) mc.player.setShiftKeyDown(false);
-		Interactions.interactBlock(hit, InteractionHand.MAIN_HAND, true);
-		if (sneaking) mc.player.setShiftKeyDown(true);
+		if (options == null) {
+			pendingTicks = Math.max(1, timeoutTicks);
+			// Sneaking with an item in hand would place it instead of opening the container.
+			boolean sneaking = mc.player.isShiftKeyDown();
+			if (sneaking) mc.player.setShiftKeyDown(false);
+			Interactions.interactBlock(hit, InteractionHand.MAIN_HAND, true);
+			if (sneaking) mc.player.setShiftKeyDown(true);
+			return f;
+		}
+		// The timeout starts once the click is made; until then, it's the click's to give up.
+		pendingTicks = Integer.MAX_VALUE;
+		Placement.Attempt a = Myriad.placement().use(owner, hit, -1, options.withSneak(false));
+		if (!a.sent()) {
+			fail(new IllegalStateException("Can't click " + pos.toShortString() + ": " + a.check()));
+			return f;
+		}
+		a.result().whenComplete((answered, t) -> {
+			if (pending != f) return;
+			if (t != null || !answered) fail(new IllegalStateException("The click on " + pos.toShortString() + " didn't go"));
+			// The server answers the click before it opens the screen; the wait starts now.
+			else if (current == null || !pos.equals(current.pos)) pendingTicks = Math.max(1, timeoutTicks);
+		});
 		return f;
 	}
 
@@ -322,6 +346,19 @@ public final class ContainerTracker implements Containers {
 			ContainerTransfer t = new ContainerTransfer(handler, what, take, how);
 			transfers.add(t);
 			return t.result;
+		}
+
+		@Override
+		public CompletableFuture<Boolean> arrange(Arrangement arrangement) {
+			return run(new Arranger(handler, arrangement));
+		}
+
+		@Override
+		public CompletableFuture<Boolean> run(Planner planner) {
+			if (!isOpen()) return CompletableFuture.failedFuture(new IllegalStateException("The container closed"));
+			PlannerJob job = new PlannerJob(handler, planner);
+			transfers.add(job);
+			return job.result;
 		}
 
 		@Override

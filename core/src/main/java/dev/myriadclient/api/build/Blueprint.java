@@ -6,9 +6,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
@@ -26,7 +24,7 @@ import java.util.function.Supplier;
  *     for (Direction d : Direction.Plane.HORIZONTAL) m.put(feet.relative(d), Target.anyOf(Blocks.OBSIDIAN));
  *     return m;
  * });
- * Blueprint printer = Blueprint.of(schematicPositions);  // indexed by chunk section
+ * Blueprint printer = Blueprint.of(schematicPositions);  // stored by chunk section
  * }</pre>
  */
 public interface Blueprint {
@@ -58,27 +56,51 @@ public interface Blueprint {
 		};
 	}
 
-	/** Fixed positions, indexed by chunk section so looking up what's in reach stays cheap however many there are. */
+	/**
+	 * Fixed positions, stored the way chunks store blocks (a 16x16x16 array for each section that has any), so asking
+	 * for what's in reach visits only the positions in reach, a lookup each, however many there are in all.
+	 */
 	static Blueprint of(Map<BlockPos, Target> positions) {
-		Long2ObjectOpenHashMap<List<Map.Entry<BlockPos, Target>>> sections = new Long2ObjectOpenHashMap<>();
+		final class Section {
+			final BlockPos[] pos = new BlockPos[4096];
+			final Target[] target = new Target[4096];
+		}
+		Long2ObjectOpenHashMap<Section> sections = new Long2ObjectOpenHashMap<>();
 		for (Map.Entry<BlockPos, Target> e : positions.entrySet()) {
 			BlockPos pos = e.getKey().immutable();
-			sections.computeIfAbsent(SectionPos.asLong(pos), k -> new ArrayList<>()).add(Map.entry(pos, e.getValue()));
+			Section section = sections.computeIfAbsent(SectionPos.asLong(pos), k -> new Section());
+			int i = (pos.getY() & 15) << 8 | (pos.getZ() & 15) << 4 | (pos.getX() & 15);
+			section.pos[i] = pos;
+			section.target[i] = e.getValue();
 		}
 		return new Blueprint() {
 			@Override
 			public void near(Vec3 center, double range, BiConsumer<BlockPos, Target> action) {
 				double r2 = range * range;
-				int minX = SectionPos.blockToSectionCoord(Mth.floor(center.x - range)), maxX = SectionPos.blockToSectionCoord(Mth.floor(center.x + range));
-				int minY = SectionPos.blockToSectionCoord(Mth.floor(center.y - range)), maxY = SectionPos.blockToSectionCoord(Mth.floor(center.y + range));
-				int minZ = SectionPos.blockToSectionCoord(Mth.floor(center.z - range)), maxZ = SectionPos.blockToSectionCoord(Mth.floor(center.z + range));
-				for (int sx = minX; sx <= maxX; sx++) {
-					for (int sy = minY; sy <= maxY; sy++) {
-						for (int sz = minZ; sz <= maxZ; sz++) {
-							List<Map.Entry<BlockPos, Target>> list = sections.get(SectionPos.asLong(sx, sy, sz));
-							if (list == null) continue;
-							for (Map.Entry<BlockPos, Target> e : list) {
-								if (Vec3.atCenterOf(e.getKey()).distanceToSqr(center) <= r2) action.accept(e.getKey(), e.getValue());
+				int x0 = Mth.floor(center.x - range), x1 = Mth.floor(center.x + range);
+				int y0 = Mth.floor(center.y - range), y1 = Mth.floor(center.y + range);
+				int z0 = Mth.floor(center.z - range), z1 = Mth.floor(center.z + range);
+				// Section by section, so each is looked up once; inside one, only the part of the cube in reach.
+				for (int sx = x0 >> 4; sx <= x1 >> 4; sx++) {
+					for (int sy = y0 >> 4; sy <= y1 >> 4; sy++) {
+						for (int sz = z0 >> 4; sz <= z1 >> 4; sz++) {
+							Section section = sections.get(SectionPos.asLong(sx, sy, sz));
+							if (section == null) continue;
+							int ax = Math.max(x0, sx << 4), bx = Math.min(x1, (sx << 4) + 15);
+							int ay = Math.max(y0, sy << 4), by = Math.min(y1, (sy << 4) + 15);
+							int az = Math.max(z0, sz << 4), bz = Math.min(z1, (sz << 4) + 15);
+							for (int y = ay; y <= by; y++) {
+								double dy = y + 0.5 - center.y;
+								for (int z = az; z <= bz; z++) {
+									double dz = z + 0.5 - center.z, dyz = dy * dy + dz * dz;
+									if (dyz > r2) continue;
+									for (int x = ax; x <= bx; x++) {
+										int i = (y & 15) << 8 | (z & 15) << 4 | (x & 15);
+										if (section.pos[i] == null) continue;
+										double dx = x + 0.5 - center.x;
+										if (dx * dx + dyz <= r2) action.accept(section.pos[i], section.target[i]);
+									}
+								}
 							}
 						}
 					}
@@ -87,7 +109,9 @@ public interface Blueprint {
 
 			@Override
 			public void forEach(BiConsumer<BlockPos, Target> action) {
-				for (List<Map.Entry<BlockPos, Target>> list : sections.values()) for (Map.Entry<BlockPos, Target> e : list) action.accept(e.getKey(), e.getValue());
+				for (Section section : sections.values()) {
+					for (int i = 0; i < 4096; i++) if (section.pos[i] != null) action.accept(section.pos[i], section.target[i]);
+				}
 			}
 		};
 	}

@@ -11,6 +11,8 @@ import dev.myriadclient.api.hook.Hooks;
 import dev.myriadclient.api.map.Maps;
 import dev.myriadclient.api.share.ConfigShares;
 import dev.myriadclient.api.module.Category;
+import dev.myriadclient.api.module.ModuleGroup;
+import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.registry.Registry;
 import dev.myriadclient.api.service.AntiCheat;
@@ -44,7 +46,13 @@ public interface MyriadApi {
 
 	List<Addon> addons();
 
+	/** @deprecated categories are tags now: use {@link #tags()} */
+	@Deprecated(since = "0.7.0")
 	Registry<Category> categories();
+
+	Registry<Tag> tags();
+
+	Registry<ModuleGroup> groups();
 
 	ModuleRegistry modules();
 

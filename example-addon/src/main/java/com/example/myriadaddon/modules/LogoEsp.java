@@ -3,7 +3,7 @@ package com.example.myriadaddon.modules;
 import com.example.myriadaddon.ExampleAddon;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.HighlightEvent;
-import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.HighlightStyle;
 import dev.myriadclient.api.setting.ColorSetting;
@@ -36,7 +36,7 @@ public final class LogoEsp extends Module {
 	private HighlightStyle style;
 
 	public LogoEsp() {
-		super(Categories.RENDER, "Logo ESP", "Outlines living things and fills them with Myriad logos (a custom highlight fill).");
+		super(Tags.RENDER, "Logo ESP", "Outlines living things and fills them with Myriad logos (a custom highlight fill).");
 		rebuild();
 	}
 

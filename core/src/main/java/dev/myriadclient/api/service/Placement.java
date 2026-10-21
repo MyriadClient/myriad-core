@@ -228,6 +228,26 @@ public interface Placement {
 	Attempt place(Object owner, BlockHitResult hit, int hotbarSlot, Options options);
 
 	/**
+	 * Right-clicks the block {@code hit} names, to use it rather than place against it: open a container, toggle a
+	 * lever or repeater, add to a composter, use the held item on it. Made the way placements are: with
+	 * {@link Options#rotate()} the look turns onto the block first (Grim checks a click on a block as it checks a
+	 * placement) and the click goes at the start of the next tick where the look lands on the block, whichever face;
+	 * without, at once on {@code hit}. Clicks and placements share one rotation a tick, in the order asked. With
+	 * {@link Options#sneak()} the server gets the sneak key down for the click; without, the click goes unsneaked
+	 * even while you sneak, so it uses the block instead of placing what you hold. {@link Options#range()} is how far
+	 * the click may reach; {@link Options#airPlace()} and {@link Options#visibleFaces()} don't apply.
+	 *
+	 * <p>The attempt's position is the clicked block; its result completes with true once the server answered the click
+	 * (the block as it is after, in the world), false if it was dropped (no look onto the block in time, out of reach,
+	 * cancelled, left the world).
+	 *
+	 * @param hotbarSlot the item to click with, swapped to silently for the click; -1 for whatever you hold
+	 */
+	default Attempt use(Object owner, BlockHitResult hit, int hotbarSlot, Options options) {
+		return Attempt.refused(hit.getBlockPos(), Check.UNAVAILABLE);
+	}
+
+	/**
 	 * The hotbar slot whose block an air placement swapped into your off hand, or -1. It comes back first thing next
 	 * tick (the tick after, for a click held over from after the movement packet); until then, placements with that
 	 * slot go from the off hand on the same swap (a burst) and other placements wait. Meanwhile the slot holds what was

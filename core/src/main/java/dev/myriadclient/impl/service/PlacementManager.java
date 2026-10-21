@@ -100,7 +100,8 @@ public final class PlacementManager implements Placement {
 	private record Aim(BlockHitResult hit, double eyeHeight) {
 	}
 
-	private record Queued(Object owner, BlockPos pos, Aim aim, int slot, Options options, CompletableFuture<Boolean> result, int expires) {
+	/** A placement, or with {@code use} a click that uses the block, waiting for its rotation. */
+	private record Queued(Object owner, BlockPos pos, Aim aim, int slot, Options options, CompletableFuture<Boolean> result, int expires, boolean use) {
 		BlockHitResult target() {
 			return aim.hit;
 		}
@@ -371,6 +372,46 @@ public final class PlacementManager implements Placement {
 	}
 
 	@Override
+	public Attempt use(Object owner, BlockHitResult hit, int hotbarSlot, Options o) {
+		BlockPos pos = hit.getBlockPos().immutable();
+		if (hotbarSlot < -1 || hotbarSlot > 8 || mc.player == null || mc.level == null) return Attempt.refused(pos, Check.UNAVAILABLE);
+		if (pending.containsKey(pos)) return Attempt.refused(pos, Check.PENDING);
+		double eyeHeight = eyeHeightFor(new AABB(pos), o.range());
+		if (Double.isNaN(eyeHeight)) return Attempt.refused(pos, Check.OUT_OF_RANGE);
+		if (hotbarSlot >= 0 && !handsFree(hotbarSlot)) return Attempt.refused(pos, Check.RATE_LIMITED);
+		if (!o.rotate() && (!Myriad.limits().canSend(PacketLimits.Kind.INTERACT, 1) || ActionTiming.get().isLate() && sneakChanges(o)))
+			return Attempt.refused(pos, Check.RATE_LIMITED);
+		CompletableFuture<Boolean> result = new CompletableFuture<>();
+		pending.put(pos, result);
+		result.whenComplete((answered, t) -> pending.remove(pos, result));
+		if (o.rotate()) queue.add(new Queued(owner, pos, new Aim(hit, eyeHeight), hotbarSlot, o, result, tick + QUEUE_TICKS, true));
+		else clickUse(hit, hotbarSlot, o, result);
+		return new Attempt(pos, Check.OK, result);
+	}
+
+	/** Whether a use click with {@code o} needs the sneak key sent the other way round for it (see {@link SneakClick}). */
+	private boolean sneakChanges(Options o) {
+		return mc.player != null && (mc.player.getLastSentInput().shift() != o.sneak() || mc.player.input.keyPresses.shift() != o.sneak());
+	}
+
+	/** Uses the block {@code hit} names now, with hotbar {@code slot}'s item (-1: what's held), and follows the answer. */
+	private void clickUse(BlockHitResult hit, int slot, Options o, CompletableFuture<Boolean> result) {
+		int before = acks.currentSequence();
+		Runnable click = () -> SneakClick.as(o.sneak(), () -> {
+			mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, hit);
+			swing(InteractionHand.MAIN_HAND, o.swing());
+		});
+		if (slot < 0) click.run();
+		else Myriad.inventory().silentSwap(slot, click);
+		int sequence = acks.currentSequence();
+		if (sequence == before) {
+			result.complete(false);
+			return;
+		}
+		acks.track(sequence, hit.getBlockPos()).whenComplete((state, t) -> result.complete(t == null));
+	}
+
+	@Override
 	public void cancel(Object owner) {
 		if (owner == null) return;
 		for (Queued q : new ArrayList<>(queue)) {
@@ -389,7 +430,7 @@ public final class PlacementManager implements Placement {
 		CompletableFuture<Boolean> result = new CompletableFuture<>();
 		pending.put(key, result);
 		result.whenComplete((placed, t) -> pending.remove(key, result));
-		if (o.rotate()) queue.add(new Queued(owner, key, aim, slot, o, result, tick + QUEUE_TICKS));
+		if (o.rotate()) queue.add(new Queued(owner, key, aim, slot, o, result, tick + QUEUE_TICKS, false));
 		else click(key, aim.hit, slot, o, result);
 		return new Attempt(key, Check.OK, result);
 	}
@@ -568,6 +609,19 @@ public final class PlacementManager implements Placement {
 			Queued q = it.next();
 			if (q.result.isDone()) {
 				it.remove();
+				continue;
+			}
+			if (q.use) {
+				if (q.slot >= 0 && !handsFree(q.slot)) continue;
+				// Where the look lands on the block, whichever face: the server checks the look is on it.
+				BlockHitResult on = Reach.rayHit(yaw, pitch, q.pos, q.options.range());
+				if (on == null) continue;
+				it.remove();
+				if (!Myriad.limits().canSend(PacketLimits.Kind.INTERACT, 1)) {
+					q.result.complete(false);
+					continue;
+				}
+				clickUse(new BlockHitResult(on.getLocation(), on.getDirection(), q.pos, false), q.slot, q.options, q.result);
 				continue;
 			}
 			if (!handsFree(q.slot) || airClick(q.target(), q.pos) && !airReady(q.slot)) continue;

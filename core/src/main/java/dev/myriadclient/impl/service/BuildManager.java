@@ -16,6 +16,7 @@ import dev.myriadclient.api.util.MathUtil;
 import dev.myriadclient.api.util.Reach;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.mixin.BlockItemAccessor;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -29,10 +30,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -154,41 +152,52 @@ public final class BuildManager implements Building {
 		Vec3 eyes = mc.player.getEyePosition();
 		double reach = Math.max(o.placing().range(), o.breaking().range());
 
-		Map<BlockPos, Status> status = new LinkedHashMap<>();
-		Map<BlockPos, Target> targets = new LinkedHashMap<>();
-		List<BlockPos> breaks = new ArrayList<>(), places = new ArrayList<>();
+		// The positions in reach, side by side; breaks and places by index into them.
+		List<BlockPos> positions = new ArrayList<>();
+		List<Target> targets = new ArrayList<>();
+		List<Status> status = new ArrayList<>();
+		IntArrayList breaks = new IntArrayList(), places = new IntArrayList();
 		b.blueprint.near(eyes, reach + 1, (pos, target) -> {
 			if (!mc.level.isLoaded(pos)) return;
 			Status s = evaluate(pos, target, eyes, o);
-			status.put(pos, s);
-			targets.put(pos, target);
-			if (s == Status.BREAK) breaks.add(pos);
-			else if (s == Status.PLACE) places.add(pos);
+			if (s == Status.BREAK) breaks.add(positions.size());
+			else if (s == Status.PLACE) places.add(positions.size());
+			positions.add(pos.immutable());
+			targets.add(target);
+			status.add(s);
 		});
 
 		// Top down, so falling blocks land in space that's already clear; then nearest first.
-		breaks.sort(Comparator.<BlockPos>comparingInt(p -> -p.getY()).thenComparingDouble(p -> eyes.distanceToSqr(Vec3.atCenterOf(p))));
-		for (int i = 0; i < breaks.size() && i < BREAKS_QUEUED; i++) {
-			Breaking.Attempt a = Myriad.breaking().breakBlock(b, breaks.get(i), o.priority(), o.breaking());
-			if (a.accepted()) status.put(breaks.get(i), Status.WAITING);
+		breaks.sort((i, j) -> {
+			int byY = Integer.compare(positions.get(j).getY(), positions.get(i).getY());
+			return byY != 0 ? byY : Double.compare(eyes.distanceToSqr(Vec3.atCenterOf(positions.get(i))), eyes.distanceToSqr(Vec3.atCenterOf(positions.get(j))));
+		});
+		for (int k = 0; k < breaks.size() && k < BREAKS_QUEUED; k++) {
+			int i = breaks.getInt(k);
+			Breaking.Attempt a = Myriad.breaking().breakBlock(b, positions.get(i), o.priority(), o.breaking());
+			if (a.accepted()) status.set(i, Status.WAITING);
 		}
 
 		// Bottom up, so each placement has something under or beside it; then nearest first.
-		places.sort(Comparator.<BlockPos>comparingInt(BlockPos::getY).thenComparingDouble(p -> eyes.distanceToSqr(Vec3.atCenterOf(p))));
+		places.sort((i, j) -> {
+			int byY = Integer.compare(positions.get(i).getY(), positions.get(j).getY());
+			return byY != 0 ? byY : Double.compare(eyes.distanceToSqr(Vec3.atCenterOf(positions.get(i))), eyes.distanceToSqr(Vec3.atCenterOf(positions.get(j))));
+		});
 		int placed = 0, checked = 0;
-		for (BlockPos pos : places) {
+		for (int k = 0; k < places.size(); k++) {
 			if (placed >= o.placesPerTick() || checked >= PLACES_CHECKED) break;
 			checked++;
-			Status s = place(b, pos, targets.get(pos));
-			status.put(pos, s);
+			int i = places.getInt(k);
+			Status s = place(b, positions.get(i), targets.get(i));
+			status.set(i, s);
 			if (s == Status.WAITING) placed++;
 		}
 
-		List<Build.Step> steps = new ArrayList<>(status.size());
+		List<Build.Step> steps = new ArrayList<>(positions.size());
 		boolean workLeft = false;
-		for (Map.Entry<BlockPos, Status> e : status.entrySet()) {
-			steps.add(new Build.Step(e.getKey(), targets.get(e.getKey()), e.getValue()));
-			if (e.getValue() != Status.DONE) workLeft = true;
+		for (int i = 0; i < positions.size(); i++) {
+			steps.add(new Build.Step(positions.get(i), targets.get(i), status.get(i)));
+			if (status.get(i) != Status.DONE) workLeft = true;
 		}
 		b.steps = steps;
 

@@ -211,11 +211,13 @@ public final class DevConsole {
 					if (!how.equals("press")) mouseButton(button, GLFW.GLFW_RELEASE);
 				}
 				// Real key presses through vanilla's KeyboardHandler: "key 1 alt", "key space alt", "key enter".
+				// "key g press" ... "key g release" holds it in between (a wheel's bind, say).
 				case "key" -> {
 					int key = keyCode(a[1]);
-					int mods = a.length > 2 ? modifiers(a[2]) : 0;
-					keyboard(GLFW.GLFW_PRESS, key, mods);
-					keyboard(GLFW.GLFW_RELEASE, key, mods);
+					String how = a.length > 2 && (a[a.length - 1].equals("press") || a[a.length - 1].equals("release")) ? a[a.length - 1] : "click";
+					int mods = a.length > 2 && !a[2].equals(how) ? modifiers(a[2]) : 0;
+					if (!how.equals("release")) keyboard(GLFW.GLFW_PRESS, key, mods);
+					if (!how.equals("press")) keyboard(GLFW.GLFW_RELEASE, key, mods);
 				}
 				case "type" -> {
 					for (int cp : line.substring(4).strip().codePoints().toArray()) {

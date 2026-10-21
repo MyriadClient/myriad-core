@@ -1,6 +1,6 @@
 package com.example.myriadaddon.modules;
 
-import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.Modules;
 import dev.myriadclient.api.setting.ColorSetting;
@@ -38,7 +38,7 @@ public final class ChatTimestamps extends Module {
 	private final ColorSetting color = sgGeneral.color("Color").defaultValue(SettingColor.role(SettingColor.Mode.TEXT, 0x88)).build();
 
 	public ChatTimestamps() {
-		super(Categories.MISC, "Chat Timestamps", "Shows when each chat message arrived.");
+		super(Tags.MISC, "Chat Timestamps", "Shows when each chat message arrived.");
 	}
 
 	/** Called by the mixin for every chat line. Returns the line unchanged while the module is off. */

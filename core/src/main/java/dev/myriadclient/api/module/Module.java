@@ -29,7 +29,7 @@ import java.util.List;
  *     private final BoolSetting omni = sgGeneral.bool("Omnidirectional").build();
  *
  *     public Sprint() {
- *         super(Categories.MOVEMENT, "Sprint", "Sprints automatically.");
+ *         super(Tags.MOVEMENT, "Sprint", "Sprints automatically.");
  *     }
  *
  *     @Subscribe
@@ -48,7 +48,8 @@ public abstract class Module implements Identified {
 	private final String name;
 	private final String path;
 	private final String description;
-	private final Category category;
+	private final List<Tag> tags = new ArrayList<>(1);
+	private ModuleGroup group;
 	private MyriadId id;
 	private boolean enabled;
 	private final List<Runnable[]> bindings = new ArrayList<>(0);
@@ -64,11 +65,21 @@ public abstract class Module implements Identified {
 	public final BoolSetting visibleInList = sgModule.bool("Show In List").description("Show in the module list HUD.").defaultValue(true).build();
 	public final BoolSetting chatFeedback = sgModule.bool("Chat Feedback").description("Announce toggles in chat.").defaultValue(true).build();
 
-	protected Module(Category category, String name, String description) {
-		this.category = category;
+	/**
+	 * @param tag what the module is about (see {@link Tags}): its colour and icon, and {@code #tag} in the launcher.
+	 *            More can be added with {@link #alsoTagged}.
+	 */
+	protected Module(Tag tag, String name, String description) {
+		this.tags.add(tag);
 		this.name = name;
 		this.path = MyriadId.toPath(name);
 		this.description = description;
+	}
+
+	/** @deprecated categories are {@link Tag}s now: use {@link #Module(Tag, String, String)} */
+	@Deprecated(since = "0.7.0")
+	protected Module(Category category, String name, String description) {
+		this(category.tag(), name, description);
 	}
 
 	@Override
@@ -92,8 +103,43 @@ public abstract class Module implements Identified {
 		return description;
 	}
 
+	/** The module's main tag: the one that gives it its colour and icon. */
+	public Tag tag() {
+		return tags.getFirst();
+	}
+
+	/** Every tag of the module, the main one first. */
+	public List<Tag> tags() {
+		return List.copyOf(tags);
+	}
+
+	public boolean hasTag(Tag tag) {
+		return tags.contains(tag);
+	}
+
+	/** Adds tags besides the main one, for a module about more than one thing (Reach: combat and world). Call it in the constructor. */
+	protected final void alsoTagged(Tag... more) {
+		for (Tag t : more) if (!tags.contains(t)) tags.add(t);
+	}
+
+	/** @deprecated categories are {@link Tag}s now: use {@link #tag()} */
+	@Deprecated(since = "0.7.0")
 	public Category category() {
-		return category;
+		return Category.of(tag());
+	}
+
+	/**
+	 * The group the module shows in, in the menu: the one its addon registered it into, or the addon's own window
+	 * ({@link ModuleGroup#isAddonWindow()}). Null until it's registered.
+	 */
+	public ModuleGroup group() {
+		return group;
+	}
+
+	/** Called by the module registry with the group it's registered into. */
+	@ApiStatus.Internal
+	public void assignGroup(ModuleGroup group) {
+		this.group = group;
 	}
 
 	public boolean isEnabled() {

@@ -27,7 +27,7 @@ public final class ModuleSettingsPanel extends WidgetPanel {
 
 	@Override
 	public String icon() {
-		return module.category().icon();
+		return module.tag().icon();
 	}
 
 	@Override
@@ -37,8 +37,7 @@ public final class ModuleSettingsPanel extends WidgetPanel {
 		header.addFixed(new Toggle(module::isEnabled, module::setEnabled), 24);
 		content.add(header);
 		if (!module.description().isEmpty()) content.add(new Label(module.description()).dim());
-		String owner = Myriad.modules().ownerOf(module);
-		content.add(new Label(module.category().name() + " · " + (owner == null ? "?" : owner)).dim());
+		content.add(new Label(module.group().name() + " · " + AddonNames.of(module)).dim());
 		content.add(SettingsView.build(module.settings));
 	}
 }

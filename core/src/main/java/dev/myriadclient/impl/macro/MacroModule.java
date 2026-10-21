@@ -4,6 +4,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.service.Tasks;
 import dev.myriadclient.api.setting.EnumSetting;
+import dev.myriadclient.api.setting.IconSetting;
 import dev.myriadclient.api.setting.StringListSetting;
 import dev.myriadclient.impl.MyriadImpl;
 import net.minecraft.client.Minecraft;
@@ -30,6 +31,7 @@ public final class MacroModule extends Module {
 		.description("One per line: .myriad commands, /server commands, wait <ticks>, or chat.").protect().build();
 	private final StringListSetting offCommands = sgGeneral.stringList("Off Commands")
 		.description("Run when it's turned off, the same way.").visible(() -> mode.get() == Mode.TOGGLE).protect().build();
+	public final IconSetting icon = sgGeneral.icon("Icon").description("Its icon on wheels.").build();
 	{
 		sgGeneral.action("Delete Macro", () -> MacroManager.delete(this)).description("Remove this macro for good.").build();
 	}
@@ -38,7 +40,7 @@ public final class MacroModule extends Module {
 	private final Object offRun = new Object();
 
 	MacroModule(String name) {
-		super(MacroManager.CATEGORY, name, "A macro: runs its commands when pressed.");
+		super(MacroManager.TAG, name, "A macro: runs its commands when pressed.");
 	}
 
 	@Override

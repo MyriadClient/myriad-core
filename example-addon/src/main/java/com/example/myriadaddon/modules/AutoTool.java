@@ -4,7 +4,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.BlockBreakEvent;
 import dev.myriadclient.api.event.events.TickEvent;
-import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.setting.BoolSetting;
 import dev.myriadclient.api.setting.IntSetting;
@@ -40,7 +40,7 @@ public final class AutoTool extends Module {
 	private int previousSlot = -1;
 
 	public AutoTool() {
-		super(Categories.PLAYER, "Auto Tool", "Switches to the best tool for the block you're mining.");
+		super(Tags.PLAYER, "Auto Tool", "Switches to the best tool for the block you're mining.");
 	}
 
 	@Override

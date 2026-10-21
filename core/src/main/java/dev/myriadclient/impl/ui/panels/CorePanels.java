@@ -5,6 +5,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.AddonContext;
 import dev.myriadclient.api.control.ControlPanel;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Window;
 import dev.myriadclient.api.util.MyriadId;
@@ -17,7 +18,8 @@ import java.util.List;
 /** Ids and registration of the panels Myriad core provides. */
 public final class CorePanels {
 	public static final MyriadId MODULES = MyriadId.of("myriad", "modules");
-	public static final MyriadId CATEGORY = MyriadId.of("myriad", "category");
+	/** A group window. Its id is from when these were category windows, so saved layouts still open them. */
+	public static final MyriadId GROUP = MyriadId.of("myriad", "category");
 	public static final MyriadId MODULE_SETTINGS = MyriadId.of("myriad", "module_settings");
 	public static final MyriadId PANEL_SETTINGS = MyriadId.of("myriad", "panel_settings");
 	public static final MyriadId CONSOLE = MyriadId.of("myriad", "console");
@@ -41,10 +43,10 @@ public final class CorePanels {
 
 	public static void register(AddonContext ctx, WindowManager wm) {
 		ctx.registerPanel(PanelType.builder(MODULES, "Modules").icon("").factory(() -> new ModulesPanel(null)).build());
-		ctx.registerPanel(PanelType.builder(CATEGORY, "Category").icon("").factory(args -> {
+		ctx.registerPanel(PanelType.builder(GROUP, "Group").icon("").factory(args -> {
 			// A window whose addons are all gone stays saved (as an orphan) until they're back.
-			List<ModuleGroup> groups = ModuleGroup.fromArgs(args);
-			return groups.stream().anyMatch(g -> !g.modules().isEmpty()) ? new ModulesPanel(groups) : null;
+			List<ModuleGroup> groups = MenuGroups.fromArgs(args);
+			return groups.isEmpty() ? null : new ModulesPanel(groups);
 		}).build());
 		ctx.registerPanel(PanelType.builder(MODULE_SETTINGS, "Module Settings").icon("").factory(args -> {
 			if (!args.has("module")) return null;

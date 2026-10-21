@@ -2,7 +2,7 @@ package com.example.myriadaddon.modules;
 
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.Render3DEvent;
-import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.Renderer3D;
 import dev.myriadclient.api.setting.ColorSetting;
@@ -42,7 +42,7 @@ public final class HoleEsp extends Module {
 		.build();
 
 	public HoleEsp() {
-		super(Categories.COMBAT, "Hole ESP", "Shows holes you can stand in safely.");
+		super(Tags.COMBAT, "Hole ESP", "Shows holes you can stand in safely.");
 	}
 
 	@Override

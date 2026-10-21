@@ -25,7 +25,7 @@ import dev.myriadclient.api.ui.ThemeSettings;
 
 /**
  * How things looked in the menu of whoever shared them, for the website to draw without knowing the addons: a
- * module's name, category (with its icon and colour) and its settings as rows (name, kind, shown value). Values come
+ * module's name, main tag (as "category", the name the site knows it by, with its icon and colour) and its settings as rows (name, kind, shown value). Values come
  * from the player's own settings; protected ones say only that they're there.
  */
 final class ShareView {
@@ -40,9 +40,9 @@ final class ShareView {
 		v.addProperty("addon", addon);
 		v.addProperty("addonName", Myriad.addons().stream().filter(a -> a.id().equals(addon)).map(Addon::name).findFirst().orElse(addon));
 		JsonObject category = new JsonObject();
-		category.addProperty("name", m.category().name());
-		category.addProperty("icon", m.category().icon());
-		category.addProperty("color", hex(m.category().color()));
+		category.addProperty("name", m.tag().name());
+		category.addProperty("icon", m.tag().icon());
+		category.addProperty("color", hex(m.tag().color()));
 		v.add("category", category);
 		JsonArray groups = new JsonArray();
 		for (SettingGroup g : m.settings.groups()) {

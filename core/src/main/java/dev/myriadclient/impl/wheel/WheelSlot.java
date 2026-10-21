@@ -20,8 +20,9 @@ import java.util.Optional;
 /**
  * One slot on a wheel: what it runs, saved as a kind and a target (an id, or a command's text), and looked up again
  * whenever it's shown or run, so it follows the module or panel as it is now and shows as missing if its addon is gone.
+ * The player can give it an icon and a name of its own (empty: the module's or panel's own).
  */
-public record WheelSlot(Kind kind, String target) {
+public record WheelSlot(Kind kind, String target, String customIcon, String customName) {
 	public enum Kind {
 		/** Toggles a module (macros are modules too). */
 		MODULE,
@@ -35,7 +36,35 @@ public record WheelSlot(Kind kind, String target) {
 		COMMAND
 	}
 
+	public WheelSlot {
+		customIcon = customIcon == null ? "" : customIcon;
+		customName = customName == null ? "" : customName.strip();
+	}
+
+	public WheelSlot(Kind kind, String target) {
+		this(kind, target, "", "");
+	}
+
+	public WheelSlot withIcon(String icon) {
+		return new WheelSlot(kind, target, icon, customName);
+	}
+
+	public WheelSlot withName(String name) {
+		return new WheelSlot(kind, target, customIcon, name);
+	}
+
+	/** Whether the two run the same thing, whatever they're called or look like. */
+	public boolean sameTarget(WheelSlot other) {
+		return kind == other.kind && target.equals(other.target);
+	}
+
 	public String label() {
+		if (!customName.isEmpty()) return customName;
+		return defaultLabel();
+	}
+
+	/** The name it has without one of its own. */
+	public String defaultLabel() {
 		return switch (kind) {
 			case MODULE -> module().map(Module::name).orElse(target);
 			case CONTROL -> control().map(ControlPanel::name).orElse(target);
@@ -45,10 +74,10 @@ public record WheelSlot(Kind kind, String target) {
 		};
 	}
 
-	/** What it is, for under the name: the module's category, "Control panel", the command kind... */
+	/** What it is, for under the name: the module's group, "Control panel", the command kind... */
 	public String hint() {
 		return switch (kind) {
-			case MODULE -> module().map(m -> m.category() == MacroManager.CATEGORY ? "Macro" : m.category().name()).orElse("Missing module");
+			case MODULE -> module().map(m -> m.hasTag(MacroManager.TAG) ? "Macro" : m.group().name()).orElse("Missing module");
 			case CONTROL -> control().isPresent() ? "Control panel" : "Missing control panel";
 			case KEY_ACTION -> keyAction().isPresent() ? "Action" : "Missing action";
 			case PANEL -> panel().isPresent() ? "Panel" : "Missing panel";
@@ -56,11 +85,16 @@ public record WheelSlot(Kind kind, String target) {
 		};
 	}
 
-	/** A Nerd Font glyph for it (the fonts the UI draws icons with). */
+	/** Its own icon if it has one, else a Nerd Font glyph for what it runs. */
 	public String icon() {
+		return customIcon.isEmpty() ? defaultIcon() : customIcon;
+	}
+
+	/** The icon it has without one of its own. */
+	public String defaultIcon() {
 		return switch (kind) {
-			case MODULE -> module().map(m -> m.category().icon()).filter(i -> !i.isEmpty()).orElse("");
-			case CONTROL -> "";
+			case MODULE -> module().map(m -> m instanceof MacroModule macro ? macro.icon.getOr(m.tag().icon()) : m.tag().icon()).filter(i -> !i.isEmpty()).orElse("");
+			case CONTROL -> control().map(ControlPanel::icon).orElse("\uf1de");
 			case KEY_ACTION -> "";
 			case PANEL -> panel().map(PanelType::icon).filter(i -> i != null && !i.isEmpty()).orElse("");
 			case COMMAND -> "";
@@ -133,13 +167,16 @@ public record WheelSlot(Kind kind, String target) {
 		JsonObject o = new JsonObject();
 		o.addProperty("kind", kind.name().toLowerCase(Locale.ROOT));
 		o.addProperty("target", target);
+		if (!customIcon.isEmpty()) o.addProperty("icon", customIcon);
+		if (!customName.isEmpty()) o.addProperty("name", customName);
 		return o;
 	}
 
 	static @Nullable WheelSlot fromJson(JsonObject o) {
 		if (!o.has("kind") || !o.has("target")) return null;
 		try {
-			return new WheelSlot(Kind.valueOf(o.get("kind").getAsString().toUpperCase(Locale.ROOT)), o.get("target").getAsString());
+			return new WheelSlot(Kind.valueOf(o.get("kind").getAsString().toUpperCase(Locale.ROOT)), o.get("target").getAsString(),
+				o.has("icon") ? o.get("icon").getAsString() : "", o.has("name") ? o.get("name").getAsString() : "");
 		} catch (RuntimeException e) {
 			return null;
 		}

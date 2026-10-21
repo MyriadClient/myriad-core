@@ -304,6 +304,11 @@ final class ServiceRouters {
 		}
 
 		@Override
+		public Placement.Attempt use(Object owner, BlockHitResult hit, int hotbarSlot, Placement.Options options) {
+			return of(owner).use(owner, hit, hotbarSlot, options);
+		}
+
+		@Override
 		public void cancel(Object owner) {
 			of(owner).cancel(owner);
 		}

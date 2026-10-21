@@ -123,7 +123,14 @@ public final class WheelScreen extends Screen {
 		title = c.ellipsize(FontFamily.SANS, size * 1.1f, title, maxW);
 		hint = c.ellipsize(FontFamily.SANS, size * 0.85f, hint, maxW);
 		float th = c.textHeight(FontFamily.SANS, size * 1.1f), hh = c.textHeight(FontFamily.SANS, size * 0.85f);
-		float top = -(th + 2 + hh) / 2;
+		// Pointing at nothing: the wheel's own icon above its name.
+		float big = size * 1.6f, ih = hovered >= 0 ? 0 : c.textHeight(FontFamily.MONO, big) + 3;
+		float top = -(ih + th + 2 + hh) / 2;
+		if (hovered < 0) {
+			String icon = wheel.icon();
+			c.text(FontFamily.MONO, big, icon, -c.textWidth(FontFamily.MONO, big, icon) / 2, top, theme.accent.argb());
+		}
+		top += ih;
 		c.text(FontFamily.SANS, size * 1.1f, title, -c.textWidth(FontFamily.SANS, size * 1.1f, title) / 2, top, hovered >= 0 ? theme.text.argb() : theme.accent.argb());
 		c.text(FontFamily.SANS, size * 0.85f, hint, -c.textWidth(FontFamily.SANS, size * 0.85f, hint) / 2, top + th + 2, theme.textDim.argb());
 		c.pop();

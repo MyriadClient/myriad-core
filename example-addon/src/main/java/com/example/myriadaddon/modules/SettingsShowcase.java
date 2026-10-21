@@ -3,7 +3,7 @@ package com.example.myriadaddon.modules;
 import com.example.myriadaddon.settings.RangeSetting;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.TickEvent;
-import dev.myriadclient.api.module.Category;
+import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.setting.ActionSetting;
 import dev.myriadclient.api.setting.BlockPosSetting;
@@ -34,7 +34,7 @@ import java.util.List;
 
 /**
  * Every built-in setting type, plus this addon's own {@link RangeSetting}, in one place to look things up. It lives
- * in the addon's own category (registered in {@code ExampleAddon#registerCategories}).
+ * with the addon's own tag (registered in {@code ExampleAddon#registerTags}).
  *
  * <p>Settings are fields built from a group. Myriad saves them, shows them in the menu, makes them settable with
  * {@code .set settings_showcase <setting> <value>}, and resets them with a right-click on their name.
@@ -92,8 +92,8 @@ public final class SettingsShowcase extends Module {
 
 	private boolean keyWasDown;
 
-	public SettingsShowcase(Category category) {
-		super(category, "Settings Showcase", "Every setting type, including a custom one.");
+	public SettingsShowcase(Tag tag) {
+		super(tag, "Settings Showcase", "Every setting type, including a custom one.");
 		flavour.onChanged(f -> {
 			if (announce.get() && isEnabled()) info("Flavour is now " + flavour.valueString());
 		});

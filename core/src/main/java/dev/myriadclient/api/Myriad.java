@@ -11,6 +11,8 @@ import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.hook.Hooks;
 import dev.myriadclient.api.map.Maps;
 import dev.myriadclient.api.module.Category;
+import dev.myriadclient.api.module.ModuleGroup;
+import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.registry.Registry;
 import dev.myriadclient.api.service.AntiCheat;
@@ -97,8 +99,23 @@ public final class Myriad {
 		return api().addons();
 	}
 
+	/** @deprecated categories are tags now: use {@link #tags()} */
+	@Deprecated(since = "0.7.0")
 	public static Registry<Category> categories() {
 		return api().categories();
+	}
+
+	/** Every module tag: Myriad's shared ones ({@link dev.myriadclient.api.module.Tags}) and addons' own. */
+	public static Registry<Tag> tags() {
+		return api().tags();
+	}
+
+	/**
+	 * The module groups addons declared. Every group with modules, addons' own windows included, is
+	 * {@link ModuleRegistry#groups()}.
+	 */
+	public static Registry<ModuleGroup> groups() {
+		return api().groups();
 	}
 
 	public static ModuleRegistry modules() {

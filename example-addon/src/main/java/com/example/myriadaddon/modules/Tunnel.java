@@ -6,7 +6,7 @@ import dev.myriadclient.api.build.Build;
 import dev.myriadclient.api.build.Target;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.Render3DEvent;
-import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.Renderer3D;
 import dev.myriadclient.api.service.Building;
@@ -39,7 +39,7 @@ public final class Tunnel extends Module {
 	private Build build;
 
 	public Tunnel() {
-		super(Categories.WORLD, "Tunnel", "Digs a tunnel the way you face.");
+		super(Tags.WORLD, "Tunnel", "Digs a tunnel the way you face.");
 	}
 
 	@Override

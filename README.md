@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/license-CC0-3b7dd8" alt="CC0">
 </p>
 
-![The Myriad menu: Essentials' category windows tiled by the Dwindle layout](docs/screenshots/menu-dwindle.png)
+![The Myriad menu: Essentials' group windows tiled by the Dwindle layout](docs/screenshots/menu-dwindle.png)
 
 Myriad is built like a desktop, not a click-GUI. The menu is a window manager modelled on
 [Hyprland](https://hyprland.org): workspaces, tiled or floating windows, layouts, a launcher, and everything reachable
@@ -52,7 +52,7 @@ the Addons window.
 | Addon | What it adds | Where |
 |---|---|---|
 | **Myriad Essentials** | The stock modules: Offhand, Kill Aura, Elytra Fly, Packet Mine, Scaffold, ESP, Nametags and the rest, with the HUD elements. Built like any other addon, on the public API, versioned on its own; remove it and Myriad boots with an empty module list. | [MyriadClient/myriad-essentials](https://github.com/MyriadClient/myriad-essentials) |
-| **Myriad Boze** | Every module of the [Boze](https://boze.dev) client in Myriad's menu, with Boze installed alongside: Boze's modules appear in the shared categories (*Combat · Boze*) with their settings, keybinds and on/off state in sync both ways, and the two friend lists kept the same. Boze stays the owner of its config and keys; Myriad is a second front end. | [MyriadClient/myriad-boze](https://github.com/MyriadClient/myriad-boze) |
+| **Myriad Boze** | Every module of the [Boze](https://boze.dev) client in Myriad's menu, with Boze installed alongside: Boze's modules appear in windows named after Boze's own categories, with their settings, keybinds and on/off state in sync both ways, and the two friend lists kept the same. Boze stays the owner of its config and keys; Myriad is a second front end. | [MyriadClient/myriad-boze](https://github.com/MyriadClient/myriad-boze) |
 | **Myriad Omarchy** | A theme that follows your [Omarchy](https://omarchy.org) system theme: switch themes on the desktop and the menu follows. | [MyriadClient/myriad-omarchy](https://github.com/MyriadClient/myriad-omarchy) |
 
 For writing your own: [myriad-addon-template](https://github.com/MyriadClient/myriad-addon-template) to start from and
@@ -69,7 +69,7 @@ For writing your own: [myriad-addon-template](https://github.com/MyriadClient/my
 | ![Tokyo Night](docs/screenshots/menu-tokyo-night.png) | ![Gruvbox](docs/screenshots/menu-gruvbox.png) |
 | The Theme panel, on the Tokyo Night preset. Every colour, gap and curve is a setting. | Gruvbox. Editing a preset saves your changes on top of it. |
 | ![The Columns layout](docs/screenshots/menu-columns.png) | |
-| The Columns layout, one category per column; `mod+L` cycles layouts per workspace. | |
+| The Columns layout, one window per column; `mod+L` cycles layouts per workspace. | |
 
 ## Building and running
 
@@ -111,32 +111,35 @@ shows these keys under Myriad's logo, and they're also in Minecraft's Controls �
 single key, like Right Shift, bind **Open Menu** there or under Keybindings → Global.
 
 - **Workspaces 1–9** each tile their windows with a layout. **Dwindle** is the default, as in Hyprland: each new
-  window splits the focused one, so a workspace grows into a grid. **Columns** (one window per module category, side
+  window splits the focused one, so a workspace grows into a grid. **Columns** (one window per column, side
   by side, with each module's settings unfolding inline) is also built in, and addons can register
   more layouts. Columns never get too narrow to read: when they don't all fit, the row scrolls sideways
   (Shift + mouse wheel, or the wheel over a gap), and focusing a window scrolls it into view.
-- **Category windows** hold one addon's modules in one category: *Combat · Essentials*, *Combat · Crystal PvP*. Addons
-  share the standard categories (same icon and colour) and can add their own. Lay them out however suits you, say a
-  combat workspace and a base workspace. When you install an addon, its windows open beside the ones of the same
-  categories if that workspace has room; an addon that doesn't fit gets a workspace of its own (continuing onto the
-  next empty one if it has more windows than fit), and a notification says where. A workspace holds as many windows
+- **Group windows** hold one addon's modules, grouped the way its author thinks best: Essentials has *Combat*,
+  *Travel*, *Building & Mining*, *Inventory* and *Visuals*; an addon that declares no groups has one window named
+  after it. Each group is a window of its own, so lay them out however suits you, say a combat workspace and a base
+  workspace, with any addon's windows side by side. When you install an addon, its windows open together on the first
+  workspace with room for them; an addon that doesn't fit gets a workspace of its own (continuing onto the next empty
+  one if it has more windows than fit), and a notification says where. A workspace holds as many windows
   as fit side by side at a readable width, so a fresh install with many addons comes up as one tidy workspace per
   addon rather than one crowded one. Only windows the desktop hasn't seen are placed: what you've arranged stays put. A window you close stays closed (the launcher reopens it).
-  **Merge** windows by dragging one by its title bar onto another's title bar: each addon becomes a section, and the
+  **Merge** windows by dragging one by its title bar onto another's title bar: each group becomes a section, and the
   icon on a section's header moves it back out to its own window.
 - Windows can be **tiled**, **floating** or **fullscreen**. Drag the gaps between tiles to resize them.
 - The bar shows workspaces 1–4, and 5–9 only while they have windows (or you're on one). The **HUD workspace** (the icon after
   the numbers) holds the in-game HUD. Its windows are drawn in game without
   window decorations. Drag them to move them; they snap to edges and to the centre, and anchor to the nearest screen
-  third. Right-click one for its settings. The **HUD** window there lists every element like a category lists
+  third. Right-click one for its settings. The **HUD** window there lists every element like a group window lists
   modules: click one to add or remove it, unfold it for its options. Delete removes the hovered element, and the
   launcher can also add and remove them.
 - The **launcher** (`Alt+Space`) fuzzy-searches modules (Enter toggles, Shift+Enter or right-click opens settings),
-  control panels, macros, panels, categories, themes, profiles and workspaces. Narrow it with `@addon` (part of an
-  addon's id or name: `@ess`, `@stash`) and `#kind` or `#category` (`#panel`, `#control`, `#macro`, `#theme`,
-  `#render`, `#combat`…), alone or with text: `@ess #render` lists Essentials' render modules, and `@ess #panel` every
-  window it has (category windows and HUD elements; `#category` and `#hud` narrow it). Whatever you type can
-  also become a **New macro**, **New control panel** or **New wheel** of that name (the last three results).
+  control panels, macros, wheels, panels, group windows, themes, profiles and workspaces. Narrow it with `@addon`
+  (part of an addon's id or name: `@ess`, `@stash`) and `#kind`, `#tag` or `#group` (`#panel`, `#control`, `#macro`,
+  `#theme`, `#render`, `#combat`, `#travel`…), alone or with text: `@ess #render` lists Essentials' render modules,
+  and `@ess #panel` every window it has (group windows and HUD elements; `#group` and `#hud` narrow it). A module's
+  **tags** say what it's about (Combat, Movement, Render, Player, World, Misc, shared by every addon, with their
+  colours); a module can have several. Whatever you type can also become a **New macro**, **New control panel** or
+  **New wheel** of that name (the last three results); "new wheel travel" makes just the wheel.
 - **Control panels** switch a set of modules together: one bind or switch turns them all on, each with settings the
   panel saves for it (open its window, unfold a module, set it up, press Save). While it's on, those lie over the
   module's own settings (tagged with the panel's name; tuning one tunes the panel's), and turning it off turns off only
@@ -164,7 +167,7 @@ single key, like Right Shift, bind **Open Menu** there or under Keybindings → 
     `.minecraft/myriad/themes/`. To share it, send the `.json`; the other person drops it in that folder and presses
     **Reload**.
   - **Theme roles**: colours come from a palette (accent, secondary, red, green, yellow, blue, magenta, cyan) that
-    modules use as defaults, so ESP, tracers, categories, notifications and the module list follow the theme. A
+    modules use as defaults, so ESP, tracers, tags, notifications and the module list follow the theme. A
     colour you change on a module is saved with that module's settings as an override.
   - **Preferences** (UI scale, pausing singleplayer, mod key, vim keys) are yours, not the theme's, and stay put when
     you switch.
@@ -200,15 +203,15 @@ Every binding can be changed in the Keybinds panel.
 ## Essentials
 
 The stock modules are the [myriad-essentials](https://github.com/MyriadClient/myriad-essentials) addon, released on its
-own. In the standard categories (each module's settings explain its options):
+own. In its five windows (each module's settings explain its options):
 
 | | |
 |---|---|
-| Combat | **Offhand** (totem, crystal, golden apple or shield, falling back to a totem when it matters; sword gap), **Auto Armor** (best armour; a bind flips chestplate and elytra), **Auto Disconnect** (health, totem pops, totems left, armour, players, beds, anchors, crystals, creepers, falls, the void, chosen entities; turns off or waits for the reason to clear), **Kill Aura** (Grim-safe: faces the target with move fix and hits when this tick's or the last sent rotation lands on its hitbox within reach, so the turn and the hit share a tick; full charge, vanilla packet order; Switch holds the best weapon on the server only, from the hotbar or inventory, charging it before the target is in reach, or attacks only while you hold one) |
-| Movement | **Elytra Fly** (highway bouncing, or Altitude: pitch 40 style flight without fireworks, about 27 b/s; with Elytra Tweaks' No Durability, long glides are cut with a chestplate so the elytra never wears; mines or, with Baritone, walks round obstacles), **Elytra Tweaks** (Rocket Boost: rockets push as hard as Grim allows, full speed at once, about 34 b/s straight and 42 on diagonals, holding height; No Durability: the elytra never wears out, swapped with a chestplate from your off hand or hotbar, the swap sounds muted), **Inventory Move** (walk with screens open, arrow keys to look), **Velocity** |
-| Player | **Auto Eat** (pauses Baritone), **Auto Tool** (silent; borrows tools from your inventory and puts them back), **Inventory Tweaks** (right-click a shulker box or ender chest in your inventory to open it on the spot), **Middle Click** (friend, experience, rocket or pearl by what you point at), **Packet Mine** (hit once and the block is mined for you with your hand free, timed to Grim's own allowances so it finishes early without flags; Fast mode finishes every block early with decoy starts, as 2b2t clients do, with double break; hold and drag to queue blocks, auto rebreak, tools borrowed from your inventory and put back), **Reach** (starts at vanilla; Grim flags more), **Stack Replenish** (tops up hotbar stacks and refills used-up slots), **Wall Interact**, **X Carry** |
-| Render | **ESP**, **Blocks** (highlight chosen blocks, like spawners or beds, in their own colours), **Storage**, **Tracers**, **Nametags** (players, mobs, items, pearl owners), **Tooltips** (shulker, ender chest and map previews, durability, food), **Full Bright** (gamma or night vision), **Free Look**, **Freecam**, **View Model**, **Zoom** |
-| World | **Air Place** (place blocks in mid-air where you look, through the off hand as 2b2t clients do; current Grim builds refuse it), **Scaffold** (blocks under you as you walk, clicking faces you can see; sprints without breaking stride, unaimed as 2b2t clients place, or Rotate to face each block for stricter Grim; bridges corners, towers when you jump) |
+| Combat | **Kill Aura** (Grim-safe: faces the target with move fix and hits when this tick's or the last sent rotation lands on its hitbox within reach, so the turn and the hit share a tick; full charge, vanilla packet order; Switch holds the best weapon on the server only, from the hotbar or inventory, charging it before the target is in reach, or attacks only while you hold one), **Offhand** (totem, crystal, golden apple or shield, falling back to a totem when it matters; sword gap), **Auto Armor** (best armour; a bind flips chestplate and elytra), **Auto Eat** (pauses Baritone), **Velocity**, **Auto Disconnect** (health, totem pops, totems left, armour, players, beds, anchors, crystals, creepers, falls, the void, chosen entities; turns off or waits for the reason to clear) |
+| Travel | **Elytra Fly** (highway bouncing, or Altitude: pitch 40 style flight without fireworks, about 27 b/s; with Elytra Swap's No Durability, long glides are cut with a chestplate so the elytra never wears; mines or, with Baritone, walks round obstacles), **Elytra Swap** (No Durability: the elytra never wears out, swapped with a chestplate from your off hand or hotbar, the swap sounds muted), **Rocket Boost** (rockets push as hard as Grim allows, full speed at once, about 34 b/s straight and 42 on diagonals, holding height), **Lock Rotation**, **Auto Walk**, **Inventory Move** (walk with screens open, arrow keys to look) |
+| Building & Mining | **Scaffold** (blocks under you as you walk, clicking faces you can see; sprints without breaking stride, unaimed as 2b2t clients place, or Rotate to face each block for stricter Grim; bridges corners, towers when you jump), **Air Place** (place blocks in mid-air where you look, through the off hand as 2b2t clients do; current Grim builds refuse it), **Packet Mine** (hit once and the block is mined for you with your hand free, timed to Grim's own allowances so it finishes early without flags; Fast mode finishes every block early with decoy starts, as 2b2t clients do, with double break; hold and drag to queue blocks, auto rebreak, tools borrowed from your inventory and put back), **Auto Tool** (silent; borrows tools from your inventory and puts them back), **Reach** (starts at vanilla; Grim flags more), **Wall Interact**, **Baritone** (Baritone's own settings, when it's installed) |
+| Inventory | **Inventory Tweaks** (right-click a shulker box or ender chest in your inventory to open it on the spot), **Stack Replenish** (tops up hotbar stacks and refills used-up slots), **X Carry**, **Middle Click** (friend, experience, rocket or pearl by what you point at) |
+| Visuals | **ESP**, **Tracers**, **Nametags** (players, mobs, items, pearl owners), **Storage**, **Blocks** (highlight chosen blocks, like spawners or beds, in their own colours), **Block Highlight**, **Full Bright** (gamma or night vision), **No Render**, **Time of Day**, **View Model**, **Zoom**, **Free Look**, **Freecam**, **Tooltips** (shulker, ender chest and map previews, durability, food), **Baritone Render** (Baritone's path and goals in the theme's colours) |
 
 HUD elements: Watermark (with the logo), Module List, Coordinates, Armor, Binds, Chest Count, Direction, Effects,
 FPS, HP, Player Count, Speed, Totems, TPS. Baritone options do nothing when Baritone isn't installed.
@@ -314,7 +317,7 @@ public final class MyAddon implements MyriadAddon {
 }
 ```
 
-Myriad runs each phase for every addon in turn: `registerCategories`, then `initialize`, then config load, then
+Myriad runs each phase for every addon in turn: `registerTags`, then `initialize`, then config load, then
 `postInitialize` (the place to look for optional integrations). If an addon throws, it is marked **failed**,
 everything it registered is removed, and the game keeps running. The Addons panel shows why it failed.
 
@@ -328,12 +331,16 @@ keybind by Myriad (the other mod handles its key); `setEnabledSilently` follows 
 
 Following these keeps addons consistent with each other and with the stock modules:
 
-- **Categories.** Your modules get a window per category, titled with your addon's name (*Combat · Your Addon*). Use
-  the shared categories (`Categories.COMBAT`, `MOVEMENT`, `RENDER`, `PLAYER`, `WORLD`, `MISC`) whenever they fit:
-  they share an icon and colour across addons, and on install your window opens beside the player's other windows
-  of that category. Register your own category (in `registerCategories`) for a kind of module that's genuinely new,
-  like automation or building; it gets a window of its own. A category is how you say which of your modules belong
-  together, so a handful per category reads better than one or twenty.
+- **Groups.** Each group of yours is a window in the menu: `ModuleGroup travel = ctx.registerGroup("Travel",
+  Icons.PLANE)`, then `ctx.registerModules(travel, ...)`. Group them the way a player looks for them, by what they're
+  for; a handful to a dozen per group reads better than one or thirty. A small addon can skip groups: modules
+  registered without one go in your addon's own window, named after it.
+- **Tags.** Give each module the shared tag that says what it's about (`Tags.COMBAT`, `MOVEMENT`, `RENDER`,
+  `PLAYER`, `WORLD`, `MISC`): its colour and icon, and `#combat` in the launcher finds it with every other addon's.
+  `alsoTagged(...)` in the constructor adds more. Register your own tag (in `registerTags`) only for a kind of module
+  none of them fits.
+- **Icons.** `Icons` has about 190 ready-made glyphs (`Icons.ROCKET`, `Icons.CUBES`…) for groups, tags and panels;
+  an `IconSetting` (`sg.icon("Icon")`) lets players pick one.
 - **Shared state** lives in objects you create in `initialize` and pass to constructors, not in static fields.
 - **Colours** default to theme roles (`SettingColor.role(Mode.ACCENT)`, `RED`, `TEXT`, …) so they follow the
   player's theme. A colour the player changes is saved as an override.
@@ -399,7 +406,7 @@ public final class MyModule extends Module {
     private final SettingGroup sgRender = settings.group("Render");          // later groups start folded
     private final ColorSetting color = sgRender.color("Color").defaultValue(SettingColor.role(SettingColor.Mode.RED)).build();
 
-    public MyModule() { super(Categories.COMBAT, "My Module", "Does a thing."); }
+    public MyModule() { super(Tags.COMBAT, "My Module", "Does a thing."); }
 
     @Subscribe
     private void onTick(TickEvent.Post e) { ... }
@@ -529,7 +536,9 @@ How the pieces fit the kinds of addons people build:
   `building()`, which works through what's in reach: wrong blocks broken, materials moved into the hotbar, each block
   clicked and rotated so it comes out facing the right way, and `Build.steps()` drawn as the plan. For clicks of your
   own, `placement().place(this, hit, slot, options)` places where vanilla would for that exact click (into air with
-  `withAirPlace`, onto a candle or slab with the same item) and `withSneak` places against chests and doors.
+  `withAirPlace`, onto a candle or slab with the same item) and `withSneak` places against chests and doors;
+  `placement().use(this, hit, slot, options)` right-clicks a block to use it (a lever, a repeater's delay), turned
+  onto it first where the server checks looks.
   `Building.Options.forServer()` rotates for everything and clicks only visible faces where the server checks, and goes
   fast where it doesn't. Each placement's `result()` says whether the server kept the block, `FadeMap` with
   `Renderer3D.blockShape` shows the plan, `tasks()` paces it, and it pauses while `server().isLagging(...)` or right
@@ -537,8 +546,11 @@ How the pieces fit the kinds of addons people build:
   mods (Litematica, Baritone) belong in the addon: keep any code touching their classes in its own class, only load it
   after `FabricLoader.getInstance().isModLoaded("litematica")`, and put mixins into them under `compat.litematica`.
 - **A storage manager** finds containers per chunk with a `ChunkCache` (`BlockInfo.isStorage`), opens them
-  with `containers().open(this, pos, ticks)`, reads them in `ContainerEvent.Loaded`/`SlotUpdated` (including ones the
-  player opens by hand: `view().byHand()`, and `opener()` says which module opened the rest), and runs multi-step jobs with `tasks().sequence(...)`. It saves what it learns with `ctx.storage()`, says
+  with `containers().open(this, pos, ticks, Placement.Options.forServer())` (turned onto the container first where the
+  server checks looks), reads them in `ContainerEvent.Loaded`/`SlotUpdated` (including ones the player opens by hand:
+  `view().byHand()`, and `opener()` says which module opened the rest), moves items with `view.take`/`put`, sorts or
+  fills one to an exact layout with `view.arrange(Containers.Arrangement.of(slots, layout))` (or runs click planners of
+  its own with `view.run`), and runs multi-step jobs with `tasks().sequence(...)`. It saves what it learns with `ctx.storage()`, says
   where an item is with `ItemTooltipEvent`, reads shulkers with `ItemInfo.contents`, and marks chests with
   `WorldLabel.Segment.item(...)` icons.
 - **A crystal PvP suite** picks targets with `TargetSettings`, finds placements with `Crystals.bases` and scores them

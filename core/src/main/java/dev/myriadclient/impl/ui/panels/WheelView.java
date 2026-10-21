@@ -1,10 +1,12 @@
 package dev.myriadclient.impl.ui.panels;
 
+import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.ui.Window;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.api.ui.widget.HBox;
+import dev.myriadclient.api.ui.widget.IconPicker;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.SettingsView;
 import dev.myriadclient.api.ui.widget.TextField;
@@ -16,9 +18,9 @@ import dev.myriadclient.impl.wheel.WheelSlot;
 import java.util.List;
 
 /**
- * One wheel's window: its slots in order (clockwise from the top), each movable and removable; a search below that adds
- * modules, macros, control panels, actions and panels, or a typed command; and, folded at the bottom, its name, bind
- * and Delete.
+ * One wheel's window: its slots in order (clockwise from the top), each movable and removable, and given an icon and a
+ * name of its own from the button at its left; a search below that adds modules, macros, control panels, actions and
+ * panels, or a typed command; and, folded at the bottom, its name, bind, icon and Delete.
  */
 final class WheelView extends WidgetPanel {
 	/** Search results shown at once. */
@@ -38,6 +40,8 @@ final class WheelView extends WidgetPanel {
 	private boolean refocus;
 	private final VBox results = new VBox(2, 0);
 	private Collapsible settingsSection;
+	/** The slot whose icon and name are being edited (by place on the wheel), or -1. */
+	private int editingSlot = -1;
 
 	WheelView(WheelImpl wheel) {
 		this.wheel = wheel;
@@ -56,12 +60,13 @@ final class WheelView extends WidgetPanel {
 
 	@Override
 	public String icon() {
-		return WheelsPanel.ICON;
+		return wheel.icon();
 	}
 
 	@Override
 	public void tick() {
-		if (!built.equals(wheel.slots())) rebuild();
+		// A slot's new icon or name shows live; only adding, removing or moving rebuilds.
+		if (!sameSlots(built, wheel.slots())) rebuild();
 		// Deleted: nothing left to show.
 		if (!MyriadImpl.get().wheelManager().all().contains(wheel)) {
 			Window w = window();
@@ -73,7 +78,11 @@ final class WheelView extends WidgetPanel {
 	protected void build(VBox content) {
 		built = wheel.slots();
 		if (built.isEmpty()) content.add(new Label("Nothing on it yet: search below for what to put on it.").dim());
-		for (int i = 0; i < built.size(); i++) content.add(row(built.get(i), i, built.size()));
+		if (editingSlot >= built.size()) editingSlot = -1;
+		for (int i = 0; i < built.size(); i++) {
+			content.add(row(i, built.size()));
+			if (i == editingSlot) content.add(slotEditor(i));
+		}
 		content.add(picker());
 		content.add(settingsSection());
 		if (refocus) {
@@ -82,18 +91,43 @@ final class WheelView extends WidgetPanel {
 		}
 	}
 
-	private HBox row(WheelSlot slot, int index, int count) {
+	private static boolean sameSlots(List<WheelSlot> a, List<WheelSlot> b) {
+		if (a.size() != b.size()) return false;
+		for (int i = 0; i < a.size(); i++) if (!a.get(i).sameTarget(b.get(i))) return false;
+		return true;
+	}
+
+	/** Slot {@code index} as it is now (its icon or name may have changed since the window was built). */
+	private WheelSlot slot(int index) {
+		List<WheelSlot> now = wheel.slots();
+		return index < now.size() ? now.get(index) : built.get(index);
+	}
+
+	private HBox row(int index, int count) {
 		HBox row = new HBox(3);
-		Label name = new Label(slot.icon() + "  " + slot.label());
-		if (!slot.exists()) name.dim();
+		row.addFixed(new Button(() -> slot(index).icon(), () -> {
+			editingSlot = editingSlot == index ? -1 : index;
+			rebuild();
+		}), 16).tooltip("Its icon and name on the wheel");
+		Label name = new Label(() -> slot(index).label());
+		name.color(() -> slot(index).exists() ? Myriad.ui().theme().text.argb() : Myriad.ui().theme().textDim.argb());
 		row.addWeighted(name, 1);
-		row.addFixed(new Label(slot.hint()).dim(), 70);
-		Button up = row.addFixed(new Button("", () -> wheel.move(slot, -1)), 16);
-		Button down = row.addFixed(new Button("", () -> wheel.move(slot, 1)), 16);
-		row.addFixed(new Button("", () -> wheel.remove(slot)), 16);
+		row.addFixed(new Label(() -> slot(index).hint()).dim(), 70);
+		Button up = row.addFixed(new Button("\uf062", () -> wheel.move(slot(index), -1)), 16);
+		Button down = row.addFixed(new Button("\uf063", () -> wheel.move(slot(index), 1)), 16);
+		row.addFixed(new Button("\uf00d", () -> wheel.remove(slot(index))), 16);
 		up.tooltip(index == 0 ? "Already first (at the top)" : "Move anticlockwise");
 		down.tooltip(index == count - 1 ? "Already last" : "Move clockwise");
 		return row;
+	}
+
+	/** Under a slot: its own name (blank for what it runs) and icon (Default for what it runs). */
+	private VBox slotEditor(int index) {
+		VBox box = new VBox(2, 0);
+		box.add(new TextField(() -> slot(index).customName()).placeholder(slot(index).defaultLabel())
+			.onChange(s -> wheel.replace(slot(index), slot(index).withName(s))));
+		box.add(new IconPicker(() -> slot(index).customIcon(), g -> wheel.replace(slot(index), slot(index).withIcon(g))));
+		return box;
 	}
 
 	private VBox picker() {
@@ -119,7 +153,7 @@ final class WheelView extends WidgetPanel {
 		List<WheelSlot> on = wheel.slots();
 		int shown = 0;
 		for (WheelSlot s : WheelSlot.candidates(query)) {
-			if (on.contains(s)) continue;
+			if (on.stream().anyMatch(s::sameTarget)) continue;
 			if (shown++ == RESULTS) break;
 			results.add(new Button(s.icon() + "  " + s.label() + "   · " + s.hint(), () -> add(s)));
 		}

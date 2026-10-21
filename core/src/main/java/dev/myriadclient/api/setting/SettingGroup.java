@@ -92,6 +92,11 @@ public class SettingGroup {
 		return bind(new StringSetting.Builder(name));
 	}
 
+	/** An icon picked from {@link dev.myriadclient.api.ui.Icons}; empty for the default. */
+	public IconSetting.Builder icon(String name) {
+		return bind(new IconSetting.Builder(name));
+	}
+
 	/** Any number of an enum's constants ("which of these"). */
 	public <E extends Enum<E>> EnumSetSetting.Builder<E> enumSet(String name, Class<E> type) {
 		return bind(new EnumSetSetting.Builder<>(name, type));

@@ -76,8 +76,12 @@ public final class AddonLoader {
 		return best != null ? best : name;
 	}
 
-	public void registerCategories() {
-		runPhase("registerCategories", MyriadAddon::registerCategories);
+	@SuppressWarnings("deprecation")
+	public void registerTags() {
+		runPhase("registerTags", (a, ctx) -> {
+			a.registerTags(ctx);
+			a.registerCategories(ctx);
+		});
 	}
 
 	public void initialize() {

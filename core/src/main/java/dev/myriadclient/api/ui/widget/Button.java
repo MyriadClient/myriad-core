@@ -35,7 +35,9 @@ public class Button extends Widget {
 		boolean hover = isHovered(mx, my);
 		int bg = accent ? ColorUtil.withAlpha(theme().accent.argb(), hover ? 200 : 150) : (hover ? theme().surfaceHover.argb() : theme().surface.argb());
 		c.roundRect(x, y, width, height, 4, bg);
-		String text = c.ellipsize(c.defaultFont(), c.defaultFontSize(), label.get(), width - 8);
+		String text = label.get();
+		// One glyph (an icon) is drawn whole: "…" in its place says nothing.
+		if (text.codePointCount(0, text.length()) > 1) text = c.ellipsize(c.defaultFont(), c.defaultFontSize(), text, width - 8);
 		c.text(text, x + (width - c.textWidth(text)) / 2, y + (height - c.textHeight()) / 2, theme().text.argb());
 		offerTooltip(mx, my);
 	}

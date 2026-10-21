@@ -3,9 +3,9 @@ package dev.myriadclient.impl;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.AddonContext;
 import dev.myriadclient.api.addon.MyriadAddon;
-import dev.myriadclient.api.module.Categories;
-import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.Tag;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.setting.ActionSetting;
 import dev.myriadclient.api.setting.BlockPosSetting;
 import dev.myriadclient.api.setting.BoolSetting;
@@ -16,6 +16,7 @@ import dev.myriadclient.api.setting.EnumSetSetting;
 import dev.myriadclient.api.setting.EnumSetting;
 import dev.myriadclient.api.setting.FileSetting;
 import dev.myriadclient.api.setting.IntListSetting;
+import dev.myriadclient.api.setting.IconSetting;
 import dev.myriadclient.api.setting.IntSetting;
 import dev.myriadclient.api.setting.KeybindSetting;
 import dev.myriadclient.api.setting.ModuleListSetting;
@@ -28,6 +29,7 @@ import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.ColorPicker;
 import dev.myriadclient.api.ui.widget.Dropdown;
 import dev.myriadclient.api.ui.widget.HBox;
+import dev.myriadclient.api.ui.widget.IconPicker;
 import dev.myriadclient.api.ui.widget.KeybindButton;
 import dev.myriadclient.api.ui.widget.RegistryPicker;
 import dev.myriadclient.api.ui.widget.Slider;
@@ -54,16 +56,17 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * Myriad core registers its own pieces through the same addon API everyone else uses: categories, layouts, themes,
+ * Myriad core registers its own pieces through the same addon API everyone else uses: tags, layouts, themes,
  * panels, bar widgets, commands, key actions and the setting editors. It registers no modules.
  */
 public final class CoreAddon implements MyriadAddon {
 	public static final MyriadId OPEN_MENU = MyriadId.of("myriad", "open_menu");
 
 	@Override
-	public void registerCategories(AddonContext ctx) {
-		for (Category c : Categories.DEFAULTS) ctx.registerCategory(c);
-		ctx.registerCategory(MacroManager.CATEGORY);
+	public void registerTags(AddonContext ctx) {
+		for (Tag t : Tags.DEFAULTS) ctx.registerTag(t);
+		ctx.registerTag(MacroManager.TAG);
+		MyriadImpl.get().groups().register(MacroManager.GROUP, ctx.namespace());
 	}
 
 	@Override
@@ -108,6 +111,7 @@ public final class CoreAddon implements MyriadAddon {
 			: new Slider(s::get, s::edit, s.sliderMin(), s.sliderMax(), s.decimals()), false);
 		w.register(EnumSetting.class, s -> enumDropdown((EnumSetting) s), false);
 		w.register(StringSetting.class, s -> new TextField(s::get).onSubmit(s::edit), false);
+		w.register(IconSetting.class, s -> new IconPicker(s::get, s::edit), true);
 		w.register(StringListSetting.class, StringListEditor::new, true);
 		w.register(IntListSetting.class, s -> new TextField(s::valueString).onSubmit(s::parse).placeholder("1, 2, 3"), false);
 		w.register(EnumSetSetting.class, s -> new RegistryPicker<>(enumSetSource((EnumSetSetting) s)), true);

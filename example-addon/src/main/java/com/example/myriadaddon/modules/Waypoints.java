@@ -7,7 +7,7 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.Render2DEvent;
 import dev.myriadclient.api.event.events.Render3DEvent;
 import dev.myriadclient.api.event.events.ScreenOpenEvent;
-import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.Projection;
 import dev.myriadclient.api.render.Renderer3D;
@@ -67,7 +67,7 @@ public final class Waypoints extends Module {
 	private final DoubleSetting scale = sgLabels.doubleSetting("Scale").defaultValue(1).range(0.5, 3).decimals(1).visible(labels::get).build();
 
 	public Waypoints(WaypointStore store) {
-		super(Categories.WORLD, "Waypoints", "Shows saved positions in the world. Manage them with .waypoint or the Waypoints window.");
+		super(Tags.WORLD, "Waypoints", "Shows saved positions in the world. Manage them with .waypoint or the Waypoints window.");
 		this.store = store;
 	}
 

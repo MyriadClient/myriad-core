@@ -20,6 +20,11 @@ public interface ControlPanel extends Identified {
 
 	String name();
 
+	/** Its icon (one of {@link dev.myriadclient.api.ui.Icons}, or the sliders it shows without one). */
+	default String icon() {
+		return "\uf1de";
+	}
+
 	/** Its modules that are installed, in order. */
 	List<Module> modules();
 

@@ -77,7 +77,7 @@ public final class HudStyle {
 	}
 
 	public int color(int index, int count, Module module) {
-		return color(index, count, module.category().color());
+		return color(index, count, module.tag().color());
 	}
 
 	/** Label colour (the theme's dim text when this style has no label option). */

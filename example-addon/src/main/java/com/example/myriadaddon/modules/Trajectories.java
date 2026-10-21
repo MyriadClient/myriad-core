@@ -3,7 +3,7 @@ package com.example.myriadaddon.modules;
 import dev.myriadclient.api.combat.Trajectory;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.Render3DEvent;
-import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.Renderer3D;
 import dev.myriadclient.api.render.ShapeBuilder;
@@ -51,7 +51,7 @@ public final class Trajectories extends Module {
 	});
 
 	public Trajectories() {
-		super(Categories.RENDER, "Trajectories", "Shows where projectiles will land.");
+		super(Tags.RENDER, "Trajectories", "Shows where projectiles will land.");
 	}
 
 	@Subscribe(inGame = true)

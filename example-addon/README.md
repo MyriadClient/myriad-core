@@ -11,25 +11,25 @@ numbered steps.
 
 | Feature | Where to find it in game |
 |---|---|
-| **Waypoints** module: boxes, beams and labels for saved positions; a "Death" waypoint when you die | World category |
+| **Waypoints** module: boxes, beams and labels for saved positions; a "Death" waypoint when you die | World Tools window |
 | `.waypoint` / `.wp` command: `list`, `add <name> [x y z]`, `remove`, `hide`, `show`, `clear` | chat or the console (`mod+Return`) |
 | **Waypoints** window: add, hide and delete waypoints | launcher (`mod+Space`) |
 | **Nearest Waypoint** and **Session Stats** HUD elements | HUD workspace → HUD window |
 | **Add Waypoint** (`Alt+B`) and **Open Waypoints** key actions | Keybinds panel (`mod+K`) |
-| **Auto Tool** module: best tool while mining (brought in from the inventory when you stand still), defers to Essentials' Packet Mine | Player category |
-| **Tunnel** module: digs a tunnel the way you face through the building planner | World category |
-| **Block Search** module: highlights the blocks you pick in the chunks around you | World category |
-| **Trajectories** module: where the item in your hand and every projectile in the air will land | Render category |
-| **Hole ESP** module: holes you can stand in safely, green for bedrock | Combat category |
-| **Chat Timestamps** module, driven by a mixin | Misc category |
-| **Settings Showcase** module: every setting type and a custom one | its own "Showcase" category |
+| **Auto Tool** module: best tool while mining (brought in from the inventory when you stand still), defers to Essentials' Packet Mine | World Tools window |
+| **Tunnel** module: digs a tunnel the way you face through the building planner | World Tools window |
+| **Block Search** module: highlights the blocks you pick in the chunks around you | World Tools window |
+| **Trajectories** module: where the item in your hand and every projectile in the air will land | Visuals window |
+| **Hole ESP** module: holes you can stand in safely, green for bedrock | Visuals window |
+| **Chat Timestamps** module, driven by a mixin | the addon's own window |
+| **Settings Showcase** module: every setting type and a custom one | the addon's own window, with its own "Showcase" tag |
 | Server TPS on the top bar, and an "Example Sunset" theme | bar / Theme panel |
 
 ## File map
 
 | File | Shows |
 |---|---|
-| `ExampleAddon.java` | the entrypoint: categories, then everything else; `postInitialize` for optional integrations |
+| `ExampleAddon.java` | the entrypoint: tags, then groups, modules and everything else; `postInitialize` for optional integrations |
 | `waypoints/WaypointStore.java` | addon state shared by several features, saved with `AddonStorage` |
 | `waypoints/Waypoint.java` | an immutable record with its own JSON form |
 | `modules/Waypoints.java` | setting groups, theme-role colours, `Render3DEvent` boxes and lines, `Render2DEvent` world labels, reacting to vanilla with `ScreenOpenEvent` |

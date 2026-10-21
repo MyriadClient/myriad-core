@@ -9,6 +9,9 @@ import dev.myriadclient.api.hook.ReplacementBuilder;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.ModuleGroup;
+import dev.myriadclient.api.module.Tag;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.setting.SettingColor;
@@ -45,20 +48,56 @@ public interface AddonContext {
 
 	Logger logger();
 
-	/** Registers a category with id {@code <your mod id>:<name in snake_case>}. */
-	Category registerCategory(String name, String icon, int color);
+	/**
+	 * Registers a tag with id {@code <your mod id>:<name in snake_case>}, for modules about something none of
+	 * {@link Tags} covers. Prefer the shared ones: {@code #combat} then finds your modules beside everyone else's.
+	 * Theme-aware colours follow the theme (e.g. {@code SettingColor.role(MAGENTA)}).
+	 */
+	Tag registerTag(String name, String icon, SettingColor color);
 
-	/** Like {@link #registerCategory(String, String, int)} with a theme-aware colour (e.g. {@code SettingColor.role(MAGENTA)}). */
-	Category registerCategory(String name, String icon, SettingColor color);
+	/** Registers a tag you constructed yourself (e.g. kept in a constants class). */
+	Tag registerTag(Tag tag);
 
-	/** Registers a category you constructed yourself (e.g. kept in a constants class). */
-	Category registerCategory(Category category);
+	/** @deprecated categories are tags now: use {@link #registerTag(String, String, SettingColor)} */
+	@Deprecated(since = "0.7.0")
+	default Category registerCategory(String name, String icon, int color) {
+		return registerCategory(name, icon, SettingColor.of(color));
+	}
 
+	/** @deprecated categories are tags now: use {@link #registerTag(String, String, SettingColor)} */
+	@Deprecated(since = "0.7.0")
+	default Category registerCategory(String name, String icon, SettingColor color) {
+		return Category.of(registerTag(name, icon, color));
+	}
+
+	/** @deprecated categories are tags now: use {@link #registerTag(Tag)} */
+	@Deprecated(since = "0.7.0")
+	default Category registerCategory(Category category) {
+		registerTag(category.tag());
+		return category;
+	}
+
+	/**
+	 * Declares a group of your modules, with id {@code <your mod id>:<name in snake_case>}: one window in the menu,
+	 * in the order groups are first used. Put modules in it with {@link #registerModule(ModuleGroup, Module)}. An
+	 * addon that declares none has one window, named after it, with all its modules.
+	 */
+	ModuleGroup registerGroup(String name, String icon);
+
+	/** Registers a module in your addon's own window (with the modules you register without a group). */
 	<M extends Module> M registerModule(M module);
+
+	/** Registers a module into {@code group}, one of yours from {@link #registerGroup}. */
+	<M extends Module> M registerModule(ModuleGroup group, M module);
 
 	/** Registers several modules, in the order given (which is their order in the menu). */
 	default void registerModules(Module... modules) {
 		for (Module m : modules) registerModule(m);
+	}
+
+	/** Registers several modules into {@code group}, in the order given (which is their order in its window). */
+	default void registerModules(ModuleGroup group, Module... modules) {
+		for (Module m : modules) registerModule(group, m);
 	}
 
 	<C extends Command> C registerCommand(C command);

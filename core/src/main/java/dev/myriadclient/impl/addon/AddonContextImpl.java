@@ -11,9 +11,10 @@ import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.HookBuilder;
 import dev.myriadclient.api.hook.ReplacementBuilder;
 import dev.myriadclient.api.hook.Service;
-import dev.myriadclient.api.module.Categories;
-import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.ModuleGroup;
+import dev.myriadclient.api.module.Tag;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.ui.BarWidget;
@@ -52,30 +53,39 @@ final class AddonContextImpl implements AddonContext {
 	}
 
 	@Override
-	public Category registerCategory(String name, String icon, int color) {
-		return registerCategory(name, icon, SettingColor.of(color));
-	}
-
-	@Override
-	public Category registerCategory(String name, String icon, SettingColor color) {
-		for (Category core : Categories.DEFAULTS) {
+	public Tag registerTag(String name, String icon, SettingColor color) {
+		for (Tag core : Tags.DEFAULTS) {
 			if (core.name().equalsIgnoreCase(name)) {
-				logger.warn("Registering a category named '{}', which duplicates Myriad's shared one; use Categories.{} instead "
-					+ "so your modules share a window with other addons'", name, core.id().path().toUpperCase());
+				logger.warn("Registering a tag named '{}', which duplicates Myriad's shared one; use Tags.{} instead "
+					+ "so #{} finds your modules with everyone else's", name, core.id().path().toUpperCase(), core.id().path());
 			}
 		}
-		return myriad.categories().register(new Category(id(MyriadId.toPath(name)), name, icon, color), addon.id());
+		return registerTag(new Tag(id(MyriadId.toPath(name)), name, icon, color));
 	}
 
 	@Override
-	public Category registerCategory(Category category) {
-		return myriad.categories().register(category, addon.id());
+	public Tag registerTag(Tag tag) {
+		return myriad.tags().register(tag, addon.id());
+	}
+
+	@Override
+	public ModuleGroup registerGroup(String name, String icon) {
+		return myriad.groups().register(new ModuleGroup(id(MyriadId.toPath(name)), name, icon), addon.id());
 	}
 
 	@Override
 	public <M extends Module> M registerModule(M module) {
 		myriad.modules().register(module, addon.id());
 		return module;
+	}
+
+	@Override
+	public <M extends Module> M registerModule(ModuleGroup group, M module) {
+		if (!group.addon().equals(addon.id())) {
+			throw new IllegalArgumentException("Group " + group.id() + " belongs to another addon; " + addon.id() + " can only use its own");
+		}
+		module.assignGroup(group);
+		return registerModule(module);
 	}
 
 	@Override

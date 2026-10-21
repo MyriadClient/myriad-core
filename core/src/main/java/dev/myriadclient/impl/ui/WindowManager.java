@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.render.Animated;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.service.Notifications;
@@ -26,7 +27,7 @@ import dev.myriadclient.impl.service.NotificationManager;
 import dev.myriadclient.impl.ui.layout.DwindleLayout;
 import dev.myriadclient.impl.ui.panels.CorePanels;
 import dev.myriadclient.impl.ui.panels.DialogPanel;
-import dev.myriadclient.impl.ui.panels.ModuleGroup;
+import dev.myriadclient.impl.ui.panels.MenuGroups;
 import dev.myriadclient.impl.ui.panels.ModulesPanel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -68,7 +69,7 @@ public final class WindowManager implements Desktop {
 	final List<WindowImpl> closing = new ArrayList<>();
 	final Launcher launcher = new Launcher(this);
 	private final DesktopPainter painter = new DesktopPainter(this);
-	private final CategoryWindows categories = new CategoryWindows(this);
+	private final GroupWindows groups = new GroupWindows(this);
 	private final DesktopBinds binds = new DesktopBinds(this);
 	final Set<WindowImpl> failedPanels = new HashSet<>();
 	final Animated transition = new Animated(1);
@@ -77,7 +78,7 @@ public final class WindowManager implements Desktop {
 	};
 
 	private JsonArray orphanWindows = new JsonArray();
-	/** Modules came or went since the desktop was last laid out: category windows need rebuilding, new groups placing. */
+	/** Modules came or went since the desktop was last laid out: group windows need rebuilding, new groups placing. */
 	private boolean modulesChanged;
 	/** Each workspace's tiling as loaded, so a window revived later (its modules came late) can take its old place. */
 	private final JsonObject[] savedTiling = new JsonObject[WORKSPACES + 1];
@@ -124,18 +125,19 @@ public final class WindowManager implements Desktop {
 		launcher.show(query);
 	}
 
-	/** Called when a module is registered or removed; the next {@link #open} refreshes the category windows. */
+	/** Called when a module is registered or removed; the next {@link #open} refreshes the group windows. */
 	public void modulesChanged() {
 		modulesChanged = true;
 	}
 
-	/** Before the desktop shows: rebuilds category windows and places new groups if modules came or went since. */
+	/** Before the desktop shows: rebuilds group windows and places new groups if modules came or went since. */
 	public void refreshModules() {
 		if (!modulesChanged) return;
 		modulesChanged = false;
 		reviveOrphans();
+		groups.tidy();
 		for (WindowImpl w : windows) if (w.panel instanceof ModulesPanel p) safe(w, p::rebuild);
-		categories.placeNewGroups(true);
+		groups.placeNewGroups(true);
 	}
 
 	/**
@@ -783,12 +785,12 @@ public final class WindowManager implements Desktop {
 	}
 
 	/**
-	 * The category window whose title bar the dragged category window is over (dropping it there merges the two), or
+	 * The group window whose title bar the dragged group window is over (dropping it there merges the two), or
 	 * null.
 	 */
 	WindowImpl mergeTarget() {
 		if (drag == null || (drag.kind != DragKind.SWAP && drag.kind != DragKind.MOVE) || !theme.titleBars.get()) return null;
-		if (!(drag.window.panel instanceof ModulesPanel from) || !from.isCategoryWindow()) return null;
+		if (!(drag.window.panel instanceof ModulesPanel from) || !from.isGroupWindow()) return null;
 		List<WindowImpl> order = workspaces[active].drawOrder();
 		for (int i = order.size() - 1; i >= 0; i--) {
 			WindowImpl w = order.get(i);
@@ -796,7 +798,7 @@ public final class WindowManager implements Desktop {
 			Rect r = w.current();
 			if (!r.contains(mouseX, mouseY)) continue;
 			boolean title = !w.fullscreen && mouseY < r.y() + theme.borderSize.get() + TITLE_H;
-			return title && w.panel instanceof ModulesPanel to && to.isCategoryWindow() ? w : null;
+			return title && w.panel instanceof ModulesPanel to && to.isGroupWindow() ? w : null;
 		}
 		return null;
 	}
@@ -804,7 +806,7 @@ public final class WindowManager implements Desktop {
 	/** Moves {@code from}'s groups into {@code into} (as sections) and closes {@code from}. */
 	private void merge(WindowImpl from, WindowImpl into) {
 		ModulesPanel merged = ((ModulesPanel) into.panel).mergedWith((ModulesPanel) from.panel);
-		replacePanel(into, merged, ModuleGroup.args(merged.groups()));
+		replacePanel(into, merged, MenuGroups.args(merged.groups()));
 		closeWindow(from);
 		markDirty();
 	}
@@ -1196,7 +1198,7 @@ public final class WindowManager implements Desktop {
 			ws.add(j);
 		}
 		o.add("workspaces", ws);
-		o.add("seen_groups", categories.saveSeen());
+		o.add("seen_groups", groups.saveSeen());
 		JsonArray wins = new JsonArray();
 		for (WindowImpl w : windows) {
 			// Dialogs hold callbacks that don't survive a restart.
@@ -1219,14 +1221,14 @@ public final class WindowManager implements Desktop {
 			savedTiling[i] = null;
 		}
 		themes.reload();
-		categories.reset();
+		groups.reset();
 		if (o == null) {
 			firstRun();
-			categories.placeNewGroups(false);
+			groups.placeNewGroups(false);
 			modulesChanged = false;
 			return;
 		}
-		if (o.has("seen_groups")) categories.loadSeen(o.getAsJsonArray("seen_groups"));
+		if (o.has("seen_groups")) groups.loadSeen(o.getAsJsonArray("seen_groups"));
 		loadTheme(o);
 		if (o.has("binds")) {
 			JsonObject b = o.getAsJsonObject("binds");
@@ -1238,8 +1240,13 @@ public final class WindowManager implements Desktop {
 				JsonObject j = e.getAsJsonObject();
 				try {
 					WindowImpl w = loadWindow(j);
-					if (w == null) orphanWindows.add(j);
-					else byUid.put(String.valueOf(w.uid), w);
+					if (w == null) {
+						orphanWindows.add(j);
+						// Its uid stays its own, so a new window doesn't take it before it comes back.
+						if (j.has("uid")) nextUid = Math.max(nextUid, j.get("uid").getAsInt() + 1);
+					} else {
+						byUid.put(String.valueOf(w.uid), w);
+					}
 				} catch (RuntimeException ex) {
 					LOG.error("Skipping broken window entry {}", j, ex);
 				}
@@ -1284,7 +1291,8 @@ public final class WindowManager implements Desktop {
 			}
 			defaultWorkspaces();
 		}
-		categories.placeNewGroups(true);
+		groups.tidy();
+		groups.placeNewGroups(true);
 		modulesChanged = false;
 	}
 
@@ -1316,6 +1324,8 @@ public final class WindowManager implements Desktop {
 		Panel panel = createPanel(type.get(), args);
 		if (panel == null) return null;
 		int uid = j.get("uid").getAsInt();
+		// Layouts saved before orphans kept their uids can have two windows with one; the later gets a new one.
+		for (WindowImpl other : windows) if (other.uid == uid) uid = nextUid++;
 		WindowImpl w = new WindowImpl(this, uid, type.get(), args, panel, Math.clamp(j.get("workspace").getAsInt(), 0, WORKSPACES));
 		nextUid = Math.max(nextUid, uid + 1);
 		w.restore(j);
@@ -1332,21 +1342,21 @@ public final class WindowManager implements Desktop {
 	}
 
 	/**
-	 * The first-run desktop: one window per addon + category group, a tiled click-GUI, laid out like addons that arrive
+	 * The first-run desktop: one window per module group, a tiled click-GUI, laid out like addons that arrive
 	 * later ({@link #placeNewGroups}): the first addon on workspace 1, the others beside it while there's room, then on
 	 * workspaces of their own.
 	 */
 	private void defaultWorkspaces() {
 		active = 1;
-		categories.reset();
-		categories.placeNewGroups(false);
+		groups.reset();
+		groups.placeNewGroups(false);
 		if (workspaces[1].isEmpty()) openPanel(CorePanels.MODULES, new JsonObject(), 1, false);
 		for (WindowImpl w : windows) w.opacity.snap(1);
 	}
 
 	/** Shows the window holding {@code group}, opening one (on the current workspace) if none does. */
 	public void openGroup(ModuleGroup group) {
-		categories.openGroup(group);
+		groups.openGroup(group);
 	}
 
 	/** Windows on {@code workspace} (for bar widgets). */

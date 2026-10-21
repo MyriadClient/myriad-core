@@ -4,7 +4,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.AddonStorage;
-import dev.myriadclient.api.module.Category;
+import dev.myriadclient.api.module.ModuleGroup;
+import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.util.MyriadId;
@@ -15,11 +16,13 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The player's macros: modules made at runtime in the Macros category. Which macros exist is kept for every profile
+ * The player's macros: modules made at runtime, tagged and grouped as Macros. Which macros exist is kept for every profile
  * ({@code macros.json} in core's storage); what each does, and its bind, is saved per profile like any module.
  */
 public final class MacroManager {
-	public static final Category CATEGORY = new Category(MyriadId.of("myriad", "macros"), "Macros", "", SettingColor.role(SettingColor.Mode.CYAN));
+	public static final Tag TAG = new Tag(MyriadId.of("myriad", "macros"), "Macros", "", SettingColor.role(SettingColor.Mode.CYAN));
+	/** Every macro's window in the menu. */
+	public static final ModuleGroup GROUP = new ModuleGroup(MyriadId.of("myriad", "macros"), "Macros", "");
 	private static final String FILE = "macros.json";
 	private static final List<MacroModule> MACROS = new ArrayList<>();
 	private static AddonStorage storage;
@@ -74,6 +77,7 @@ public final class MacroManager {
 	private static MacroModule add(String name) {
 		if (MyriadImpl.get().modules().contains(MyriadId.of("myriad", MyriadId.toPath(name)))) return byName(name).orElse(null);
 		MacroModule m = new MacroModule(name);
+		m.assignGroup(GROUP);
 		MyriadImpl.get().modules().register(m, "myriad");
 		MACROS.add(m);
 		return m;

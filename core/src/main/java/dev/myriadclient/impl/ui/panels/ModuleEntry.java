@@ -1,6 +1,7 @@
 package dev.myriadclient.impl.ui.panels;
 
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.setting.SettingGroup;
@@ -43,7 +44,7 @@ class ModuleEntry extends CardEntry {
 
 	@Override
 	protected int accent() {
-		return module.category().color();
+		return module.tag().color();
 	}
 
 	@Override
@@ -84,14 +85,19 @@ class ModuleEntry extends CardEntry {
 		return right;
 	}
 
-	/** Description, then the source addon and category as pills (in the category's current colour). */
+	/** Description, then the source addon and the tags as pills (in the main tag's current colour). */
 	@Override
 	protected String tooltipText() {
 		return (module.description().isEmpty() ? "" : module.description() + "\n")
-			+ badgeLine(" " + source + "@" + String.format("%08X", module.category().color()), module.category().name());
+			+ badgeLine(" " + source + "@" + String.format("%08X", module.tag().color()), tagNames());
 	}
 
-	/** Description, then badges for the source addon and the category, at the top of the card. */
+	/** The module's tags, for its badge: "Combat, World". */
+	private String tagNames() {
+		return String.join(", ", module.tags().stream().map(Tag::name).toList());
+	}
+
+	/** Description, then badges for the source addon and the tags, at the top of the card. */
 	private final class Info extends Widget {
 		private final Label description = new Label(module.description()).dim();
 
@@ -108,12 +114,12 @@ class ModuleEntry extends CardEntry {
 			float s = c.defaultFontSize() * 0.7f;
 			float th = c.textHeight(FontFamily.SANS, s) + 3;
 			float cy = y + height - th / 2;
-			int accent = module.category().color();
+			int accent = module.tag().color();
 			String tag = " " + source;
 			float bx = x + badgeWidth(c, tag, true);
 			badge(c, tag, bx, cy, accent, true);
-			String category = module.category().name();
-			badge(c, category, bx + 4 + badgeWidth(c, category, false), cy, theme().textDim.argb(), false);
+			String tags = tagNames();
+			badge(c, tags, bx + 4 + badgeWidth(c, tags, false), cy, theme().textDim.argb(), false);
 		}
 	}
 }

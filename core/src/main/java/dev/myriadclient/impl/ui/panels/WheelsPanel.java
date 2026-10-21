@@ -3,6 +3,7 @@ package dev.myriadclient.impl.ui.panels;
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
@@ -24,7 +25,7 @@ import java.util.Set;
  * bottom makes a new one.
  */
 final class WheelsPanel extends WidgetPanel {
-	static final String ICON = "";
+	static final String ICON = Icons.DOT_CIRCLE;
 
 	private String newName = "";
 	private List<WheelImpl> built = List.of();
@@ -80,7 +81,7 @@ final class WheelsPanel extends WidgetPanel {
 
 		@Override
 		protected String title() {
-			return wheel.name();
+			return wheel.icon() + "  " + wheel.name();
 		}
 
 		@Override

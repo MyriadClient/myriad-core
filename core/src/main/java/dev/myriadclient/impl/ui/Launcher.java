@@ -4,6 +4,8 @@ import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.control.ControlPanel;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.ModuleGroup;
+import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.render.Animated;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.render.FontFamily;
@@ -15,7 +17,7 @@ import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.macro.MacroManager;
 import dev.myriadclient.impl.ui.panels.AddonNames;
 import dev.myriadclient.impl.ui.panels.CorePanels;
-import dev.myriadclient.impl.ui.panels.ModuleGroup;
+import dev.myriadclient.impl.ui.panels.MenuGroups;
 import dev.myriadclient.impl.wheel.WheelImpl;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
@@ -31,7 +33,7 @@ import java.util.Set;
  * A rofi/wofi-style launcher: fuzzy search over modules, panels, categories, themes, profiles and workspaces.
  * Enter runs the selection; Shift+Enter runs its alternate action (e.g. open a module's settings instead of
  * toggling it). Mod+Space also opens it on its own over the game ({@link LauncherScreen}): what it runs there that
- * needs the desktop (a panel, a category, settings) opens the menu first, the rest happens without it.
+ * needs the desktop (a panel, a group's window, settings) opens the menu first, the rest happens without it.
  */
 final class Launcher {
 	private static final float WIDTH = 260, ROW = 15, MAX_ROWS = 10;
@@ -43,9 +45,14 @@ final class Launcher {
 	/**
 	 * {@code inPlace}: {@link #run} works without the desktop showing (toggling a module, applying a theme).
 	 * {@code source}: the addon it comes from ("" for the player's own and the desktop's), for {@code @addon} filters.
-	 * {@code tags}: what it is (module, panel, control…) and, for modules and categories, the category, for {@code #tag}.
+	 * {@code tags}: what it is (module, panel, control…) and, for modules, their tags and group, for {@code #tag}.
 	 */
 	private record Entry(String icon, String title, String hint, Runnable run, Runnable alt, Kind kind, boolean inPlace, String source, Set<String> tags) {
+	}
+
+	private static Set<String> with(Set<String> tags, Set<String> more) {
+		tags.addAll(more);
+		return tags;
 	}
 
 	private static Set<String> tags(String... tags) {
@@ -109,17 +116,18 @@ final class Launcher {
 	private List<Entry> entries(String text) {
 		List<Entry> list = new ArrayList<>();
 		for (Module m : Myriad.modules()) {
-			Set<String> t = tags("module", m.category().name(), m.category().id().path());
-			if (m.category() == MacroManager.CATEGORY) t.add("macro");
-			list.add(new Entry(m.isEnabled() ? "" : "", m.name(), m.category().name() + " · " + (m.isEnabled() ? "on" : "off"),
+			Set<String> t = tags("module", m.group().id().path());
+			for (Tag tag : m.tags()) t.addAll(tags(tag.name(), tag.id().path()));
+			if (m.hasTag(MacroManager.TAG)) t.add("macro");
+			list.add(new Entry(m.isEnabled() ? "" : "", m.name(), m.group().name() + " · " + (m.isEnabled() ? "on" : "off"),
 				m::toggle, () -> CorePanels.openModuleSettings(m, false), Kind.MODULE, true, m.id().namespace(), t));
 		}
 		for (ControlPanel c : Myriad.controls().all()) {
-			list.add(new Entry("\uf1de", "Control: " + c.name(), c.modules().size() + " modules · " + (c.isActive() ? "on" : "off"),
+			list.add(new Entry(c.icon(), "Control: " + c.name(), c.modules().size() + " modules · " + (c.isActive() ? "on" : "off"),
 				c::toggle, () -> CorePanels.openControl(c), Kind.OTHER, true, c.isPreset() ? c.id().namespace() : "", tags("control")));
 		}
 		for (WheelImpl w : MyriadImpl.get().wheelManager().all()) {
-			list.add(new Entry("\uf192", "Wheel: " + w.name(), w.slots().size() + " on it" + (w.keybind.get().isSet() ? " · " + w.keybind.get().displayName() : ""),
+			list.add(new Entry(w.icon(), "Wheel: " + w.name(), w.slots().size() + " on it" + (w.keybind.get().isSet() ? " · " + w.keybind.get().displayName() : ""),
 				() -> CorePanels.openWheel(w), null, Kind.OTHER, false, "", tags("wheel")));
 		}
 		for (PanelType t : Myriad.panels()) {
@@ -136,9 +144,10 @@ final class Launcher {
 				() -> wm.openPanel(t.id(), new JsonObject()),
 				() -> wm.openPanel(t.id(), new JsonObject(), wm.activeWorkspace(), true), Kind.OTHER, false, t.id().namespace(), t.isHud() ? tags("hud", "panel") : tags("panel")));
 		}
-		for (ModuleGroup g : ModuleGroup.all()) {
-			list.add(new Entry(g.category().icon(), g.category().name() + " · " + g.addonName(), "Category", () -> wm.openGroup(g), null,
-				Kind.OTHER, false, g.addon(), tags("category", "panel", g.category().name(), g.category().id().path())));
+		for (ModuleGroup g : MenuGroups.all()) {
+			String title = g.isAddonWindow() ? g.name() : g.name() + " · " + AddonNames.of(g.addon());
+			list.add(new Entry(g.icon(), title, MenuGroups.modules(g).size() + " modules", () -> wm.openGroup(g), null,
+				Kind.OTHER, false, g.addon(), tags("group", "panel", g.id().path())));
 		}
 		for (ThemeManager.Entry t : wm.themes().all()) {
 			list.add(new Entry("\uf1fc", "Theme: " + t.name(), t.isUser() ? "Your theme" : "Apply theme", () -> wm.applyTheme(t.id()),
@@ -153,16 +162,28 @@ final class Launcher {
 			list.add(new Entry("", "Workspace " + i, "Switch", () -> wm.switchWorkspace(ws), null, Kind.OTHER, false, "", tags("workspace")));
 		}
 		list.add(new Entry("", "HUD", "Edit HUD layout", () -> wm.switchWorkspace(0), null, Kind.OTHER, false, "", tags("hud", "workspace")));
-		// Making things, named after what's typed if anything is.
-		String name = text.strip();
-		list.add(new Entry("\uf067", name.isEmpty() ? "New macro" : "New macro: " + name, "A module that runs commands", () -> {
-			Module m = MacroManager.create(name);
-			CorePanels.openModuleSettings(m, false);
-		}, null, Kind.OTHER, false, "", tags("macro", "new")));
-		list.add(new Entry("\uf067", name.isEmpty() ? "New control panel" : "New control panel: " + name, "Switch modules together", () ->
-			CorePanels.openControl(Myriad.controls().create(name)), null, Kind.OTHER, false, "", tags("control", "new")));
-		list.add(new Entry("\uf067", name.isEmpty() ? "New wheel" : "New wheel: " + name, "Pick from a ring while a key is held", () ->
-			CorePanels.openWheel(MyriadImpl.get().wheelManager().create(name)), null, Kind.OTHER, false, "", tags("wheel", "new")));
+		// Making things, named after what's typed if anything is. Typing "new wheel …" (or macro, control panel) asks for
+		// that one: it's the only one offered, first, named with the rest.
+		String typed = text.strip();
+		String lower = typed.toLowerCase(Locale.ROOT);
+		String asked = null;
+		for (String kind : List.of("macro", "control panel", "wheel")) if (lower.equals("new " + kind) || lower.startsWith("new " + kind + " ")) asked = kind;
+		String name = asked == null ? typed : typed.substring(4 + asked.length()).strip();
+		Set<String> extra = asked == null ? Set.of() : Set.of("asked");
+		if (asked == null || asked.equals("macro")) {
+			list.add(new Entry("\uf067", name.isEmpty() ? "New macro" : "New macro: " + name, "A module that runs commands", () -> {
+				Module m = MacroManager.create(name);
+				CorePanels.openModuleSettings(m, false);
+			}, null, Kind.OTHER, false, "", with(tags("macro", "new"), extra)));
+		}
+		if (asked == null || asked.equals("control panel")) {
+			list.add(new Entry("\uf067", name.isEmpty() ? "New control panel" : "New control panel: " + name, "Switch modules together", () ->
+				CorePanels.openControl(Myriad.controls().create(name)), null, Kind.OTHER, false, "", with(tags("control", "new"), extra)));
+		}
+		if (asked == null || asked.equals("wheel")) {
+			list.add(new Entry("\uf067", name.isEmpty() ? "New wheel" : "New wheel: " + name, "Pick from a ring while a key is held", () ->
+				CorePanels.openWheel(MyriadImpl.get().wheelManager().create(name)), null, Kind.OTHER, false, "", with(tags("wheel", "new"), extra)));
+		}
 		return list;
 	}
 
@@ -219,9 +240,10 @@ final class Launcher {
 			results = q.filtered() ? all.stream().filter(e -> !e.tags.contains("new")).limit(80).toList()
 				: all.stream().filter(e -> !e.title.startsWith("Workspace") && !e.title.startsWith("Profile") && !e.tags.contains("new")).limit(40).toList();
 		} else {
-			// "New macro: …" and "New control panel: …" go last, whatever they'd score.
+			// "New macro: …" and the like go last, whatever they'd score; first when "new wheel …" asked for one.
 			results = all.stream().filter(e -> e.tags.contains("new") || score(e, q.text) != FuzzyMatch.NO_MATCH)
-				.sorted(Comparator.comparingInt((Entry e) -> e.tags.contains("new") ? Integer.MAX_VALUE : -score(e, q.text))).limit(40).toList();
+				.sorted(Comparator.comparingInt((Entry e) -> e.tags.contains("asked") ? Integer.MIN_VALUE
+					: e.tags.contains("new") ? Integer.MAX_VALUE : -score(e, q.text))).limit(40).toList();
 		}
 		selected = Math.clamp(selected, 0, Math.max(0, results.size() - 1));
 	}
@@ -246,7 +268,7 @@ final class Launcher {
 
 		float size = c.defaultFontSize() * 1.1f;
 		c.text(FontFamily.MONO, size, "", x + 8, y + 6, theme.accent.argb());
-		String shown = query.isEmpty() ? "Search…   @addon  #kind  #category" : query;
+		String shown = query.isEmpty() ? "Search…   @addon  #kind  #tag" : query;
 		c.text(FontFamily.SANS, size, shown, x + 22, y + 6, query.isEmpty() ? theme.textDim.argb() : theme.text.argb());
 		if (!query.isEmpty() && (System.nanoTime() / 500_000_000L) % 2 == 0) {
 			c.rect(x + 22 + c.textWidth(FontFamily.SANS, size, query) + 1, y + 6, 0.75f, c.textHeight(FontFamily.SANS, size), theme.text.argb());

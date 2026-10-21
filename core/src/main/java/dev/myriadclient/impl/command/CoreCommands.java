@@ -13,8 +13,8 @@ import dev.myriadclient.api.command.arguments.EnumArgumentType;
 import dev.myriadclient.api.command.arguments.SettingArgumentType;
 import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Service;
-import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.setting.KeybindSetting;
@@ -548,14 +548,13 @@ public final class CoreCommands {
 			}
 		});
 
-		ctx.registerCommand(new Command("modules", "Lists modules by category; click one to toggle it.", "mods") {
+		ctx.registerCommand(new Command("modules", "Lists modules by group; click one to toggle it.", "mods") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				b.executes(c -> {
-					for (Category category : Myriad.categories()) {
-						var modules = Myriad.modules().inCategory(category);
-						if (modules.isEmpty()) continue;
-						MutableComponent line = Component.literal(category.name() + ": ").withStyle(ChatFormatting.GRAY);
+					for (ModuleGroup group : Myriad.modules().groups()) {
+						var modules = Myriad.modules().inGroup(group);
+						MutableComponent line = Component.literal(group.name() + ": ").withStyle(ChatFormatting.GRAY);
 						for (int i = 0; i < modules.size(); i++) {
 							Module m = modules.get(i);
 							if (i > 0) line.append(Component.literal(", ").withStyle(ChatFormatting.DARK_GRAY));

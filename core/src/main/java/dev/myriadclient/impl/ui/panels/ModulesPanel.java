@@ -3,8 +3,8 @@ package dev.myriadclient.impl.ui.panels;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.setting.SettingGroup;
@@ -29,9 +29,9 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * A category window: one addon's modules in one category ("Combat · Essentials"), like a classic click-GUI frame, or
- * several such groups merged into one window, each in its own section. Without groups it's the Modules panel: every
- * module by category, with a filter box.
+ * A group window: one addon's group of modules ("Travel", from Essentials), like a classic click-GUI frame, or several
+ * groups merged into one window, each in its own section. Without groups it's the Modules panel: every module by
+ * group, with a filter box.
  */
 public final class ModulesPanel extends WidgetPanel {
 	/** Null for the Modules panel (everything). */
@@ -55,21 +55,22 @@ public final class ModulesPanel extends WidgetPanel {
 	public String title() {
 		if (groups == null) return "Modules";
 		Set<String> names = new LinkedHashSet<>();
-		for (ModuleGroup g : groups) names.add(g.category().name());
+		for (ModuleGroup g : groups) names.add(g.name());
 		return String.join(" + ", names);
 	}
 
 	@Override
 	public String subtitle() {
 		if (groups == null) return null;
+		// An addon's own window is already named after it.
 		Set<String> names = new LinkedHashSet<>();
-		for (ModuleGroup g : groups) names.add(g.addonName());
-		return String.join(", ", names);
+		for (ModuleGroup g : groups) if (!g.isAddonWindow()) names.add(AddonNames.of(g.addon()));
+		return names.isEmpty() ? null : String.join(", ", names);
 	}
 
 	@Override
 	public String icon() {
-		return groups == null || groups.isEmpty() ? "" : groups.getFirst().category().icon();
+		return groups == null || groups.isEmpty() ? "" : groups.getFirst().icon();
 	}
 
 	/** Name matches fuzzily; descriptions only on whole-word prefixes of 3+ letters, so short queries stay precise. */
@@ -103,45 +104,49 @@ public final class ModulesPanel extends WidgetPanel {
 			return;
 		}
 		List<ModuleGroup> shown = new ArrayList<>();
-		for (ModuleGroup g : groups) if (!g.modules().isEmpty()) shown.add(g);
+		for (ModuleGroup g : groups) if (!MenuGroups.modules(g).isEmpty()) shown.add(g);
 		if (shown.size() == 1) {
-			for (Module m : shown.getFirst().modules()) content.add(new ModuleEntry(m, unfolded, groupsOpen));
+			for (Module m : MenuGroups.modules(shown.getFirst())) content.add(new ModuleEntry(m, unfolded, groupsOpen));
 			return;
 		}
-		// Merged: a section per group. The category is only worth repeating when the window mixes categories.
-		boolean mixed = shown.stream().map(ModuleGroup::category).distinct().count() > 1;
+		// Merged: a section per group.
 		for (ModuleGroup g : shown) {
-			List<Module> modules = g.modules();
+			List<Module> modules = MenuGroups.modules(g);
 			VBox body = new VBox(2, 0);
 			for (Module m : modules) body.add(new ModuleEntry(m, unfolded, groupsOpen));
-			String name = mixed ? g.category().icon() + "  " + g.category().name() + " · " + g.addonName() : g.addonName();
+			String name = sectionName(g);
 			content.add(new GroupSection(g, () -> name + "  " + modules.stream().filter(Module::isEnabled).count() + "/" + modules.size(), body));
 		}
 	}
 
-	/** The Modules panel: a filter box, then every module grouped by category. */
+	/** A group's section title: its icon and name, and its addon's unless it's the addon's own window. */
+	private static String sectionName(ModuleGroup g) {
+		return g.icon() + "  " + g.name() + (g.isAddonWindow() ? "" : " · " + AddonNames.of(g.addon()));
+	}
+
+	/** The Modules panel: a filter box, then every module by group, as in the menu. */
 	private void buildAll(VBox content) {
 		content.add(new TextField(() -> filter).placeholder("  Filter modules…").onChange(s -> filter = s));
 		if (Myriad.modules().size() == 0) {
 			content.add(new Label("No modules installed. Drop Myriad addons (like myriad-essentials) into your mods folder.").dim());
 			return;
 		}
-		for (Category category : Myriad.categories()) {
-			List<Module> modules = Myriad.modules().inCategory(category);
-			if (modules.isEmpty()) continue;
+		for (ModuleGroup group : MenuGroups.all()) {
+			List<Module> modules = MenuGroups.modules(group);
 			VBox body = new VBox(2, 0);
 			for (Module m : modules) body.add(new ModuleEntry(m, unfolded, groupsOpen)).visible(() -> matches(m));
-			String key = category.id().toString();
+			String key = group.id().toString();
+			String name = sectionName(group);
 			Collapsible section = new Collapsible(
-				() -> category.icon() + "  " + category.name() + "  " + modules.stream().filter(Module::isEnabled).count() + "/" + modules.size(),
+				() -> name + "  " + modules.stream().filter(Module::isEnabled).count() + "/" + modules.size(),
 				body, () -> !filter.isBlank() || expanded.getOrDefault(key, true), v -> expanded.put(key, v));
 			section.visible(() -> modules.stream().anyMatch(this::matches));
 			content.add(section);
 		}
 	}
 
-	/** Whether this is a category window (rather than the Modules panel), so it can be merged with another. */
-	public boolean isCategoryWindow() {
+	/** Whether this is a group window (rather than the Modules panel), so it can be merged with another. */
+	public boolean isGroupWindow() {
 		return groups != null;
 	}
 
@@ -166,8 +171,8 @@ public final class ModulesPanel extends WidgetPanel {
 		rest.remove(group);
 		ModulesPanel kept = new ModulesPanel(rest);
 		kept.unfolded.addAll(unfolded);
-		wm.replacePanel(w, kept, ModuleGroup.args(rest));
-		wm.openPanel(CorePanels.CATEGORY, ModuleGroup.args(List.of(group)), w.workspace(), false);
+		wm.replacePanel(w, kept, MenuGroups.args(rest));
+		wm.openPanel(CorePanels.GROUP, MenuGroups.args(List.of(group)), w.workspace(), false);
 	}
 
 	/** A merged window's section, with a pop-out button at the right of its header. */
@@ -175,7 +180,7 @@ public final class ModulesPanel extends WidgetPanel {
 		private final ModuleGroup group;
 
 		GroupSection(ModuleGroup group, Supplier<String> title, VBox body) {
-			super(title, body, () -> expanded.getOrDefault(group.key(), true), v -> expanded.put(group.key(), v));
+			super(title, body, () -> expanded.getOrDefault(group.id().toString(), true), v -> expanded.put(group.id().toString(), v));
 			this.group = group;
 		}
 
@@ -191,7 +196,7 @@ public final class ModulesPanel extends WidgetPanel {
 			boolean over = overPopOut(mx, my);
 			c.text(FontFamily.MONO, s, "\uf08e", x + width - 10, y + (ROW - c.textHeight(FontFamily.MONO, s)) / 2,
 				over ? theme().accent.argb() : theme().textDim.argb());
-			tooltip = over ? "Move " + group.addonName() + " · " + group.category().name() + " to its own window" : null;
+			tooltip = over ? "Move " + group.name() + " to its own window" : null;
 			offerTooltip(mx, my);
 		}
 

@@ -3,6 +3,7 @@ package dev.myriadclient.impl.ui.panels;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.control.ControlPanel;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.share.ConfigShare;
 import dev.myriadclient.api.share.ConfigShares;
@@ -52,7 +53,7 @@ final class SharePanel extends WidgetPanel {
 	protected void build(VBox content) {
 		content.add(new Label("Share").bold());
 		content.add(new Label("Pick what goes in. Values an addon marks private (webhooks, coordinates, passwords) never do.").dim());
-		for (ModuleGroup g : ModuleGroup.all()) content.add(new GroupCard(g));
+		for (ModuleGroup g : MenuGroups.all()) content.add(new GroupCard(g));
 		for (ControlPanel p : Myriad.controls().all()) content.add(row("Control panel: " + p.name(), () -> panels.contains(p), on -> toggle(panels, p, on)));
 		content.add(row("Theme (colours and style)", () -> theme, on -> theme = on));
 		content.add(row("Keybinds", () -> binds, on -> binds = on));
@@ -162,49 +163,49 @@ final class SharePanel extends WidgetPanel {
 		return r;
 	}
 
-	/** One of the menu's windows (an addon's category): click shares all of it, unfold to pick modules. */
+	/** One of the menu's windows (a group): click shares all of it, unfold to pick modules. */
 	private final class GroupCard extends CardEntry {
 		private final ModuleGroup group;
 
 		GroupCard(ModuleGroup group) {
-			super(false, unfolded.contains(group.key()));
+			super(false, unfolded.contains(group.id().toString()));
 			this.group = group;
 		}
 
 		private boolean all() {
-			return modules.containsAll(group.modules());
+			return modules.containsAll(MenuGroups.modules(group));
 		}
 
 		@Override
 		protected String title() {
-			return group.category().name() + " · " + group.addonName();
+			return group.isAddonWindow() ? group.name() : group.name() + " · " + AddonNames.of(group.addon());
 		}
 
 		@Override
 		protected boolean isOn() {
-			return group.modules().stream().anyMatch(modules::contains);
+			return MenuGroups.modules(group).stream().anyMatch(modules::contains);
 		}
 
 		@Override
 		protected int accent() {
-			return group.category().color();
+			return theme().accent.argb();
 		}
 
 		@Override
 		protected boolean isExpanded() {
-			return unfolded.contains(group.key());
+			return unfolded.contains(group.id().toString());
 		}
 
 		@Override
 		protected void setExpanded(boolean expanded) {
-			if (expanded) unfolded.add(group.key());
-			else unfolded.remove(group.key());
+			if (expanded) unfolded.add(group.id().toString());
+			else unfolded.remove(group.id().toString());
 		}
 
 		@Override
 		protected void primary() {
 			boolean all = all();
-			for (Module m : group.modules()) toggle(modules, m, !all);
+			for (Module m : MenuGroups.modules(group)) toggle(modules, m, !all);
 		}
 
 		@Override
@@ -214,8 +215,8 @@ final class SharePanel extends WidgetPanel {
 
 		@Override
 		protected float drawBadges(Canvas c, float right, float cy) {
-			long n = group.modules().stream().filter(modules::contains).count();
-			return badge(c, n + "/" + group.modules().size(), right, cy, theme().textDim.argb(), false) - 4;
+			long n = MenuGroups.modules(group).stream().filter(modules::contains).count();
+			return badge(c, n + "/" + MenuGroups.modules(group).size(), right, cy, theme().textDim.argb(), false) - 4;
 		}
 
 		@Override
@@ -225,7 +226,7 @@ final class SharePanel extends WidgetPanel {
 
 		@Override
 		protected void buildBody(VBox body) {
-			for (Module m : group.modules()) body.add(row(m.name(), () -> modules.contains(m), on -> toggle(modules, m, on)));
+			for (Module m : MenuGroups.modules(group)) body.add(row(m.name(), () -> modules.contains(m), on -> toggle(modules, m, on)));
 		}
 	}
 }

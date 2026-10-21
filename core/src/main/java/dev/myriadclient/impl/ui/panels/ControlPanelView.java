@@ -64,7 +64,7 @@ final class ControlPanelView extends WidgetPanel {
 
 	@Override
 	public String icon() {
-		return "";
+		return control.icon();
 	}
 
 	@Override

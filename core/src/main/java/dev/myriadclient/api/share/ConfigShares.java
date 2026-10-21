@@ -3,6 +3,8 @@ package dev.myriadclient.api.share;
 import dev.myriadclient.api.control.ControlPanel;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.ModuleGroup;
+import dev.myriadclient.api.module.Tag;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.Collection;
@@ -16,7 +18,7 @@ import java.util.concurrent.CompletableFuture;
  * ConfigShare share = Myriad.shares().builder()
  *     .title("2b2t highway")
  *     .module(elytraFly)
- *     .addonCategory("myriad-essentials", Categories.MOVEMENT)
+ *     .group(travel)
  *     .controlPanel(highway)
  *     .theme()
  *     .build();
@@ -59,14 +61,27 @@ public interface ConfigShares {
 
 		Builder modules(Collection<? extends Module> modules);
 
-		/** Every module of {@code category}, from every addon. */
-		Builder category(Category category);
+		/** Every module with {@code tag}, from every addon. */
+		Builder tag(Tag tag);
+
+		/** The modules of {@code group}: one of the menu's windows. */
+		Builder group(ModuleGroup group);
 
 		/** Every module of the addon with this mod id. */
 		Builder addon(String modId);
 
-		/** The modules of one addon in one category: one of the menu's windows. */
-		Builder addonCategory(String modId, Category category);
+		/** @deprecated categories are tags now: use {@link #tag(Tag)} */
+		@Deprecated(since = "0.7.0")
+		default Builder category(Category category) {
+			return tag(category.tag());
+		}
+
+		/** @deprecated windows are groups now: use {@link #group(ModuleGroup)}, or {@link #tag(Tag)} and {@link #addon(String)} */
+		@Deprecated(since = "0.7.0")
+		default Builder addonCategory(String modId, Category category) {
+			for (Module m : dev.myriadclient.api.Myriad.modules().withTag(category.tag())) if (m.id().namespace().equals(modId)) module(m);
+			return this;
+		}
 
 		/** A control panel, with the settings it saves (its member modules aren't added; add them too to share theirs). */
 		Builder controlPanel(ControlPanel panel);

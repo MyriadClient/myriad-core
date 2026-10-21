@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -45,6 +46,21 @@ class BlueprintTest {
 		int[] count = {0};
 		bp.forEach((pos, t) -> count[0]++);
 		assertEquals(m.size(), count[0]);
+	}
+
+	@Test
+	void indexedBlueprintMatchesBruteForceForScatteredPositions() {
+		Random r = new Random(42);
+		Map<BlockPos, Target> m = new HashMap<>();
+		// Scattered over many sections, negative coordinates included; each with a target of its own.
+		for (int i = 0; i < 5000; i++) m.put(new BlockPos(r.nextInt(80) - 40, r.nextInt(60) - 30, r.nextInt(80) - 40), Target.anyOf());
+		Blueprint bp = Blueprint.of(m);
+		for (int i = 0; i < 50; i++) {
+			Vec3 eyes = new Vec3(r.nextDouble() * 80 - 40, r.nextDouble() * 60 - 30, r.nextDouble() * 80 - 40);
+			double range = 1 + r.nextDouble() * 9;
+			assertEquals(expected(m.keySet(), eyes, range), near(bp, eyes, range));
+			bp.near(eyes, range, (pos, target) -> assertSame(m.get(pos), target));
+		}
 	}
 
 	@Test

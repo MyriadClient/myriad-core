@@ -9,6 +9,7 @@ import dev.myriadclient.api.control.ControlPreset;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.service.Notifications;
 import dev.myriadclient.api.setting.BoolSetting;
+import dev.myriadclient.api.setting.IconSetting;
 import dev.myriadclient.api.setting.KeybindSetting;
 import dev.myriadclient.api.setting.ModuleListSetting;
 import dev.myriadclient.api.setting.Setting;
@@ -42,6 +43,7 @@ public final class ControlPanelImpl implements ControlPanel {
 	private final SettingGroup sg = settings.group("Control Panel");
 	public final StringSetting name = sg.string("Name").build();
 	public final StringSetting description = sg.string("Description").description("Shown beside its name in its window's title bar.").build();
+	public final IconSetting icon = sg.icon("Icon").description("Its icon: on its window, on wheels and in the launcher.").build();
 	public final ModuleListSetting members = sg.modules("Modules").description("The modules it switches on and off together.").build();
 	public final KeybindSetting keybind = sg.keybind("Keybind").description("Turns it on and off, in game.").build();
 	public final BoolSetting hold = sg.bool("Hold").description("Only on while the keybind is held.").build();
@@ -98,6 +100,11 @@ public final class ControlPanelImpl implements ControlPanel {
 	@Override
 	public String name() {
 		return name.get().isBlank() ? "Control panel" : name.get();
+	}
+
+	@Override
+	public String icon() {
+		return icon.getOr(ControlPanel.super.icon());
 	}
 
 	@Override

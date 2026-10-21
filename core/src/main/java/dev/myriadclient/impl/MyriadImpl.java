@@ -14,6 +14,8 @@ import dev.myriadclient.api.map.Maps;
 import dev.myriadclient.api.share.ConfigShares;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.module.Category;
+import dev.myriadclient.api.module.ModuleGroup;
+import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.registry.Registry;
 import dev.myriadclient.api.service.AntiCheat;
@@ -85,7 +87,10 @@ public final class MyriadImpl implements MyriadApi {
 
 	private final Minecraft mc = Minecraft.getInstance();
 	private final MyriadEventBus events = new MyriadEventBus();
+	private final Registry<Tag> tags = new Registry<>("tag");
+	/** The tags under their old name, for addons built before 0.7.0; kept in step with {@link #tags}. */
 	private final Registry<Category> categories = new Registry<>("category");
+	private final Registry<ModuleGroup> groups = new Registry<>("group");
 	private final ModuleRegistry modules = new ModuleRegistry();
 	private final Registry<Command> commands = new Registry<>("command");
 	private final Registry<PanelType> panels = new Registry<>("panel");
@@ -123,6 +128,8 @@ public final class MyriadImpl implements MyriadApi {
 	private final UpdateManager updates = new UpdateManager(config.root());
 
 	private MyriadImpl() {
+		tags.onAdd(t -> categories.register(Category.of(t), tags.ownerOf(t)));
+		tags.onRemove(t -> categories.unregister(t.id()));
 	}
 
 	public static MyriadImpl get() {
@@ -177,7 +184,7 @@ public final class MyriadImpl implements MyriadApi {
 		events.subscribe(commandManager);
 
 		addonLoader.discover();
-		addonLoader.registerCategories();
+		addonLoader.registerTags();
 		addonLoader.initialize();
 		config.load();
 		addonLoader.postInitialize();
@@ -189,7 +196,7 @@ public final class MyriadImpl implements MyriadApi {
 	}
 
 	public List<Registry<?>> registries() {
-		return List.of(categories, modules, commands, panels, layouts, themes, barWidgets, keyActions, addonSettings, controls.presets(), hooks.registry());
+		return List.of(tags, groups, modules, commands, panels, layouts, themes, barWidgets, keyActions, addonSettings, controls.presets(), hooks.registry());
 	}
 
 	public ConfigManagerImpl configImpl() {
@@ -221,6 +228,16 @@ public final class MyriadImpl implements MyriadApi {
 	@Override
 	public Registry<Category> categories() {
 		return categories;
+	}
+
+	@Override
+	public Registry<Tag> tags() {
+		return tags;
+	}
+
+	@Override
+	public Registry<ModuleGroup> groups() {
+		return groups;
 	}
 
 	@Override

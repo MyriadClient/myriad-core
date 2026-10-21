@@ -9,12 +9,17 @@ package dev.myriadclient.api.addon;
  * }</pre>
  *
  * Name, version, authors and icon come from your mod metadata. Myriad calls the methods below in phases across all
- * addons: every addon's {@link #registerCategories} runs before any {@link #initialize}, and config is loaded between
+ * addons: every addon's {@link #registerTags} runs before any {@link #initialize}, and config is loaded between
  * {@link #initialize} and {@link #postInitialize}. If any phase throws, the addon is marked failed, everything it
  * registered is removed, and the game keeps running.
  */
 public interface MyriadAddon {
-	/** Register custom module categories here so other addons can use them in {@link #initialize}. */
+	/** Register your own module tags here so other addons can use them in {@link #initialize}. */
+	default void registerTags(AddonContext ctx) {
+	}
+
+	/** @deprecated categories are tags now: use {@link #registerTags}. Still called, right after it. */
+	@Deprecated(since = "0.7.0")
 	default void registerCategories(AddonContext ctx) {
 	}
 
