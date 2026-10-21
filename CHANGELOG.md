@@ -6,6 +6,76 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.6.0
+
+- **For addons, from Myriad Automation's notes** (what it did itself, now core's for everyone):
+  - `Placement.place(owner, hit, …)` puts the block where vanilla does: into the clicked block when it's replaceable
+    (air with `airPlace`, through the off hand, so an air placement takes any face and point; grass, water) or when
+    the item adds to it (candles, sea pickles, snow layers, a slab's other half), otherwise beside it as before.
+  - `Placement.Options.withSneak(true)` clicks as if sneaking, without crouching (the sneak key goes to the server for
+    just the click), so chests, doors, repeaters and note blocks can be placed against.
+  - `Placement.offHandSlot()` and `canPlaceWith(slot)` say whose block an air placement has in your off hand this
+    tick and whether a placement can go now; an air placement no longer starts a swap after a click in the same tick.
+  - A sign a module places doesn't leave its editor open over the game.
+  - `Containers.open(owner, pos, ticks)` and `View.opener()`/`byHand()`: who opened a container, so modules that act on
+    the ones you open (sorting) leave other modules' alone. `Containers.close()` waits for a moment Grim takes a close
+    in (it flags one made while you move, as it does clicks).
+  - `Inventory.giveBack` goes through the menu of a container you opened yourself instead of waiting for it to close
+    (one a module opened is left alone while it works).
+  - Placements into a replaceable block or onto one they add to (snow layers, candles) report as kept when they
+    were: the result was judged by whether the block is replaceable, which a snow layer always is.
+  - `AntiCheat.joinedProtocol()`, `joinedVersion()` and `isTranslated()`: the version the server sees you as
+    (through ViaFabricPlus), for rules that differ by version.
+- **Wheels**: hold a bind in game to show a ring of modules, macros, control panels, addons' actions, panels and
+  command lines, drawn in the theme over a blur of the game; let go over one to run it (a click works too; Escape or a
+  right click closes it). As many wheels as you like, each with its own bind, saved per profile (`wheels.json`): the
+  Wheels window and each wheel's own window (search to add, arrows to order them clockwise from the top, name and
+  bind under Settings), New wheel in the launcher, and a Wheels section in Keybinds. A slot follows its module or
+  panel as it is now and shows as missing while its addon isn't installed.
+- **Focus follows the mouse** on the desktop: the window under the cursor is the focused one (keys go to it, its
+  border and the bar's title show it). Only the focus moves, so nothing shifts under the cursor; a click still raises
+  a floating window and scrolls a column into view.
+- **Binds with several modifiers** (Ctrl+Alt+T, Ctrl+Alt+Page Down): typed binds take short key names too
+  (`.bind esp ctrl+alt+pgdown`; also pgup, del, ins, esc, prtsc), a mouse button set while holding modifiers keeps
+  them (Ctrl+Mouse5), and a module bound to a combination takes the key for itself, so Ctrl+Alt+E toggles it without
+  also opening the inventory (a plain key still reaches the game as before). Caps Lock and Num Lock are never part of
+  a bind, so one set with either on still works with them off.
+- **A modifier on its own as a bind**: press Left Alt (or Ctrl, Shift, Super) in a bind box and let go without another
+  key, and that key alone is the bind; `.bind esp alt` (also `ralt`, `ctrl`, `rshift`, `super`, `ctrl+alt` for Ctrl
+  held with Left Alt).
+- The launcher's `#panel` takes in every window: category windows and HUD elements too, so `@ess #panel` lists all of
+  an addon's (`#category` and `#hud` still narrow it).
+- The Theme window's and the launcher's theme icon showed as "?": its glyph isn't in Myriad's icon font. It's a paint
+  brush now.
+- **Air placement in bursts, at 30 a second**: an air placement swaps the block to the off hand, and the swap back goes
+  out first thing next tick, as Grim (PacketOrderG) cancels any off hand swap sent after a placement in the same tick.
+  Every other placement of that block in the tick (against air or a block) now goes from the off hand on that one swap,
+  so builds run as fast as the server keeps placements. A placement with another item waits for the swap back
+  (queued ones stay queued; one without a turn is refused with `RATE_LIMITED`, try again next tick). The swap back
+  goes out on the block's own slot whatever moved the server's slot meanwhile (your scroll, another module's swap),
+  instead of being dropped or a second swap fighting it, and the slot and off hand show what they held throughout.
+  Before, a second air placement in a tick, or another slot's silent swap, sent a swap Grim cancelled, leaving items in
+  the wrong hands. Measured in singleplayer on a floating wall of two items, as fast as core allowed: 30/30 placed,
+  30 to 31.6 a second, 9 at most in a tick, off hand and hotbar untouched.
+- **The interaction budget is Paper's own 9 in 300 ms** (was 330 ms, which held builds to about 27 a second). Packets
+  held over to the next tick (sent after the movement packet) now count when they're held, not when they go out:
+  a burst made late in a tick used to pass the budget whole (16 in one tick in a test) and go out together next tick,
+  past what the server keeps.
+- **Pitch exactly ±90**: a turn that reached straight up or down could come out a hair past it in floats
+  (38.01° → -90.0000076°), a packet Grim refuses (BadPacketsD), so the server kept the look before and a block placed
+  then faced the wrong way. Pitch now lands on its target exactly.
+- **Faces seen through another face**: `Reach.hitFor` and placements with `visibleFaces` counted a face as visible when
+  the ray reached the block at all; from above, a ray to the top of a side face enters through the top, where the click
+  lands. The ray now has to reach the face itself.
+- **`BlockInfo.isClickable`** also counts every block whose class handles a right click itself (repeaters, redstone
+  dust, cakes, composters, candles, looms, modded blocks), worked out once per class; fences, redstone ore, TNT and
+  pumpkins, which let a held block through, still count as placeable against. Placements no longer click a repeater's
+  delay instead of placing against it, and `Target.solid()` no longer picks such blocks as filler.
+- **Fast Grim breaking**: the decoy start goes just above the build limit over the block (the server ignores any
+  break up there, and Grim sees air), at most one a tick.
+- `Rotations.serverYaw()` says how teleports count: vanilla's answer to one carries its look, but a turn sent while a
+  teleport is on its way never lands, so work that clicks on an earlier look should check again after `TeleportEvent`.
+
 ## 0.5.0
 
 - **Waypoints from Xaero's Minimap**: `Myriad.maps()` reads the waypoints of the server you're on, in every dimension,

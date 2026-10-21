@@ -26,7 +26,8 @@ class PacketLimiterTest {
 		// Paper drops the 10th use or place packet within 300 ms: a burst of 9 goes, the 10th waits for the window.
 		PacketLimiter l = new PacketLimiter();
 		assertEquals(9, l.limit(Kind.INTERACT));
-		assertTrue(l.windowMs(Kind.INTERACT) > 300);
+		// Paper's own window: never shorter (it would drop packets), and not longer (builds get the full 30 a second).
+		assertEquals(300, l.windowMs(Kind.INTERACT));
 		for (int i = 0; i < 9; i++) {
 			assertTrue(l.canSend(Kind.INTERACT, 1));
 			l.record(Kind.INTERACT);

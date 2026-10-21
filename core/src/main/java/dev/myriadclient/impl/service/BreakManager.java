@@ -72,10 +72,6 @@ public final class BreakManager implements Breaking {
 	 * which Grim checks for (about 300 ms).
 	 */
 	private static final int FINISH_GAP = 6;
-	/** {@link Mode#FAST_GRIM}: how far above the block the decoy starts go (out of reach, so the server ignores them). */
-	private static final int DECOY_HEIGHT = 955;
-	/** {@link Mode#FAST_GRIM}: at most this many decoys a second (each is a flag on builds that check for them). */
-	private static final int DECOYS_PER_SECOND = 40;
 	/** How long to wait for the server's word on a finished break, beyond when it's due. */
 	private static final int GRACE_TICKS = 40;
 	/** Breaker ids for the crack overlay, apart from real entities (and the player's own mining). */
@@ -162,8 +158,7 @@ public final class BreakManager implements Breaking {
 	private final GrimBreakTiming grim = new GrimBreakTiming();
 	/** Efficiency of the item the server held, sampled each tick: {ms, level}, oldest first. */
 	private final ArrayDeque<long[]> heldEfficiency = new ArrayDeque<>();
-	/** When decoys went out (ms), for their budget; and the tick the last one did (a finish waits for the next). */
-	private final ArrayDeque<Long> decoyTimes = new ArrayDeque<>();
+	/** The tick the last decoy went out: a finish waits for the next, and there's never more than one a tick. */
 	private int decoyTick = Integer.MIN_VALUE;
 	/**
 	 * The block the server is finishing by itself, if any. It has room for one: while it's taken, an early finish is
@@ -319,7 +314,6 @@ public final class BreakManager implements Breaking {
 		rebreakPos = serverDelayedPos = null;
 		grim.reset();
 		heldEfficiency.clear();
-		decoyTimes.clear();
 	}
 
 	/**
@@ -569,7 +563,7 @@ public final class BreakManager implements Breaking {
 		if (decoyTick == tick) return false;
 		long now = System.currentTimeMillis();
 		if (grim.finishOk(now)) return true;
-		if (j.grim() && grim.startOk(now) && decoyBudget() && budget(1)) decoyStart(j);
+		if (j.grim() && grim.startOk(now) && budget(1)) decoyStart(j);
 		return false;
 	}
 
@@ -606,23 +600,15 @@ public final class BreakManager implements Breaking {
 	}
 
 	/**
-	 * A start for the spot {@link #DECOY_HEIGHT} blocks above {@code j}'s block, out of reach: the server ignores it,
-	 * while Grim (on servers with ViaVersion) times air from then on, which breaks at once, so the next finish passes
-	 * whatever block it's for. Face down, as you'd see a block that far above.
+	 * A start for the spot just over the build limit above {@code j}'s block: the server ignores any break above the
+	 * limit ("too high"), while Grim (on servers with ViaVersion) times air from then on, which breaks at once, so the
+	 * next finish passes whatever block it's for. Face down, the face you'd see from under it. One a tick at most.
 	 */
 	private void decoyStart(Job j) {
-		BlockPos decoy = j.pos.above(DECOY_HEIGHT);
+		BlockPos decoy = new BlockPos(j.pos.getX(), mc.level.getMaxY() + 1, j.pos.getZ());
 		decoyTick = tick;
-		decoyTimes.addLast(System.currentTimeMillis());
 		Packets.sendSequenced(seq -> new ServerboundPlayerActionPacket(Action.START_DESTROY_BLOCK, decoy, Direction.DOWN, seq));
 		swing(j);
-	}
-
-	/** Whether another decoy fits in {@link #DECOYS_PER_SECOND}. */
-	private boolean decoyBudget() {
-		long now = System.currentTimeMillis();
-		while (!decoyTimes.isEmpty() && now - decoyTimes.peekFirst() > 1000) decoyTimes.pollFirst();
-		return decoyTimes.size() < DECOYS_PER_SECOND;
 	}
 
 	/** {@code j} was finished early: the server now finishes it by itself once its progress reaches 1. */

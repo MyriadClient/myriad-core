@@ -1,7 +1,12 @@
 package dev.myriadclient.api.util;
 
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.AbstractChestBlock;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
 import net.minecraft.world.level.block.AnvilBlock;
@@ -16,13 +21,19 @@ import net.minecraft.world.level.block.CrafterBlock;
 import net.minecraft.world.level.block.CraftingTableBlock;
 import net.minecraft.world.level.block.DispenserBlock;
 import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.FenceBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.HopperBlock;
 import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.NoteBlock;
+import net.minecraft.world.level.block.PumpkinBlock;
+import net.minecraft.world.level.block.RedStoneOreBlock;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
+import net.minecraft.world.level.block.TntBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
 
 /**
  * What kind of block something is, with one answer shared by every addon: can it be broken, does it survive
@@ -81,14 +92,44 @@ public final class BlockInfo {
 	}
 
 	/**
-	 * Right-clicking it does something (opens, toggles, sits), so clicking it to place a block against it would
-	 * interact instead unless the player sneaks.
+	 * Right-clicking it does something (opens, toggles, cycles, eats), so clicking it to place a block against it would
+	 * interact instead unless the player sneaks. Besides the common cases, any block whose class handles a click itself
+	 * counts (repeaters, redstone dust, cakes, composters, candles, modded blocks), told from its code once per class.
 	 */
 	public static boolean isClickable(BlockState state) {
 		Block b = state.getBlock();
 		return b instanceof BaseEntityBlock || b instanceof AbstractChestBlock<?> || b instanceof DoorBlock || b instanceof TrapDoorBlock
 			|| b instanceof FenceGateBlock || b instanceof ButtonBlock || b instanceof LeverBlock || b instanceof CraftingTableBlock
-			|| b instanceof AnvilBlock || b instanceof BedBlock || b instanceof NoteBlock;
+			|| b instanceof AnvilBlock || b instanceof BedBlock || b instanceof NoteBlock || HANDLES_CLICKS.get(b.getClass());
+	}
+
+	/**
+	 * Vanilla blocks that handle some clicks but let a held block through to be placed: fences (leads), redstone ore
+	 * (lights up), TNT (flint and steel) and pumpkins (shears).
+	 */
+	private static final Set<Class<?>> PASSES_BLOCKS = Set.of(FenceBlock.class, RedStoneOreBlock.class, TntBlock.class, PumpkinBlock.class);
+
+	/** Per block class: whether it, or a class it extends, overrides {@code useWithoutItem} or {@code useItemOn}. */
+	private static final ClassValue<Boolean> HANDLES_CLICKS = new ClassValue<>() {
+		@Override
+		protected Boolean computeValue(Class<?> type) {
+			for (Class<?> c = type; c != null && c != Block.class && c != BlockBehaviour.class; c = c.getSuperclass()) {
+				if (PASSES_BLOCKS.contains(c)) return false;
+				if (declares(c, "useWithoutItem", BlockState.class, Level.class, BlockPos.class, Player.class, BlockHitResult.class)
+					|| declares(c, "useItemOn", ItemStack.class, BlockState.class, Level.class, BlockPos.class, Player.class, InteractionHand.class, BlockHitResult.class))
+					return true;
+			}
+			return false;
+		}
+	};
+
+	private static boolean declares(Class<?> c, String name, Class<?>... params) {
+		try {
+			c.getDeclaredMethod(name, params);
+			return true;
+		} catch (NoSuchMethodException e) {
+			return false;
+		}
 	}
 
 	/** Air, water, grass and anything else a placed block replaces. */

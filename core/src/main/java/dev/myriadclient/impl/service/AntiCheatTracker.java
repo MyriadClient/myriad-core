@@ -5,6 +5,7 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.service.AntiCheat;
+import dev.myriadclient.impl.network.JoinedVersion;
 import net.minecraft.network.protocol.common.ClientboundPingPacket;
 
 import java.util.Collection;
@@ -121,5 +122,20 @@ public final class AntiCheatTracker implements AntiCheat {
 		String host = colon > 0 ? address.substring(0, colon) : address;
 		for (String k : known) if (host.equals(k) || host.endsWith("." + k)) return true;
 		return false;
+	}
+
+	@Override
+	public int joinedProtocol() {
+		return JoinedVersion.get().protocol();
+	}
+
+	@Override
+	public String joinedVersion() {
+		return JoinedVersion.get().name();
+	}
+
+	@Override
+	public boolean isTranslated() {
+		return JoinedVersion.get().translated();
 	}
 }

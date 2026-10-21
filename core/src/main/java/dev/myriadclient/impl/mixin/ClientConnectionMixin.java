@@ -102,6 +102,9 @@ public abstract class ClientConnectionMixin {
 	@Unique
 	private void myriad$held(Packet<?> packet, CallbackInfo ci) {
 		if (packet instanceof ServerboundSetCarriedItemPacket slot) myriad$lastSlot = slot.getSlot();
+		// Counted against the budget now, not when it goes out: more sent later this tick must see it, or a burst made
+		// after the movement packet all goes out at once next tick, past what the server keeps.
+		if (MyriadImpl.get() != null) MyriadImpl.get().packetLimiter().record(packet);
 		ci.cancel();
 	}
 
@@ -121,7 +124,8 @@ public abstract class ClientConnectionMixin {
 	private void myriad$countSent(Packet<?> packet, @Nullable ChannelFutureListener callbacks, boolean flush, CallbackInfo ci) {
 		if (packet instanceof ServerboundSetCarriedItemPacket slot) myriad$lastSlot = slot.getSlot();
 		if (myriad$isClientSide()) ActionTiming.get().sent(packet);
-		if (myriad$isClientSide() && MyriadImpl.get() != null) MyriadImpl.get().packetLimiter().record(packet);
+		// (Held actions going out now were counted when they were held.)
+		if (myriad$isClientSide() && !ActionTiming.isFlushing() && MyriadImpl.get() != null) MyriadImpl.get().packetLimiter().record(packet);
 	}
 
 	/** Wraps packet handling so receive handlers can drop or replace packets. */

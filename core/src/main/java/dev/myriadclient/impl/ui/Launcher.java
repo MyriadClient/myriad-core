@@ -11,10 +11,12 @@ import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.ThemeSettings;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.api.util.FuzzyMatch;
+import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.macro.MacroManager;
 import dev.myriadclient.impl.ui.panels.AddonNames;
 import dev.myriadclient.impl.ui.panels.CorePanels;
 import dev.myriadclient.impl.ui.panels.ModuleGroup;
+import dev.myriadclient.impl.wheel.WheelImpl;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 
@@ -116,6 +118,10 @@ final class Launcher {
 			list.add(new Entry("\uf1de", "Control: " + c.name(), c.modules().size() + " modules · " + (c.isActive() ? "on" : "off"),
 				c::toggle, () -> CorePanels.openControl(c), Kind.OTHER, true, c.isPreset() ? c.id().namespace() : "", tags("control")));
 		}
+		for (WheelImpl w : MyriadImpl.get().wheelManager().all()) {
+			list.add(new Entry("\uf192", "Wheel: " + w.name(), w.slots().size() + " on it" + (w.keybind.get().isSet() ? " · " + w.keybind.get().displayName() : ""),
+				() -> CorePanels.openWheel(w), null, Kind.OTHER, false, "", tags("wheel")));
+		}
 		for (PanelType t : Myriad.panels()) {
 			if (t.isHud()) {
 				boolean on = wm.hudElement(t).isPresent();
@@ -123,19 +129,19 @@ final class Launcher {
 					() -> {
 						if (on) wm.removeHudElement(t);
 						else wm.addHudElement(t);
-					}, null, Kind.OTHER, true, t.id().namespace(), tags("hud")));
+					}, null, Kind.OTHER, true, t.id().namespace(), tags("hud", "panel")));
 			}
 			if (!t.isListed()) continue;
 			list.add(new Entry(t.icon() == null ? "" : t.icon(), t.name(), t.isHud() ? "HUD element" : "Panel",
 				() -> wm.openPanel(t.id(), new JsonObject()),
-				() -> wm.openPanel(t.id(), new JsonObject(), wm.activeWorkspace(), true), Kind.OTHER, false, t.id().namespace(), tags(t.isHud() ? "hud" : "panel")));
+				() -> wm.openPanel(t.id(), new JsonObject(), wm.activeWorkspace(), true), Kind.OTHER, false, t.id().namespace(), t.isHud() ? tags("hud", "panel") : tags("panel")));
 		}
 		for (ModuleGroup g : ModuleGroup.all()) {
 			list.add(new Entry(g.category().icon(), g.category().name() + " · " + g.addonName(), "Category", () -> wm.openGroup(g), null,
-				Kind.OTHER, false, g.addon(), tags("category", g.category().name(), g.category().id().path())));
+				Kind.OTHER, false, g.addon(), tags("category", "panel", g.category().name(), g.category().id().path())));
 		}
 		for (ThemeManager.Entry t : wm.themes().all()) {
-			list.add(new Entry("\uf53f", "Theme: " + t.name(), t.isUser() ? "Your theme" : "Apply theme", () -> wm.applyTheme(t.id()),
+			list.add(new Entry("\uf1fc", "Theme: " + t.name(), t.isUser() ? "Your theme" : "Apply theme", () -> wm.applyTheme(t.id()),
 				() -> wm.openPanel(CorePanels.THEME, new JsonObject()), Kind.OTHER, true, t.isUser() ? "" : t.id().namespace(), tags("theme")));
 		}
 		for (String p : Myriad.config().profiles()) {
@@ -155,6 +161,8 @@ final class Launcher {
 		}, null, Kind.OTHER, false, "", tags("macro", "new")));
 		list.add(new Entry("\uf067", name.isEmpty() ? "New control panel" : "New control panel: " + name, "Switch modules together", () ->
 			CorePanels.openControl(Myriad.controls().create(name)), null, Kind.OTHER, false, "", tags("control", "new")));
+		list.add(new Entry("\uf067", name.isEmpty() ? "New wheel" : "New wheel: " + name, "Pick from a ring while a key is held", () ->
+			CorePanels.openWheel(MyriadImpl.get().wheelManager().create(name)), null, Kind.OTHER, false, "", tags("wheel", "new")));
 		return list;
 	}
 

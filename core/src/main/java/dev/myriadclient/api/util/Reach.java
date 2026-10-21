@@ -100,9 +100,10 @@ public final class Reach {
 			for (Vec3 point : new Vec3[]{nearestOnFace(pos, face, eyes), Positions.faceCenter(pos, face)}) {
 				double d = eyes.distanceToSqr(point);
 				if (d > r2) continue;
-				// Seeing a face means the ray from the eyes lands on this block (not one in front of it).
+				// Seeing a face means the ray from the eyes lands on this face of this block: not on one in front of it, nor
+				// on another face it enters through first (the top, for the top of a side face seen from above).
 				BlockHitResult ray = mc().level.clip(new ClipContext(eyes, point, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, mc().player));
-				boolean visible = exposed && (ray.getType() == HitResult.Type.MISS || ray.getBlockPos().equals(pos));
+				boolean visible = exposed && (ray.getType() == HitResult.Type.MISS || ray.getBlockPos().equals(pos) && ray.getDirection() == face);
 				BlockHitResult hit = new BlockHitResult(point, face, pos, false);
 				if (visible) {
 					if (d < bestDist) {

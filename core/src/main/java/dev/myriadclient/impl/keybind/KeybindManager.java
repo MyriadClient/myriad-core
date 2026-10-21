@@ -13,6 +13,8 @@ import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.control.ControlPanelImpl;
 import dev.myriadclient.impl.ui.MyriadTitleScreen;
 import dev.myriadclient.impl.ui.WindowManager;
+import dev.myriadclient.impl.wheel.WheelImpl;
+import dev.myriadclient.impl.wheel.WheelManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
 import org.lwjgl.glfw.GLFW;
@@ -93,7 +95,9 @@ public final class KeybindManager {
 		for (Module m : Myriad.modules()) {
 			// A mirror's key is handled by the mod it mirrors; acting on it here too would toggle twice.
 			if (m.isMirror() || !matches(m.keybind.get(), code, mouse, mods)) continue;
-			hits.add(new Hit(m.keybind.get(), m.holdMode.get() ? () -> m.setEnabled(true) : m::toggle, false));
+			// A plain key also stays the game's (R still reloads), but a combination (Ctrl+Alt+T) is the module's alone:
+			// T doesn't open chat as well.
+			hits.add(new Hit(m.keybind.get(), m.holdMode.get() ? () -> m.setEnabled(true) : m::toggle, m.keybind.get().modifiers() != 0));
 		}
 		for (ControlPanelImpl c : controls()) {
 			if (!matches(c.keybind.get(), code, mouse, mods)) continue;
@@ -101,6 +105,12 @@ public final class KeybindManager {
 		}
 		for (KeyAction a : Myriad.keyActions()) {
 			if (matches(a.bind(), code, mouse, mods)) hits.add(new Hit(a.bind(), a::run, true));
+		}
+		// A wheel shows while its bind is held (it watches for the release itself).
+		WheelManager wheels = MyriadImpl.get().wheelManager();
+		for (WheelImpl w : wheels.all()) {
+			Keybind bind = w.keybind.get();
+			if (matches(bind, code, mouse, mods)) hits.add(new Hit(bind, () -> wheels.show(w, bind), true));
 		}
 		int most = 0;
 		for (Hit h : hits) most = Math.max(most, Integer.bitCount(h.bind.modifiers()));

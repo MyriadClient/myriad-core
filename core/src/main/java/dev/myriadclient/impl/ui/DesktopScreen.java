@@ -41,6 +41,11 @@ public final class DesktopScreen extends Screen {
 	}
 
 	@Override
+	public void mouseMoved(double mouseX, double mouseY) {
+		wm.mouseMoved(mouseX, mouseY);
+	}
+
+	@Override
 	public boolean mouseReleased(MouseButtonEvent event) {
 		return wm.mouseReleased(event.x(), event.y(), event.button());
 	}

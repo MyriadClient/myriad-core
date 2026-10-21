@@ -35,19 +35,20 @@ public interface Placement {
 	 */
 	final class Options {
 		/** Lenient servers: no rotation, any face. */
-		public static final Options DEFAULT = new Options(false, false, true, 4.5, false);
+		public static final Options DEFAULT = new Options(false, false, true, 4.5, false, false);
 		/** Servers that check placements (Grim, NCP, 2b2t): rotate first and click only visible faces. */
-		public static final Options STRICT = new Options(true, false, true, 4.5, true);
+		public static final Options STRICT = new Options(true, false, true, 4.5, true, false);
 
-		private final boolean rotate, airPlace, swing, visibleFaces;
+		private final boolean rotate, airPlace, swing, visibleFaces, sneak;
 		private final double range;
 
-		private Options(boolean rotate, boolean airPlace, boolean swing, double range, boolean visibleFaces) {
+		private Options(boolean rotate, boolean airPlace, boolean swing, double range, boolean visibleFaces, boolean sneak) {
 			this.rotate = rotate;
 			this.airPlace = airPlace;
 			this.swing = swing;
 			this.range = range;
 			this.visibleFaces = visibleFaces;
+			this.sneak = sneak;
 		}
 
 		/** {@link #STRICT} on servers that check placements ({@link AntiCheat#isStrict()}), otherwise {@link #DEFAULT}. */
@@ -96,41 +97,55 @@ public interface Placement {
 			return visibleFaces;
 		}
 
+		/**
+		 * Click as if sneaking, without crouching: the server gets the sneak key down for just the click (and up again
+		 * straight after, before the tick's movement), so blocks that would open or toggle (chests, doors, repeaters,
+		 * note blocks) can be placed against, and a chest stays single beside another. Off, such blocks aren't clicked
+		 * unless you're sneaking yourself.
+		 */
+		public boolean sneak() {
+			return sneak;
+		}
+
 		public Options withRotate(boolean rotate) {
-			return new Options(rotate, airPlace, swing, range, visibleFaces);
+			return new Options(rotate, airPlace, swing, range, visibleFaces, sneak);
 		}
 
 		public Options withAirPlace(boolean airPlace) {
-			return new Options(rotate, airPlace, swing, range, visibleFaces);
+			return new Options(rotate, airPlace, swing, range, visibleFaces, sneak);
 		}
 
 		public Options withSwing(boolean swing) {
-			return new Options(rotate, airPlace, swing, range, visibleFaces);
+			return new Options(rotate, airPlace, swing, range, visibleFaces, sneak);
 		}
 
 		public Options withRange(double range) {
-			return new Options(rotate, airPlace, swing, range, visibleFaces);
+			return new Options(rotate, airPlace, swing, range, visibleFaces, sneak);
 		}
 
 		public Options withVisibleFaces(boolean visibleFaces) {
-			return new Options(rotate, airPlace, swing, range, visibleFaces);
+			return new Options(rotate, airPlace, swing, range, visibleFaces, sneak);
+		}
+
+		public Options withSneak(boolean sneak) {
+			return new Options(rotate, airPlace, swing, range, visibleFaces, sneak);
 		}
 
 		@Override
 		public boolean equals(Object o) {
 			return o instanceof Options x && x.rotate == rotate && x.airPlace == airPlace && x.swing == swing && x.range == range
-				&& x.visibleFaces == visibleFaces;
+				&& x.visibleFaces == visibleFaces && x.sneak == sneak;
 		}
 
 		@Override
 		public int hashCode() {
-			return Objects.hash(rotate, airPlace, swing, range, visibleFaces);
+			return Objects.hash(rotate, airPlace, swing, range, visibleFaces, sneak);
 		}
 
 		@Override
 		public String toString() {
 			return "Placement.Options[rotate=" + rotate + ", airPlace=" + airPlace + ", swing=" + swing + ", range=" + range
-				+ ", visibleFaces=" + visibleFaces + "]";
+				+ ", visibleFaces=" + visibleFaces + ", sneak=" + sneak + "]";
 		}
 	}
 
@@ -152,7 +167,11 @@ public interface Placement {
 		NOT_VISIBLE,
 		/** A placement or break there is still waiting for its turn or the server's answer. */
 		PENDING,
-		/** The shared packet budget is spent for now ({@link PacketLimits}); try again next tick. */
+		/**
+		 * The shared packet budget is spent for now ({@link PacketLimits}), another item's block is in the off hand for
+		 * this tick's air placements (it comes back first thing next tick), or an unrotated {@link Options#sneak()}
+		 * placement was asked for after the tick's movement packet; try again next tick.
+		 */
 		RATE_LIMITED;
 
 		public boolean ok() {
@@ -195,15 +214,33 @@ public interface Placement {
 	Attempt place(Object owner, BlockPos pos, int hotbarSlot, Options options);
 
 	/**
-	 * Places by clicking exactly {@code hit} (a face of an existing block), for when the face or the click position
-	 * matters: stairs, slabs, logs and other blocks whose orientation follows where you click. Range, rotation, swing
-	 * and pending checks follow {@code options}; the target position is {@code hit}'s block offset by its face.
+	 * Places by clicking exactly {@code hit}, for when the face or the click position matters: stairs, slabs, logs and
+	 * other blocks whose orientation follows where you click. The block goes where vanilla puts it: beside the clicked
+	 * block (offset by the face), or into it when it's replaceable (grass, water; air with {@link Options#airPlace()},
+	 * through the off hand, so an air placement can have any face and point) or the item adds to it (candles, sea
+	 * pickles, snow layers, the other half of a slab: click the block with the same item). Range, rotation, swing,
+	 * sneak and pending checks follow {@code options}.
 	 */
 	default Attempt place(BlockHitResult hit, int hotbarSlot, Options options) {
 		return place(null, hit, hotbarSlot, options);
 	}
 
 	Attempt place(Object owner, BlockHitResult hit, int hotbarSlot, Options options);
+
+	/**
+	 * The hotbar slot whose block an air placement swapped into your off hand, or -1. It comes back first thing next
+	 * tick (the tick after, for a click held over from after the movement packet); until then, placements with that
+	 * slot go from the off hand on the same swap (a burst) and other placements wait. Meanwhile the slot holds what was
+	 * in your off hand, so read the block from the off hand.
+	 */
+	default int offHandSlot() {
+		return -1;
+	}
+
+	/** Whether a placement with hotbar {@code hotbarSlot}'s item can go now, as far as the off hand goes (see {@link #offHandSlot()}). */
+	default boolean canPlaceWith(int hotbarSlot) {
+		return true;
+	}
 
 	/** Drops {@code owner}'s placements that haven't been sent yet; their results complete with false. */
 	void cancel(Object owner);
@@ -255,6 +292,16 @@ public interface Placement {
 		@Override
 		public Attempt place(Object owner, BlockHitResult hit, int hotbarSlot, Options options) {
 			return core.place(owner, hit, hotbarSlot, options);
+		}
+
+		@Override
+		public int offHandSlot() {
+			return core.offHandSlot();
+		}
+
+		@Override
+		public boolean canPlaceWith(int hotbarSlot) {
+			return core.canPlaceWith(hotbarSlot);
 		}
 
 		@Override

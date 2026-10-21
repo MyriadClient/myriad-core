@@ -828,6 +828,20 @@ public final class WindowManager implements Desktop {
 		int button;
 	}
 
+	/**
+	 * Focus follows the mouse: the window under it becomes the focused one, for keys and the highlighted title bar. Only
+	 * the focus moves (a floating window isn't raised, a column isn't scrolled into view), so nothing shifts under the
+	 * cursor; a click still does both. Not while dragging, or with the launcher open over the desktop.
+	 */
+	void mouseMoved(double gx, double gy) {
+		float mx = toUnits(gx), my = toUnits(gy);
+		mouseX = mx;
+		mouseY = my;
+		if (drag != null || launcher.isOpen()) return;
+		WindowImpl w = topWindowAt(mx, my);
+		if (w != null && !w.closing) workspaces[active].focused = w;
+	}
+
 	boolean mouseClicked(double gx, double gy, int button) {
 		float mx = toUnits(gx), my = toUnits(gy);
 		mouseX = mx;

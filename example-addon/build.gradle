@@ -21,7 +21,10 @@ dependencies {
 	if (project.hasProperty("essentialsDir")) {
 		localRuntime fileTree(dir: "${project.essentialsDir}/build/libs", include: "myriad-essentials-*.jar", exclude: ["*-sources.jar"])
 	} else if (!project.hasProperty("noEssentials")) {
-		localRuntime "dev.myriadclient:myriad-essentials:${rootProject.essentials_version}"
+		localRuntime("dev.myriadclient:myriad-essentials:${rootProject.essentials_version}") {
+			// The released core it depends on would load beside this checkout's under the same mod id.
+			exclude group: "dev.myriadclient", module: "myriad"
+		}
 	}
 }
 

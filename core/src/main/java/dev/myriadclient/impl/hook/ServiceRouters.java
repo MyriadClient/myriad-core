@@ -317,6 +317,16 @@ final class ServiceRouters {
 		public boolean isPending(BlockPos pos) {
 			return all().isPending(pos);
 		}
+
+		@Override
+		public int offHandSlot() {
+			return all().offHandSlot();
+		}
+
+		@Override
+		public boolean canPlaceWith(int hotbarSlot) {
+			return all().canPlaceWith(hotbarSlot);
+		}
 	}
 
 	static final class BreakingRouter implements Breaking {

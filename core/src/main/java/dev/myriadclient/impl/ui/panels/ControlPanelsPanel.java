@@ -135,7 +135,7 @@ final class ControlPanelsPanel extends WidgetPanel {
 		protected void buildBody(VBox body) {
 			List<Module> modules = control.modules();
 			body.add(new Label(modules.isEmpty() ? "No modules yet." : String.join(", ", modules.stream().map(Module::name).toList())).dim());
-			body.add(new Button("  Open", () -> open(control)));
+			body.add(new Button(" Open", () -> open(control)));
 		}
 	}
 }

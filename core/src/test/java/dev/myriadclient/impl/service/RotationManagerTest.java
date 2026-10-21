@@ -17,6 +17,16 @@ class RotationManagerTest {
 	}
 
 	@Test
+	void pitchLandsExactlyOnTheLimits() {
+		// From 38.01183 in floats, 38.01183 + (-90 - 38.01183) is -90.0000076: past what Grim accepts.
+		assertEquals(-90f, RotationManager.step(38.01183319f, -90, 0, false));
+		for (float from = -89.9f; from < 90; from += 0.0137f) {
+			assertEquals(-90f, RotationManager.step(from, -90, 0, false));
+			assertEquals(90f, RotationManager.step(from, 90, 0, false));
+		}
+	}
+
+	@Test
 	void fixKeysKeepsKeysWhenTheYawMatches() {
 		assertArrayEquals(new int[]{1, 0}, RotationManager.fixKeys(10, 10, true, false, false, false));
 		assertArrayEquals(new int[]{1, 1}, RotationManager.fixKeys(10, 10, true, false, false, true));

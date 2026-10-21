@@ -12,6 +12,12 @@ import java.util.Locale;
  */
 public record Keybind(int code, boolean mouse, int modifiers) {
 	public static final Keybind NONE = new Keybind(GLFW.GLFW_KEY_UNKNOWN, false, 0);
+	/** The modifiers a bind can hold, any number of them (Ctrl+Alt+T): not Caps Lock or Num Lock. */
+	public static final int MODIFIERS = GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_ALT | GLFW.GLFW_MOD_SHIFT | GLFW.GLFW_MOD_SUPER;
+
+	public Keybind {
+		modifiers &= MODIFIERS;
+	}
 
 	public static Keybind key(int key) {
 		return new Keybind(key, false, 0);
@@ -74,8 +80,9 @@ public record Keybind(int code, boolean mouse, int modifiers) {
 
 	/**
 	 * A bind written the way {@link #displayName()} shows it, in any case: {@code "t"}, {@code "ctrl+t"},
-	 * {@code "shift+alt+f6"}, {@code "left.shift"}, {@code "mouse5"}, {@code "rmb"}; {@code "none"} for no bind.
-	 * Null if it isn't one.
+	 * {@code "ctrl+alt+pgdown"}, {@code "shift+alt+f6"}, a modifier on its own ({@code "alt"}, {@code "rshift"}),
+	 * {@code "mouse5"}, {@code "rmb"};
+	 * {@code "none"} for no bind. Null if it isn't one.
 	 */
 	public static @Nullable Keybind parse(String input) {
 		String in = input.trim().toLowerCase(Locale.ROOT);
@@ -107,6 +114,29 @@ public record Keybind(int code, boolean mouse, int modifiers) {
 			}
 		}
 		if (key.matches("mouse[1-8]")) return new Keybind(Integer.parseInt(key.substring(5)) - 1, true, mods);
+		key = switch (key) {
+			case "pgdown", "pgdn", "pagedown" -> "page.down";
+			case "pgup", "pageup" -> "page.up";
+			case "del" -> "delete";
+			case "ins" -> "insert";
+			case "esc" -> "escape";
+			case "return" -> "enter";
+			case "bksp" -> "backspace";
+			case "caps", "capslock" -> "caps.lock";
+			case "numlock" -> "num.lock";
+			case "scrolllock" -> "scroll.lock";
+			case "prtsc", "printscreen" -> "print.screen";
+			// A modifier on its own as the key (left one unless told): "alt", "ctrl+rshift".
+			case "alt", "lalt", "leftalt" -> "left.alt";
+			case "ralt", "rightalt" -> "right.alt";
+			case "ctrl", "control", "lctrl", "leftctrl" -> "left.control";
+			case "rctrl", "rightctrl" -> "right.control";
+			case "shift", "lshift", "leftshift" -> "left.shift";
+			case "rshift", "rightshift" -> "right.shift";
+			case "super", "win", "cmd", "lsuper", "lwin" -> "left.win";
+			case "rsuper", "rwin" -> "right.win";
+			default -> key;
+		};
 		try {
 			InputConstants.Key k = InputConstants.getKey("key.keyboard." + key);
 			return k.getValue() < 0 ? null : new Keybind(k.getValue(), false, mods);

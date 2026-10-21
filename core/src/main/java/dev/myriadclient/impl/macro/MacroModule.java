@@ -74,7 +74,11 @@ public final class MacroModule extends Module {
 		seq.start();
 	}
 
-	private static void line(String line) {
+	/**
+	 * Runs one command line as a macro does: a Myriad command with the command prefix, a server command with {@code /},
+	 * anything else as chat. Wheels run their command slots through it too.
+	 */
+	public static void line(String line) {
 		var mc = Minecraft.getInstance();
 		String prefix = Myriad.config().commandPrefix();
 		if (line.startsWith(prefix)) {

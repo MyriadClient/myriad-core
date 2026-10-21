@@ -46,6 +46,10 @@ public final class ContainerTracker implements Containers {
 	private CompletableFuture<View> pending;
 	private BlockPos pendingPos;
 	private int pendingTicks;
+	/** Who asked for the pending open (null with no owner given). */
+	private @Nullable Object pendingOwner;
+	/** A close asked for while the server wouldn't take one yet: it goes at the first moment it will. */
+	private boolean closeWanted;
 
 	public ContainerTracker(MenuSync sync) {
 		this.sync = sync;
@@ -62,7 +66,8 @@ public final class ContainerTracker implements Containers {
 		if (pending != null && pendingPos != null && mc.level != null && !ContainerKinds.opens(mc.level.getBlockState(pendingPos), menu)) {
 			fail(new IllegalStateException("Something else opened instead of the container at " + pendingPos.toShortString()));
 		}
-		current = new ViewImpl(menu, pos);
+		boolean byCode = pending != null;
+		current = new ViewImpl(menu, pos, byCode ? pendingOwner : null, !byCode);
 		Myriad.events().post(new ContainerEvent.Opened(current));
 	}
 
@@ -96,6 +101,10 @@ public final class ContainerTracker implements Containers {
 	/** At the start of the tick, before the movement packet, as clicks go. */
 	@Subscribe
 	private void runTransfers(TickEvent.Pre e) {
+		if (closeWanted) {
+			if (current == null || mc.player == null) closeWanted = false;
+			else if (Myriad.inventory().prepareClick()) closeNow();
+		}
 		ContainerTransfer t = transfers.peek();
 		if (t != null && t.tick(sync)) transfers.poll();
 	}
@@ -116,6 +125,7 @@ public final class ContainerTracker implements Containers {
 		if (current == null) return;
 		ViewImpl closed = current;
 		current = null;
+		closeWanted = false;
 		for (ContainerTransfer t : transfers) t.result.completeExceptionally(new IllegalStateException("The container closed"));
 		transfers.clear();
 		Myriad.events().post(new ContainerEvent.Closed(closed));
@@ -136,6 +146,11 @@ public final class ContainerTracker implements Containers {
 
 	@Override
 	public CompletableFuture<View> open(BlockPos pos, int timeoutTicks) {
+		return open(null, pos, timeoutTicks);
+	}
+
+	@Override
+	public CompletableFuture<View> open(@Nullable Object owner, BlockPos pos, int timeoutTicks) {
 		if (pending != null) fail(new IllegalStateException("Replaced by another open()"));
 		CompletableFuture<View> f = new CompletableFuture<>();
 		BlockHitResult hit = Reach.hitFor(pos, false);
@@ -148,8 +163,9 @@ public final class ContainerTracker implements Containers {
 			return f;
 		}
 		// Another container is open: it closes first, as it would for a click on a block by hand.
-		if (current != null) close();
+		if (current != null) closeNow();
 		pending = f;
+		pendingOwner = owner;
 		pendingPos = pos.immutable();
 		pendingTicks = Math.max(1, timeoutTicks);
 		// Sneaking with an item in hand would place it instead of opening the container.
@@ -162,17 +178,38 @@ public final class ContainerTracker implements Containers {
 
 	@Override
 	public void close() {
+		if (mc.player == null || current == null) return;
+		if (Myriad.inventory().prepareClick()) closeNow();
+		else closeWanted = true;
+	}
+
+	private void closeNow() {
+		closeWanted = false;
 		if (mc.player != null && current != null) mc.player.closeContainer();
 	}
 
 	private final class ViewImpl implements View {
 		private final AbstractContainerMenu handler;
 		private final BlockPos pos;
+		private final @Nullable Object opener;
+		private final boolean byHand;
 		private boolean loaded;
 
-		ViewImpl(AbstractContainerMenu handler, BlockPos pos) {
+		ViewImpl(AbstractContainerMenu handler, BlockPos pos, @Nullable Object opener, boolean byHand) {
 			this.handler = handler;
 			this.pos = pos;
+			this.opener = opener;
+			this.byHand = byHand;
+		}
+
+		@Override
+		public @Nullable Object opener() {
+			return opener;
+		}
+
+		@Override
+		public boolean byHand() {
+			return byHand;
 		}
 
 		@Override

@@ -73,6 +73,19 @@ public interface AntiCheat {
 	boolean removeKnownServer(String host);
 
 	/**
+	 * The protocol number of the version the server sees you as: the one ViaFabricPlus translates to when it does
+	 * (1.20.4 is 765), otherwise this game's own; -1 if it can't be told. Grim judges some things by it
+	 * (which clicks it refuses while you move, some placements), so version-specific rules can gate on it.
+	 */
+	int joinedProtocol();
+
+	/** That version as players name it: "1.20.4", "26.2"; "unknown" if it can't be told. */
+	String joinedVersion();
+
+	/** Whether ViaFabricPlus translates this connection to another version than the game's own. */
+	boolean isTranslated();
+
+	/**
 	 * {@link #isStrict()} from anywhere, including before Myriad has started (then true: when in doubt, be careful).
 	 */
 	static boolean strict() {

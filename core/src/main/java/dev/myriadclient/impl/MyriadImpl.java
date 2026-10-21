@@ -42,6 +42,7 @@ import dev.myriadclient.impl.addon.AddonLoader;
 import dev.myriadclient.impl.command.CommandManager;
 import dev.myriadclient.impl.config.ConfigManagerImpl;
 import dev.myriadclient.impl.control.ControlManager;
+import dev.myriadclient.impl.wheel.WheelManager;
 import dev.myriadclient.impl.elytra.ElytraManager;
 import dev.myriadclient.impl.elytra.LeavingGlide;
 import dev.myriadclient.impl.event.MyriadEventBus;
@@ -106,6 +107,7 @@ public final class MyriadImpl implements MyriadApi {
 	private final ElytraManager elytra = new ElytraManager();
 	private final MapsImpl maps = new MapsImpl();
 	private final ControlManager controls = new ControlManager();
+	private final WheelManager wheels = new WheelManager();
 	private final BuildManager building = new BuildManager();
 	private final FriendsManager friends = new FriendsManager(config.root());
 	private final ServerStatsTracker serverStats = new ServerStatsTracker();
@@ -318,6 +320,10 @@ public final class MyriadImpl implements MyriadApi {
 
 	public ControlManager controlManager() {
 		return controls;
+	}
+
+	public WheelManager wheelManager() {
+		return wheels;
 	}
 
 	@Override

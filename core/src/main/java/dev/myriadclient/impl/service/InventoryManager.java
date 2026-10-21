@@ -45,6 +45,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Input;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -93,8 +94,16 @@ public final class InventoryManager implements Inventory {
 	private boolean restorePending;
 	private int swapSlot;
 	private long restoreAt;
-	/** What a swap's action left to undo when it goes back (an off hand swap), done with its slot still held. */
-	private final List<Runnable> beforeRestore = new ArrayList<>();
+	/**
+	 * What swaps' actions left to undo (an air placement's off hand swap), each with the slot it was made with and the
+	 * tick it may go out: never in the tick of its click, as Grim (PacketOrderG) cancels an off hand swap sent after a
+	 * use in the same tick.
+	 */
+	private final List<Undo> undos = new ArrayList<>();
+	private record Undo(int slot, long made, long at, Runnable action) {
+	}
+	/** The slot the server holds for the silent swap action running now. */
+	private int actionSlot = -1;
 	private boolean restoring;
 
 	/**
@@ -158,7 +167,7 @@ public final class InventoryManager implements Inventory {
 		ServerboundUseItemOnPacket.class, ServerboundPlayerActionPacket.class, ServerboundPlayerCommandPacket.class, ServerboundSwingPacket.class,
 		ServerboundPlayerInputPacket.class})
 	private void beforeAction(PacketEvent.Send e) {
-		if (restorePending && !restoring && Ticks.current() >= restoreAt && mc.player != null && mc.isSameThread()) restore();
+		if (due() && !restoring && mc.player != null && mc.isSameThread()) restore();
 	}
 
 	/** The server can set the slot itself (on join, or by a plugin); a respawn starts with no keys and no sprint. */
@@ -258,11 +267,17 @@ public final class InventoryManager implements Inventory {
 	 */
 	@Subscribe(priority = ActionTiming.FLUSH_PRIORITY + 50)
 	private void restoreSwap(TickEvent.Pre e) {
-		if (!restorePending) return;
+		if (!restorePending && undos.isEmpty()) return;
 		if (mc.player == null || mc.getConnection() == null) {
 			restorePending = false;
-			beforeRestore.clear();
-		} else if (Ticks.current() >= restoreAt) restore();
+			undos.clear();
+		} else if (due()) restore();
+	}
+
+	/** Whether the silent swap's way back, or an undo, may go out now. */
+	private boolean due() {
+		long now = Ticks.current();
+		return restorePending && now >= restoreAt || !undos.isEmpty() && now >= undos.getFirst().at;
 	}
 
 	/** The slot the server should hold when no silent swap is under way: a hold's, or the one you see. */
@@ -294,24 +309,35 @@ public final class InventoryManager implements Inventory {
 	}
 
 	/**
-	 * Undoes what a silent swap's action left for the next tick, with the client holding that slot again as it did; the
-	 * server stays where it is. Anything that changes the server's slot settles first.
+	 * Ends a silent swap before the server's slot changes: runs the undos that may go out now. The server stays on
+	 * the last one's slot; whoever settles sends the slot it wants next.
 	 */
 	private void settle() {
-		if (!restorePending) return;
 		restorePending = false;
-		if (beforeRestore.isEmpty()) return;
-		List<Runnable> undo = List.copyOf(beforeRestore);
-		beforeRestore.clear();
-		// Something moved the server off that slot without settling first: undoing it now would hit another item.
-		if (serverSlot != swapSlot || mc.player == null) return;
+		undo(-1);
+	}
+
+	/**
+	 * Runs the undos due now, and those for {@code slot} (whose next action needs that hand back) even if early, each
+	 * with the client and the server on the slot it was made with: the server is put back there first if something
+	 * moved it since. The rest wait for their tick.
+	 */
+	private void undo(int slot) {
+		if (undos.isEmpty() || mc.player == null || mc.getConnection() == null) return;
+		long now = Ticks.current();
 		var inv = mc.player.getInventory();
 		int visible = inv.getSelectedSlot();
 		restoring = true;
-		inv.setSelectedSlot(swapSlot);
-		mc.gameMode.carriedIndex = swapSlot;
 		try {
-			for (Runnable r : undo) r.run();
+			for (var it = undos.iterator(); it.hasNext(); ) {
+				Undo u = it.next();
+				if (now < u.at && u.slot != slot) continue;
+				it.remove();
+				if (serverSlot != u.slot) sendSlot(u.slot);
+				inv.setSelectedSlot(u.slot);
+				mc.gameMode.carriedIndex = u.slot;
+				u.action.run();
+			}
 		} finally {
 			inv.setSelectedSlot(visible);
 			mc.gameMode.carriedIndex = visible;
@@ -320,11 +346,39 @@ public final class InventoryManager implements Inventory {
 	}
 
 	/**
-	 * For a silent swap's action: runs {@code undo} when the swap goes back (first thing next tick), with its slot still
-	 * held at the server and in the client's hand. Air placement swaps the block back out of the off hand this way.
+	 * For a silent swap's action: runs {@code undo} when the swap goes back (first thing next tick, or the tick after
+	 * for an action held over to the next one), with the client and the server on the action's slot. Air placement
+	 * swaps the block back out of the off hand this way.
 	 */
 	public void afterSwap(Runnable undo) {
-		beforeRestore.add(undo);
+		if (actionSlot < 0) throw new IllegalStateException("afterSwap outside a silent swap's action");
+		long now = Ticks.current();
+		undos.add(new Undo(actionSlot, now, now + (ActionTiming.get().isLate() ? 2 : 1), undo));
+	}
+
+	/** Whether an undo (an air placement's off hand swap) is still to go out: the off hand isn't what it was. */
+	public boolean undoPending() {
+		return !undos.isEmpty();
+	}
+
+	/**
+	 * The hotbar slot an undo was made for this tick, or -1: its block is in the off hand for the rest of the tick, so
+	 * more placements of it can go from there without another swap.
+	 */
+	/** Whether an action (a click, an attack, a use) went out since this tick's movement packet. */
+	public boolean actedThisTick() {
+		return actedThisTick;
+	}
+
+	/** The slot of the first undo still to go out, or -1. */
+	public int undoSlot() {
+		return undos.isEmpty() ? -1 : undos.getFirst().slot;
+	}
+
+	public int undoSlotThisTick() {
+		long now = Ticks.current();
+		for (Undo u : undos) if (u.made == now) return u.slot;
+		return -1;
 	}
 
 	private void sendSlot(int slot) {
@@ -357,12 +411,17 @@ public final class InventoryManager implements Inventory {
 	public void beforeCarriedSync() {
 		if (mc.player == null || restoring) return;
 		int visible = mc.player.getInventory().getSelectedSlot();
-		if (restorePending && (userClick || userAttack || visible != mc.gameMode.carriedIndex)) {
-			settle();
-			if (userClick || userAttack) {
-				int target = userAttack && !userClick ? wanted() : visible;
-				if (serverSlot != target) sendSlot(target);
-			}
+		boolean own = userClick || userAttack;
+		boolean settled = restorePending && (own || visible != mc.gameMode.carriedIndex);
+		if (settled) settle();
+		// Your own click needs its hand back now; a slot you newly selected leaves undos to go out on their own slot.
+		if (own && undoPending()) {
+			undo(visible);
+			settled = true;
+		}
+		if (settled && own) {
+			int target = userAttack && !userClick ? wanted() : visible;
+			if (serverSlot != target) sendSlot(target);
 		}
 		if (!userClick || holder == null) return;
 		if (serverSlot != visible) sendSlot(visible);
@@ -464,20 +523,25 @@ public final class InventoryManager implements Inventory {
 	@Override
 	public void silentSwap(int hotbarSlot, Runnable action) {
 		if (mc.player == null || mc.getConnection() == null || hotbarSlot < 0 || hotbarSlot > 8) return;
-		// What the last swap left to undo goes first, from its own slot.
-		if (restorePending && (swapSlot != hotbarSlot || !beforeRestore.isEmpty())) settle();
+		// The last swap ends before the server moves to another slot (its undos go out if they may).
+		if (restorePending && swapSlot != hotbarSlot) settle();
+		// This slot's own undo first: the action needs its hand back (even in the tick it was made).
+		undo(hotbarSlot);
 		var inv = mc.player.getInventory();
 		int visible = inv.getSelectedSlot();
 		if (serverSlot != hotbarSlot) sendSlot(hotbarSlot);
 		// The client holds it too for the action, so what it predicts (a placement, an item used) is with that item.
 		inv.setSelectedSlot(hotbarSlot);
 		mc.gameMode.carriedIndex = hotbarSlot;
+		int outer = actionSlot;
+		actionSlot = hotbarSlot;
 		try {
 			action.run();
 		} finally {
+			actionSlot = outer;
 			inv.setSelectedSlot(visible);
 			mc.gameMode.carriedIndex = visible;
-			if (serverSlot != wanted() || !beforeRestore.isEmpty()) {
+			if (serverSlot != wanted()) {
 				restorePending = true;
 				swapSlot = hotbarSlot;
 				// Sent after this tick's movement, it goes out with what ActionTiming holds next tick: back the tick after.
@@ -1007,9 +1071,15 @@ public final class InventoryManager implements Inventory {
 			if (held || !b.giveBack && ticks - b.lastWanted < KEEP_TICKS) continue;
 			// A moment you aren't moving if one comes soon; otherwise your keys are released for a tick.
 			if (!safeToClick() && !(++b.waited > WAIT_FOR_STILL && prepareClick())) continue;
-			if (!canClick(1)) continue;
+			// With a container you opened yourself, through its menu (it shows your inventory too), rather than waiting for
+			// it to close; one a module opened is left alone (its own clicks are under way there), so that waits.
+			var menu = mc.player.containerMenu;
+			boolean inContainer = menu != mc.player.inventoryMenu;
+			if (inContainer && !Myriad.containers().current().map(v -> v.byHand()).orElse(false)) continue;
+			if (inContainer ? !Myriad.limits().canSend(PacketLimits.Kind.INVENTORY, 1) || !prepareClick() : !canClick(1)) continue;
 			if (selected == b.slot && b.selectedBefore != b.slot) select(b.selectedBefore);
-			clickSwap(b.home, b.slot);
+			if (inContainer && !swapIn(menu, b.home, b.slot)) continue;
+			if (!inContainer) clickSwap(b.home, b.slot);
 			borrows.remove(b);
 			return;
 		}
@@ -1021,7 +1091,7 @@ public final class InventoryManager implements Inventory {
 		masks.clear();
 		waitingClicks.clear();
 		restorePending = false;
-		beforeRestore.clear();
+		undos.clear();
 	}
 
 	/**
@@ -1077,6 +1147,17 @@ public final class InventoryManager implements Inventory {
 	private boolean clickSwap(int index, int hotbarSlot) {
 		click(index, hotbarSlot, ContainerInput.SWAP);
 		return true;
+	}
+
+	/** A number-key swap of inventory {@code index} with {@code hotbarSlot} in an open container's menu; false if it doesn't show that slot. */
+	private boolean swapIn(AbstractContainerMenu menu, int index, int hotbarSlot) {
+		var inv = mc.player.getInventory();
+		for (var slot : menu.slots) {
+			if (slot.container != inv || slot.getContainerSlot() != index) continue;
+			mc.gameMode.handleContainerInput(menu.containerId, slot.index, hotbarSlot, ContainerInput.SWAP, mc.player);
+			return true;
+		}
+		return false;
 	}
 
 	/** Whether a shift click on {@code from} (outside the armour slots) lands the item in armour slot {@code to}. */

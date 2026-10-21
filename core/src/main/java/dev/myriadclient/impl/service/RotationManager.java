@@ -80,10 +80,14 @@ public final class RotationManager implements Rotations {
 		return v == null || v.isNaN() ? step(from, to, speed, yawAxis) : yawAxis ? v : Mth.clamp(v, -90, 90);
 	}
 
-	/** Moves {@code from} towards {@code to} by at most {@code speed} degrees (0 = all the way); yaw wraps around. */
+	/**
+	 * Moves {@code from} towards {@code to} by at most {@code speed} degrees (0 = all the way); yaw wraps around. Pitch
+	 * that gets there lands on {@code to} itself: {@code from + (to - from)} can round past it, and a pitch of -90.00001
+	 * is a packet Grim refuses (BadPacketsD), leaving the server on the look before.
+	 */
 	static float step(float from, float to, float speed, boolean wraps) {
 		float delta = wraps ? Mth.wrapDegrees(to - from) : to - from;
-		if (speed <= 0 || Math.abs(delta) <= speed) return from + delta;
+		if (speed <= 0 || Math.abs(delta) <= speed) return wraps ? from + delta : to;
 		return from + Math.copySign(speed, delta);
 	}
 

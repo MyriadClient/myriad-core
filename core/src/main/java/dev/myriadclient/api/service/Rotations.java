@@ -156,7 +156,13 @@ public interface Rotations {
 	/** Whether a rotation other than your real one was sent last tick (including while easing back). */
 	boolean isRotating();
 
-	/** Yaw/pitch the server currently believes the player has. */
+	/**
+	 * Yaw/pitch the server currently believes the player has: the last rotation sent, including vanilla's answer to a
+	 * teleport, which carries the look the teleport set (it goes out as the teleport is handled, before the next tick
+	 * starts). One thing it can't know: while a teleport is on its way, the server ignores movement packets until it's
+	 * accepted, so a turn sent then never lands, and a click sent then is made with the teleport's look. Work that
+	 * clicks on a look sent earlier should check again after a {@code TeleportEvent}.
+	 */
 	float serverYaw();
 
 	float serverPitch();

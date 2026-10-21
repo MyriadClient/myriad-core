@@ -168,7 +168,12 @@ public interface Inventory {
 	 */
 	int borrow(Object owner, int inventoryIndex, Predicate<ItemStack> replaceable);
 
-	/** Puts back what {@code owner} borrowed as soon as a click can go, instead of waiting. */
+	/**
+	 * Puts back what {@code owner} borrowed as soon as a click can go, instead of waiting; with a container you opened
+	 * yourself, through its menu (which shows your inventory too), so it needn't close first. In a container a module
+	 * opened ({@link Containers.View#byHand()} false) it waits for that to close, so it never clicks in the middle of
+	 * that module's work.
+	 */
 	void giveBack(Object owner);
 
 	/**

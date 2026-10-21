@@ -48,7 +48,19 @@ public interface Containers {
 	 */
 	CompletableFuture<View> open(BlockPos pos, int timeoutTicks);
 
-	/** Closes the open container (and its screen), if any. */
+	/**
+	 * {@link #open(BlockPos, int)} on behalf of {@code owner} (your module), which the container then reports as its
+	 * {@link View#opener()}: modules that act on containers as they open (sorting, stealing) can leave other modules'
+	 * alone.
+	 */
+	CompletableFuture<View> open(Object owner, BlockPos pos, int timeoutTicks);
+
+	/**
+	 * Closes the open container (and its screen), if any, at a moment the server takes it: Grim flags a close made while
+	 * you move just as it refuses a click then (MultiActionsD), so where clicks have to wait for a still moment
+	 * ({@link Inventory#prepareClick()}), so does the close, first thing in a coming tick. {@link View#isOpen()} says
+	 * when it has.
+	 */
 	void close();
 
 	/**
@@ -113,6 +125,15 @@ public interface Containers {
 
 		/** Whether this container is still the one open. */
 		boolean isOpen();
+
+		/**
+		 * The owner that opened it through {@link Containers#open(Object, BlockPos, int)}, or null: opened by hand, by the
+		 * server, or through {@link Containers#open(BlockPos, int)} without an owner (see {@link #byHand()}).
+		 */
+		@Nullable Object opener();
+
+		/** Whether you opened it yourself (or the server did), rather than code through {@link Containers#open}. */
+		boolean byHand();
 
 		/** Number of the container's own slots (the player's inventory below them isn't counted). */
 		int size();

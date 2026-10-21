@@ -107,6 +107,20 @@ final class DesktopPainter {
 		}
 	}
 
+	/** Something drawn over the game on its own, like the launcher (a wheel), in the desktop's units and theme. */
+	void renderOverlay(GuiGraphicsExtractor ctx, Consumer<UiRenderer> draw) {
+		wm.updateScale();
+		UiRenderer c = UiRenderer.get();
+		prepareRenderer(c);
+		c.begin(ctx, wm.pixelScale);
+		try {
+			c.captureBlur();
+			draw.accept(c);
+		} finally {
+			c.end();
+		}
+	}
+
 	/**
 	 * Myriad's mark on the title screen: the logo, the version, and how to open the menu, in the bottom left corner
 	 * just above Minecraft's version line (the one corner every window shape leaves free).

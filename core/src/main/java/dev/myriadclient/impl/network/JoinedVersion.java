@@ -35,6 +35,18 @@ public final class JoinedVersion {
 		return protocol;
 	}
 
+	/** "1.20.4", "26.2" or "unknown". */
+	public String name() {
+		refresh();
+		return name;
+	}
+
+	/** Whether ViaFabricPlus translates this connection. */
+	public boolean translated() {
+		refresh();
+		return translated;
+	}
+
 	/** "1.20.4 (ViaFabricPlus)", "26.2" or "unknown". */
 	public String describe() {
 		refresh();

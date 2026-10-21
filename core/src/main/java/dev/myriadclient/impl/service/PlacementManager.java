@@ -4,6 +4,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Priority;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.MovementPacketsEvent;
+import dev.myriadclient.api.event.events.ScreenOpenEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.service.PacketLimits;
@@ -12,21 +13,29 @@ import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.util.BlockInfo;
 import dev.myriadclient.api.util.MathUtil;
 import dev.myriadclient.api.util.Reach;
+import dev.myriadclient.api.util.Slots;
 import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
 import dev.myriadclient.impl.network.JoinedVersion;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.SignItem;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -57,6 +66,10 @@ public final class PlacementManager implements Placement {
 
 	/** How long a rotated placement may wait for its rotation before it's given up. */
 	private static final int QUEUE_TICKS = 6;
+	/** How long an air placement's swap keeps both slots showing what they held, at most (it ends at the swap back). */
+	private static final long MASK_MS = 500;
+	/** How long after a module places a sign the editor the server opens for it is kept closed. */
+	private static final long SIGN_EDITOR_MS = 2000;
 	/**
 	 * How far in from the edges of a face a click aims, at the point nearest the eyes: off the rim, so a little error
 	 * in where the eyes are doesn't land the look on the next face, and at a different spot each time you've moved.
@@ -123,16 +136,21 @@ public final class PlacementManager implements Placement {
 
 	/** Why no face qualified: nothing to click (and no air face you can see, for air placements), or only faces you can't see. */
 	private Check supportCheck(BlockPos pos, Options o) {
-		if (!clickTargets(pos).isEmpty()) return Check.NOT_VISIBLE;
+		if (!clickTargets(pos, o.sneak()).isEmpty()) return Check.NOT_VISIBLE;
 		return o.airPlace() ? Check.NOT_VISIBLE : Check.NO_SUPPORT;
 	}
 
 	/** Everything but support: replaceable, in range, not pending, no entity in the way, budget left. */
 	private Check spaceCheck(BlockPos pos, Options o) {
+		return spaceCheck(pos, o, null);
+	}
+
+	/** With a click's {@code context}, the space counts as free where vanilla would place there (see {@link #placeContext}). */
+	private Check spaceCheck(BlockPos pos, Options o, @Nullable BlockPlaceContext context) {
 		if (mc.player == null || mc.level == null) return Check.UNAVAILABLE;
 		if (isPending(pos) || Myriad.breaking().isPending(pos)) return Check.PENDING;
 		BlockState state = mc.level.getBlockState(pos);
-		if (!state.canBeReplaced()) return Check.OCCUPIED;
+		if (context != null ? !context.canPlace() : !state.canBeReplaced()) return Check.OCCUPIED;
 		if (Double.isNaN(eyeHeightFor(new AABB(pos), o.range()))) return Check.OUT_OF_RANGE;
 		boolean blocked = !mc.level.getEntities((Entity) null, new AABB(pos),
 			e -> e.isAlive() && e.isPickable() || e == mc.player && e.getBoundingBox().intersects(new AABB(pos))).isEmpty();
@@ -155,7 +173,7 @@ public final class PlacementManager implements Placement {
 	}
 
 	private Aim target(BlockPos pos, Options o) {
-		List<BlockHitResult> targets = clickTargets(pos);
+		List<BlockHitResult> targets = clickTargets(pos, o.sneak());
 		if (targets.isEmpty()) return o.airPlace() ? airHit(pos, o.range(), o.rotate()) : null;
 		for (BlockHitResult t : targets) {
 			Aim aim = aimAt(t.getBlockPos(), t.getDirection(), o.range());
@@ -337,9 +355,13 @@ public final class PlacementManager implements Placement {
 
 	@Override
 	public Attempt place(Object owner, BlockHitResult hit, int hotbarSlot, Options o) {
-		BlockPos pos = hit.getBlockPos().relative(hit.getDirection());
-		if (hotbarSlot < 0 || hotbarSlot > 8) return Attempt.refused(pos, Check.UNAVAILABLE);
-		Check check = spaceCheck(pos, o);
+		if (hotbarSlot < 0 || hotbarSlot > 8 || mc.player == null) return Attempt.refused(hit.getBlockPos().relative(hit.getDirection()), Check.UNAVAILABLE);
+		// Where vanilla puts it: into the clicked block when that's replaceable (air, grass, water) or the item adds to
+		// it (a candle, the other half of a slab), otherwise beside it.
+		BlockPlaceContext context = placeContext(hit, hotbarSlot);
+		BlockPos pos = context.getClickedPos();
+		if (airClick(hit, pos) && !o.airPlace()) return Attempt.refused(pos, Check.NO_SUPPORT);
+		Check check = spaceCheck(pos, o, context);
 		if (!check.ok()) return Attempt.refused(pos, check);
 		double eyeHeight = eyeHeightFor(new AABB(hit.getLocation(), hit.getLocation()), o.range());
 		if (Double.isNaN(eyeHeight)) return Attempt.refused(pos, Check.OUT_OF_RANGE);
@@ -359,6 +381,10 @@ public final class PlacementManager implements Placement {
 	}
 
 	private Attempt submit(Object owner, BlockPos pos, Aim aim, int slot, Options o) {
+		if (!o.rotate() && (!handsFree(slot) || airClick(aim.hit, pos) && !airReady(slot))) return Attempt.refused(pos, Check.RATE_LIMITED);
+		// A sneak click's input packets aren't held over to the next tick as the click would be: it waits for a tick's start.
+		if (!o.rotate() && o.sneak() && ActionTiming.get().isLate() && BlockInfo.isClickable(mc.level.getBlockState(aim.hit.getBlockPos())))
+			return Attempt.refused(pos, Check.RATE_LIMITED);
 		BlockPos key = pos.immutable();
 		CompletableFuture<Boolean> result = new CompletableFuture<>();
 		pending.put(key, result);
@@ -371,21 +397,42 @@ public final class PlacementManager implements Placement {
 	/** Sends the placement now and completes {@code result} with the server's answer. */
 	private void click(BlockPos pos, BlockHitResult target, int slot, Options o, CompletableFuture<Boolean> result) {
 		int before = acks.currentSequence();
+		// What was there: a placement into a replaceable block or onto one it adds to (a snow layer, a candle) leaves
+		// something replaceable or the same block, so it's judged by the change.
+		BlockState was = mc.level.getBlockState(pos);
 		// Clicking the empty space itself: an air placement.
-		boolean air = target.getBlockPos().equals(pos);
-		Myriad.inventory().silentSwap(slot, () -> {
-			if (air && MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory) {
+		boolean air = airClick(target, pos);
+		if (placing(slot).getItem() instanceof SignItem) signPlacedAt = System.currentTimeMillis();
+		InventoryManager inventory = MyriadImpl.get().inventoryManager() instanceof InventoryManager i ? i : null;
+		if (inventory != null && inventory.undoSlotThisTick() == slot) {
+			// This slot's block is in the off hand for this tick's air placements: this one goes from there too (against
+			// air or a block), with no swap of its own, so a whole burst rides on one swap.
+			sneaking(o, target, () -> {
+				mc.gameMode.useItemOn(mc.player, InteractionHand.OFF_HAND, target);
+				swing(InteractionHand.OFF_HAND, o.swing());
+			});
+		} else Myriad.inventory().silentSwap(slot, () -> {
+			if (air && inventory != null) {
 				// Swap the block to the off hand, place it from there, swing that hand, and swap back: how 2b2t clients
 				// place against air there, past its Grim. Back first thing next tick: Grim (PacketOrderG) cancels an off
 				// hand swap after a placement in the same tick, which would leave the block in your off hand. Meanwhile
-				// what was in the off hand (a totem) is in the hand the server holds, where it still saves you.
+				// what was in the off hand (a totem) is in the hand the server holds, where it still saves you; both
+				// slots show what they held, so nothing flickers.
+				Myriad.inventory().mask(this, MASK_MS, slot, Slots.OFF_HAND);
 				inventory.swapHands();
-				mc.gameMode.useItemOn(mc.player, InteractionHand.OFF_HAND, target);
-				swing(InteractionHand.OFF_HAND, o.swing());
-				inventory.afterSwap(inventory::swapHands);
+				sneaking(o, target, () -> {
+					mc.gameMode.useItemOn(mc.player, InteractionHand.OFF_HAND, target);
+					swing(InteractionHand.OFF_HAND, o.swing());
+				});
+				inventory.afterSwap(() -> {
+					inventory.swapHands();
+					Myriad.inventory().unmask(this);
+				});
 			} else {
-				mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, target);
-				if (o.swing()) mc.player.swing(InteractionHand.MAIN_HAND);
+				sneaking(o, target, () -> {
+					mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, target);
+					if (o.swing()) mc.player.swing(InteractionHand.MAIN_HAND);
+				});
 			}
 		});
 		int sequence = acks.currentSequence();
@@ -394,7 +441,7 @@ public final class PlacementManager implements Placement {
 			result.complete(false);
 			return;
 		}
-		acks.track(sequence, pos).whenComplete((state, t) -> result.complete(t == null && !state.canBeReplaced()));
+		acks.track(sequence, pos).whenComplete((state, t) -> result.complete(t == null && !state.isAir() && (!state.canBeReplaced() || !state.equals(was))));
 	}
 
 	/**
@@ -409,6 +456,73 @@ public final class PlacementManager implements Placement {
 	static float[] anglesFromNextPosition(Vec3 point, double eyeHeight) {
 		Minecraft mc = Minecraft.getInstance();
 		return MathUtil.anglesTo(mc.player.position().add(0, eyeHeight, 0).add(mc.player.getDeltaMovement()), point);
+	}
+
+	@Override
+	public int offHandSlot() {
+		return MyriadImpl.get().inventoryManager() instanceof InventoryManager i ? i.undoSlot() : -1;
+	}
+
+	@Override
+	public boolean canPlaceWith(int hotbarSlot) {
+		return handsFree(hotbarSlot);
+	}
+
+	/** What clicking {@code hit} with hotbar {@code slot}'s item does as vanilla works it out: where it goes, and whether it can. */
+	private BlockPlaceContext placeContext(BlockHitResult hit, int slot) {
+		return new BlockPlaceContext(mc.player, InteractionHand.MAIN_HAND, placing(slot), hit);
+	}
+
+	/** What a placement from hotbar {@code slot} places: the slot's item, or the off hand's while its block is there for a burst. */
+	private ItemStack placing(int slot) {
+		boolean inOffHand = MyriadImpl.get().inventoryManager() instanceof InventoryManager i && i.undoSlotThisTick() == slot;
+		return inOffHand ? mc.player.getOffhandItem() : mc.player.getInventory().getItem(slot);
+	}
+
+	/** Whether clicking {@code hit} to place at {@code pos} clicks empty space (air or a liquid): an air placement. */
+	private boolean airClick(BlockHitResult hit, BlockPos pos) {
+		if (!hit.getBlockPos().equals(pos) || mc.level == null) return false;
+		BlockState clicked = mc.level.getBlockState(pos);
+		return clicked.isAir() || clicked.getBlock() instanceof LiquidBlock;
+	}
+
+	/**
+	 * Runs {@code click} on {@code target} as if sneaking if {@code o} asks for it (see {@link Options#sneak()}) and the
+	 * clicked block would act on a plain click; other clicks need no sneak, so they don't send its input packets.
+	 */
+	private void sneaking(Options o, BlockHitResult target, Runnable click) {
+		if (o.sneak() && mc.level != null && BlockInfo.isClickable(mc.level.getBlockState(target.getBlockPos()))) SneakClick.during(click);
+		else click.run();
+	}
+
+	/** When a module last placed a sign: the editor the server opens for it is kept closed for a moment. */
+	private long signPlacedAt = Long.MIN_VALUE / 2;
+
+	/** A sign placed by a module would leave its editor open over the game, stopping whatever placed it: it's kept closed. */
+	@Subscribe
+	private void onScreenOpen(ScreenOpenEvent e) {
+		if (e.screen() instanceof AbstractSignEditScreen && System.currentTimeMillis() - signPlacedAt < SIGN_EDITOR_MS) e.cancel();
+	}
+
+	/**
+	 * Whether a placement with hotbar {@code slot}'s block can go now, as far as the off hand goes: yes if no air
+	 * placement's block is in it, or if it's this slot's block, swapped there this tick (it goes from there too). Others
+	 * wait until it's back next tick: a swap after a placement in the same tick is what Grim (PacketOrderG) cancels,
+	 * which leaves items in the wrong hands.
+	 */
+	private static boolean handsFree(int slot) {
+		if (!(MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory) || !inventory.undoPending()) return true;
+		return inventory.undoSlotThisTick() == slot;
+	}
+
+	/**
+	 * Whether an air placement with hotbar {@code slot}'s block can go now: one that would start a new swap to the off
+	 * hand can't follow a click or other action in the same tick (PacketOrderG cancels the swap); one riding this tick's
+	 * swap of the same block can.
+	 */
+	private static boolean airReady(int slot) {
+		if (!(MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory)) return true;
+		return inventory.undoSlotThisTick() == slot || !inventory.actedThisTick();
 	}
 
 	/** Swings {@code hand}: shown if {@code visible}, otherwise only sent (a placement without a swing is noticed). */
@@ -456,13 +570,13 @@ public final class PlacementManager implements Placement {
 				it.remove();
 				continue;
 			}
+			if (!handsFree(q.slot) || airClick(q.target(), q.pos) && !airReady(q.slot)) continue;
 			Aim look = lookHit(yaw, pitch, q.target().getBlockPos(), q.target().getDirection(), q.options.range());
 			if (look == null) continue;
 			it.remove();
-			// The world may have changed while it waited (an air placement clicks the space itself).
-			boolean air = q.target().getBlockPos().equals(q.pos);
-			if (!mc.level.getBlockState(q.pos).canBeReplaced() || !air && mc.level.getBlockState(q.target().getBlockPos()).canBeReplaced()
-				|| !Myriad.limits().canSend(PacketLimits.Kind.INTERACT, 1)) {
+			// The world may have changed while it waited: the click still has to put the block where it was meant to go.
+			BlockPlaceContext context = placeContext(look.hit, q.slot);
+			if (!context.canPlace() || !context.getClickedPos().equals(q.pos) || !Myriad.limits().canSend(PacketLimits.Kind.INTERACT, 1)) {
 				q.result.complete(false);
 				continue;
 			}
@@ -491,13 +605,18 @@ public final class PlacementManager implements Placement {
 
 	@Override
 	public List<BlockHitResult> clickTargets(BlockPos pos) {
+		return clickTargets(pos, false);
+	}
+
+	/** {@link #clickTargets(BlockPos)}, also against blocks that act on a click when the placement {@code sneaks}. */
+	private List<BlockHitResult> clickTargets(BlockPos pos, boolean sneaks) {
 		List<BlockHitResult> out = new ArrayList<>();
 		if (mc.player == null || mc.level == null) return out;
 		Vec3 eyes = mc.player.getEyePosition();
 		for (Direction dir : Direction.values()) {
 			BlockPos neighbour = pos.relative(dir);
 			BlockState state = mc.level.getBlockState(neighbour);
-			if (state.canBeReplaced() || (BlockInfo.isClickable(state) && !mc.player.isShiftKeyDown())) continue;
+			if (state.canBeReplaced() || (BlockInfo.isClickable(state) && !sneaks && !mc.player.isShiftKeyDown())) continue;
 			Direction face = dir.getOpposite();
 			Vec3 hitVec = Vec3.atCenterOf(neighbour).add(Vec3.atLowerCornerOf(face.getUnitVec3i()).scale(0.5));
 			out.add(new BlockHitResult(hitVec, face, neighbour, false));
@@ -506,7 +625,11 @@ public final class PlacementManager implements Placement {
 		return out;
 	}
 
-	/** The clicked face points towards the eyes and nothing stands between them and the click point. */
+	/**
+	 * The clicked face points towards the eyes and the ray to the click point reaches it through that face: not through
+	 * a block in front, nor through another face of the block itself (from above, a ray to the top of a side face enters
+	 * through the top, and the click would land there).
+	 */
 	private boolean visible(BlockHitResult hit) {
 		return visible(new Aim(hit, mc.player.getEyeHeight()));
 	}
@@ -516,6 +639,6 @@ public final class PlacementManager implements Placement {
 		BlockHitResult hit = aim.hit;
 		if (!exposed(hit.getBlockPos(), hit.getDirection(), aim.eyeHeight)) return false;
 		BlockHitResult ray = mc.level.clip(new ClipContext(eyes(aim.eyeHeight), hit.getLocation(), ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, mc.player));
-		return ray.getType() == HitResult.Type.MISS || ray.getBlockPos().equals(hit.getBlockPos());
+		return ray.getType() == HitResult.Type.MISS || ray.getBlockPos().equals(hit.getBlockPos()) && ray.getDirection() == hit.getDirection();
 	}
 }

@@ -9,8 +9,12 @@ import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.KeybindButton;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.VBox;
+import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.ui.DesktopBinds;
 import dev.myriadclient.impl.ui.WindowManager;
+import dev.myriadclient.impl.wheel.WheelImpl;
+
+import java.util.List;
 
 /** Every binding in one place: global actions, desktop shortcuts (with the mod key) and module toggles. */
 public final class KeybindsPanel extends WidgetPanel {
@@ -63,5 +67,12 @@ public final class KeybindsPanel extends WidgetPanel {
 			modules.add(row(m.name(), new KeybindButton(m.keybind::get, m.keybind::set)));
 		}
 		if (Myriad.modules().size() > 0) content.add(new Collapsible("Modules", modules));
+
+		List<WheelImpl> wheels = MyriadImpl.get().wheelManager().all();
+		if (!wheels.isEmpty()) {
+			VBox list = new VBox(2, 0);
+			for (WheelImpl w : wheels) list.add(row(w.name(), new KeybindButton(w.keybind::get, w.keybind::set)));
+			content.add(new Collapsible("Wheels", list));
+		}
 	}
 }

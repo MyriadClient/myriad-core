@@ -10,6 +10,7 @@ import dev.myriadclient.api.ui.Window;
 import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.ui.WindowManager;
+import dev.myriadclient.impl.wheel.WheelImpl;
 
 import java.util.List;
 
@@ -32,6 +33,8 @@ public final class CorePanels {
 	public static final MyriadId HOOKS = MyriadId.of("myriad", "hooks");
 	public static final MyriadId SHARE = MyriadId.of("myriad", "share");
 	public static final MyriadId CONTROL = MyriadId.of("myriad", "control");
+	public static final MyriadId WHEELS = MyriadId.of("myriad", "wheels");
+	public static final MyriadId WHEEL = MyriadId.of("myriad", "wheel");
 
 	private CorePanels() {
 	}
@@ -54,7 +57,7 @@ public final class CorePanels {
 		ctx.registerPanel(PanelType.builder(PROFILES, "Profiles").icon("").factory(ProfilesPanel::new).build());
 		ctx.registerPanel(PanelType.builder(ADDONS, "Addons").icon("").factory(AddonsPanel::new).build());
 		ctx.registerPanel(PanelType.builder(FRIENDS, "Friends").icon("").factory(FriendsPanel::new).build());
-		ctx.registerPanel(PanelType.builder(THEME, "Theme").icon("").factory(ThemePanel::new).build());
+		ctx.registerPanel(PanelType.builder(THEME, "Theme").icon("").factory(ThemePanel::new).build());
 		ctx.registerPanel(PanelType.builder(HUD_ELEMENTS, "HUD").icon("\uf2d2").factory(() -> new HudElementsPanel(wm)).build());
 		ctx.registerPanel(PanelType.builder(KEYBINDS, "Keybinds").icon("").factory(() -> new KeybindsPanel(wm)).build());
 		ctx.registerPanel(PanelType.builder(PROFILER, "Profiler").icon("\uf0e4").factory(ProfilerPanel::new).build());
@@ -67,12 +70,24 @@ public final class CorePanels {
 			return MyriadImpl.get().controlManager().impls().stream().filter(c -> c.id().toString().equals(args.get("id").getAsString()))
 				.findFirst().map(ControlPanelView::new).orElse(null);
 		}).build());
+		ctx.registerPanel(PanelType.builder(WHEELS, "Wheels").icon(WheelsPanel.ICON).factory(WheelsPanel::new).build());
+		// One wheel's window; not listed on its own (the launcher lists each wheel).
+		ctx.registerPanel(PanelType.builder(WHEEL, "Wheel").icon(WheelsPanel.ICON).listed(false).factory(args -> {
+			if (!args.has("id")) return null;
+			WheelImpl w = MyriadImpl.get().wheelManager().get(args.get("id").getAsString());
+			return w == null ? null : new WheelView(w);
+		}).build());
 	}
 
 	/**
 	 * Opens a module's settings. By default an existing settings window on the active workspace is re-targeted
 	 * (an "inspector"), so browsing modules doesn't pile up windows; {@code newWindow} always opens another one.
 	 */
+	/** Opens a wheel's window. */
+	public static void openWheel(WheelImpl wheel) {
+		WheelsPanel.open(wheel);
+	}
+
 	/** Opens a control panel's window. */
 	public static void openControl(ControlPanel c) {
 		ControlPanelsPanel.open(c);

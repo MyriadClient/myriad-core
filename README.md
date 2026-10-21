@@ -134,8 +134,9 @@ single key, like Right Shift, bind **Open Menu** there or under Keybindings → 
 - The **launcher** (`Alt+Space`) fuzzy-searches modules (Enter toggles, Shift+Enter or right-click opens settings),
   control panels, macros, panels, categories, themes, profiles and workspaces. Narrow it with `@addon` (part of an
   addon's id or name: `@ess`, `@stash`) and `#kind` or `#category` (`#panel`, `#control`, `#macro`, `#theme`,
-  `#render`, `#combat`…), alone or with text: `@ess #render` lists Essentials' render modules. Whatever you type can
-  also become a **New macro** or a **New control panel** of that name (the last two results).
+  `#render`, `#combat`…), alone or with text: `@ess #render` lists Essentials' render modules, and `@ess #panel` every
+  window it has (category windows and HUD elements; `#category` and `#hud` narrow it). Whatever you type can
+  also become a **New macro**, **New control panel** or **New wheel** of that name (the last three results).
 - **Control panels** switch a set of modules together: one bind or switch turns them all on, each with settings the
   panel saves for it (open its window, unfold a module, set it up, press Save). While it's on, those lie over the
   module's own settings (tagged with the panel's name; tuning one tunes the panel's), and turning it off turns off only
@@ -145,6 +146,11 @@ single key, like Right Shift, bind **Open Menu** there or under Keybindings → 
   per line, a Myriad command (`.toggle esp`), a server command (`/home`), `wait <ticks>`, or chat. Run mode runs them
   once per press; Toggle runs Commands when turned on and Off Commands when turned off. Being modules, they take a
   bind, hold, the launcher and control panels like any other. `.macro [run|new|delete <name>]`.
+- **Wheels**: hold a wheel's bind in game and a ring of what you put on it appears, in your theme; let go over one to
+  run it (a click works too, Escape or right-click closes). A wheel takes modules and macros (toggled), control panels
+  (switched), addons' actions, panels (opened in the menu) and command lines (`.toggle esp`, `/home`). Make as many as
+  you like, each with its own bind, in the Wheels window or the launcher (New wheel); search to add, arrows to order
+  them clockwise from the top.
 - **Sharing**: the **Share** window (or `.share`) turns modules, menu windows, control panels and the theme into a
   code like `myriad_JS3k4d`. Anyone can look at it on [myriadclient.dev/config/…](https://myriadclient.dev/docs/use/sharing),
   or take it in: as their own settings, or as a control panel to try without losing theirs. Settings addons mark
@@ -210,7 +216,7 @@ FPS, HP, Player Count, Speed, Totems, TPS. Baritone options do nothing when Bari
 ## Commands
 
 Prefix `.` (change with `.prefix`). Commands autocomplete in chat and in the console panel.
-`.toggle <module> [on|off]`, `.bind <module> <key|none>`, `.set <module> [setting] [value]`, `.reset <module>`,
+`.toggle <module> [on|off]`, `.bind <module> <key|none>` (any modifiers: `ctrl+alt+t`, `ctrl+alt+pgdown`), `.set <module> [setting] [value]`, `.reset <module>`,
 `.profile [load|delete|save]`, `.friend add|remove|list`, `.theme <preset>`, `.addons`, `.update [check|all|<addon>]`, `.diagnostics` (copies versions,
 addons, mods and enabled modules' changed settings for a bug report), `.panic`, `.help`, `.menu`,
 `.modules` (click one to toggle it), `.binds`, `.say <message>` (sends text starting with the prefix as chat),
@@ -521,7 +527,9 @@ How the pieces fit the kinds of addons people build:
   catch anything the vanilla client couldn't do.
 - **A schematic printer** turns the schematic into a `Blueprint.of(...)` of `Target.state(...)` and hands it to
   `building()`, which works through what's in reach: wrong blocks broken, materials moved into the hotbar, each block
-  clicked and rotated so it comes out facing the right way, and `Build.steps()` drawn as the plan.
+  clicked and rotated so it comes out facing the right way, and `Build.steps()` drawn as the plan. For clicks of your
+  own, `placement().place(this, hit, slot, options)` places where vanilla would for that exact click (into air with
+  `withAirPlace`, onto a candle or slab with the same item) and `withSneak` places against chests and doors.
   `Building.Options.forServer()` rotates for everything and clicks only visible faces where the server checks, and goes
   fast where it doesn't. Each placement's `result()` says whether the server kept the block, `FadeMap` with
   `Renderer3D.blockShape` shows the plan, `tasks()` paces it, and it pauses while `server().isLagging(...)` or right
@@ -529,8 +537,8 @@ How the pieces fit the kinds of addons people build:
   mods (Litematica, Baritone) belong in the addon: keep any code touching their classes in its own class, only load it
   after `FabricLoader.getInstance().isModLoaded("litematica")`, and put mixins into them under `compat.litematica`.
 - **A storage manager** finds containers per chunk with a `ChunkCache` (`BlockInfo.isStorage`), opens them
-  with `containers().open(pos)`, reads them in `ContainerEvent.Loaded`/`SlotUpdated` (including ones the player opens
-  by hand), and runs multi-step jobs with `tasks().sequence(...)`. It saves what it learns with `ctx.storage()`, says
+  with `containers().open(this, pos, ticks)`, reads them in `ContainerEvent.Loaded`/`SlotUpdated` (including ones the
+  player opens by hand: `view().byHand()`, and `opener()` says which module opened the rest), and runs multi-step jobs with `tasks().sequence(...)`. It saves what it learns with `ctx.storage()`, says
   where an item is with `ItemTooltipEvent`, reads shulkers with `ItemInfo.contents`, and marks chests with
   `WorldLabel.Segment.item(...)` icons.
 - **A crystal PvP suite** picks targets with `TargetSettings`, finds placements with `Crystals.bases` and scores them

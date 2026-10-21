@@ -46,15 +46,15 @@ public final class ProfilesPanel extends WidgetPanel {
 		content.add(Spacer.divider());
 		HBox create = new HBox(4);
 		create.addWeighted(new TextField(() -> newName).placeholder("New profile name").onChange(s -> newName = s), 1);
-		create.addFixed(new Button("Create", () -> {
+		create.addFixed(new Button("New", () -> {
 			if (!newName.isBlank()) {
 				Myriad.config().switchProfile(newName);
 				newName = "";
 				rebuild();
 			}
-		}).accent(), 50);
+		}).accent(), 36);
 		content.add(create);
-		content.add(new Label("Creating a profile copies the current state into it.").dim());
+		content.add(new Label("A new profile starts as a copy of the current one.").dim());
 		content.add(Spacer.divider());
 		HBox ac = new HBox(4);
 		ac.addWeighted(new Label("Anti-cheat"), 1);

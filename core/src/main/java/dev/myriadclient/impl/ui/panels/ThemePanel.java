@@ -33,7 +33,7 @@ public final class ThemePanel extends WidgetPanel {
 
 	@Override
 	public String icon() {
-		return "";
+		return "";
 	}
 
 	@Override
