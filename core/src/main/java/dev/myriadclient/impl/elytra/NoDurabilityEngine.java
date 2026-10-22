@@ -10,18 +10,12 @@ import dev.myriadclient.api.event.events.InputEvent;
 import dev.myriadclient.api.event.events.InteractEvent;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.service.AntiCheat;
-import dev.myriadclient.api.util.ItemInfo;
-import dev.myriadclient.api.util.Packets;
 import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
-import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
-import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
-import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.AABB;
@@ -63,15 +57,18 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * between them (both in one of its ticks), that break is lost, and nothing is set back: the stop doesn't wait for a
  * tick, so the start always finds the glide stopped. A break the server took shows (its tick ended with you not
  * gliding, and it says so); one it doesn't say so for within a round trip is made again at once, and it and the next
- * {@link #LONG_BREAKS} hold still two ticks, as the timing that lost one changes slowly (6b6t lost about one in five,
+ * {@link GlideBreaks#LONG_BREAKS} hold still two ticks, as the timing that lost one changes slowly (6b6t lost about one in five,
  * often twice running). No chestplate needed. Grim, for its part, flags the two starts and the still tick.
  */
 final class NoDurabilityEngine implements NoDurability {
 	private final Owner fly;
 	private final Minecraft mc = Minecraft.getInstance();
+	private final GlideBreaks breaks = new GlideBreaks();
+	private final GlideCatch catcher;
 
 	NoDurabilityEngine(Owner fly) {
 		this.fly = fly;
+		catcher = new GlideCatch(fly);
 	}
 
 	/** Ticks between glide restarts: well under vanilla's 80-tick floating kick and the 20 ticks that wear the elytra. */
@@ -86,7 +83,7 @@ final class NoDurabilityEngine implements NoDurability {
 	/** Ticks of gliding with room below before the first swap. */
 	private static final int ARM_TICKS = 10;
 	/** Coming down more than this since you last rose, the server's count of your fall would hurt on landing. */
-	private static final double SAFE_DESCENT = 3;
+	static final double SAFE_DESCENT = 3;
 	/**
 	 * Ticks of gliding the server needs, elytra back on, before it lets go of that count: it only does while it sees you
 	 * descend gently, and its idea of your speed (a free fall while it wasn't gliding you) takes a while to settle.
@@ -136,13 +133,15 @@ final class NoDurabilityEngine implements NoDurability {
 
 	@Override
 	public void enable() {
-		endBreaks();
+		breaks.end();
 		ENABLED.remove(this);
 		ENABLED.add(this);
 		Myriad.events().subscribe(this);
+		Myriad.events().subscribe(breaks);
 		swapping = startNow = rocketWanted = stopForUse = finishing = equipping = recovering = confirming = setBack = false;
 		descent = 0;
-		armTicks = catching = 0;
+		armTicks = 0;
+		catcher.stop();
 		GrimChunks.start();
 	}
 
@@ -156,11 +155,12 @@ final class NoDurabilityEngine implements NoDurability {
 			if (startNow) pressJumpOnce();
 		}
 		swapping = startNow = equipping = recovering = confirming = false;
-		catching = 0;
+		catcher.stop();
 		GlideHolder.disarm(this);
 		GrimChunks.stop();
-		endBreaks();
+		breaks.end();
 		Myriad.events().unsubscribe(this);
+		Myriad.events().unsubscribe(breaks);
 		ENABLED.remove(this);
 	}
 
@@ -182,10 +182,10 @@ final class NoDurabilityEngine implements NoDurability {
 		// Another engine runs (two would each send their starts, often in the same tick, where they cancel out).
 		if (active() != this) {
 			finish();
-			endBreaks();
+			breaks.end();
 			return;
 		}
-		catchGlide(mc.player);
+		catcher.tick(mc.player, descent);
 		tickNoDurability();
 	}
 
@@ -219,36 +219,18 @@ final class NoDurabilityEngine implements NoDurability {
 		trackDescent(p);
 		if (!fly.noDurability()) {
 			finish();
-			endBreaks();
+			breaks.end();
 			return;
 		}
 		// Where the glide isn't simulated, restarting it mid-air spares the elytra; Grim flags that, so there a chestplate goes on.
 		if (!AntiCheat.inEffect().simulatesGlide()) {
 			finish();
-			tickBreaks(p, wasSetBack);
+			breaks.tick(p, wasSetBack);
 			return;
 		}
-		endBreaks();
+		breaks.end();
 		if (!swapping) {
-			// Not while you eat (or use anything held): a swap would stop it (see onUse).
-			boolean ready = p.isFallFlying() && ChestSwapper.elytraWorn() && !p.onGround() && !p.isInWater() && !p.isPassenger() && !p.isUsingItem()
-				&& !ElytraManager.pilotHoldsGlide() && room(true);
-			armTicks = ready ? armTicks + 1 : 0;
-			if (armTicks < ARM_TICKS) return;
-			if (!chestplateAtHand(true)) return;
-			if (!ChestSwapper.ready()) {
-				warnOnce("No Durability can't swap armour with Curse of Binding.");
-				return;
-			}
-			if (!pathKnown(p, cycleTicks())) {
-				chunkWait();
-				return;
-			}
-			if (!GlideHolder.arm(this)) return;
-			ChestSwapper.swap();
-			swapping = true;
-			sinceStart = 0;
-			startMs = 0;
+			arm(p);
 			return;
 		}
 		sinceStart++;
@@ -277,35 +259,72 @@ final class NoDurabilityEngine implements NoDurability {
 			return;
 		}
 		if (equipping) {
-			if (ChestSwapper.elytraWorn() && ChestSwapper.settled() || sinceStart > INTERVAL + CLEAR_TIMEOUT) {
-				if (recovering) {
-					// The start alone; the chestplate once the server glides.
-					recovering = false;
-					restart(false);
-					confirming = true;
-				} else {
-					swapAgainOrStop(p);
-				}
-			}
+			equipped(p);
 			return;
 		}
 		if (confirming) {
-			if (GlideHolder.glidingSince(startMs)) {
-				confirming = false;
-				if (pathKnown(p, cycleTicks())) {
-					ChestSwapper.swap();
-					sinceStart = 0;
-				} else {
-					chunkWait();
-					finish();
-					armTicks = ARM_TICKS;
-				}
-			} else if (sinceStart > 2 * roundTripTicks() + 10) {
-				confirming = false;
-				finish();
-			}
+			confirm(p);
 			return;
 		}
+		nextStart(p);
+	}
+
+	/** Not swapping yet: the first swap, once you've glided with room below for a while and everything it needs is there. */
+	private void arm(LocalPlayer p) {
+		// Not while you eat (or use anything held): a swap would stop it (see onUse).
+		boolean ready = p.isFallFlying() && ChestSwapper.elytraWorn() && !p.onGround() && !p.isInWater() && !p.isPassenger() && !p.isUsingItem()
+			&& !ElytraManager.pilotHoldsGlide() && room(true);
+		armTicks = ready ? armTicks + 1 : 0;
+		if (armTicks < ARM_TICKS) return;
+		if (!chestplateAtHand(true)) return;
+		if (!ChestSwapper.ready()) {
+			warnOnce("No Durability can't swap armour with Curse of Binding.");
+			return;
+		}
+		if (!pathKnown(p, cycleTicks())) {
+			chunkWait();
+			return;
+		}
+		if (!GlideHolder.arm(this)) return;
+		ChestSwapper.swap();
+		swapping = true;
+		sinceStart = 0;
+		startMs = 0;
+	}
+
+	/** The elytra was put back on for the next start: the start once the server has it on. */
+	private void equipped(LocalPlayer p) {
+		if (!(ChestSwapper.elytraWorn() && ChestSwapper.settled()) && sinceStart <= INTERVAL + CLEAR_TIMEOUT) return;
+		if (recovering) {
+			// The start alone; the chestplate once the server glides.
+			recovering = false;
+			restart(false);
+			confirming = true;
+		} else {
+			swapAgainOrStop(p);
+		}
+	}
+
+	/** After a start made again for a lost one: the chestplate once the server glides, or the swapping stops. */
+	private void confirm(LocalPlayer p) {
+		if (GlideHolder.glidingSince(startMs)) {
+			confirming = false;
+			if (pathKnown(p, cycleTicks())) {
+				ChestSwapper.swap();
+				sinceStart = 0;
+			} else {
+				chunkWait();
+				finish();
+				armTicks = ARM_TICKS;
+			}
+		} else if (sinceStart > 2 * roundTripTicks() + 10) {
+			confirming = false;
+			finish();
+		}
+	}
+
+	/** The next start, once the server's stop for the last swap is in and it's due. */
+	private void nextStart(LocalPlayer p) {
 		boolean cleared = GlideHolder.cleared(this);
 		boolean due = sinceStart >= INTERVAL || rocketWanted || stopForUse || GlideHolder.exposed(this);
 		// Not two starts in a row (Grim's ElytraC).
@@ -334,94 +353,19 @@ final class NoDurabilityEngine implements NoDurability {
 		}
 	}
 
-	// ---- breaks, where the glide isn't simulated ---------------------------------------------------------------------
-
-	/** Ticks of gliding between two breaks: under the 20 that wear the elytra, with room for a lost one to be made again. */
-	private static final int BREAK_INTERVAL = 12;
-	/** Ticks past a round trip to wait for the server to say a break stopped the glide. */
-	private static final int BREAK_CONFIRM_MARGIN = 2;
-	/** After a lost break, this many breaks hold still two ticks (their starts surely a server tick apart). */
-	private static final int LONG_BREAKS = 20;
-	/** Vanilla's gliding bit in the entity flag byte ({@code Entity.FLAG_FALL_FLYING}). */
-	private static final int GLIDING_BIT = 1 << 7;
-
 	/** The engines enabled, oldest first; one of them runs ({@link #active}). */
 	private static final CopyOnWriteArrayList<NoDurabilityEngine> ENABLED = new CopyOnWriteArrayList<>();
-	/** The glide is stopped for a break, and you hold still ({@link #breakStill} more ticks). */
-	private boolean breakStopped;
-	/** The client glides on through the breaks (until you land, or a setback). */
-	private boolean breakHold;
-	private int breakStill, breakGlideTicks, breakConfirm, longBreaks;
-	/** Network thread: the server said it isn't gliding you since the last break. */
-	private volatile boolean stopSeen;
 
 	/** Whether a break holds the local player still this tick: no movement, so none goes out. */
 	public static boolean holdsStill() {
 		NoDurabilityEngine n = active();
-		return n != null && n.breakStopped;
+		return n != null && n.breaks.stopped();
 	}
 
 	/** Whether the local player counts as gliding through the breaks. */
 	public static boolean holdsGlide() {
 		NoDurabilityEngine n = active();
-		return n != null && n.breakHold;
-	}
-
-	private void tickBreaks(LocalPlayer p, boolean wasSetBack) {
-		// A setback: the server may not be gliding you any more, so the client shows what it says (the catch opens it).
-		if (wasSetBack || p.onGround() || p.isInWater() || p.isInLava()) breakHold = false;
-		if (breakStopped && --breakStill > 0) return;
-		if (breakStopped) {
-			breakStopped = false;
-			breakGlideTicks = 0;
-			sendStart();
-			return;
-		}
-		var chest = p.getItemBySlot(EquipmentSlot.CHEST);
-		if (!p.isFallFlying() || p.onGround() || p.isInWater() || p.isCreative() || !ItemInfo.isGlider(chest) || !chest.isDamageableItem()) {
-			breakGlideTicks = 0;
-			return;
-		}
-		breakGlideTicks++;
-		// The last break unheard of: lost, so another one now, and the next ones hold still two ticks.
-		boolean lost = breakConfirm > 0 && --breakConfirm == 0 && !stopSeen;
-		if (lost) longBreaks = LONG_BREAKS;
-		if (!lost && breakGlideTicks < BREAK_INTERVAL) return;
-		// Gliding, so the server takes this start as a stop.
-		stopSeen = false;
-		sendStart();
-		breakStopped = breakHold = true;
-		breakStill = longBreaks > 0 ? 2 : 1;
-		if (longBreaks > 0) longBreaks--;
-		breakConfirm = Myriad.server().ping() / 50 + BREAK_CONFIRM_MARGIN;
-	}
-
-	/** Ends a break under way (the glide starts again) and the breaks' hold. */
-	private void endBreaks() {
-		if (breakStopped && mc.player != null && mc.getConnection() != null) sendStart();
-		breakStopped = breakHold = false;
-		breakGlideTicks = breakConfirm = longBreaks = 0;
-	}
-
-	private void sendStart() {
-		Packets.send(new ServerboundPlayerCommandPacket(mc.player, ServerboundPlayerCommandPacket.Action.START_FALL_FLYING));
-	}
-
-	/** A break's tick sends no movement (a look changed would send one): the server isn't gliding you. */
-	@Subscribe(packets = ServerboundMovePlayerPacket.class)
-	private void onSendMove(PacketEvent.Send e) {
-		if (breakStopped) e.cancel();
-	}
-
-	/** Network thread: the server says it isn't gliding you, which a break that took shows. */
-	@Subscribe(packets = ClientboundSetEntityDataPacket.class)
-	private void onEntityData(PacketEvent.Receive e) {
-		var p = mc.player;
-		var data = (ClientboundSetEntityDataPacket) e.packet();
-		if (p == null || data.id() != p.getId()) return;
-		for (var value : data.packedItems()) {
-			if (value.id() == 0 && value.value() instanceof Byte flags && (flags & GLIDING_BIT) == 0) stopSeen = true;
-		}
+		return n != null && n.breaks.holding();
 	}
 
 	/** A setback came in: handled on the next tick (see {@link #startMs}). */
@@ -542,69 +486,8 @@ final class NoDurabilityEngine implements NoDurability {
 	/** While swapping: jump only as the press that starts the glide again (released the tick before). Same for a catch. */
 	@Subscribe(priority = Priority.LOWEST)
 	private void onInput(InputEvent e) {
-		if (catching > 0) e.jump = catchNow;
+		if (catcher.catching()) e.jump = catcher.press();
 		else if (swapping || startNow) e.jump = startNow;
-	}
-
-
-	// ---- catching a dropped glide -----------------------------------------------------------------------------------
-
-	/** How long to keep trying to open the elytra again after the glide drops in mid-air. */
-	private static final int CATCH_TICKS = 20;
-
-	private boolean wasGliding, catchNow;
-	/** Ticks left to catch a dropped glide (0: nothing to catch). */
-	private int catching;
-
-	/**
-	 * A safety net: the glide stopping in mid-air with nothing a player would stop it for (no ground, water, ladder or
-	 * vehicle) means the server's stop got through to the client (a setback, a lost hold, chunks that came in late), and
-	 * a fall from there could cost every block the server counted while it wasn't gliding you. So the elytra is opened
-	 * again at once, as a player would: on if a chestplate is worn, then jump released for a tick and pressed. Not when
-	 * you'd land without hurting (a foot above the ground): opened there, the glide would
-	 * skim the ground for the next 30 blocks, wearing the elytra, with No Durability's swapping kept off by the ground.
-	 */
-	private void catchGlide(LocalPlayer p) {
-		boolean gliding = p.isFallFlying();
-		boolean free = !p.onGround() && !p.isInWater() && !p.isPassenger() && !p.onClimbable() && !p.getAbilities().flying;
-		if (wasGliding && !gliding && free && !fly.letsGlideDrop() && !softLanding(p)) {
-			catching = CATCH_TICKS;
-			fly.info("Glide dropped in mid-air: opening the elytra again");
-		}
-		wasGliding = gliding;
-		catchNow = false;
-		if (catching == 0) return;
-		if (gliding || !free) {
-			catching = 0;
-			return;
-		}
-		catching--;
-		if (!ChestSwapper.elytraWorn()) {
-			ChestSwapper.restoreElytra();
-			return;
-		}
-		// Released last tick (the press opens it, as vanilla does), pressed this one.
-		catchNow = !lastCatchPress;
-		lastCatchPress = catchNow;
-	}
-
-	private boolean lastCatchPress;
-
-	/**
-	 * Whether you'd come down from here without fall damage: ground within the fall the server lets go (counting what
-	 * it has already, and the rise still to come), under you and under where you're carried while you fall.
-	 */
-	private boolean softLanding(LocalPlayer p) {
-		Vec3 v = p.getDeltaMovement();
-		double rise = v.y > 0 ? v.y * v.y / (2 * 0.08) : 0;
-		double drop = SAFE_DESCENT - 0.5 - descent - rise;
-		if (drop <= 0) return false;
-		AABB box = p.getBoundingBox();
-		// Where you'll be over the next half second, taken at full speed (you slow down off the elytra, so that's farther).
-		for (int t = 0; t <= 10; t += 2) {
-			if (mc.level.noBlockCollision(p, box.move(v.x * t, 0, v.z * t).expandTowards(0, -drop, 0))) return false;
-		}
-		return true;
 	}
 
 	/**
