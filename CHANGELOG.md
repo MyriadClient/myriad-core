@@ -34,6 +34,12 @@ and may change in any release. Addons declare the oldest core they support in `f
 - **Setting builders named like the rest:** `integer(name)`, `decimal(name)` and `oneOf(name, default)` beside
   `bool`, `string` and `color`. `intSetting`, `doubleSetting` and `enumSetting` are **deprecated, still working**, and
   go in 1.0; core, the example addon, Essentials, Automation, Stash Hunter and the Boze bridge use the new names.
+- **`Client`: the game's player, world, connection and interaction manager, never null.** `Client.player()`,
+  `level()`, `connection()` and `interaction()` return the game's or throw an `IllegalStateException` naming the
+  method that asked outside a world ("No player outside a world: KitBuilder.round asked for it"), so a handler that
+  forgot `@Subscribe(inGame = true)` fails with a reason instead of a `NullPointerException` somewhere later;
+  `Client.inGame()` for code that also runs on the title screen. Automation's tick handlers moved onto
+  `inGame = true` and lost their null checks.
 
 ## 0.7.0
 
