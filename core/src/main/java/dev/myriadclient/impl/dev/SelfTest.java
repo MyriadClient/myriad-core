@@ -5,6 +5,7 @@ import dev.myriadclient.api.combat.Crystals;
 import dev.myriadclient.api.combat.Threats;
 import dev.myriadclient.api.combat.Trajectory;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.Modules;
 import dev.myriadclient.api.util.Movement;
 import dev.myriadclient.api.util.Reach;
 import dev.myriadclient.api.world.Holes;
@@ -49,6 +50,7 @@ final class SelfTest {
 	void start() {
 		LOG.info("[dev] selftest: {} modules, {} ticks each", queue.size(), ticks);
 		((MyriadEventBus) Myriad.events()).setFailureHook((where, t) -> failures.add((current == null ? "?" : current.id()) + ": " + where + ": " + t));
+		Modules.setGuardHook((module, t) -> failures.add((current == null ? "?" : current.id()) + ": " + module.id() + "'s mixin code: " + t));
 		helpers();
 	}
 
@@ -84,6 +86,7 @@ final class SelfTest {
 
 	private void report() {
 		((MyriadEventBus) Myriad.events()).setFailureHook(null);
+		Modules.setGuardHook(null);
 		if (!selfDisabled.isEmpty()) LOG.info("[dev] selftest: turned themselves off: {}", String.join(", ", selfDisabled));
 		for (String f : failures) LOG.warn("[dev] selftest: FAIL {}", f);
 		LOG.info("[dev] selftest: {} modules run, {} failures", tested, failures.size());

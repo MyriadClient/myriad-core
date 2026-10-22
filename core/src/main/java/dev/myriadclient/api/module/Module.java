@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A toggleable feature. While enabled, the module is subscribed to the event bus, so {@code @Subscribe} methods
@@ -57,6 +58,8 @@ public abstract class Module implements Identified {
 	/** Who holds the module off ({@link Modules#suspend}), by identity; and whether the player has it on meanwhile. */
 	private final List<Object> suspenders = new ArrayList<>(0);
 	private boolean onAfterSuspension;
+	/** Failures in its mixins' guarded code since it was last turned on ({@link Modules#guard}). */
+	final AtomicInteger guardFailures = new AtomicInteger();
 	private final List<Runnable[]> bindings = new ArrayList<>(0);
 	private List<String> formerNames = List.of();
 	private List<Class<? extends Module>> conflicts = List.of();
@@ -190,6 +193,7 @@ public abstract class Module implements Identified {
 				if (other != null) other.setEnabled(false, feedback);
 			}
 			Myriad.events().subscribe(this);
+			guardFailures.set(0);
 			try {
 				for (Runnable[] b : bindings) b[0].run();
 				onEnable();

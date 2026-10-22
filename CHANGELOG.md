@@ -28,6 +28,14 @@ and may change in any release. Addons declare the oldest core they support in `f
   files over 600 lines and methods over 60. Behaviour is unchanged: core's tests and the Grim suite (40/40) pass on
   the split code, and the desktop was checked in a dev client.
 
+- **`Modules.guard` for code mixins run.** An event handler that keeps throwing is turned off by the bus, but a mixin
+  calls straight into its module from the middle of vanilla's code, where an exception crashed the game. Now
+  `Modules.guard(module, () -> ...)`, or `Modules.guard(module, () -> answer, fallback)` for code that answers, runs
+  it, logs the first few failures with their stack trace, and after 50 turns the module off with a notice. The count
+  starts over when it's turned back on. Out-of-memory errors still go through. The dev self-test counts these
+  failures against the module under test. The mixin pattern in the docs and the addon template now uses it:
+  `if (m != null) Modules.guard(m, () -> ...)`.
+
 ## 0.8.0
 
 - **Anti-cheat profiles are values, and addons can add their own.** `AntiCheat.Profile` was an enum of two (Vanilla,
