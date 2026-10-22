@@ -55,8 +55,9 @@ class NoDurabilityHarnessTest {
 		if (keep) {
 			NoDurability engine = Myriad.elytra().noDurability(KEEP);
 			engine.enable();
-			// As a flight does: before the tick's actions, after its own steering.
+			// As a flight does: before the tick's actions, after its own steering; off with the test, as a module turning off.
 			Myriad.events().listen(TickEvent.Pre.class, Priority.BEFORE_ACTIONS + 10, e -> engine.tick());
+			h.onClose(engine::disable);
 		}
 		return server;
 	}

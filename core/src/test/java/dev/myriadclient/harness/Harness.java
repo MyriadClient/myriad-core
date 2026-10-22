@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
+import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.util.Ticks;
 import dev.myriadclient.api.util.RateCounter;
 import dev.myriadclient.impl.MyriadImpl;
@@ -111,6 +112,7 @@ public final class Harness implements AutoCloseable {
 	private final List<Sent> sent = new ArrayList<>();
 	private final List<Runnable> nextTick = new ArrayList<>();
 	private final List<Runnable> everyTick = new ArrayList<>();
+	private final List<Runnable> onClose = new ArrayList<>();
 	private @Nullable ServerGlide serverGlide;
 	private boolean grimPings;
 	private int nextPing = 1;
@@ -308,6 +310,12 @@ public final class Harness implements AutoCloseable {
 		return this;
 	}
 
+	/** Runs {@code action} when the harness closes, before it leaves the world (turning off what a test turned on). */
+	public Harness onClose(Runnable action) {
+		onClose.add(action);
+		return this;
+	}
+
 	/** Runs {@code action} at the start of every tick from now on, as a module's tick handler would. */
 	public Harness everyTick(Runnable action) {
 		everyTick.add(action);
@@ -455,8 +463,11 @@ public final class Harness implements AutoCloseable {
 		}
 	}
 
+	/** Leaves the world as a disconnect does (services let go of what they held for it), then forgets this client. */
 	@Override
 	public void close() {
+		for (Runnable r : onClose) r.run();
+		Myriad.events().post(WorldEvent.Leave.INSTANCE);
 		MyriadImpl.uninstall();
 		Clock.use(null);
 		Fields.set(RateCounter.class, "millis", (LongSupplier) () -> System.nanoTime() / 1_000_000L);
