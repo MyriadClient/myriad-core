@@ -10,15 +10,10 @@ import dev.myriadclient.api.addon.AddonState;
 import dev.myriadclient.api.command.Command;
 import dev.myriadclient.api.command.arguments.Arguments;
 import dev.myriadclient.api.command.arguments.ChoiceArgumentType;
-import dev.myriadclient.api.command.arguments.SettingArgumentType;
 import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.service.AntiCheat;
-import dev.myriadclient.api.service.KeyAction;
-import dev.myriadclient.api.setting.KeybindSetting;
-import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.util.Baritone;
 import dev.myriadclient.api.util.FakePlayers;
 import dev.myriadclient.api.util.MyriadId;
@@ -28,17 +23,13 @@ import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.event.MyriadEventBus;
 import dev.myriadclient.impl.event.Profiler;
 import dev.myriadclient.impl.hook.HookManager;
-import dev.myriadclient.impl.macro.MacroManager;
 import dev.myriadclient.impl.network.JoinedVersion;
-import dev.myriadclient.impl.ui.ThemeManager;
-import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.update.UpdateManager;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,8 +38,6 @@ import java.util.Locale;
 import static dev.myriadclient.api.command.arguments.ModuleArgumentType.module;
 import static dev.myriadclient.api.command.arguments.PlayerArgumentType.player;
 import static dev.myriadclient.api.command.arguments.ProfileArgumentType.profile;
-import static dev.myriadclient.api.command.arguments.SettingArgumentType.setting;
-import static dev.myriadclient.api.command.arguments.SettingValueArgumentType.value;
 
 /** System commands that operate on Myriad itself (not features), so they live in core. */
 public final class CoreCommands {
@@ -75,130 +64,19 @@ public final class CoreCommands {
 	}
 
 	public static void register(AddonContext ctx) {
-		ctx.registerCommand(new Command("toggle", "Toggles a module, or turns it on or off (.toggle sprint on).", "t") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				b.then(argument("module", module()).executes(c -> {
-					Module m = c.getArgument("module", Module.class);
-					m.toggle();
-					if (!m.chatFeedback.get()) info(m.name() + (m.isEnabled() ? " enabled" : " disabled"));
-					return SINGLE_SUCCESS;
-				}).then(argument("state", Arguments.choice(() -> List.of("on", "off"))).executes(c -> {
-					Module m = c.getArgument("module", Module.class);
-					m.setEnabled(StringArgumentType.getString(c, "state").equals("on"));
-					if (!m.chatFeedback.get()) info(m.name() + (m.isEnabled() ? " enabled" : " disabled"));
-					return SINGLE_SUCCESS;
-				})));
-			}
-		});
+		// In this order: .help lists them as registered.
+		for (Command c : List.of(
+			ModuleCommands.toggle(), ModuleCommands.bind(), ModuleCommands.set(), ModuleCommands.reset(),
+			ConfigCommands.profile(), ConfigCommands.friend(), addons(), update(), diagnostics(), help(),
+			ModuleCommands.panic(), baritone(), ConfigCommands.prefix(), antiCheat(), profiler(),
+			ConfigCommands.control(), hooks(), ConfigCommands.macro(), ConfigCommands.cape(), ConfigCommands.theme(),
+			ModuleCommands.modules(), ModuleCommands.binds(), say(), ConfigCommands.reload(), disconnect(),
+			fakePlayer(), menu()
+		)) ctx.registerCommand(c);
+	}
 
-		ctx.registerCommand(new Command("bind", "Binds a module to a key (e.g. .bind sprint r, .bind sprint none).") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				b.then(argument("module", module()).then(argument("key", StringArgumentType.word()).executes(c -> {
-					Module m = c.getArgument("module", Module.class);
-					KeybindSetting k = m.keybind;
-					if (!k.parse(StringArgumentType.getString(c, "key"))) {
-						error("Unknown key. Use names like r, ctrl+t, ctrl+alt+pgdown, shift+f6, left.shift, mouse5 or none.");
-						return 0;
-					}
-					info(m.name() + " bound to " + k.valueString());
-					return SINGLE_SUCCESS;
-				})));
-			}
-		});
-
-		ctx.registerCommand(new Command("set", "Shows or changes a module setting.", "s") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				b.then(argument("module", module())
-					.executes(c -> {
-						Module m = c.getArgument("module", Module.class);
-						info(Component.literal(m.name()).withStyle(ChatFormatting.BOLD));
-						for (Setting<?> s : m.settings.all()) {
-							if (!s.isSerializable()) continue;
-							info(Component.literal("  " + m.settings.keyOf(s) + " = ").withStyle(ChatFormatting.GRAY).append(Component.literal(s.valueString()).withStyle(ChatFormatting.WHITE)));
-						}
-						return SINGLE_SUCCESS;
-					})
-					.then(argument("setting", setting())
-						.executes(c -> {
-							Setting<?> s = SettingArgumentType.get(c, "module", "setting");
-							info(s.name() + " = " + s.valueString() + (s.description().isEmpty() ? "" : "  (" + s.description() + ")"));
-							return SINGLE_SUCCESS;
-						})
-						.then(argument("value", value()).executes(c -> {
-							Setting<?> s = SettingArgumentType.get(c, "module", "setting");
-							String v = c.getArgument("value", String.class);
-							if (!setOrEdit(s, v)) {
-								error("Invalid value '" + v + "' for " + s.name());
-								return 0;
-							}
-							info(s.name() + " set to " + s.valueString() + (s.isOverridden() ? " (for " + s.overriddenBy() + ")" : ""));
-							return SINGLE_SUCCESS;
-						}))));
-			}
-		});
-
-		ctx.registerCommand(new Command("reset", "Resets a module's settings to defaults.") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				b.then(argument("module", module()).executes(c -> {
-					Module m = c.getArgument("module", Module.class);
-					m.settings.resetAll();
-					info("Reset " + m.name());
-					return SINGLE_SUCCESS;
-				}));
-			}
-		});
-
-		ctx.registerCommand(new Command("profile", "Switches, creates or deletes config profiles.", "config") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				b.executes(c -> {
-					info("Profile: " + Myriad.config().activeProfile() + "  (all: " + String.join(", ", Myriad.config().profiles()) + ")");
-					return SINGLE_SUCCESS;
-				});
-				b.then(literal("load").then(argument("name", profile()).executes(c -> {
-					Myriad.config().switchProfile(c.getArgument("name", String.class));
-					info("Switched to " + Myriad.config().activeProfile());
-					return SINGLE_SUCCESS;
-				})));
-				b.then(literal("delete").then(argument("name", profile()).executes(c -> {
-					String n = c.getArgument("name", String.class);
-					if (Myriad.config().deleteProfile(n)) info("Deleted " + n);
-					else error("Can't delete " + n + " (missing or active)");
-					return SINGLE_SUCCESS;
-				})));
-				b.then(literal("save").executes(c -> {
-					Myriad.config().saveNow();
-					info("Saved");
-					return SINGLE_SUCCESS;
-				}));
-			}
-		});
-
-		ctx.registerCommand(new Command("friend", "Manages friends.", "f") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				b.then(literal("add").then(argument("name", player()).executes(c -> {
-					String n = c.getArgument("name", String.class);
-					info(Myriad.friends().add(n) ? "Added " + n : n + " is already a friend");
-					return SINGLE_SUCCESS;
-				})));
-				b.then(literal("remove").then(argument("name", player()).executes(c -> {
-					String n = c.getArgument("name", String.class);
-					info(Myriad.friends().remove(n) ? "Removed " + n : n + " isn't a friend");
-					return SINGLE_SUCCESS;
-				})));
-				b.then(literal("list").executes(c -> {
-					info("Friends: " + (Myriad.friends().all().isEmpty() ? "none" : String.join(", ", Myriad.friends().all())));
-					return SINGLE_SUCCESS;
-				}));
-			}
-		});
-
-		ctx.registerCommand(new Command("addons", "Lists loaded addons.") {
+	private static Command addons() {
+		return new Command("addons", "Lists loaded addons.") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				b.executes(c -> {
@@ -210,9 +88,11 @@ public final class CoreCommands {
 					return SINGLE_SUCCESS;
 				});
 			}
-		});
+		};
+	}
 
-		ctx.registerCommand(new Command("update", "Updates Myriad and addons from GitHub: .update lists, .update check, .update all, .update <addon>.") {
+	private static Command update() {
+		return new Command("update", "Updates Myriad and addons from GitHub: .update lists, .update check, .update all, .update <addon>.") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				UpdateManager updates = MyriadImpl.get().updates();
@@ -264,9 +144,11 @@ public final class CoreCommands {
 					return SINGLE_SUCCESS;
 				}));
 			}
-		});
+		};
+	}
 
-		ctx.registerCommand(new Command("diagnostics", "Copies a report for bug reports: versions, addons, mods and enabled modules' changed settings.", "diag") {
+	private static Command diagnostics() {
+		return new Command("diagnostics", "Copies a report for bug reports: versions, addons, mods and enabled modules' changed settings.", "diag") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				b.executes(c -> {
@@ -276,9 +158,11 @@ public final class CoreCommands {
 					return SINGLE_SUCCESS;
 				});
 			}
-		});
+		};
+	}
 
-		ctx.registerCommand(new Command("help", "Lists commands.", "commands") {
+	private static Command help() {
+		return new Command("help", "Lists commands.", "commands") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				b.executes(c -> {
@@ -289,24 +173,11 @@ public final class CoreCommands {
 					return SINGLE_SUCCESS;
 				});
 			}
-		});
+		};
+	}
 
-		ctx.registerCommand(new Command("panic", "Disables every module.") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				b.executes(c -> {
-					int n = 0;
-					for (Module m : Myriad.modules().enabled()) {
-						m.disable();
-						n++;
-					}
-					info("Disabled " + n + " modules");
-					return SINGLE_SUCCESS;
-				});
-			}
-		});
-
-		ctx.registerCommand(new Command("baritone", "Runs a Baritone command, as its # prefix does: .b goto 0 64 0, .b mine diamond_ore, .b stop.", "b") {
+	private static Command baritone() {
+		return new Command("baritone", "Runs a Baritone command, as its # prefix does: .b goto 0 64 0, .b mine diamond_ore, .b stop.", "b") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				b.executes(c -> baritone("help"));
@@ -319,20 +190,11 @@ public final class CoreCommands {
 				else if (!Baritone.command(command)) error("Baritone didn't take \"" + command + "\".");
 				return SINGLE_SUCCESS;
 			}
-		});
+		};
+	}
 
-		ctx.registerCommand(new Command("prefix", "Changes the command prefix.") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				b.then(argument("prefix", StringArgumentType.word()).executes(c -> {
-					Myriad.config().setCommandPrefix(StringArgumentType.getString(c, "prefix"));
-					info("Prefix is now " + Myriad.config().commandPrefix());
-					return SINGLE_SUCCESS;
-				}));
-			}
-		});
-
-		ctx.registerCommand(new Command("anticheat", "Shows or sets what the server checks: auto, grim, vanilla, ncp or an addon's profile.", "ac") {
+	private static Command antiCheat() {
+		return new Command("anticheat", "Shows or sets what the server checks: auto, grim, vanilla, ncp or an addon's profile.", "ac") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				b.executes(c -> {
@@ -359,9 +221,11 @@ public final class CoreCommands {
 						return SINGLE_SUCCESS;
 					}))));
 			}
-		});
+		};
+	}
 
-		ctx.registerCommand(new Command("profiler", "Times every event handler: .profiler on|off, or .profiler for the heaviest right now.") {
+	private static Command profiler() {
+		return new Command("profiler", "Times every event handler: .profiler on|off, or .profiler for the heaviest right now.") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				MyriadEventBus bus = (MyriadEventBus) Myriad.events();
@@ -390,37 +254,11 @@ public final class CoreCommands {
 					return SINGLE_SUCCESS;
 				}));
 			}
-		});
+		};
+	}
 
-		ctx.registerCommand(new Command("control", "Lists control panels, or turns one on or off by name.") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				b.executes(c -> {
-					var all = Myriad.controls().all();
-					if (all.isEmpty()) info("No control panels: make one in the launcher (New control panel) or the Control Panels window.");
-					for (var cp : all) {
-						info(Component.literal(cp.name()).withStyle(cp.isActive() ? ChatFormatting.GREEN : ChatFormatting.WHITE)
-							.append(Component.literal("  " + cp.modules().size() + " modules" + (cp.keybind().isSet() ? ", " + cp.keybind().displayName() : "")).withStyle(ChatFormatting.GRAY)));
-					}
-					return SINGLE_SUCCESS;
-				});
-				for (String how : List.of("on", "off", "toggle")) {
-					b.then(literal(how).then(argument("name", StringArgumentType.greedyString()).executes(c -> {
-						String name = StringArgumentType.getString(c, "name");
-						var cp = Myriad.controls().byName(name).orElse(null);
-						if (cp == null) {
-							error("No control panel called " + name);
-							return 0;
-						}
-						if (how.equals("toggle")) cp.toggle();
-						else cp.setActive(how.equals("on"));
-						return SINGLE_SUCCESS;
-					})));
-				}
-			}
-		});
-
-		ctx.registerCommand(new Command("hooks", "Lists what addons replaced or hooked, turns a contribution on or off, or shows which hooks a module's calls go through.") {
+	private static Command hooks() {
+		return new Command("hooks", "Lists what addons replaced or hooked, turns a contribution on or off, or shows which hooks a module's calls go through.") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				b.executes(c -> {
@@ -473,135 +311,11 @@ public final class CoreCommands {
 					return SINGLE_SUCCESS;
 				})));
 			}
-		});
+		};
+	}
 
-		ctx.registerCommand(new Command("macro", "Lists macros, or runs, makes or deletes one by name.") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				b.executes(c -> {
-					var all = MacroManager.all();
-					if (all.isEmpty()) info("No macros: .macro new <name>, or New macro in the launcher.");
-					for (var m : all) info(m.name() + (m.keybind.get().isSet() ? "  " + m.keybind.get().displayName() : ""));
-					return SINGLE_SUCCESS;
-				});
-				b.then(literal("run").then(argument("name", StringArgumentType.greedyString()).executes(c -> {
-					String name = StringArgumentType.getString(c, "name");
-					var m = MacroManager.byName(name).orElse(null);
-					if (m == null) {
-						error("No macro called " + name);
-						return 0;
-					}
-					m.toggle();
-					return SINGLE_SUCCESS;
-				})));
-				b.then(literal("new").then(argument("name", StringArgumentType.greedyString()).executes(c -> {
-					var m = MacroManager.create(StringArgumentType.getString(c, "name"));
-					info("Macro " + m.name() + ": give it commands in its settings (.set \"" + m.name() + "\" commands …) or the menu.");
-					return SINGLE_SUCCESS;
-				})));
-				b.then(literal("delete").then(argument("name", StringArgumentType.greedyString()).executes(c -> {
-					String name = StringArgumentType.getString(c, "name");
-					var m = MacroManager.byName(name).orElse(null);
-					if (m == null) {
-						error("No macro called " + name);
-						return 0;
-					}
-					MacroManager.delete(m);
-					info("Deleted macro " + m.name());
-					return SINGLE_SUCCESS;
-				})));
-			}
-		});
-
-		ctx.registerCommand(new Command("cape", "Turns Myriad's cape on or off (seen by Myriad players near you).") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				var cape = ((WindowManager) Myriad.ui()).theme().myriadCape;
-				b.executes(c -> {
-					info(cape.get() ? "Wearing Myriad's cape: Myriad players near you see it. .cape off takes it off" : "Not wearing Myriad's cape. .cape on puts it on");
-					return SINGLE_SUCCESS;
-				});
-				b.then(literal("on").executes(c -> {
-					cape.set(true);
-					Myriad.config().markDirty();
-					info("Wearing Myriad's cape");
-					return SINGLE_SUCCESS;
-				}));
-				b.then(literal("off").executes(c -> {
-					cape.set(false);
-					Myriad.config().markDirty();
-					info("Myriad's cape is off: players near you see your own cape again");
-					return SINGLE_SUCCESS;
-				}));
-			}
-		});
-
-		ctx.registerCommand(new Command("theme", "Lists themes, or applies one by name.") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				ThemeManager themes = ((WindowManager) Myriad.ui()).themes();
-				b.executes(c -> {
-					StringBuilder sb = new StringBuilder("Themes: ");
-					for (ThemeManager.Entry t : themes.all()) sb.append(t.id().path()).append(' ');
-					info(sb.toString());
-					return SINGLE_SUCCESS;
-				});
-				b.then(argument("name", StringArgumentType.greedyString())
-					.suggests((c, s) -> SharedSuggestionProvider.suggest(themes.all().stream().map(t -> t.id().path()), s))
-					.executes(c -> {
-						String n = StringArgumentType.getString(c, "name");
-						var found = themes.find(n);
-						if (found.isEmpty()) {
-							error("No theme " + n);
-							return 0;
-						}
-						Myriad.ui().applyTheme(found.get().id());
-						return SINGLE_SUCCESS;
-					}));
-			}
-		});
-
-		ctx.registerCommand(new Command("modules", "Lists modules by group; click one to toggle it.", "mods") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				b.executes(c -> {
-					for (ModuleGroup group : Myriad.modules().groups()) {
-						var modules = Myriad.modules().inGroup(group);
-						MutableComponent line = Component.literal(group.name() + ": ").withStyle(ChatFormatting.GRAY);
-						for (int i = 0; i < modules.size(); i++) {
-							Module m = modules.get(i);
-							if (i > 0) line.append(Component.literal(", ").withStyle(ChatFormatting.DARK_GRAY));
-							line.append(Texts.command(m.name(), "toggle " + m.id().path()).withStyle(m.isEnabled() ? ChatFormatting.GREEN : ChatFormatting.WHITE));
-						}
-						info(line);
-					}
-					return SINGLE_SUCCESS;
-				});
-			}
-		});
-
-		ctx.registerCommand(new Command("binds", "Lists every keybind: modules and key actions.") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				b.executes(c -> {
-					int n = 0;
-					for (Module m : Myriad.modules()) {
-						if (!m.keybind.get().isSet()) continue;
-						info(Component.literal(m.keybind.get().displayName()).withStyle(ChatFormatting.AQUA).append(Component.literal("  " + m.name()).withStyle(ChatFormatting.WHITE)));
-						n++;
-					}
-					for (KeyAction a : Myriad.keyActions()) {
-						if (!a.bind().isSet()) continue;
-						info(Component.literal(a.bind().displayName()).withStyle(ChatFormatting.AQUA).append(Component.literal("  " + a.name()).withStyle(ChatFormatting.GRAY)));
-						n++;
-					}
-					if (n == 0) info("Nothing is bound. Bind a module with .bind <module> <key>.");
-					return SINGLE_SUCCESS;
-				});
-			}
-		});
-
-		ctx.registerCommand(new Command("say", "Sends a chat message as-is, even one starting with the command prefix.") {
+	private static Command say() {
+		return new Command("say", "Sends a chat message as-is, even one starting with the command prefix.") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				b.then(argument("message", StringArgumentType.greedyString()).executes(c -> {
@@ -609,20 +323,11 @@ public final class CoreCommands {
 					return SINGLE_SUCCESS;
 				}));
 			}
-		});
+		};
+	}
 
-		ctx.registerCommand(new Command("reload", "Reloads the active profile from disk (after editing config files by hand).") {
-			@Override
-			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
-				b.executes(c -> {
-					Myriad.config().reload();
-					info("Reloaded profile " + Myriad.config().activeProfile());
-					return SINGLE_SUCCESS;
-				});
-			}
-		});
-
-		ctx.registerCommand(new Command("disconnect", "Leaves the server or world.", "dc") {
+	private static Command disconnect() {
+		return new Command("disconnect", "Leaves the server or world.", "dc") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				b.executes(c -> {
@@ -633,9 +338,11 @@ public final class CoreCommands {
 					return SINGLE_SUCCESS;
 				});
 			}
-		});
+		};
+	}
 
-		ctx.registerCommand(new Command("fakeplayer", "Spawns client-side dummy players for testing (only you see them).", "fp") {
+	private static Command fakePlayer() {
+		return new Command("fakeplayer", "Spawns client-side dummy players for testing (only you see them).", "fp") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				b.then(literal("add").executes(c -> spawn("Dummy", 20))
@@ -670,9 +377,11 @@ public final class CoreCommands {
 				info("Spawned " + name + " with " + health + " health");
 				return SINGLE_SUCCESS;
 			}
-		});
+		};
+	}
 
-		ctx.registerCommand(new Command("menu", "Opens the Myriad menu.", "gui", "desktop") {
+	private static Command menu() {
+		return new Command("menu", "Opens the Myriad menu.", "gui", "desktop") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				// Opening a screen from chat must wait until the chat screen has closed.
@@ -681,15 +390,6 @@ public final class CoreCommands {
 					return SINGLE_SUCCESS;
 				});
 			}
-		});
-	}
-
-	/** Like the UI: while something lays a value over this setting (a control panel that's on), the edit is its. */
-	private static <T> boolean setOrEdit(Setting<T> s, String input) {
-		if (!s.isOverridden()) return s.parse(input);
-		T v = s.decode(input);
-		if (v == null) return false;
-		s.edit(v);
-		return true;
+		};
 	}
 }
