@@ -6,10 +6,13 @@ import dev.myriadclient.impl.render.HighlightRenderer;
 import dev.myriadclient.impl.render.WorldRenderQueue;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.client.renderer.Projection;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
@@ -17,10 +20,25 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
+	@Shadow
+	@Final
+	private Projection hudProjection;
+
 	@Inject(method = "renderItemInHand", at = @At("HEAD"), cancellable = true)
 	private void myriad$hand(CameraRenderState cameraState, float deltaPartialTick, Matrix4fc modelViewMatrix, CallbackInfo ci) {
 		if (Myriad.isReady() && Myriad.events().hasListeners(CameraEvent.Hand.class)
-			&& Myriad.events().post(new CameraEvent.Hand()).isCancelled()) ci.cancel();
+			&& Myriad.events().post(new CameraEvent.Hand()).isCancelled()) {
+			ci.cancel();
+			return;
+		}
+		// Hand highlights are asked about as the hand is submitted, with the hand's own projection.
+		if (HighlightRenderer.INSTANCE.isArmed()) HighlightRenderer.INSTANCE.beginHand(hudProjection.getMatrix(new Matrix4f()));
+	}
+
+	/** The hand is drawn: its highlights go over it, before screen effects and the GUI. */
+	@Inject(method = "renderItemInHand", at = @At("RETURN"))
+	private void myriad$handHighlights(CameraRenderState cameraState, float deltaPartialTick, Matrix4fc modelViewMatrix, CallbackInfo ci) {
+		HighlightRenderer.INSTANCE.endHand();
 	}
 
 	/** Vanilla multiplies the projection by the view bob; tracers undo it to start at the crosshair. */

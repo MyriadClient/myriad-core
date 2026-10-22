@@ -204,11 +204,13 @@ public final class DevConsole {
 					Myriad.events().post(new MouseButtonEvent(GLFW.GLFW_MOUSE_BUTTON_MIDDLE, GLFW.GLFW_PRESS, 0, false));
 					Myriad.events().post(new MouseButtonEvent(GLFW.GLFW_MOUSE_BUTTON_MIDDLE, GLFW.GLFW_RELEASE, 0, false));
 				}
+				// "mouse 0 press shift": a press held with Shift down (a drag keeps the press's modifiers).
 				case "mouse" -> {
 					int button = Integer.parseInt(a[1]);
 					String how = a.length > 2 ? a[2].toLowerCase(Locale.ROOT) : "click";
-					if (!how.equals("release")) mouseButton(button, GLFW.GLFW_PRESS);
-					if (!how.equals("press")) mouseButton(button, GLFW.GLFW_RELEASE);
+					int mods = a.length > 3 ? modifiers(a[3]) : 0;
+					if (!how.equals("release")) mouseButton(button, GLFW.GLFW_PRESS, mods);
+					if (!how.equals("press")) mouseButton(button, GLFW.GLFW_RELEASE, mods);
 				}
 				// Real key presses through vanilla's KeyboardHandler: "key 1 alt", "key space alt", "key enter".
 				// "key g press" ... "key g release" holds it in between (a wheel's bind, say).
@@ -274,8 +276,8 @@ public final class DevConsole {
 		}
 	}
 
-	private void mouseButton(int button, int action) {
-		invokeMouse("onButton", new Class<?>[]{long.class, MouseButtonInfo.class, int.class}, mc.getWindow().handle(), new MouseButtonInfo(button, 0), action);
+	private void mouseButton(int button, int action, int mods) {
+		invokeMouse("onButton", new Class<?>[]{long.class, MouseButtonInfo.class, int.class}, mc.getWindow().handle(), new MouseButtonInfo(button, mods), action);
 	}
 
 	/** Calls one of vanilla's (private) GLFW input callbacks on the mouse handler. */

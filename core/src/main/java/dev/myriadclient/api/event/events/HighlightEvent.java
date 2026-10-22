@@ -7,6 +7,9 @@ import dev.myriadclient.api.render.HighlightStyle;
 import dev.myriadclient.api.render.WorldMesh;
 import dev.myriadclient.api.world.ChunkCache;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
@@ -17,7 +20,8 @@ import org.jetbrains.annotations.Nullable;
  * nothing listens, highlighting costs nothing. Both are posted on the render thread, every frame.
  * <p>
  * Entities are drawn over shapes, so a wall of highlighted chests doesn't hide the highlighted players behind it, and
- * shapes added through {@link Shapes#below()} are drawn under the other shapes.
+ * shapes added through {@link Shapes#below()} are drawn under the other shapes. Your first-person hand and held items
+ * ({@link Hand}) are highlighted over the hand, after all of those.
  * Highlights that look alike (the same {@link HighlightStyle} and colour) connect: touching ones get one outline around
  * them all, so a vein of ores or a double chest is one shape. Where highlights that look different touch, the one added
  * later outlines itself across the boundary; a low-priority listener runs later, so its highlights draw over others
@@ -85,6 +89,94 @@ public abstract class HighlightEvent {
 		}
 
 		/** Highlights the entity in {@code color} (ARGB). Ignored if already highlighted or {@code color}'s alpha is 0. */
+		public void highlight(HighlightStyle style, int color) {
+			if (this.style != null || style == null || (color >>> 24) == 0) return;
+			this.style = style;
+			this.color = color;
+		}
+
+		public boolean isHighlighted() {
+			return style != null;
+		}
+
+		@ApiStatus.Internal
+		public @Nullable HighlightStyle style() {
+			return style;
+		}
+
+		@ApiStatus.Internal
+		public int color() {
+			return color;
+		}
+	}
+
+	/**
+	 * A part of your first-person view model is being drawn this frame: call {@link #highlight} to highlight it. Hand
+	 * highlights are drawn over the hand, after the world's highlights; nothing is ever in front of the hand, so a
+	 * style's through walls makes no difference. Parts that look alike connect, so an arm and the item it holds
+	 * highlighted alike get one outline around both. The first listener to highlight a part wins.
+	 * <p>
+	 * Vanilla only draws a bare arm while the main hand is empty (and around a held map); a hidden hand (a module
+	 * hiding it) isn't asked about. One instance is reused for every part: don't keep it past the handler.
+	 */
+	public static final class Hand extends HighlightEvent {
+		/** What's being drawn. */
+		public enum Part {
+			/** The bare arm. */
+			ARM,
+			/** The item held in the hand. */
+			ITEM
+		}
+
+		private Part part;
+		private InteractionHand hand;
+		private HumanoidArm side;
+		private ItemStack item;
+		private float tickDelta;
+		private @Nullable HighlightStyle style;
+		private int color;
+
+		@ApiStatus.Internal
+		public Hand() {
+		}
+
+		@ApiStatus.Internal
+		public Hand reset(Part part, InteractionHand hand, HumanoidArm side, ItemStack item, float tickDelta) {
+			this.part = part;
+			this.hand = hand;
+			this.side = side;
+			this.item = item;
+			this.tickDelta = tickDelta;
+			this.style = null;
+			this.color = 0;
+			return this;
+		}
+
+		public Part part() {
+			return part;
+		}
+
+		/** The hand it's in: main or off. */
+		public InteractionHand hand() {
+			return hand;
+		}
+
+		/** The side of the screen it's drawn on (the main hand is on the right unless your main arm is the left). */
+		public HumanoidArm side() {
+			return side;
+		}
+
+		/** The held item; empty for {@link Part#ARM}. */
+		public ItemStack item() {
+			return item;
+		}
+
+		/** The partial tick the hand is drawn at. */
+		public float tickDelta() {
+			return tickDelta;
+		}
+
+		/** Highlights the part in {@code color} (ARGB). Ignored if already highlighted or {@code color}'s alpha is 0. */
 		public void highlight(HighlightStyle style, int color) {
 			if (this.style != null || style == null || (color >>> 24) == 0) return;
 			this.style = style;

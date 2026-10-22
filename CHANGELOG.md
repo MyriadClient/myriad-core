@@ -8,6 +8,25 @@ and may change in any release. Addons declare the oldest core they support in `f
 
 ## 0.9.0 (unreleased)
 
+- **Highlights for your first-person hand and held items.** `HighlightEvent.Hand` asks about each part of the view
+  model as it's drawn: `part()` (`ARM` or `ITEM`), `hand()`, `side()`, `item()`; `highlight(style, color)` as for
+  entities. Hand highlights are drawn over the hand, after the world's (so the hand never hides them nor they it), with
+  every `HighlightStyle` option: outline, glow, fill (custom fills too), gradient. An arm and the item it holds
+  highlighted alike get one outline around both. Vanilla only draws a bare arm while the main hand is empty.
+  - How: the hand's parts are submitted with their highlight id as the outline colour, and the outline pass vanilla
+    skips for the hand runs into a mask of the hand's own (vanilla's entity outline target is still in use then).
+    Spread and composite are scissored to the hand. While nothing listens, a hand part costs one flag check. Uncapped
+    in the dev client, a sword and shield highlighted with an 8 px glow: 479 fps against 476 fps off (about 2.1 ms a
+    frame either way, within the noise).
+  - With an Iris shader pack on, Iris draws the hand inside the level in passes of its own and skips vanilla's: hand
+    highlights are asked about in those passes (with Iris's hand projection) and drawn where vanilla's hand would be,
+    over the pack's finished image. Tested with Iris 1.11.4, Sodium 0.9.2 and Complementary Unbound r5.9.3. The hook
+    (`compat.iris.IrisHandRendererMixin`, by class name, so core still doesn't need Iris) only applies with Iris
+    installed.
+- **`HighlightSettings.builder(group)`**: `.defaults(style)` starts the options from another look (Packet Mine's
+  solid fill with no outline, say), `.noThroughWalls()` leaves out an option that means nothing for what's
+  highlighted (the hand), `.visible(...)` as before. The constructors are unchanged.
+
 - **Settings keep their values through every round trip.** A table test (`SettingRoundTripTest`) puts each setting
   type through JSON both ways, `encode`/`decode`, `.set` with what it shows, bad JSON, and a save that keeps keys it
   doesn't know. It found five bugs, now fixed:

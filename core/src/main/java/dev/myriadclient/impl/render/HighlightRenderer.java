@@ -37,13 +37,17 @@ import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
+import org.joml.Vector3fc;
 import org.joml.Vector4f;
 
 import java.nio.ByteOrder;
@@ -53,6 +57,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalDouble;
+import java.util.function.Consumer;
 
 /**
  * Draws {@link HighlightEvent} highlights: outlines, glows and fills around exact silhouettes.
@@ -98,7 +103,7 @@ public final class HighlightRenderer {
 	/** Highlights per frame: their ids take 16 bits of the mask, the merge group the other 8. */
 	static final int MAX_HIGHLIGHTS = 1 << 16;
 	/** Layers, by index; shapes and below-shapes ({@link #isShapes}) are drawn the same way, into masks of their own. */
-	private static final int ENTITIES = 0, SHAPES = 1, BELOW = 2;
+	private static final int ENTITIES = 0, SHAPES = 1, BELOW = 2, HAND = 3;
 	private static final int[] SHAPE_LAYERS = {BELOW, SHAPES};
 	/** Glowing entities while Myriad owns the outline target: close to vanilla's soft outline. */
 	private static final HighlightStyle VANILLA_GLOW = HighlightStyle.OUTLINE.withOutlineWidth(1).withGlow(3).withGlowStrength(0.7f);
@@ -106,7 +111,8 @@ public final class HighlightRenderer {
 
 	private final HighlightEvent.Entity entityEvent = new HighlightEvent.Entity();
 	private final HighlightEvent.Shapes shapesEvent = new HighlightEvent.Shapes();
-	private ListenerFlag entityListeners, shapeListeners;
+	private final HighlightEvent.Hand handEvent = new HighlightEvent.Hand();
+	private ListenerFlag entityListeners, shapeListeners, handListeners;
 
 	// This frame's highlights, by id.
 	private long frame;
@@ -160,10 +166,20 @@ public final class HighlightRenderer {
 	private Frustum frustum;
 
 	// GPU state.
-	private final Layer[] layers = {new Layer("entities"), new Layer("shapes"), new Layer("shapes below")};
-	/** Per shapes layer: its mask. */
-	private final TextureTarget[] masks = new TextureTarget[3];
-	private MappableRingBuffer buffer;
+	private final Layer[] layers = {new Layer("entities"), new Layer("shapes"), new Layer("shapes below"), new Layer("hand")};
+	/** Per shapes layer and the hand: its mask. */
+	private final TextureTarget[] masks = new TextureTarget[4];
+	/** The hand's data has a buffer of its own: it's written after the world's, in the same frame. */
+	private MappableRingBuffer buffer, handBuffer;
+
+	// The first-person hand, drawn after the world: its highlights are numbered from handBase (-1 while it has none).
+	private boolean drawingHand;
+	private int handBase = -1;
+	private final Matrix4f handProjection = new Matrix4f();
+	private final Matrix4f handTransform = new Matrix4f();
+	private final Vector4f handCorner = new Vector4f();
+	/** The hand layer's screen area while its parts come in (min x, min y, max x, max y), and one part's. */
+	private final float[] handArea = new float[4], partArea = new float[4];
 
 	/** Addons' fills: shader id number to its composite pass. */
 	private static final Int2ObjectOpenHashMap<RenderPipeline> FILLS = new Int2ObjectOpenHashMap<>();
@@ -224,6 +240,8 @@ public final class HighlightRenderer {
 			masked[l] = false;
 		}
 		meshes.clear();
+		drawingHand = false;
+		handBase = -1;
 		asked.clear();
 		askedColor.clear();
 		for (Layer l : layers) l.reset();
@@ -234,9 +252,10 @@ public final class HighlightRenderer {
 		if (entityListeners == null) {
 			entityListeners = Myriad.events().flag(HighlightEvent.Entity.class);
 			shapeListeners = Myriad.events().flag(HighlightEvent.Shapes.class);
+			handListeners = Myriad.events().flag(HighlightEvent.Hand.class);
 		}
 		// A ghost highlighted last frame keeps the pipeline on, as listeners do.
-		armed = entityListeners.isSet() || shapeListeners.isSet() || frame - ghostFrame <= 2;
+		armed = entityListeners.isSet() || shapeListeners.isSet() || handListeners.isSet() || frame - ghostFrame <= 2;
 	}
 
 	/** The frame a ghost last asked for a highlight in. */
@@ -496,11 +515,14 @@ public final class HighlightRenderer {
 		bounds[b + 5] = box.maxZ;
 	}
 
-	/** Fills in the shader data of every highlight; returns {reach, outline} in pixels, the most any highlight needs. */
-	private float[] fillData() {
+	/**
+	 * Fills in the shader data of highlights {@code from} to {@code to} (exclusive); returns {reach, outline} in pixels,
+	 * the most any of them needs.
+	 */
+	private float[] fillData(int from, int to) {
 		float scale = (float) Minecraft.getInstance().getWindow().getGuiScale();
 		float maxReach = 0, maxOutline = 0;
-		for (int id = 0; id < count; id++) {
+		for (int id = from; id < to; id++) {
 			HighlightStyle style = styles[id];
 			int color = colors[id], i = id * FLOATS;
 			float alpha = (color >>> 24) / 255f;
@@ -585,10 +607,11 @@ public final class HighlightRenderer {
 		if (main.getDepthTextureView() == null) return;
 		int w = main.width, h = main.height;
 		screenArea(w, h);
-		float[] widths = fillData();
+		float[] widths = fillData(0, count);
 		int radius = Math.min(MAX_RADIUS, (int) Math.ceil(widths[0]) + 1);
 		int boundary = Math.min(radius, (int) Math.ceil(widths[1]) + 1);
-		GpuBuffer gpuData = upload(radius, boundary);
+		buffer = ring(buffer, "Myriad highlights", count);
+		GpuBuffer gpuData = write(buffer, radius, boundary, 0, count);
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
 		if (shapes && !meshes.isEmpty()) drawMeshes(encoder, gpuData);
 		for (int l : SHAPE_LAYERS) if (masked[l] && layers[l].count > 0) prepare(encoder, layers[l], masks[l], main, gpuData, radius, w, h);
@@ -678,17 +701,21 @@ public final class HighlightRenderer {
 			if (!layer.prepared) continue;
 			layer.prepared = false;
 			if (encoder == null) encoder = RenderSystem.getDevice().createCommandEncoder();
-			composite(encoder, MyriadPipelines.HIGHLIGHT_COMPOSITE, layer, main);
-			// Addons' fills, each over its own highlights' insides.
-			for (int fill : layer.customFills) {
-				RenderPipeline pipeline = FILLS.get(fill);
-				if (pipeline != null) composite(encoder, pipeline, layer, main);
-			}
+			composite(encoder, layer, main, buffer.currentBuffer());
 		}
 	}
 
-	private void composite(CommandEncoder encoder, RenderPipeline pipeline, Layer layer, RenderTarget main) {
-		try (RenderPass pass = begin(encoder, pipeline, main.getColorTextureView(), buffer.currentBuffer(), layer.compositeRect)) {
+	/** One layer onto the main target: outlines, glows and built-in fills, then addons' fills over their highlights' insides. */
+	private void composite(CommandEncoder encoder, Layer layer, RenderTarget main, GpuBuffer gpuData) {
+		composite(encoder, MyriadPipelines.HIGHLIGHT_COMPOSITE, layer, main, gpuData);
+		for (int fill : layer.customFills) {
+			RenderPipeline pipeline = FILLS.get(fill);
+			if (pipeline != null) composite(encoder, pipeline, layer, main, gpuData);
+		}
+	}
+
+	private void composite(CommandEncoder encoder, RenderPipeline pipeline, Layer layer, RenderTarget main, GpuBuffer gpuData) {
+		try (RenderPass pass = begin(encoder, pipeline, main.getColorTextureView(), gpuData, layer.compositeRect)) {
 			pass.bindTexture("SpreadSampler", layer.spread.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
 			pass.draw(3, 1, 0, 0);
 		}
@@ -765,6 +792,118 @@ public final class HighlightRenderer {
 		return true;
 	}
 
+	/**
+	 * The first-person hand is about to be submitted, with {@code projection} (the hand's own field of view): its parts
+	 * are asked about as they're submitted ({@link #hand}) while anything listens for {@link HighlightEvent.Hand}.
+	 */
+	public void beginHand(Matrix4fc projection) {
+		drawingHand = armed && handListeners.isSet();
+		if (drawingHand) handProjection.set(projection);
+	}
+
+	/**
+	 * A pass that drew the hand is over, but the hand's highlights aren't drawn yet: a shader pack's hand passes (Iris
+	 * draws the hand inside the level) keep what they highlighted for {@link #endHand}, after the pack's image is done.
+	 */
+	public void pauseHand() {
+		drawingHand = false;
+	}
+
+	/** Whether the hand is being submitted with highlights asked about. */
+	public boolean drawingHand() {
+		return drawingHand;
+	}
+
+	/**
+	 * A part of the first-person hand is being submitted at {@code pose}: who highlights it, as the outline colour to
+	 * submit it with (0 for nobody). {@code extents} visits points around its shape, relative to {@code pose}, for its
+	 * screen area; it's only called when the part is highlighted.
+	 */
+	public int hand(HighlightEvent.Hand.Part part, InteractionHand hand, HumanoidArm side, ItemStack item, Matrix4fc pose,
+					Consumer<Consumer<Vector3fc>> extents) {
+		if (!drawingHand) return 0;
+		float tickDelta = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
+		HighlightEvent.Hand e = Myriad.events().post(handEvent.reset(part, hand, side, item, tickDelta));
+		if (e.style() == null || count >= MAX_HIGHLIGHTS) return 0;
+		RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
+		int w = main.width, h = main.height;
+		if (handBase < 0) {
+			handBase = count;
+			handArea[0] = handArea[1] = Float.MAX_VALUE;
+			handArea[2] = handArea[3] = -Float.MAX_VALUE;
+			TextureTarget mask = masks[HAND];
+			if (mask == null) mask = masks[HAND] = new TextureTarget("Myriad highlight hand", w, h, true, GpuFormat.RGBA8_UNORM);
+			else if (mask.width != w || mask.height != h) mask.resize(w, h);
+			RenderSystem.getDevice().createCommandEncoder().clearColorAndDepthTextures(mask.getColorTexture(), new Vector4f(0), mask.getDepthTexture(), 0.0);
+		}
+		AABB none = new AABB(camX, camY, camZ, camX, camY, camZ);
+		int id = add(HAND, e.style(), e.color(), none, none);
+		if (id < 0) return 0;
+		// Where it lands on screen: the hand's projection, the model-view it's drawn with, then its pose.
+		handProjection.mul(RenderSystem.getModelViewStack(), handTransform).mul(pose);
+		float[] r = partArea;
+		r[0] = r[1] = Float.MAX_VALUE;
+		r[2] = r[3] = -Float.MAX_VALUE;
+		extents.accept(v -> {
+			handTransform.transform(handCorner.set(v.x(), v.y(), v.z(), 1));
+			float cw = Math.max(handCorner.w, 1e-4f);
+			float px = (handCorner.x / cw * 0.5f + 0.5f) * w, py = (handCorner.y / cw * 0.5f + 0.5f) * h;
+			r[0] = Math.min(r[0], px);
+			r[1] = Math.min(r[1], py);
+			r[2] = Math.max(r[2], px);
+			r[3] = Math.max(r[3], py);
+		});
+		// Nothing visited (a model without extents): the whole screen, as for something partly behind the camera.
+		if (r[0] > r[2]) {
+			r[0] = r[1] = 0;
+			r[2] = w;
+			r[3] = h;
+		}
+		System.arraycopy(r, 0, data, id * FLOATS + 8, 4);
+		handArea[0] = Math.min(handArea[0], r[0]);
+		handArea[1] = Math.min(handArea[1], r[1]);
+		handArea[2] = Math.max(handArea[2], r[2]);
+		handArea[3] = Math.max(handArea[3], r[3]);
+		return encode(id - handBase, groupOf[id]);
+	}
+
+	/** The hand's mask: the outline target while the hand is drawn with highlights ({@link #handHighlighted}). */
+	public RenderTarget handMask() {
+		return masks[HAND];
+	}
+
+	/** Whether the hand is being drawn with highlights, so its outline pass goes into {@link #handMask}. */
+	public boolean handHighlighted() {
+		return drawingHand && handBase >= 0;
+	}
+
+	/**
+	 * The hand is drawn: its highlights over it, from its own mask (spread, then composite; nothing hides the hand),
+	 * including any a shader pack's hand passes collected earlier in the frame ({@link #pauseHand}).
+	 */
+	public void endHand() {
+		drawingHand = false;
+		if (handBase < 0) return;
+		RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
+		int w = main.width, h = main.height;
+		int x0 = Math.max(0, (int) Math.floor(handArea[0]) - 1), y0 = Math.max(0, (int) Math.floor(handArea[1]) - 1);
+		int x1 = Math.min(w, (int) Math.ceil(handArea[2]) + 1), y1 = Math.min(h, (int) Math.ceil(handArea[3]) + 1);
+		if (x1 <= x0 || y1 <= y0) return;
+		Layer layer = layers[HAND];
+		layer.area = new int[]{x0, y0, x1, y1};
+		layer.anyDepthTested = false;
+		float[] widths = fillData(handBase, count);
+		int radius = Math.min(MAX_RADIUS, (int) Math.ceil(widths[0]) + 1);
+		int boundary = Math.min(radius, (int) Math.ceil(widths[1]) + 1);
+		handBuffer = ring(handBuffer, "Myriad hand highlights", count - handBase);
+		GpuBuffer gpuData = write(handBuffer, radius, boundary, handBase, count);
+		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+		prepare(encoder, layer, masks[HAND], main, gpuData, radius, w, h);
+		if (!layer.prepared) return;
+		layer.prepared = false;
+		composite(encoder, layer, main, gpuData);
+	}
+
 	/** {@code area} grown by {@code dx}, {@code dy} and clamped to the screen, as a scissor {x, y, width, height}. */
 	private static int[] grow(int[] area, int dx, int dy, int w, int h) {
 		int x0 = Math.max(0, area[0] - dx), y0 = Math.max(0, area[1] - dy);
@@ -772,22 +911,26 @@ public final class HighlightRenderer {
 		return new int[]{x0, y0, x1 - x0, y1 - y0};
 	}
 
-	/** Writes the header and every highlight to this frame's slot of the data buffer. */
-	private GpuBuffer upload(int radius, int boundary) {
-		int bytes = (HEADER + count * TEXELS) * 16;
-		if (buffer == null || buffer.size() < bytes) {
-			if (buffer != null) GpuGarbage.close(buffer);
-			int size = Math.max(4096, Integer.highestOneBit(bytes - 1) << 1);
-			buffer = new MappableRingBuffer(() -> "Myriad highlights", GpuBuffer.USAGE_MAP_WRITE | GpuBuffer.USAGE_UNIFORM_TEXEL_BUFFER, size);
-		} else {
-			buffer.rotate();
+	/** {@code ring} moved on to this frame's slot, or a new one if it can't hold {@code highlights}. */
+	private static MappableRingBuffer ring(MappableRingBuffer ring, String name, int highlights) {
+		int bytes = (HEADER + highlights * TEXELS) * 16;
+		if (ring != null && ring.size() >= bytes) {
+			ring.rotate();
+			return ring;
 		}
-		GpuBuffer gpu = buffer.currentBuffer();
+		if (ring != null) GpuGarbage.close(ring);
+		int size = Math.max(4096, Integer.highestOneBit(bytes - 1) << 1);
+		return new MappableRingBuffer(() -> name, GpuBuffer.USAGE_MAP_WRITE | GpuBuffer.USAGE_UNIFORM_TEXEL_BUFFER, size);
+	}
+
+	/** Writes the header and highlights {@code from} to {@code to} (as ids from 0) to {@code ring}'s current slot. */
+	private GpuBuffer write(MappableRingBuffer ring, int radius, int boundary, int from, int to) {
+		GpuBuffer gpu = ring.currentBuffer();
 		try (GpuBufferSlice.MappedView view = gpu.map(false, true)) {
 			FloatBuffer out = view.data().order(ByteOrder.nativeOrder()).asFloatBuffer();
-			out.put(radius).put((float) Minecraft.getInstance().getWindow().getGuiScale()).put(count).put(boundary);
+			out.put(radius).put((float) Minecraft.getInstance().getWindow().getGuiScale()).put(to - from).put(boundary);
 			out.put((float) ((System.nanoTime() - START) / 1e9 % 3600)).put(0).put(0).put(0);
-			out.put(data, 0, count * FLOATS);
+			out.put(data, from * FLOATS, (to - from) * FLOATS);
 		}
 		return gpu;
 	}
