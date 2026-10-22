@@ -15,7 +15,9 @@ import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
@@ -23,6 +25,8 @@ import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.stats.StatsCounter;
 import net.minecraft.world.entity.player.Input;
+import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
+import net.minecraft.world.item.ItemStack;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -53,6 +57,8 @@ public final class Harness implements AutoCloseable {
 	}
 
 	private static boolean booted;
+	/** Vanilla's data-driven registries (dimension types, enchantments, ...), as the built-in data defines them. */
+	static HolderLookup.Provider lookup;
 
 	public final Minecraft mc;
 	public final FakeLevel level;
@@ -67,16 +73,20 @@ public final class Harness implements AutoCloseable {
 		boot();
 		mc = Fields.allocate(Minecraft.class);
 		Fields.set(Minecraft.class, "instance", mc);
-		level = FakeLevel.create();
+		level = FakeLevel.create(lookup.lookupOrThrow(Registries.DIMENSION_TYPE).getOrThrow(BuiltinDimensionTypes.OVERWORLD));
 		ClientPacketListener listener = Fields.allocate(ClientPacketListener.class);
 		Fields.set(listener, "localGameProfile", new GameProfile(UUID.fromString("00000000-0000-0000-0000-000000000001"), "Tester"));
+		Fields.set(listener, "playerInfoMap", new java.util.HashMap<>());
+		Fields.set(listener, "enabledFeatures", net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS);
 		Connection connection = new Connection(PacketFlow.CLIENTBOUND);
 		Fields.set(connection, "channel", channel);
 		Fields.set(listener, "connection", connection);
 		// The game's own defaults (the test's working folder has no options.txt).
 		Fields.set(mc, "options", new Options(mc, new File(".")));
 		Fields.set(mc, "soundManager", Fields.allocate(net.minecraft.client.sounds.SoundManager.class));
+		Fields.set(level, "connection", listener);
 		player = new LocalPlayer(mc, level, listener, new StatsCounter(), null, Input.EMPTY, false, null);
+		level.add(player);
 		Fields.set(mc, "player", player);
 		Fields.set(mc, "level", level);
 		Fields.set(mc, "gameMode", new MultiPlayerGameMode(mc, listener));
@@ -99,8 +109,31 @@ public final class Harness implements AutoCloseable {
 		if (booted) return;
 		SharedConstants.tryDetectVersion();
 		Bootstrap.bootStrap();
-		BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(VanillaRegistries.createLookup()).forEach(p -> p.apply());
+		lookup = VanillaRegistries.createLookup();
+		BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(p -> p.apply());
 		booted = true;
+	}
+
+	/** Stands the player at {@code x y z}, on the ground, looking along {@code yaw}/{@code pitch}. */
+	public Harness standAt(double x, double y, double z, float yaw, float pitch) {
+		player.setPos(x, y, z);
+		player.setYRot(yaw);
+		player.setXRot(pitch);
+		player.setOnGround(true);
+		// What the server last had: the movement packet compares against these.
+		Fields.set(player, "xLast", x);
+		Fields.set(player, "yLast", y);
+		Fields.set(player, "lastOnGround", true);
+		Fields.set(player, "zLast", z);
+		Fields.set(player, "yRotLast", yaw);
+		Fields.set(player, "xRotLast", pitch);
+		return this;
+	}
+
+	/** Puts {@code stack} in inventory slot {@code index} (0-8 the hotbar). */
+	public Harness give(int index, ItemStack stack) {
+		player.getInventory().setItem(index, stack);
+		return this;
 	}
 
 	/** Runs {@code action} at the start of the next tick, after core's own tick-start work, as a module's tick handler would. */
