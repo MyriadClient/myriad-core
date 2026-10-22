@@ -30,7 +30,10 @@ import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockChangedAckPacket;
+import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
+import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ServerboundClientTickEndPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
@@ -46,6 +49,8 @@ import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
+import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
 
 import java.io.File;
@@ -129,6 +134,7 @@ public final class Harness implements AutoCloseable {
 		GameRenderer renderer = Fields.allocate(GameRenderer.class);
 		Fields.set(renderer, "mainCamera", camera);
 		Fields.set(mc, "gameRenderer", renderer);
+		Fields.set(mc, "gui", FakeGui.create());
 		Clock.use(() -> millis);
 		Fields.set(RateCounter.class, "millis", (LongSupplier) () -> millis);
 		myriad = MyriadImpl.forHarness();
@@ -250,6 +256,26 @@ public final class Harness implements AutoCloseable {
 		receive(new ClientboundBlockChangedAckPacket(sequence));
 		level.handleBlockChangedAck(sequence);
 		return this;
+	}
+
+	/**
+	 * The server opens a single chest's menu with {@code contents} in its first slots, as vanilla handles its open-screen
+	 * and contents packets: the player's open menu becomes it, filled, and core hears both as its mixins tell it.
+	 */
+	public ChestMenu serverOpensChest(int syncId, List<ItemStack> contents) {
+		ChestMenu menu = ChestMenu.threeRows(syncId, player.getInventory());
+		receive(new ClientboundOpenScreenPacket(syncId, MenuType.GENERIC_9x3, Component.literal("Chest")));
+		player.containerMenu = menu;
+		myriad.containerTracker().onOpened(syncId);
+		List<ItemStack> all = new ArrayList<>();
+		for (int i = 0; i < menu.slots.size(); i++) {
+			all.add(i < contents.size() ? contents.get(i) : i < 27 ? ItemStack.EMPTY : menu.slots.get(i).getItem().copy());
+		}
+		int state = menu.incrementStateId();
+		receive(new ClientboundContainerSetContentPacket(syncId, state, all, ItemStack.EMPTY));
+		menu.initializeContents(state, all, ItemStack.EMPTY);
+		myriad.containerTracker().onContents(syncId);
+		return menu;
 	}
 
 	/** Every packet sent so far, in order. */
