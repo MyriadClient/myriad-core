@@ -221,7 +221,8 @@ final class NoDurabilityEngine implements NoDurability {
 			endBreaks();
 			return;
 		}
-		if (!AntiCheat.strict()) {
+		// Where the glide isn't simulated, restarting it mid-air spares the elytra; Grim flags that, so there a chestplate goes on.
+		if (!AntiCheat.inEffect().simulatesGlide()) {
 			finish();
 			tickBreaks(p, wasSetBack);
 			return;

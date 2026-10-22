@@ -45,4 +45,28 @@ class OptionsTest {
 		assertEquals(Placement.Options.STRICT, Placement.Options.forServer());
 		assertEquals(Breaking.Options.PACKET, Breaking.Options.forServer());
 	}
+
+	@Test
+	void presetsForTheServerFollowTheProfilesAnswers() {
+		AntiCheat.Profile grim = AntiCheat.Profile.GRIM, vanilla = AntiCheat.Profile.VANILLA;
+		assertEquals(Placement.Options.STRICT, Placement.Options.forProfile(grim));
+		assertEquals(Breaking.Options.PACKET, Breaking.Options.forProfile(grim));
+		assertEquals(Rotations.Options.MOVE_FIX, Rotations.Options.forProfile(grim));
+		assertEquals(Building.Options.STRICT, Building.Options.forProfile(grim));
+		assertEquals(Placement.Options.DEFAULT, Placement.Options.forProfile(vanilla));
+		assertEquals(Breaking.Options.FAST, Breaking.Options.forProfile(vanilla));
+		assertEquals(Rotations.Options.INSTANT, Rotations.Options.forProfile(vanilla));
+		assertEquals(Building.Options.DEFAULT, Building.Options.forProfile(vanilla));
+		// NoCheatPlus acts as the vanilla server did for it before it had a profile of its own.
+		assertEquals(Placement.Options.DEFAULT, Placement.Options.forProfile(AntiCheat.Profile.NCP));
+		assertEquals(Breaking.Options.FAST, Breaking.Options.forProfile(AntiCheat.Profile.NCP));
+
+		AntiCheat.Profile anyFace = grim.named("test:any_face", "Any face").withVisibleFacesOnly(false).withBreakTiming(AntiCheat.BreakTiming.SERVER);
+		Placement.Options p = Placement.Options.forProfile(anyFace);
+		assertTrue(p.rotate());
+		assertFalse(p.visibleFaces());
+		assertEquals(Breaking.Options.FAST, Breaking.Options.forProfile(anyFace));
+		assertEquals(1, Building.Options.forProfile(anyFace).placesPerTick());
+		assertEquals(p, Building.Options.forProfile(anyFace).placing());
+	}
 }

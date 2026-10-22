@@ -1,5 +1,6 @@
 package dev.myriadclient.impl.service;
 
+import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.util.RateCounter;
 import net.minecraft.network.protocol.Packet;
@@ -24,7 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public final class PacketLimiter implements PacketLimits {
 	private static final int WINDOW_MS = 500;
-	private static final Map<Kind, Integer> LIMITS = Map.of(Kind.BLOCK_ACTION, 80, Kind.INTERACT, 9, Kind.INVENTORY, 8);
+	private static final Map<Kind, Integer> LIMITS = Map.of(Kind.BLOCK_ACTION, 80, Kind.INVENTORY, 8);
 	private static final Map<Kind, Integer> WINDOWS = Map.of(Kind.BLOCK_ACTION, WINDOW_MS, Kind.INTERACT, 300, Kind.INVENTORY, WINDOW_MS);
 
 	private final Map<Kind, RateCounter> sent = new EnumMap<>(Kind.class);
@@ -74,9 +75,10 @@ public final class PacketLimiter implements PacketLimits {
 		return sent.get(kind).count();
 	}
 
+	/** Interactions are the anti-cheat profile's budget (9 in Myriad's, for Paper's limiter); the rest are fixed. */
 	@Override
 	public int limit(Kind kind) {
-		return LIMITS.get(kind);
+		return kind == Kind.INTERACT ? AntiCheat.inEffect().interactionBudget() : LIMITS.get(kind);
 	}
 
 	@Override

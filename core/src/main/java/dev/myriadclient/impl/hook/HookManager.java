@@ -370,7 +370,7 @@ public final class HookManager implements Hooks {
 	private void refreshWhere() {
 		AntiCheat.Profile p = Myriad.antiCheat().profile();
 		String h = Match.normalize(Myriad.server().address());
-		if (p == profile && Objects.equals(h, host)) return;
+		if (p.equals(profile) && Objects.equals(h, host)) return;
 		profile = p;
 		host = h;
 		synchronized (this) {

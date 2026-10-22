@@ -6,6 +6,32 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.8.0 (in progress)
+
+- **Anti-cheat profiles are values, and addons can add their own.** `AntiCheat.Profile` was an enum of two (Vanilla,
+  Grim), so the services could only ask "is it Grim?" and an addon for another server had nowhere to say what that
+  server checks. A profile is now a set of answers the services act on: `simulatesMovement()`,
+  `checksLookOnActions()`, `visibleFacesOnly()`, `clicksOnlyWhileStill()`, `simulatesGlide()`, `breakTiming()`
+  (`SERVER` or `CHECKED`) and `interactionBudget()`. The `forServer()` presets of placement, breaking, rotations and
+  building are built from those answers rather than from "is it Grim", as are the inventory's wait for a still moment,
+  No Durability's choice between a chestplate swap and restarting the glide, and the interaction budget; on Grim and
+  on a vanilla server everything comes out exactly as before (a test compares each preset).
+  - `Profile.VANILLA`, `GRIM` and the new `NCP` (NoCheatPlus, which 6b6t runs a fork of). NCP is treated as a vanilla
+    server, as 6b6t was until now, except that it says the glide isn't simulated, so modules can tell it apart without
+    naming the server. Auto picks it on 6b6t; Grim's pings still win if a server shows them.
+  - `Profile.GRIM.named("my-addon:my_server", "My server").withSimulatesGlide(false)` makes a profile of your own;
+    `ctx.registerAntiCheatProfile(profile)` lists it for the player (Profiles window, `.anticheat`), and
+    `Match.on(profile)` matches it. Profiles are the same profile when their ids are. The `AntiCheat.DETECT` hook
+    (`ServerSeen(host, singleplayer, pings, protocol)` → a profile) lets an addon recognise its server so Auto picks
+    its profile; core's own guess is the fallback, and detection runs on the render thread.
+  - `AntiCheat.inEffect()` is the profile in effect from anywhere (Grim before Myriad has started), beside `strict()`;
+    `isStrict()` is now `simulatesMovement()`. `choice()`/`choose(profile)` (null for Auto) and `profiles()` replace
+    `Mode`, `mode()` and `setMode()`, which are **deprecated, still working**, and go in 1.0. The saved choice is the
+    profile's id ("grim" as before, an addon's as "my-addon:my_server"), kept while the addon that registers it loads.
+  - **Source-breaking:** a `switch` over `AntiCheat.Profile` no longer compiles, and `Profile.name()` is the display
+    name ("Grim", was "GRIM"). Compiled addons that only read `Profile.GRIM`/`VANILLA` or call `strict()` keep
+    working. Essentials switches its elytra checks from `strict()` to `simulatesGlide()`.
+
 ## 0.7.0
 
 - **Groups replace category windows.** With several addons, every addon in the same six categories made a wall of

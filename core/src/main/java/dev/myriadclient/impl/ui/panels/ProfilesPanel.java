@@ -12,7 +12,9 @@ import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.impl.command.CoreCommands;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /** Switch, create and delete config profiles. A profile holds module state and the desktop layout. */
 public final class ProfilesPanel extends WidgetPanel {
@@ -58,14 +60,19 @@ public final class ProfilesPanel extends WidgetPanel {
 		content.add(Spacer.divider());
 		HBox ac = new HBox(4);
 		ac.addWeighted(new Label("Anti-cheat"), 1);
-		ac.addFixed(new Dropdown<>(() -> List.of(AntiCheat.Mode.values()), Myriad.antiCheat()::mode, Myriad.antiCheat()::setMode,
-			m -> switch (m) {
-				case AUTO -> "Auto";
-				case GRIM -> "Grim";
-				case VANILLA -> "Vanilla";
-			}), 80);
+		// Auto is the empty choice.
+		ac.addFixed(new Dropdown<Optional<AntiCheat.Profile>>(ProfilesPanel::antiCheatChoices, () -> Optional.ofNullable(Myriad.antiCheat().choice()),
+			c -> Myriad.antiCheat().choose(c.orElse(null)), c -> c.map(AntiCheat.Profile::name).orElse("Auto")), 96);
 		content.add(ac);
 		content.add(new Label(() -> CoreCommands.antiCheatStatus() + ". Grim makes modules rotate before acting, click only faces you "
-			+ "can see and wait for safe moments; Vanilla acts as fast as the vanilla server allows.").dim());
+			+ "can see and wait for safe moments; Vanilla acts as fast as the vanilla server allows; NoCheatPlus is Vanilla with "
+			+ "a loosely checked glide.").dim());
+	}
+
+	private static List<Optional<AntiCheat.Profile>> antiCheatChoices() {
+		List<Optional<AntiCheat.Profile>> choices = new ArrayList<>();
+		choices.add(Optional.empty());
+		for (AntiCheat.Profile p : Myriad.antiCheat().profiles()) choices.add(Optional.of(p));
+		return choices;
 	}
 }

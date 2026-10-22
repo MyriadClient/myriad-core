@@ -55,9 +55,16 @@ public interface Rotations {
 			this.moveFix = moveFix;
 		}
 
-		/** {@link #MOVE_FIX} where the server checks movement against rotations ({@link AntiCheat#isStrict()}), else {@link #INSTANT}. */
+		/**
+		 * {@link #MOVE_FIX} where the server simulates movement against rotations
+		 * ({@link AntiCheat.Profile#simulatesMovement()}), else {@link #INSTANT}.
+		 */
 		public static Options forServer() {
-			return AntiCheat.strict() ? MOVE_FIX : INSTANT;
+			return forProfile(AntiCheat.inEffect());
+		}
+
+		static Options forProfile(AntiCheat.Profile p) {
+			return p.simulatesMovement() ? MOVE_FIX : INSTANT;
 		}
 
 		/**

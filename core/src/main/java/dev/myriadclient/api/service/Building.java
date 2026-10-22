@@ -55,9 +55,17 @@ public interface Building {
 			this.keepUp = keepUp;
 		}
 
-		/** {@link #STRICT} on servers that check placements and breaks ({@link AntiCheat#isStrict()}), otherwise {@link #DEFAULT}. */
+		/**
+		 * What the server in effect takes ({@link AntiCheat#inEffect()}): where it checks the look of each click, one
+		 * placement a tick with a turn for each, and breaks turned too; placements as {@link Placement.Options#forServer()}.
+		 * {@link #STRICT} on Grim, {@link #DEFAULT} on a vanilla server.
+		 */
 		public static Options forServer() {
-			return AntiCheat.strict() ? STRICT : DEFAULT;
+			return forProfile(AntiCheat.inEffect());
+		}
+
+		static Options forProfile(AntiCheat.Profile p) {
+			return (p.checksLookOnActions() ? STRICT : DEFAULT).withPlacing(Placement.Options.forProfile(p));
 		}
 
 		/** How blocks are placed. */

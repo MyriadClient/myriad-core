@@ -651,8 +651,8 @@ public final class InventoryManager implements Inventory {
 	}
 
 	private boolean coreSafeToClick() {
-		// Only anti-cheats that simulate movement (Grim) refuse clicks while you move.
-		if (!Myriad.antiCheat().isStrict()) return true;
+		// Only anti-cheats that refuse clicks while you move (Grim) need a still moment.
+		if (!Myriad.antiCheat().profile().clicksOnlyWhileStill()) return true;
 		return !rules().refusesKeys(sentInput) && (!sentSprinting || canBracket());
 	}
 
@@ -695,7 +695,7 @@ public final class InventoryManager implements Inventory {
 	@Override
 	public boolean prepareClick() {
 		if (mc.player == null) return false;
-		if (!Myriad.antiCheat().isStrict()) return true;
+		if (!Myriad.antiCheat().profile().clicksOnlyWhileStill()) return true;
 		if (!rules().refusesKeys(sentInput)) {
 			if (!sentSprinting) return true;
 			if (canBracket()) return stopSprintForClicks();
@@ -717,7 +717,7 @@ public final class InventoryManager implements Inventory {
 	@Override
 	public boolean clickWaiting() {
 		if (mc.player == null) return false;
-		return mc.player.tickCount - stillWantedAt <= 2 || !waitingClicks.isEmpty() && Myriad.antiCheat().isStrict() && rules().refusesKeys(sentInput);
+		return mc.player.tickCount - stillWantedAt <= 2 || !waitingClicks.isEmpty() && Myriad.antiCheat().profile().clicksOnlyWhileStill() && rules().refusesKeys(sentInput);
 	}
 
 	@Override

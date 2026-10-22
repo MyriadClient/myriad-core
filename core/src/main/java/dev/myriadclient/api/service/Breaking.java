@@ -93,10 +93,14 @@ public interface Breaking {
 
 		/**
 		 * Packet mining with your hand free, as fast as the server allows: {@link #PACKET} where an anti-cheat times
-		 * breaks ({@link AntiCheat#isStrict()}), otherwise {@link #FAST}.
+		 * breaks ({@link AntiCheat.BreakTiming#CHECKED}), otherwise {@link #FAST}.
 		 */
 		public static Options forServer() {
-			return AntiCheat.strict() ? PACKET : FAST;
+			return forProfile(AntiCheat.inEffect());
+		}
+
+		static Options forProfile(AntiCheat.Profile p) {
+			return p.breakTiming() == AntiCheat.BreakTiming.CHECKED ? PACKET : FAST;
 		}
 
 		/** How blocks are mined; see {@link Mode}. */

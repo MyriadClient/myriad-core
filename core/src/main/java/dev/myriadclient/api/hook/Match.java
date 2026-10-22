@@ -119,7 +119,7 @@ public final class Match {
 	/** Whether the profile and server parts match, whoever calls. */
 	@ApiStatus.Internal
 	public boolean testWhere(AntiCheat.Profile profile, @Nullable String host) {
-		if (this.profile != null && this.profile != profile) return false;
+		if (this.profile != null && !this.profile.equals(profile)) return false;
 		return server == null || host != null && (host.equals(server) || host.endsWith("." + server));
 	}
 
@@ -141,7 +141,7 @@ public final class Match {
 		if (callerId != null) s.append("for ").append(callerId);
 		else if (callerType != null) s.append("for ").append(callerType.getSimpleName());
 		if (addon != null) s.append(s.isEmpty() ? "" : " · ").append("for ").append(addon).append("'s modules");
-		if (profile != null) s.append(s.isEmpty() ? "" : " · ").append("on ").append(profile.name().charAt(0)).append(profile.name().substring(1).toLowerCase(Locale.ROOT));
+		if (profile != null) s.append(s.isEmpty() ? "" : " · ").append("on ").append(profile.name());
 		if (server != null) s.append(s.isEmpty() ? "" : " · ").append("at ").append(server);
 		return s.isEmpty() ? "always" : s.toString();
 	}
@@ -149,7 +149,7 @@ public final class Match {
 	@Override
 	public boolean equals(Object o) {
 		return o instanceof Match m && Objects.equals(callerId, m.callerId) && callerType == m.callerType && Objects.equals(addon, m.addon)
-			&& profile == m.profile && Objects.equals(server, m.server);
+			&& Objects.equals(profile, m.profile) && Objects.equals(server, m.server);
 	}
 
 	@Override

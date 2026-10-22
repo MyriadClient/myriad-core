@@ -51,9 +51,18 @@ public interface Placement {
 			this.sneak = sneak;
 		}
 
-		/** {@link #STRICT} on servers that check placements ({@link AntiCheat#isStrict()}), otherwise {@link #DEFAULT}. */
+		/**
+		 * What the server in effect takes ({@link AntiCheat#inEffect()}): turned first where it checks the look of each
+		 * click, visible faces only where it requires them. {@link #STRICT} on Grim, {@link #DEFAULT} on a vanilla server.
+		 */
 		public static Options forServer() {
-			return AntiCheat.strict() ? STRICT : DEFAULT;
+			return forProfile(AntiCheat.inEffect());
+		}
+
+		static Options forProfile(AntiCheat.Profile p) {
+			if (p.checksLookOnActions() && p.visibleFacesOnly()) return STRICT;
+			if (!p.checksLookOnActions() && !p.visibleFacesOnly()) return DEFAULT;
+			return DEFAULT.withRotate(p.checksLookOnActions()).withVisibleFaces(p.visibleFacesOnly());
 		}
 
 		/**

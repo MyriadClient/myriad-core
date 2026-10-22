@@ -15,6 +15,7 @@ import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.module.Tags;
+import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.ui.BarWidget;
@@ -113,6 +114,14 @@ final class AddonContextImpl implements AddonContext {
 	@Override
 	public Theme registerTheme(Theme theme) {
 		return myriad.themes().register(theme, addon.id());
+	}
+
+	@Override
+	public AntiCheat.Profile registerAntiCheatProfile(AntiCheat.Profile profile) {
+		if (!profile.id().namespace().equals(addon.id())) {
+			throw new IllegalArgumentException("Anti-cheat profile " + profile.id() + " has to be in " + addon.id() + "'s namespace");
+		}
+		return myriad.antiCheat().profiles().register(profile, addon.id());
 	}
 
 	@Override

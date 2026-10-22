@@ -6,7 +6,6 @@ import com.google.gson.JsonObject;
 import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.config.ConfigManager;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.api.util.MyriadId;
@@ -107,10 +106,12 @@ public final class ConfigManagerImpl implements ConfigManager {
 					((AntiCheatTracker) myriad.antiCheat()).setKnownServers(hosts);
 				}
 				if (o.has("antiCheat")) {
+					// "auto", a core profile by path ("grim", as before 0.8), or an addon's by id; an addon's may register later.
 					try {
-						myriad.antiCheat().setMode(AntiCheat.Mode.valueOf(o.get("antiCheat").getAsString().toUpperCase(Locale.ROOT)));
+						String v = o.get("antiCheat").getAsString().toLowerCase(Locale.ROOT);
+						((AntiCheatTracker) myriad.antiCheat()).setChoiceId(v.equals("auto") ? null : MyriadId.parse(v, "myriad"));
 					} catch (RuntimeException ignored) {
-						// An unknown value (from a newer version) keeps the default.
+						// An unreadable value keeps Auto.
 					}
 				}
 				if (o.has("checkUpdates")) myriad.updates().setCheckEnabled(o.get("checkUpdates").getAsBoolean());
@@ -191,7 +192,8 @@ public final class ConfigManagerImpl implements ConfigManager {
 		global.addProperty(FORMAT_KEY, FORMAT);
 		global.addProperty("profile", profile);
 		global.addProperty("prefix", prefix);
-		global.addProperty("antiCheat", myriad.antiCheat().mode().name().toLowerCase(Locale.ROOT));
+		MyriadId choice = ((AntiCheatTracker) myriad.antiCheat()).choiceId();
+		global.addProperty("antiCheat", choice == null ? "auto" : choice.namespace().equals("myriad") ? choice.path() : choice.toString());
 		JsonArray known = new JsonArray();
 		for (String h : myriad.antiCheat().knownServers()) known.add(h);
 		global.add("knownGrimServers", known);

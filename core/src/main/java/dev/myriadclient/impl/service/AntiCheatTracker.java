@@ -1,77 +1,151 @@
 package dev.myriadclient.impl.service;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.event.Priority;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.PacketEvent;
+import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.api.registry.Registry;
 import dev.myriadclient.api.service.AntiCheat;
+import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.network.JoinedVersion;
 import net.minecraft.network.protocol.common.ClientboundPingPacket;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 
 /**
  * The anti-cheat profile: the player's choice, or (Auto) a guess from the server. Anti-cheats that simulate the player
  * send a ping ("transaction") with nearly everything that changes the player, many a second; the vanilla server never
- * sends one in game. A few of them in a row mean such an anti-cheat.
+ * sends one in game. A few of them in a row mean such an anti-cheat. NoCheatPlus sends none, so it's known by host.
+ * <p>
+ * The guess is worked out when something it depends on changes (joining, the pings, the known hosts, a profile coming
+ * or going) and every tick while an addon answers {@link AntiCheat#DETECT}, and kept: {@link #profile()} is read by
+ * every {@code forServer()} preset, so it's a field read.
  */
 public final class AntiCheatTracker implements AntiCheat {
 	/** Pings seen since joining before the server counts as running one. */
 	private static final int PINGS = 5;
+	/** Pings counted at most, for {@link ServerSeen#pings()}. */
+	private static final int MAX_PINGS = 100;
 	/** Servers known to run Grim, by host (and their subdomains); the defaults plus the player's. */
 	public static final Set<String> DEFAULT_KNOWN = Set.of("2b2t.org");
+	/** Servers known to run NoCheatPlus: 6b6t's fork has been live there since 2026-10-10. */
+	static final Set<String> NCP_HOSTS = Set.of("6b6t.org");
 	private volatile Set<String> known = DEFAULT_KNOWN;
 
-	private volatile Mode mode = Mode.AUTO;
+	private final Registry<Profile> profiles = new Registry<>("anti-cheat profile");
+	/** The chosen profile's id, kept while the addon that registers it hasn't yet (config loads first), or null for Auto. */
+	private volatile @Nullable MyriadId chosenId;
+	private volatile @Nullable Profile chosen;
+	private volatile Profile detected = Profile.VANILLA;
 	private volatile int pings;
-	private volatile boolean onKnown;
+	/** {@link #pings} when the guess was last made. */
+	private int pingsAtDetect;
+	private volatile @Nullable String host;
+	private volatile boolean singleplayer;
+
+	public AntiCheatTracker() {
+		for (Profile p : new Profile[]{Profile.VANILLA, Profile.GRIM, Profile.NCP}) profiles.register(p, "myriad");
+		profiles.onAdd(p -> resolve());
+		profiles.onRemove(p -> resolve());
+	}
 
 	@Override
 	public Profile profile() {
-		return switch (mode) {
-			case AUTO -> detected();
-			case VANILLA -> Profile.VANILLA;
-			case GRIM -> Profile.GRIM;
-		};
+		Profile c = chosen;
+		return c != null ? c : detected;
 	}
 
 	@Override
 	public Profile detected() {
-		return onKnown || pings >= PINGS ? Profile.GRIM : Profile.VANILLA;
+		return detected;
 	}
 
 	@Override
-	public Mode mode() {
-		return mode;
+	public @Nullable Profile choice() {
+		return chosen;
 	}
 
 	@Override
-	public void setMode(Mode mode) {
-		if (mode == null || mode == this.mode) return;
-		this.mode = mode;
+	public void choose(@Nullable Profile profile) {
+		MyriadId id = profile == null ? null : profile.id();
+		if (id != null && !profiles.contains(id)) throw new IllegalArgumentException("Anti-cheat profile " + id + " isn't registered");
+		if (Objects.equals(id, chosenId)) return;
+		chosenId = id;
+		resolve();
 		if (Myriad.isReady()) Myriad.config().markDirty();
 	}
 
+	/** The chosen profile's id as saved, or null for Auto. */
+	public @Nullable MyriadId choiceId() {
+		return chosenId;
+	}
+
+	/** Restores the choice from the config: the profile may belong to an addon that registers it later. */
+	public void setChoiceId(@Nullable MyriadId id) {
+		chosenId = id;
+		resolve();
+	}
+
+	@Override
+	public Registry<Profile> profiles() {
+		return profiles;
+	}
+
+	private void resolve() {
+		MyriadId id = chosenId;
+		chosen = id == null ? null : profiles.get(id).orElse(null);
+		detect();
+	}
+
+	/** Network thread: only counts. The guess changes on the next tick, so addons' detection never runs off-thread. */
 	@Subscribe(packets = ClientboundPingPacket.class)
 	private void onReceive(PacketEvent.Receive e) {
-		if (pings < PINGS) pings++;
+		if (pings < MAX_PINGS) pings++;
+	}
+
+	@Subscribe(priority = Priority.HIGHEST + 100)
+	private void onTick(TickEvent.Pre e) {
+		if (DETECT.hooked() || pingsAtDetect < PINGS && pings >= PINGS) detect();
 	}
 
 	@Subscribe
 	private void onJoin(WorldEvent.Join e) {
 		pings = 0;
 		String address = Myriad.server().address();
-		onKnown = address != null && isKnown(address.toLowerCase(Locale.ROOT));
+		host = address == null ? null : normalize(address);
+		singleplayer = Myriad.server().isSingleplayer();
+		detect();
 	}
 
 	@Subscribe
 	private void onLeave(WorldEvent.Leave e) {
 		pings = 0;
-		onKnown = false;
+		host = null;
+		singleplayer = false;
+		detect();
+	}
+
+	private void detect() {
+		pingsAtDetect = pings;
+		boolean inGame = host != null || singleplayer;
+		ServerSeen seen = new ServerSeen(host, singleplayer, pingsAtDetect, inGame ? joinedProtocol() : -1);
+		Profile p = DETECT.hooked() ? DETECT.call(null, seen, this::guess) : null;
+		detected = p != null ? p : guess(seen);
+	}
+
+	/** Core's own guess: a known Grim host or the pings, then a known NoCheatPlus host, else the vanilla server. */
+	Profile guess(ServerSeen seen) {
+		if (seen.host() != null && matches(seen.host(), known) || seen.pings() >= PINGS) return Profile.GRIM;
+		if (seen.host() != null && matches(seen.host(), NCP_HOSTS)) return Profile.NCP;
+		return Profile.VANILLA;
 	}
 
 	@Override
@@ -86,6 +160,7 @@ public final class AntiCheatTracker implements AntiCheat {
 		Set<String> next = new TreeSet<>(known);
 		next.add(h);
 		known = Collections.unmodifiableSet(next);
+		detect();
 		if (Myriad.isReady()) Myriad.config().markDirty();
 		return true;
 	}
@@ -97,6 +172,7 @@ public final class AntiCheatTracker implements AntiCheat {
 		Set<String> next = new TreeSet<>(known);
 		next.remove(h);
 		known = Collections.unmodifiableSet(next);
+		detect();
 		if (Myriad.isReady()) Myriad.config().markDirty();
 		return true;
 	}
@@ -109,6 +185,7 @@ public final class AntiCheatTracker implements AntiCheat {
 			if (!n.isEmpty()) next.add(n);
 		}
 		known = Collections.unmodifiableSet(next);
+		detect();
 	}
 
 	private static String normalize(String host) {
@@ -117,10 +194,8 @@ public final class AntiCheatTracker implements AntiCheat {
 		return colon > 0 ? h.substring(0, colon) : h;
 	}
 
-	private boolean isKnown(String address) {
-		int colon = address.lastIndexOf(':');
-		String host = colon > 0 ? address.substring(0, colon) : address;
-		for (String k : known) if (host.equals(k) || host.endsWith("." + k)) return true;
+	private static boolean matches(String host, Set<String> hosts) {
+		for (String k : hosts) if (host.equals(k) || host.endsWith("." + k)) return true;
 		return false;
 	}
 

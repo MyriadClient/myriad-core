@@ -117,7 +117,7 @@ public interface Inventory {
 	 * <p>
 	 * Moves that can wait (refills, tools, building material) should wait for this. A click made anyway isn't lost:
 	 * core holds it back until a tick the server takes it on, and the client shows its result meanwhile. Always true
-	 * where the server doesn't check this ({@link AntiCheat#isStrict()} is false).
+	 * where the server doesn't check this ({@link AntiCheat.Profile#clicksOnlyWhileStill()} is false).
 	 */
 	boolean safeToClick();
 

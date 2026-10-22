@@ -9,7 +9,7 @@ import dev.myriadclient.api.addon.AddonContext;
 import dev.myriadclient.api.addon.AddonState;
 import dev.myriadclient.api.command.Command;
 import dev.myriadclient.api.command.arguments.Arguments;
-import dev.myriadclient.api.command.arguments.EnumArgumentType;
+import dev.myriadclient.api.command.arguments.ChoiceArgumentType;
 import dev.myriadclient.api.command.arguments.SettingArgumentType;
 import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Service;
@@ -21,6 +21,7 @@ import dev.myriadclient.api.setting.KeybindSetting;
 import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.util.Baritone;
 import dev.myriadclient.api.util.FakePlayers;
+import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.api.util.Texts;
 import dev.myriadclient.impl.Diagnostics;
 import dev.myriadclient.impl.MyriadImpl;
@@ -39,6 +40,7 @@ import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -56,10 +58,20 @@ public final class CoreCommands {
 	/** "Anti-cheat: Auto (Grim detected), joined as 1.20.4 (ViaFabricPlus)" and the like. */
 	public static String antiCheatStatus() {
 		AntiCheat ac = Myriad.antiCheat();
-		String profile = ac.profile() == AntiCheat.Profile.GRIM ? "Grim" : "Vanilla";
-		String status = ac.mode() == AntiCheat.Mode.AUTO ? "Anti-cheat: Auto (" + profile + (ac.detected() == AntiCheat.Profile.GRIM ? " detected)" : ", none detected)")
-			: "Anti-cheat: " + profile;
+		AntiCheat.Profile detected = ac.detected();
+		String status = ac.choice() == null
+			? "Anti-cheat: Auto (" + (detected.equals(AntiCheat.Profile.VANILLA) ? "Vanilla, none detected)" : detected.name() + " detected)")
+			: "Anti-cheat: " + ac.profile().name();
 		return Minecraft.getInstance().getConnection() == null ? status : status + ", joined as " + JoinedVersion.get().describe();
+	}
+
+	/** "auto", then each profile: Myriad's by path ("grim"), addons' by id. */
+	private static List<String> antiCheatChoices() {
+		List<String> choices = new ArrayList<>(List.of("auto"));
+		for (AntiCheat.Profile p : Myriad.antiCheat().profiles()) {
+			choices.add(p.id().namespace().equals("myriad") ? p.id().path() : p.id().toString());
+		}
+		return choices;
 	}
 
 	public static void register(AddonContext ctx) {
@@ -320,15 +332,16 @@ public final class CoreCommands {
 			}
 		});
 
-		ctx.registerCommand(new Command("anticheat", "Shows or sets what the server checks: auto, grim or vanilla.", "ac") {
+		ctx.registerCommand(new Command("anticheat", "Shows or sets what the server checks: auto, grim, vanilla, ncp or an addon's profile.", "ac") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				b.executes(c -> {
 					info(antiCheatStatus());
 					return SINGLE_SUCCESS;
 				});
-				b.then(argument("mode", Arguments.enumValue(AntiCheat.Mode.class)).executes(c -> {
-					Myriad.antiCheat().setMode(EnumArgumentType.get(c, "mode", AntiCheat.Mode.class));
+				b.then(argument("profile", ChoiceArgumentType.strict(CoreCommands::antiCheatChoices)).executes(c -> {
+					String choice = ChoiceArgumentType.get(c, "profile");
+					Myriad.antiCheat().choose(choice.equals("auto") ? null : Myriad.antiCheat().profiles().get(MyriadId.parse(choice, "myriad")).orElseThrow());
 					info(antiCheatStatus());
 					return SINGLE_SUCCESS;
 				}));

@@ -12,6 +12,7 @@ import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.module.Tags;
+import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.setting.SettingColor;
@@ -128,6 +129,13 @@ public interface AddonContext {
 	Layout registerLayout(Layout layout);
 
 	Theme registerTheme(Theme theme);
+
+	/**
+	 * What a server checks, as a profile of your own, its id in your namespace
+	 * ({@code AntiCheat.Profile.GRIM.named("my-addon:my_server", "My server").withSimulatesGlide(false)}): the player can
+	 * pick it, {@code Match.on} matches it, and your {@link AntiCheat#DETECT} handler can answer with it on your server.
+	 */
+	AntiCheat.Profile registerAntiCheatProfile(AntiCheat.Profile profile);
 
 	/**
 	 * A ready-made control panel, with id {@code <your mod id>:<name in snake_case>}: players find it in their Control

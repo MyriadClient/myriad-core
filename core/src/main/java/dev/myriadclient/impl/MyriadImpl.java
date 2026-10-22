@@ -196,7 +196,7 @@ public final class MyriadImpl implements MyriadApi {
 	}
 
 	public List<Registry<?>> registries() {
-		return List.of(tags, groups, modules, commands, panels, layouts, themes, barWidgets, keyActions, addonSettings, controls.presets(), hooks.registry());
+		return List.of(tags, groups, modules, commands, panels, layouts, themes, barWidgets, keyActions, addonSettings, controls.presets(), hooks.registry(), antiCheat.profiles());
 	}
 
 	public ConfigManagerImpl configImpl() {
