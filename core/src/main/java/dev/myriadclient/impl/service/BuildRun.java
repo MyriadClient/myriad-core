@@ -19,7 +19,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.BlockHitResult;
@@ -28,9 +27,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 
@@ -94,10 +91,7 @@ final class BuildRun implements Build {
 	/** Each kind's positions as sort key and index packed in one long ({@link #key}), so they sort as plain numbers. */
 	private final LongArrayList breaks = new LongArrayList(), places = new LongArrayList(), clicks = new LongArrayList();
 	private final BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-	/** The items exact targets have needed: the only ones moved into the hotbar for them, and the only ones moved out. */
-	private final Set<Item> materials = new HashSet<>();
-	/** Hotbar slots this build moved materials into, the longest ago first. */
-	private final List<Integer> filledSlots = new ArrayList<>();
+	private final BuildMaterials materials;
 
 	private volatile List<Step> steps = List.of();
 	private int stepsTick = -1;
@@ -116,6 +110,7 @@ final class BuildRun implements Build {
 		this.owner = owner;
 		this.blueprint = blueprint;
 		this.options = options;
+		materials = new BuildMaterials(manager);
 	}
 
 	// ---- Build --------------------------------------------------------------------------------------------------
@@ -195,10 +190,15 @@ final class BuildRun implements Build {
 		if (tick < pausedUntil) return;
 		// Not while you're in a chest or your inventory, or eating, drinking or drawing a bow.
 		if (mc.gui.screen() instanceof AbstractContainerScreen<?> || mc.player.isUsingItem()) return;
-		Building.Options o = options;
+		plan(options);
+		act(options);
+		checkDone(options);
+	}
+
+	/** Every position in reach that isn't done: its status, and what to do there, sorted into the kinds' lists. */
+	private void plan(Building.Options o) {
 		Vec3 eyes = mc.player.getEyePosition();
 		double reach = Math.max(o.placing().range(), o.breaking().range());
-
 		work.clear();
 		workTargets.clear();
 		workStatus.clear();
@@ -240,7 +240,10 @@ final class BuildRun implements Build {
 				}
 			}
 		});
+	}
 
+	/** Breaks first (top down), then placements, then clicks into a setting, within this tick's share. */
+	private void act(Building.Options o) {
 		// The look after a solved click goes out this tick: a break's turn now would take its place.
 		boolean follow = manager.placement().followPending();
 		int actions = 0;
@@ -279,7 +282,10 @@ final class BuildRun implements Build {
 			set(i, s);
 			if (s == Status.WAITING) actions++;
 		}
+	}
 
+	/** Whether the build is done: by what's in reach for one that keeps up, else by the whole blueprint now and then. */
+	private void checkDone(Building.Options o) {
 		boolean workLeft = !work.isEmpty();
 		// The whole blueprint, for builds that finish, only when there's nothing left to do here.
 		if (o.keepUp()) {
@@ -392,7 +398,7 @@ final class BuildRun implements Build {
 		Status held = held(at);
 		if (held != null) return held;
 		BlockState want = target.orientedState();
-		int slot = target instanceof Target.Exact exact ? slotFor(BlockRules.item(exact.state())) : slotFor(target);
+		int slot = target instanceof Target.Exact exact ? materials.slotFor(BlockRules.item(exact.state())) : materials.slotFor(target);
 		if (slot == -2) return Status.NO_ITEM;
 		if (slot == -3) return Status.NO_SLOT;
 		if (slot < 0 || !Myriad.placement().canPlaceWith(slot)) return Status.WAITING;
@@ -515,68 +521,6 @@ final class BuildRun implements Build {
 		heldUntil.put(key, tick + HOLD_TICKS);
 		heldStatus.put(key, why);
 		return why;
-	}
-
-	// ---- materials ----------------------------------------------------------------------------------------------
-
-	/**
-	 * The hotbar slot holding {@code item}; otherwise moves one in from the inventory (one move a tick for all builds,
-	 * keys released first so the server takes the click) and returns -1 to wait for it; -2 if there's none at all, -3
-	 * if no hotbar slot may take it.
-	 */
-	private int slotFor(Item item) {
-		materials.add(item);
-		int memo = manager.slotThisTick(item);
-		return memo != Integer.MIN_VALUE ? memo : manager.rememberSlot(item, findSlot(item));
-	}
-
-	private int findSlot(Item item) {
-		int slot = Myriad.inventory().findInHotbar(s -> s.is(item));
-		if (slot >= 0) return slot;
-		if (Myriad.inventory().findInInventory(s -> s.is(item)) < 0) {
-			// In the off hand for a tick after an air placement, until it's swapped back first thing next tick.
-			return Myriad.placement().offHandSlot() >= 0 && mc.player.getOffhandItem().is(item) ? -1 : -2;
-		}
-		// Not while a block is in the off hand: a click now would put the server back on your slot before the swap back.
-		if (Myriad.placement().offHandSlot() >= 0) return -1;
-		int into = hotbarSlotToFill();
-		if (into < 0) return -3;
-		if (manager.moveMaterial(() -> Myriad.inventory().ensureInHotbar(s -> s.is(item), into) == into)) {
-			filledSlots.remove((Integer) into);
-			filledSlots.add(into);
-		}
-		return -1;
-	}
-
-	/**
-	 * The hotbar slot a material is moved into: an empty one; else the one this build filled longest ago; else one
-	 * holding another of the blocks it builds with. Never a slot with anything else: your own things stay where you keep
-	 * them. -1 if there's none.
-	 */
-	private int hotbarSlotToFill() {
-		var inv = mc.player.getInventory();
-		for (int i = 0; i < 9; i++) if (inv.getItem(i).isEmpty()) return i;
-		// Checked again: you may have put something of your own there since.
-		for (int i : filledSlots) if (materials.contains(inv.getItem(i).getItem())) return i;
-		for (int i = 8; i >= 0; i--) if (materials.contains(inv.getItem(i).getItem())) return i;
-		return -1;
-	}
-
-	/** The hotbar slot with the best item for {@code target} (by its preference); otherwise moves one in, as {@link #slotFor(Item)}. */
-	private int slotFor(Target target) {
-		var inv = mc.player.getInventory();
-		int best = -1, bestPref = Integer.MAX_VALUE;
-		for (int i = 0; i < 9; i++) {
-			int pref = target.preference(inv.getItem(i));
-			if (pref >= 0 && pref < bestPref) {
-				best = i;
-				bestPref = pref;
-			}
-		}
-		if (best >= 0) return best;
-		if (Myriad.inventory().findInInventory(s -> target.preference(s) >= 0) < 0) return -2;
-		manager.moveMaterial(() -> Myriad.inventory().ensureInHotbar(s -> target.preference(s) >= 0, -1) >= 0);
-		return -1;
 	}
 
 	// ---- bookkeeping --------------------------------------------------------------------------------------------
