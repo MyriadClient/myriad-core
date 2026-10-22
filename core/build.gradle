@@ -51,3 +51,39 @@ javadoc {
 	options.addStringOption('Xdoclint:all,-missing', '-quiet')
 	options.addStringOption('encoding', 'UTF-8')
 }
+
+// Size budget for core's internals (impl): files up to 600 lines, methods up to 60. Warns with the offenders rather than
+// failing; a file may say why it's bigger with a comment starting "// size:".
+tasks.register("checkSizes") {
+	group = "verification"
+	description = "Warns about impl files over 600 lines (without a // size: reason) and methods over 60."
+	def sources = fileTree("src/main/java/dev/myriadclient/impl") { include "**/*.java" }
+	inputs.files(sources)
+	doLast {
+		// A method's first line (one tab per nesting level), not a control statement, a field, a lambda or an anonymous class.
+		def methodStart = ~/^(\t+)(?!(if|for|while|switch|catch|else|try|do|synchronized|return|case|default)\b)[\w<>@\[\], .?]+\(.*$/
+		List<String> warnings = []
+		sources.each { File f ->
+			def lines = f.readLines()
+			def name = projectDir.toPath().relativize(f.toPath()).toString()
+			if (lines.size() > 600 && !lines.any { it.trim().startsWith("// size:") }) warnings << "${name}: ${lines.size()} lines"
+			for (int i = 0; i < lines.size(); i++) {
+				def m = methodStart.matcher(lines[i])
+				if (!m.matches() || lines[i].contains("=") || lines[i].contains("new ") || lines[i].trim().startsWith("return")) continue
+				// The signature may wrap: its body opens on the first line ending in "{" before any ";".
+				int open = i
+				while (open < lines.size() && !lines[open].endsWith("{") && !lines[open].endsWith(";")) open++
+				if (open >= lines.size() || lines[open].endsWith(";") || lines[open].contains("->")) continue
+				def close = m.group(1) + "}"
+				int end = open + 1
+				while (end < lines.size() && lines[end] != close) end++
+				int length = end - i + 1
+				if (length > 60) warnings << "${name}:${i + 1}: ${lines[i].trim().take(80)} (${length} lines)"
+				i = open
+			}
+		}
+		if (warnings.isEmpty()) logger.lifecycle("checkSizes: everything within 600 lines a file, 60 a method")
+		else logger.warn("checkSizes: ${warnings.size()} over budget (impl files 600 lines, methods 60):\n  " + warnings.join("\n  "))
+	}
+}
+check.dependsOn checkSizes
