@@ -2,6 +2,7 @@ package dev.myriadclient.api.service;
 
 import dev.myriadclient.api.build.Blueprint;
 import dev.myriadclient.api.build.Build;
+import dev.myriadclient.api.util.RenderThread;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
@@ -30,6 +31,7 @@ import java.util.Objects;
  * A module's builds stop when it's disabled.
  */
 @ApiStatus.NonExtendable
+@RenderThread
 public interface Building {
 	/**
 	 * How a blueprint is built. Start from a preset ({@link #forServer()}, {@link #DEFAULT}, {@link #STRICT}) and change

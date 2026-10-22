@@ -1,5 +1,6 @@
 package dev.myriadclient.api.service;
 
+import dev.myriadclient.api.util.RenderThread;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.concurrent.CompletableFuture;
@@ -34,6 +35,7 @@ import java.util.function.Supplier;
  */
 @Deprecated
 @ApiStatus.NonExtendable
+@RenderThread
 public interface Tasks {
 	/** Runs {@code action} after {@code ticks} ticks (0 = the next time tasks run, at the end of this tick or the next). */
 	Handle later(Object owner, int ticks, Runnable action);

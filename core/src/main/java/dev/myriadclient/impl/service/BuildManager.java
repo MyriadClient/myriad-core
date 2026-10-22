@@ -10,6 +10,7 @@ import dev.myriadclient.api.event.events.TeleportEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.service.Building;
+import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.impl.MyriadImpl;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import net.minecraft.client.Minecraft;
@@ -42,6 +43,7 @@ public final class BuildManager implements Building {
 
 	@Override
 	public Build start(Object owner, Blueprint blueprint, Options options) {
+		Threads.assertRender();
 		BuildRun b = new BuildRun(this, owner, blueprint, options);
 		builds.add(b);
 		return b;

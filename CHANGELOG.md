@@ -43,6 +43,17 @@ and may change in any release. Addons declare the oldest core they support in `f
   other mods' modules are left as they are.
 - `-PopenDesktop` (and `-Dmyriad.openDesktop`) open the desktop again with Myriad's own title screen on.
 
+- **Which thread your code runs on, written down.** A new Threads page in the docs lists where each event fires. Every
+  service is render thread only and marked `@RenderThread`. `Modules`, `Packets`, `Notifications` and the event bus
+  are safe from any thread and marked `@AnyThread`, as are the events that can fire elsewhere: `PacketEvent.Send`
+  and `.Receive`, `BlockRenderEvent`, `ItemTooltipEvent`.
+  - `@Subscribe(thread = HandlerThread.RENDER)` runs a handler on the render thread. An event posted elsewhere (a
+    received packet) reaches it at the start of the next tick, too late to cancel and skipped if cancelled meanwhile.
+    For packet handlers that act on the game. Posting costs the same as before: 26.1–26.4 ns to five handlers before,
+    25.2–27.2 ns after, within the noise.
+  - With `-Dmyriad.dev` (set by the dev clients and core's tests), the services' entry points log a call from another
+    thread, with the stack, once per call site (`Threads.assertRender()`). The Grim suite logged none.
+
 ## 0.8.0
 
 - **Anti-cheat profiles are values, and addons can add their own.** `AntiCheat.Profile` was an enum of two (Vanilla,

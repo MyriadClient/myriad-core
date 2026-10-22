@@ -1,6 +1,7 @@
 package dev.myriadclient.api.event.events;
 
 import dev.myriadclient.api.event.Cancellable;
+import dev.myriadclient.api.util.AnyThread;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.ApiStatus;
@@ -10,6 +11,7 @@ import org.jetbrains.annotations.ApiStatus;
  * block when a chunk section is meshed, on the chunk builder threads, so handlers must be thread-safe and fast; the
  * answer is for every block of that state, not a position. Change what you hide, then {@link #reloadChunks()}.
  */
+@AnyThread
 public final class BlockRenderEvent extends Cancellable {
 	private final BlockState state;
 

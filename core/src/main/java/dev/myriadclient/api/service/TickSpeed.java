@@ -1,5 +1,6 @@
 package dev.myriadclient.api.service;
 
+import dev.myriadclient.api.util.RenderThread;
 import org.jetbrains.annotations.ApiStatus;
 /**
  * The speed the client runs game ticks at ("timer"). Several features can speed it up or slow it down at once without
@@ -11,6 +12,7 @@ import org.jetbrains.annotations.ApiStatus;
  * }</pre>
  */
 @ApiStatus.NonExtendable
+@RenderThread
 public interface TickSpeed {
 	/** Sets {@code owner}'s multiplier (1 = normal, 2 = twice as fast); 1 or less than 0.05 clears it. */
 	void set(Object owner, float multiplier);

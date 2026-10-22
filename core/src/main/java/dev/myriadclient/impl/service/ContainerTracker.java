@@ -11,6 +11,7 @@ import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.util.Interactions;
 import dev.myriadclient.api.util.Reach;
 import dev.myriadclient.api.util.Slots;
+import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -164,6 +165,7 @@ public final class ContainerTracker implements Containers {
 
 	@Override
 	public CompletableFuture<View> open(@Nullable Object owner, BlockPos pos, int timeoutTicks, @Nullable Placement.Options options) {
+		Threads.assertRender();
 		if (pending != null) fail(new IllegalStateException("Replaced by another open()"));
 		CompletableFuture<View> f = new CompletableFuture<>();
 		double range = options == null ? Reach.blockRange() : options.range();

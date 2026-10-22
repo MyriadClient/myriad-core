@@ -8,6 +8,7 @@ import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.util.MathUtil;
+import dev.myriadclient.api.util.Threads;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
@@ -48,6 +49,7 @@ public final class RotationManager implements Rotations {
 
 	@Override
 	public synchronized void request(Object owner, float yaw, float pitch, int priority, Options options, Runnable afterSent) {
+		Threads.assertRender();
 		if (Float.isNaN(yaw) && Float.isNaN(pitch)) return;
 		requests.add(new Request(owner, yaw, Float.isNaN(pitch) ? pitch : Mth.clamp(pitch, -90, 90), priority, options == null ? Options.INSTANT : options, afterSent));
 	}

@@ -4,6 +4,7 @@ import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Replacement;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.util.Reach;
+import dev.myriadclient.api.util.RenderThread;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
@@ -26,6 +27,7 @@ import java.util.concurrent.CompletableFuture;
  * }</pre>
  */
 @ApiStatus.NonExtendable
+@RenderThread
 public interface Placement {
 	/**
 	 * How blocks are placed. Start from a preset ({@link #forServer()}, {@link #DEFAULT}, {@link #STRICT}) and change

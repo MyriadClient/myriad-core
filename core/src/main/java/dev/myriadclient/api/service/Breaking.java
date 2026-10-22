@@ -3,6 +3,7 @@ package dev.myriadclient.api.service;
 import dev.myriadclient.api.hook.Replacement;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.util.Reach;
+import dev.myriadclient.api.util.RenderThread;
 import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.ApiStatus;
 
@@ -26,6 +27,7 @@ import java.util.concurrent.CompletableFuture;
  * A module's breaks are cancelled when it's disabled.
  */
 @ApiStatus.NonExtendable
+@RenderThread
 public interface Breaking {
 	enum Mode {
 		/**

@@ -2,6 +2,7 @@ package dev.myriadclient.impl.event;
 
 import dev.myriadclient.api.event.Cancellable;
 import dev.myriadclient.api.event.EventBus;
+import dev.myriadclient.api.event.HandlerThread;
 import dev.myriadclient.api.event.ListenerFlag;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.Subscription;
@@ -23,6 +24,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -37,7 +39,8 @@ import java.util.function.Function;
  *     <li>a throwing handler is logged with its owning addon and disabled if it keeps failing,</li>
  *     <li>{@code inGame} handlers are only called with a player in a world, and packet handlers only for the packet
  *     classes they ask for (a second dispatch table per packet class, so the rest aren't even visited),</li>
- *     <li>{@link ListenerFlag}s for the hottest hooks, and an optional {@link Profiler} that times every handler.</li>
+ *     <li>{@link ListenerFlag}s for the hottest hooks, and an optional {@link Profiler} that times every handler,</li>
+ *     <li>handlers that want the render thread get an event posted elsewhere at the start of the next tick.</li>
  * </ul>
  */
 public final class MyriadEventBus implements EventBus {
@@ -59,12 +62,40 @@ public final class MyriadEventBus implements EventBus {
 	private long order;
 	private volatile Function<Class<?>, String> ownerResolver = Class::getName;
 	private volatile BooleanSupplier inGame = () -> true;
+	/** Whether this is the render thread, for {@code @Subscribe(thread = RENDER)} handlers. */
+	private volatile BooleanSupplier renderThread = () -> true;
+	/** Events posted off the render thread, for its handlers that want them there: delivered at the next tick's start. */
+	private final ConcurrentLinkedQueue<Deferred> deferred = new ConcurrentLinkedQueue<>();
+
+	private record Deferred(Listener listener, Object event) {
+	}
 	private final Map<Class<?>, Flag> flags = new ConcurrentHashMap<>();
 	private volatile Profiler profiler;
 
 	/** What {@code @Subscribe(inGame = true)} checks (the client's player and level). */
 	public void setInGameCheck(BooleanSupplier check) {
 		inGame = check;
+	}
+
+	/** How {@code @Subscribe(thread = RENDER)} tells the render thread from others. */
+	public void setRenderThreadCheck(BooleanSupplier check) {
+		renderThread = check;
+	}
+
+	/**
+	 * Calls the render-thread handlers of events posted elsewhere since the last call, in order: first thing in the
+	 * client tick. An event cancelled by then is skipped by handlers that don't receive cancelled ones.
+	 */
+	public void deliverDeferred() {
+		if (deferred.isEmpty()) return;
+		boolean inGame = this.inGame.getAsBoolean();
+		Profiler profiler = this.profiler;
+		for (Deferred d; (d = deferred.poll()) != null; ) {
+			Listener l = d.listener;
+			if (l.disabled || l.inGame && !inGame) continue;
+			if (d.event instanceof Cancellable c && c.isCancelled() && !l.receiveCancelled) continue;
+			invoke(l, d.event, profiler);
+		}
 	}
 
 	/** Starts or stops timing every handler. */
@@ -120,7 +151,7 @@ public final class MyriadEventBus implements EventBus {
 	@Override
 	@SuppressWarnings("unchecked")
 	public <E> Subscription listen(Class<E> event, int priority, Consumer<? super E> handler) {
-		Listener l = new Listener(event, priority, false, false, null, (Consumer<Object>) handler, ownerResolver.apply(handler.getClass()), handler);
+		Listener l = new Listener(event, priority, false, false, false, null, (Consumer<Object>) handler, ownerResolver.apply(handler.getClass()), handler);
 		synchronized (lock) {
 			l.order = order++;
 			byType.computeIfAbsent(event, k -> new ArrayList<>()).add(l);
@@ -142,18 +173,31 @@ public final class MyriadEventBus implements EventBus {
 		Cancellable cancellable = event instanceof Cancellable c ? c : null;
 		boolean inGame = this.inGame.getAsBoolean();
 		Profiler profiler = this.profiler;
+		// Asked only if a handler wants the render thread (none of the hot ones do).
+		int onRender = -1;
 		for (Listener l : listeners) {
+			if (l.render) {
+				if (onRender < 0) onRender = renderThread.getAsBoolean() ? 1 : 0;
+				if (onRender == 0) {
+					deferred.add(new Deferred(l, event));
+					continue;
+				}
+			}
 			if (l.disabled || l.inGame && !inGame) continue;
 			if (cancellable != null && cancellable.isCancelled() && !l.receiveCancelled) continue;
-			long start = profiler != null ? System.nanoTime() : 0;
-			try {
-				l.invoker.accept(event);
-			} catch (Throwable t) {
-				onFailure(l, event, t);
-			}
-			if (profiler != null) profiler.record(l.ownerObject, l.owner, l.type, System.nanoTime() - start);
+			invoke(l, event, profiler);
 		}
 		return event;
+	}
+
+	private void invoke(Listener l, Object event, Profiler profiler) {
+		long start = profiler != null ? System.nanoTime() : 0;
+		try {
+			l.invoker.accept(event);
+		} catch (Throwable t) {
+			onFailure(l, event, t);
+		}
+		if (profiler != null) profiler.record(l.ownerObject, l.owner, l.type, System.nanoTime() - start);
 	}
 
 	@Override
@@ -246,7 +290,7 @@ public final class MyriadEventBus implements EventBus {
 		List<Listener> found = new ArrayList<>();
 		String ownerName = ownerResolver.apply(klass);
 		for (Handler h : handlers(klass, statics)) {
-			found.add(new Listener(h.event, h.priority, h.receiveCancelled, h.inGame, h.packets, createInvoker(h.method, statics ? null : owner), ownerName, owner));
+			found.add(new Listener(h.event, h.priority, h.receiveCancelled, h.inGame, h.render, h.packets, createInvoker(h.method, statics ? null : owner), ownerName, owner));
 		}
 		synchronized (lock) {
 			if (byOwner.containsKey(owner)) return;
@@ -277,14 +321,14 @@ public final class MyriadEventBus implements EventBus {
 					if (packets != null && !PacketEvent.class.isAssignableFrom(m.getParameterTypes()[0])) {
 						throw new IllegalArgumentException("@Subscribe(packets = ...) on " + c.getName() + "#" + m.getName() + " needs a PacketEvent parameter");
 					}
-					list.add(new Handler(m, m.getParameterTypes()[0], sub.priority(), sub.receiveCancelled(), sub.inGame(), packets));
+					list.add(new Handler(m, m.getParameterTypes()[0], sub.priority(), sub.receiveCancelled(), sub.inGame(), sub.thread() == HandlerThread.RENDER, packets));
 				}
 			}
 			return List.copyOf(list);
 		});
 	}
 
-	private record Handler(Method method, Class<?> event, int priority, boolean receiveCancelled, boolean inGame, Class<?>[] packets) {
+	private record Handler(Method method, Class<?> event, int priority, boolean receiveCancelled, boolean inGame, boolean render, Class<?>[] packets) {
 	}
 
 	@SuppressWarnings("unchecked")
@@ -353,6 +397,8 @@ public final class MyriadEventBus implements EventBus {
 		final Class<?> type;
 		final int priority;
 		final boolean receiveCancelled, inGame;
+		/** Called on the render thread only ({@code @Subscribe(thread = RENDER)}): deferred when posted elsewhere. */
+		final boolean render;
 		/** Packet classes this handler wants, or null for every packet. */
 		final Class<?>[] packets;
 		final Consumer<Object> invoker;
@@ -364,11 +410,12 @@ public final class MyriadEventBus implements EventBus {
 		int failures;
 		volatile boolean disabled;
 
-		Listener(Class<?> type, int priority, boolean receiveCancelled, boolean inGame, Class<?>[] packets, Consumer<Object> invoker, String owner, Object ownerObject) {
+		Listener(Class<?> type, int priority, boolean receiveCancelled, boolean inGame, boolean render, Class<?>[] packets, Consumer<Object> invoker, String owner, Object ownerObject) {
 			this.type = type;
 			this.priority = priority;
 			this.receiveCancelled = receiveCancelled;
 			this.inGame = inGame;
+			this.render = render;
 			this.packets = packets;
 			this.invoker = invoker;
 			this.owner = owner;

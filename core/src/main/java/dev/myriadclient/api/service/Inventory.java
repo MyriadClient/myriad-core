@@ -4,6 +4,7 @@ import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Replacement;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.util.Mining;
+import dev.myriadclient.api.util.RenderThread;
 import dev.myriadclient.api.util.Slots;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.ApiStatus;
@@ -16,6 +17,7 @@ import java.util.function.ToDoubleFunction;
 
 /** Hotbar helpers that track the slot the server thinks is selected. */
 @ApiStatus.NonExtendable
+@RenderThread
 public interface Inventory {
 	/** The hotbar slot (0-8) last sent to the server. */
 	int serverSlot();

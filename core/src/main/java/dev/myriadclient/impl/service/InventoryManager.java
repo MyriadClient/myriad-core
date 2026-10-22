@@ -6,6 +6,7 @@ import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.service.Inventory;
+import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.api.util.Ticks;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.network.ActionTiming;
@@ -423,6 +424,7 @@ public final class InventoryManager implements Inventory {
 
 	@Override
 	public void select(int hotbarSlot) {
+		Threads.assertRender();
 		if (mc.player == null || hotbarSlot < 0 || hotbarSlot > 8) return;
 		mc.player.getInventory().setSelectedSlot(hotbarSlot);
 		mc.gameMode.ensureHasSentCarriedItem();
@@ -434,6 +436,7 @@ public final class InventoryManager implements Inventory {
 	 */
 	@Override
 	public void silentSwap(int hotbarSlot, Runnable action) {
+		Threads.assertRender();
 		if (mc.player == null || mc.getConnection() == null || hotbarSlot < 0 || hotbarSlot > 8) return;
 		// The last swap ends before the server moves to another slot (its undos go out if they may).
 		if (restorePending && swapSlot != hotbarSlot) settle();
@@ -504,6 +507,7 @@ public final class InventoryManager implements Inventory {
 
 	@Override
 	public int ensureInHotbar(Predicate<ItemStack> predicate, int preferredSlot) {
+		Threads.assertRender();
 		return clicks.ensureInHotbar(predicate, preferredSlot);
 	}
 
@@ -605,6 +609,7 @@ public final class InventoryManager implements Inventory {
 
 	@Override
 	public boolean move(int from, int to) {
+		Threads.assertRender();
 		return clicks.move(from, to);
 	}
 

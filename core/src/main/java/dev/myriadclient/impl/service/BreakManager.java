@@ -12,6 +12,7 @@ import dev.myriadclient.api.util.BlockInfo;
 import dev.myriadclient.api.util.Mining;
 import dev.myriadclient.api.util.Packets;
 import dev.myriadclient.api.util.Reach;
+import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
@@ -132,6 +133,7 @@ public final class BreakManager implements Breaking {
 
 	@Override
 	public Attempt breakBlock(Object owner, BlockPos pos, int priority, Options options) {
+		Threads.assertRender();
 		BreakJob existing = find(pos);
 		if (existing != null) {
 			if (priority > existing.priority) {

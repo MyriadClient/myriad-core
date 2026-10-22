@@ -1,6 +1,7 @@
 package dev.myriadclient.api.module;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.util.AnyThread;
 import dev.myriadclient.api.util.MyriadId;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.ApiStatus;
@@ -29,6 +30,7 @@ import java.util.function.Supplier;
  * }
  * }</pre>
  */
+@AnyThread
 public final class Modules {
 	/** Failures a module's guarded code may have before the module is turned off: as many as an event handler may. */
 	private static final int GUARD_FAILURES = 50;

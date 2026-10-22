@@ -44,6 +44,8 @@ public class MyriadClient implements ClientModInitializer {
 
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> {
 			Ticks.advance();
+			// Events posted off the render thread since last tick, for the handlers that want them on it, first.
+			bus.deliverDeferred();
 			bus.post(TickEvent.Pre.INSTANCE);
 		});
 		ClientTickEvents.END_CLIENT_TICK.register(mc -> {

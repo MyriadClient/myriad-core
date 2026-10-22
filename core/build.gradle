@@ -35,6 +35,8 @@ test {
 	// The harness runs Minecraft's classes under Fabric's loader, which keeps its game folder (logs, config) here.
 	workingDir = file("build/test-run")
 	doFirst { workingDir.mkdirs() }
+	// Dev checks on, as in the dev clients: a service called off the render thread is logged (Threads.assertRender).
+	systemProperty "myriad.dev", "true"
 	testLogging {
 		events "passed", "skipped", "failed"
 		exceptionFormat "full"

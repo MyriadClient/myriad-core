@@ -46,6 +46,7 @@ import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.layout.Layout;
 import dev.myriadclient.api.util.PacketChannel;
+import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.impl.addon.AddonLoader;
 import dev.myriadclient.impl.command.CommandManager;
 import dev.myriadclient.impl.config.ConfigManagerImpl;
@@ -245,6 +246,7 @@ public final class MyriadImpl implements MyriadApi {
 	private void wireServices() {
 		events.setOwnerResolver(addonLoader::ownerOf);
 		events.setInGameCheck(() -> mc.level != null && mc.player != null);
+		events.setRenderThreadCheck(Threads::isRender);
 		Setting.setGlobalChangeHook(config::markDirty);
 		SettingColor.setPaletteProvider(windowManager.theme()::roleColor);
 		windowManager.setDirtyHook(config::markDirty);
@@ -301,7 +303,7 @@ public final class MyriadImpl implements MyriadApi {
 	}
 
 	@Override
-	public EventBus events() {
+	public MyriadEventBus events() {
 		return events;
 	}
 

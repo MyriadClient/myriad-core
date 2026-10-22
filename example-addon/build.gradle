@@ -42,6 +42,8 @@ loom {
 loom {
 	runs {
 		client {
+			// Dev checks: core's services log a call from a thread other than the render thread (Threads.assertRender).
+			property("myriad.dev", "true")
 			// ./gradlew :example-addon:runClient -PopenDesktop opens the desktop over the title screen on launch.
 			property("myriad.openDesktop", project.hasProperty("openDesktop").toString())
 			// -PscreenshotEvery=N saves a screenshot every N seconds.

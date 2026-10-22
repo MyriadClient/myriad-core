@@ -3,6 +3,7 @@ package dev.myriadclient.api.service;
 import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Replacement;
 import dev.myriadclient.api.hook.Service;
+import dev.myriadclient.api.util.RenderThread;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.ApiStatus;
@@ -28,6 +29,7 @@ import java.util.Objects;
  * }</pre>
  */
 @ApiStatus.NonExtendable
+@RenderThread
 public interface Rotations {
 	int PRIORITY_LOW = 0;
 	int PRIORITY_NORMAL = 50;

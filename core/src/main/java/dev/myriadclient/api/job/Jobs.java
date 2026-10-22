@@ -1,5 +1,6 @@
 package dev.myriadclient.api.job;
 
+import dev.myriadclient.api.util.RenderThread;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.Optional;
  * on its step) shows a notice with the owner's name and the reason.
  */
 @ApiStatus.NonExtendable
+@RenderThread
 public interface Jobs {
 	/** Starts {@code step} for {@code owner}. It first ticks at the coming job tick (this tick's, if that hasn't run yet). */
 	<T> Job<T> start(Object owner, Step<T> step);

@@ -1,6 +1,7 @@
 package dev.myriadclient.api.elytra;
 
 import dev.myriadclient.api.event.events.GlideEvent;
+import dev.myriadclient.api.util.RenderThread;
 import org.jetbrains.annotations.ApiStatus;
 
 /**
@@ -25,6 +26,7 @@ import org.jetbrains.annotations.ApiStatus;
  * }</pre>
  */
 @ApiStatus.NonExtendable
+@RenderThread
 public interface Elytra {
 	/**
 	 * A flight module flying the local player. While one is added, the glide follows what it says; the camera stays the

@@ -1,6 +1,7 @@
 package dev.myriadclient.api.util;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.util.AnyThread;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.prediction.PredictiveAction;
 import net.minecraft.core.BlockPos;
@@ -12,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
 /** Sending packets to the server. All of these do nothing outside a world. */
+@AnyThread
 public final class Packets {
 	private Packets() {
 	}

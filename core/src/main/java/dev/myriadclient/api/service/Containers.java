@@ -1,6 +1,7 @@
 package dev.myriadclient.api.service;
 
 import dev.myriadclient.api.util.ItemMatch;
+import dev.myriadclient.api.util.RenderThread;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
@@ -40,6 +41,7 @@ import java.util.function.ToIntFunction;
  * }</pre>
  */
 @ApiStatus.NonExtendable
+@RenderThread
 public interface Containers {
 	/** The open container, if one is open (the player's own inventory doesn't count). */
 	Optional<View> current();

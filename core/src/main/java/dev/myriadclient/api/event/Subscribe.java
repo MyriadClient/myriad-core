@@ -35,4 +35,10 @@ public @interface Subscribe {
 	 * handler for every other packet, cheaper than an {@code instanceof} in a handler that runs for every packet.
 	 */
 	Class<?>[] packets() default {};
+
+	/**
+	 * The thread the handler runs on: where the event is posted (default), or the render thread, for a handler of an
+	 * event posted elsewhere ({@code PacketEvent.Receive}) that acts on the game. See {@link HandlerThread#RENDER}.
+	 */
+	HandlerThread thread() default HandlerThread.POSTER;
 }

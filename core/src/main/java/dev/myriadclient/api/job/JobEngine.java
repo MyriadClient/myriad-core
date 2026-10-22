@@ -3,6 +3,7 @@ package dev.myriadclient.api.job;
 import dev.myriadclient.api.event.Subscription;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.Modules;
+import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.api.util.TickBudget;
 import org.jetbrains.annotations.ApiStatus;
 import org.slf4j.Logger;
@@ -65,6 +66,7 @@ public final class JobEngine implements Jobs {
 
 	@Override
 	public <T> Job<T> start(Object owner, Step<T> step) {
+		Threads.assertRender();
 		Slot<T> slot = Slot.open(this, null, owner, step);
 		(ticking ? starting : roots).add(slot);
 		return slot.node;

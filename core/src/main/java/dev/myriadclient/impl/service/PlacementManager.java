@@ -14,6 +14,7 @@ import dev.myriadclient.api.util.BlockInfo;
 import dev.myriadclient.api.util.MathUtil;
 import dev.myriadclient.api.util.Reach;
 import dev.myriadclient.api.util.Slots;
+import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
@@ -110,6 +111,7 @@ public final class PlacementManager implements Placement {
 
 	@Override
 	public Solution solve(BlockPos pos, BlockState wanted, int hotbarSlot, Options o) {
+		Threads.assertRender();
 		if (hotbarSlot < 0 || hotbarSlot > 8 || mc.player == null) return Solution.none(Check.UNAVAILABLE);
 		return solver.solve(pos.immutable(), wanted, placing(hotbarSlot), o);
 	}
@@ -126,6 +128,7 @@ public final class PlacementManager implements Placement {
 
 	@Override
 	public Attempt place(Object owner, Click c, int hotbarSlot, Options o) {
+		Threads.assertRender();
 		BlockPos pos = c.pos();
 		if (hotbarSlot < 0 || hotbarSlot > 8 || mc.player == null) return Attempt.refused(pos, Check.UNAVAILABLE);
 		// The click carries its own look, sneak and air placement; range, swing and the rest stay the caller's.
@@ -203,6 +206,7 @@ public final class PlacementManager implements Placement {
 
 	@Override
 	public Attempt place(Object owner, BlockPos pos, int hotbarSlot, Options o) {
+		Threads.assertRender();
 		if (hotbarSlot < 0 || hotbarSlot > 8) return Attempt.refused(pos, Check.UNAVAILABLE);
 		Check space = spaceCheck(pos, o);
 		if (!space.ok()) return Attempt.refused(pos, space);
@@ -213,6 +217,7 @@ public final class PlacementManager implements Placement {
 
 	@Override
 	public Attempt place(Object owner, BlockHitResult hit, int hotbarSlot, Options o) {
+		Threads.assertRender();
 		if (hotbarSlot < 0 || hotbarSlot > 8 || mc.player == null) return Attempt.refused(hit.getBlockPos().relative(hit.getDirection()), Check.UNAVAILABLE);
 		// Where vanilla puts it: into the clicked block when that's replaceable (air, grass, water) or the item adds to
 		// it (a candle, the other half of a slab), otherwise beside it.
@@ -230,6 +235,7 @@ public final class PlacementManager implements Placement {
 
 	@Override
 	public Attempt use(Object owner, BlockHitResult hit, int hotbarSlot, Options o) {
+		Threads.assertRender();
 		BlockPos pos = hit.getBlockPos().immutable();
 		if (hotbarSlot < -1 || hotbarSlot > 8 || mc.player == null || mc.level == null) return Attempt.refused(pos, Check.UNAVAILABLE);
 		if (pending.containsKey(pos)) return Attempt.refused(pos, Check.PENDING);

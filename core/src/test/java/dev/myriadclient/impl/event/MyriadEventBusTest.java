@@ -1,6 +1,7 @@
 package dev.myriadclient.impl.event;
 
 import dev.myriadclient.api.event.Cancellable;
+import dev.myriadclient.api.event.HandlerThread;
 import dev.myriadclient.api.event.Priority;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.Subscription;
@@ -183,5 +184,73 @@ class MyriadEventBusTest {
 		bus.subscribe(second);
 		bus.post(new Base());
 		assertEquals(List.of("first"), calls);
+	}
+
+	static class OnRender {
+		final List<String> calls = new ArrayList<>();
+
+		@Subscribe(thread = HandlerThread.RENDER)
+		private void render(Base e) {
+			calls.add("render " + Thread.currentThread().getName());
+		}
+
+		@Subscribe
+		private void poster(Base e) {
+			calls.add("poster " + Thread.currentThread().getName());
+		}
+	}
+
+	@Test
+	void aRenderHandlerGetsAnEventPostedElsewhereAtTheNextDelivery() throws Exception {
+		MyriadEventBus bus = new MyriadEventBus();
+		Thread render = Thread.currentThread();
+		bus.setRenderThreadCheck(() -> Thread.currentThread() == render);
+		OnRender l = new OnRender();
+		bus.subscribe(l);
+		Thread network = new Thread(() -> bus.post(new Base()), "network");
+		network.start();
+		network.join();
+		assertEquals(List.of("poster network"), l.calls);
+		bus.deliverDeferred();
+		assertEquals(List.of("poster network", "render " + render.getName()), l.calls);
+		// Delivered once.
+		bus.deliverDeferred();
+		assertEquals(2, l.calls.size());
+		// Posted on the render thread: at once, in priority order as usual.
+		l.calls.clear();
+		bus.post(new Base());
+		assertEquals(2, l.calls.size());
+	}
+
+	static class LateReader {
+		int seen, seenCancelled;
+
+		@Subscribe(thread = HandlerThread.RENDER)
+		private void read(Stoppable e) {
+			seen++;
+		}
+
+		@Subscribe(thread = HandlerThread.RENDER, receiveCancelled = true)
+		private void readAll(Stoppable e) {
+			seenCancelled++;
+		}
+	}
+
+	@Test
+	void aLateHandlerSkipsWhatWasCancelledMeanwhile() throws Exception {
+		MyriadEventBus bus = new MyriadEventBus();
+		Thread render = Thread.currentThread();
+		bus.setRenderThreadCheck(() -> Thread.currentThread() == render);
+		LateReader l = new LateReader();
+		bus.subscribe(l);
+		Thread network = new Thread(() -> {
+			bus.post(new Stoppable());
+			bus.post(new Stoppable()).cancel();
+		}, "network");
+		network.start();
+		network.join();
+		bus.deliverDeferred();
+		assertEquals(1, l.seen);
+		assertEquals(2, l.seenCancelled);
 	}
 }
