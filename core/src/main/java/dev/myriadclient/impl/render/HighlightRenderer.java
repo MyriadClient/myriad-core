@@ -1,19 +1,11 @@
 package dev.myriadclient.impl.render;
 
 import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.IndexType;
-import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import dev.myriadclient.api.Myriad;
@@ -22,10 +14,11 @@ import dev.myriadclient.api.event.events.HighlightEvent;
 import dev.myriadclient.api.render.HighlightStyle;
 import dev.myriadclient.api.render.WorldMesh;
 import dev.myriadclient.impl.compat.EntityCullingCompat;
+import dev.myriadclient.impl.render.HighlightPasses.Layer;
+import dev.myriadclient.impl.render.HighlightPasses.MeshDraw;
+import dev.myriadclient.impl.render.HighlightTable.GroupKey;
 import it.unimi.dsi.fastutil.floats.FloatArrayList;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
-import it.unimi.dsi.fastutil.ints.IntRBTreeSet;
 import it.unimi.dsi.fastutil.objects.Object2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
@@ -36,7 +29,6 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.HumanoidArm;
@@ -46,17 +38,11 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
-import org.joml.Vector3f;
 import org.joml.Vector3fc;
 import org.joml.Vector4f;
 
-import java.nio.ByteOrder;
-import java.nio.FloatBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
-import java.util.OptionalDouble;
 import java.util.function.Consumer;
 
 /**
@@ -94,41 +80,23 @@ import java.util.function.Consumer;
 public final class HighlightRenderer {
 	public static final HighlightRenderer INSTANCE = new HighlightRenderer();
 
-	/** vec4s per highlight in the data buffer: top colour, bottom colour, gradient rectangle, shape, fill. */
-	private static final int TEXELS = 5;
-	/** vec4s before the first highlight: (radius, GUI scale, count, boundary radius), (seconds, 0, 0, 0). */
-	private static final int HEADER = 2;
-	private static final int FLOATS = TEXELS * 4;
 	private static final int MAX_RADIUS = 64;
 	/** Highlights per frame: their ids take 16 bits of the mask, the merge group the other 8. */
 	static final int MAX_HIGHLIGHTS = 1 << 16;
-	/** Layers, by index; shapes and below-shapes ({@link #isShapes}) are drawn the same way, into masks of their own. */
+	/** Layers, by index; shapes and below-shapes are drawn the same way, into masks of their own. */
 	private static final int ENTITIES = 0, SHAPES = 1, BELOW = 2, HAND = 3;
-	private static final int[] SHAPE_LAYERS = {BELOW, SHAPES};
+	static final int[] SHAPE_LAYERS = {BELOW, SHAPES};
 	/** Glowing entities while Myriad owns the outline target: close to vanilla's soft outline. */
 	private static final HighlightStyle VANILLA_GLOW = HighlightStyle.OUTLINE.withOutlineWidth(1).withGlow(3).withGlowStrength(0.7f);
-	private static final Matrix4f IDENTITY = new Matrix4f();
 
 	private final HighlightEvent.Entity entityEvent = new HighlightEvent.Entity();
 	private final HighlightEvent.Shapes shapesEvent = new HighlightEvent.Shapes();
 	private final HighlightEvent.Hand handEvent = new HighlightEvent.Hand();
 	private ListenerFlag entityListeners, shapeListeners, handListeners;
 
-	// This frame's highlights, by id.
 	private long frame;
 	private boolean armed;
-	private int count;
-	private HighlightStyle[] styles = new HighlightStyle[64];
-	private int[] colors = new int[64];
-	private int[] groupOf = new int[64];
-	private byte[] layerOf = new byte[64];
-	/** Per highlight: the box the gradient spans, then a box sure to contain the whole silhouette (12 doubles). */
-	private double[] bounds = new double[12 * 64];
-	/** Per highlight: distance from the camera to its nearest part, for distance scaling. */
-	private double[] nearest = new double[64];
-	private float[] data = new float[FLOATS * 64];
-	/** This frame's merge groups: highlights that look alike (same style and colour) share one, and connect. */
-	private final Object2IntOpenHashMap<GroupKey> groups = new Object2IntOpenHashMap<>();
+	private final HighlightTable highlights = new HighlightTable();
 	/** Shapes that look alike share one highlight per frame, per layer. */
 	@SuppressWarnings("unchecked")
 	private final Object2IntOpenHashMap<GroupKey>[] shapeIds = new Object2IntOpenHashMap[]{null, new Object2IntOpenHashMap<>(), new Object2IntOpenHashMap<>()};
@@ -136,14 +104,7 @@ public final class HighlightRenderer {
 	@SuppressWarnings("unchecked")
 	private final Object2IntOpenHashMap<PaletteKey>[] paletteIds = new Object2IntOpenHashMap[]{null, new Object2IntOpenHashMap<>(), new Object2IntOpenHashMap<>()};
 
-	private record GroupKey(HighlightStyle style, int rgb) {
-	}
-
 	private record PaletteKey(HighlightStyle style, List<Integer> palette) {
-	}
-
-	/** A retained mesh to draw into a shapes mask, with the first id of its palette. */
-	private record MeshDraw(WorldMesh mesh, int baseId, int layer) {
 	}
 
 	/** Per shapes layer: geometry relative to the camera (min x/y/z, max x/y/z per box) and each box's encoded id. */
@@ -156,12 +117,7 @@ public final class HighlightRenderer {
 	private final Reference2ObjectOpenHashMap<Entity, HighlightStyle> asked = new Reference2ObjectOpenHashMap<>();
 	private final Reference2IntOpenHashMap<Entity> askedColor = new Reference2IntOpenHashMap<>();
 
-	// This frame's camera, captured before the level is drawn.
-	private final Matrix4f projection = new Matrix4f();
-	private final Matrix4f view = new Matrix4f();
-	private final Matrix4f viewProjection = new Matrix4f();
-	private final Vector4f corner = new Vector4f();
-	private double camX, camY, camZ;
+	// This frame's camera, captured before the level is drawn (its position and matrices go to the table).
 	private boolean outlinesShown;
 	private Frustum frustum;
 
@@ -181,39 +137,6 @@ public final class HighlightRenderer {
 	/** The hand layer's screen area while its parts come in (min x, min y, max x, max y), and one part's. */
 	private final float[] handArea = new float[4], partArea = new float[4];
 
-	/** Addons' fills: shader id number to its composite pass. */
-	private static final Int2ObjectOpenHashMap<RenderPipeline> FILLS = new Int2ObjectOpenHashMap<>();
-	private static final long START = System.nanoTime();
-
-	/** Registers an addon's fill (see {@link HighlightStyle.Fill#custom}): its shader becomes one more composite pass. */
-	public static void registerFill(int shaderId, Identifier shader) {
-		FILLS.put(shaderId, MyriadPipelines.highlightFill(shaderId, shader));
-	}
-
-	/** One mask's passes and results. */
-	private static final class Layer {
-		final String name;
-		TextureTarget resolved, spread;
-		/** Addons' fills used by this layer's highlights this frame. */
-		final IntRBTreeSet customFills = new IntRBTreeSet();
-		int count;
-		boolean anyDepthTested, prepared;
-		int[] area;
-		final int[] compositeRect = new int[4];
-
-		Layer(String name) {
-			this.name = name;
-		}
-
-		void reset() {
-			customFills.clear();
-			count = 0;
-			anyDepthTested = false;
-			prepared = false;
-			area = null;
-		}
-	}
-
 	private HighlightRenderer() {
 	}
 
@@ -230,8 +153,7 @@ public final class HighlightRenderer {
 	/** Start of a frame's extraction, before any entity is. */
 	public void beginFrame() {
 		frame++;
-		count = 0;
-		groups.clear();
+		highlights.clear();
 		for (int l : SHAPE_LAYERS) {
 			shapeIds[l].clear();
 			paletteIds[l].clear();
@@ -270,7 +192,7 @@ public final class HighlightRenderer {
 		ghostFrame = frame;
 		if (!armed) return 0;
 		int id = add(ENTITIES, style, color, box, box.inflate(1));
-		return id < 0 ? 0 : encode(id, groupOf[id]);
+		return id < 0 ? 0 : encode(id, highlights.groupOf[id]);
 	}
 
 	/**
@@ -327,7 +249,7 @@ public final class HighlightRenderer {
 		double dx = pos.x - entity.getX(), dy = pos.y - entity.getY(), dz = pos.z - entity.getZ();
 		AABB hitbox = entity.getBoundingBox().move(dx, dy, dz);
 		int id = add(ENTITIES, style, color, hitbox, cullingBox.move(dx, dy, dz).inflate(1));
-		if (id >= 0) state.outlineColor = encode(id, groupOf[id]);
+		if (id >= 0) state.outlineColor = encode(id, highlights.groupOf[id]);
 	}
 
 	/** Posts {@link HighlightEvent.Shapes} and submits the frame's boxes to the shapes masks. */
@@ -390,7 +312,7 @@ public final class HighlightRenderer {
 		if (!armed || style == null || (color >>> 24) == 0 || (frustum != null && !frustum.isVisible(box))) return;
 		int layer = below ? BELOW : SHAPES;
 		int id = shape(layer, style, color, box);
-		if (id >= 0) shapeBox(layer, box, 0, 0, 0, encode(id, groupOf[id]));
+		if (id >= 0) shapeBox(layer, box, 0, 0, 0, encode(id, highlights.groupOf[id]));
 	}
 
 	/** {@link HighlightEvent.Shapes#block}. */
@@ -404,7 +326,7 @@ public final class HighlightRenderer {
 		int layer = below ? BELOW : SHAPES;
 		int id = shape(layer, style, color, bounds);
 		if (id < 0) return;
-		int c = encode(id, groupOf[id]);
+		int c = encode(id, highlights.groupOf[id]);
 		if (shape.isEmpty()) shapeBox(layer, new AABB(0, 0, 0, 1, 1, 1).inflate(inflate), pos.getX(), pos.getY(), pos.getZ(), c);
 		else shape.forAllBoxes((x0, y0, z0, x1, y1, z1) -> shapeBox(layer, new AABB(x0, y0, z0, x1, y1, z1).inflate(inflate), pos.getX(), pos.getY(), pos.getZ(), c));
 	}
@@ -419,12 +341,12 @@ public final class HighlightRenderer {
 		PaletteKey pk = new PaletteKey(style, key);
 		int base = paletteIds[layer].getOrDefault(pk, -1);
 		if (base < 0) {
-			if (count + palette.length > MAX_HIGHLIGHTS || palette.length > 256) return;
-			base = count;
+			if (highlights.count + palette.length > MAX_HIGHLIGHTS || palette.length > 256) return;
+			base = highlights.count;
 			for (int c : palette) add(layer, style, c, mesh.bounds(), mesh.bounds());
 			paletteIds[layer].put(pk, base);
 		} else {
-			for (int i = 0; i < palette.length; i++) grow(base + i, mesh.bounds());
+			for (int i = 0; i < palette.length; i++) highlights.grow(base + i, mesh.bounds());
 		}
 		meshes.add(new MeshDraw(mesh, base, layer));
 	}
@@ -437,7 +359,7 @@ public final class HighlightRenderer {
 		GroupKey key = new GroupKey(style, color);
 		int id = shapeIds[layer].getOrDefault(key, -1);
 		if (id >= 0) {
-			grow(id, box);
+			highlights.grow(id, box);
 			return id;
 		}
 		id = add(layer, style, color, box, box);
@@ -448,112 +370,24 @@ public final class HighlightRenderer {
 	private void shapeBox(int layer, AABB b, double ox, double oy, double oz, int encoded) {
 		// Relative to the camera while still in doubles, so boxes far from spawn keep their precision.
 		FloatArrayList boxes = shapeBoxes[layer];
-		boxes.add((float) (b.minX + ox - camX));
-		boxes.add((float) (b.minY + oy - camY));
-		boxes.add((float) (b.minZ + oz - camZ));
-		boxes.add((float) (b.maxX + ox - camX));
-		boxes.add((float) (b.maxY + oy - camY));
-		boxes.add((float) (b.maxZ + oz - camZ));
+		boxes.add((float) (b.minX + ox - highlights.camX));
+		boxes.add((float) (b.minY + oy - highlights.camY));
+		boxes.add((float) (b.minZ + oz - highlights.camZ));
+		boxes.add((float) (b.maxX + ox - highlights.camX));
+		boxes.add((float) (b.maxY + oy - highlights.camY));
+		boxes.add((float) (b.maxZ + oz - highlights.camZ));
 		shapeColors[layer].add(encoded);
 	}
 
 	/** Records a highlight in {@code layer}; returns its id, or -1 when there are too many. */
 	private int add(int layer, HighlightStyle style, int color, AABB gradientBox, AABB around) {
-		if (count >= MAX_HIGHLIGHTS) return -1;
-		int id = count++;
-		if (styles.length < count) {
-			int n = styles.length * 2;
-			styles = Arrays.copyOf(styles, n);
-			colors = Arrays.copyOf(colors, n);
-			groupOf = Arrays.copyOf(groupOf, n);
-			layerOf = Arrays.copyOf(layerOf, n);
-			nearest = Arrays.copyOf(nearest, n);
-			bounds = Arrays.copyOf(bounds, n * 12);
-			data = Arrays.copyOf(data, n * FLOATS);
-		}
-		GroupKey key = new GroupKey(style, color & 0xFFFFFF);
-		int group = groups.getInt(key);
-		if (group == 0) groups.put(key, group = groups.size() % 255 + 1);
-		styles[id] = style;
-		colors[id] = color;
-		groupOf[id] = group;
-		layerOf[id] = (byte) layer;
-		putBox(id * 12, gradientBox);
-		putBox(id * 12 + 6, around);
-		nearest[id] = distance(gradientBox);
+		int id = highlights.add(layer, style, color, gradientBox, around);
+		if (id < 0) return -1;
 		Layer l = layers[layer];
 		l.count++;
 		l.anyDepthTested |= !style.throughWalls();
 		if (style.fill().isCustom()) l.customFills.add(style.fill().shaderId());
 		return id;
-	}
-
-	/** Grows highlight {@code id}'s boxes to cover {@code box}; its widths follow its nearest part. */
-	private void grow(int id, AABB box) {
-		int b = id * 12;
-		for (int o : new int[]{b, b + 6}) {
-			bounds[o] = Math.min(bounds[o], box.minX);
-			bounds[o + 1] = Math.min(bounds[o + 1], box.minY);
-			bounds[o + 2] = Math.min(bounds[o + 2], box.minZ);
-			bounds[o + 3] = Math.max(bounds[o + 3], box.maxX);
-			bounds[o + 4] = Math.max(bounds[o + 4], box.maxY);
-			bounds[o + 5] = Math.max(bounds[o + 5], box.maxZ);
-		}
-		nearest[id] = Math.min(nearest[id], distance(box));
-	}
-
-	private double distance(AABB box) {
-		return Math.sqrt(box.distanceToSqr(new Vec3(camX, camY, camZ)));
-	}
-
-	private void putBox(int b, AABB box) {
-		bounds[b] = box.minX;
-		bounds[b + 1] = box.minY;
-		bounds[b + 2] = box.minZ;
-		bounds[b + 3] = box.maxX;
-		bounds[b + 4] = box.maxY;
-		bounds[b + 5] = box.maxZ;
-	}
-
-	/**
-	 * Fills in the shader data of highlights {@code from} to {@code to} (exclusive); returns {reach, outline} in pixels,
-	 * the most any of them needs.
-	 */
-	private float[] fillData(int from, int to) {
-		float scale = (float) Minecraft.getInstance().getWindow().getGuiScale();
-		float maxReach = 0, maxOutline = 0;
-		for (int id = from; id < to; id++) {
-			HighlightStyle style = styles[id];
-			int color = colors[id], i = id * FLOATS;
-			float alpha = (color >>> 24) / 255f;
-			putColor(i, color, alpha);
-			if (style.hasGradient()) putColor(i + 4, style.gradient(), alpha * (style.gradient() >>> 24) / 255f);
-			else System.arraycopy(data, i, data, i + 4, 4);
-			// i + 8..11: the gradient rectangle, from screenArea.
-			// Thinner with distance (to half), but an outline never drops below a pixel.
-			float far = style.widthScale(nearest[id]);
-			float outline = style.outlineWidth() * scale * far, glow = style.glow() * scale * far;
-			if (outline > 0) outline = Math.max(1, outline);
-			data[i + 12] = outline;
-			data[i + 13] = glow;
-			data[i + 14] = style.glowStrength();
-			data[i + 15] = style.fillOpacity();
-			data[i + 16] = style.fill().shaderId();
-			data[i + 17] = style.dotSpacing() * scale;
-			data[i + 18] = style.dotSize() * scale * 0.5f;
-			// Bit 0: hidden parts are dropped; above it the merge group (the mesh mask shader reads it from here).
-			data[i + 19] = (style.throughWalls() ? 0 : 1) + 2 * groupOf[id];
-			maxReach = Math.max(maxReach, outline + glow);
-			maxOutline = Math.max(maxOutline, outline);
-		}
-		return new float[]{maxReach, maxOutline};
-	}
-
-	private void putColor(int i, int argb, float alpha) {
-		data[i] = (argb >> 16 & 0xFF) / 255f;
-		data[i + 1] = (argb >> 8 & 0xFF) / 255f;
-		data[i + 2] = (argb & 0xFF) / 255f;
-		data[i + 3] = alpha;
 	}
 
 	/**
@@ -577,16 +411,13 @@ public final class HighlightRenderer {
 	/** The level camera, at the start of {@code LevelRenderer.render}. */
 	public void camera(Vec3 pos, Matrix4fc modelView, Frustum frustum, boolean outlinesShown) {
 		this.frustum = frustum;
-		camX = pos.x;
-		camY = pos.y;
-		camZ = pos.z;
-		view.set(modelView);
+		highlights.camera(pos, modelView);
 		this.outlinesShown = outlinesShown;
 	}
 
 	/** The level projection, view bobbing and nausea included, as the frame is drawn with it. */
 	public void projection(Matrix4fc projection) {
-		this.projection.set(projection);
+		highlights.projection.set(projection);
 	}
 
 	/** Whether this frame's entity outline target holds highlight ids (so vanilla mustn't post-process or blit it). */
@@ -606,90 +437,17 @@ public final class HighlightRenderer {
 		RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
 		if (main.getDepthTextureView() == null) return;
 		int w = main.width, h = main.height;
-		screenArea(w, h);
-		float[] widths = fillData(0, count);
+		int[][] areas = highlights.screenAreas(layers.length, w, h);
+		for (int l = 0; l < layers.length; l++) layers[l].area = areas[l];
+		float[] widths = highlights.fillData(0, highlights.count);
 		int radius = Math.min(MAX_RADIUS, (int) Math.ceil(widths[0]) + 1);
 		int boundary = Math.min(radius, (int) Math.ceil(widths[1]) + 1);
-		buffer = ring(buffer, "Myriad highlights", count);
-		GpuBuffer gpuData = write(buffer, radius, boundary, 0, count);
+		buffer = HighlightPasses.ring(buffer, "Myriad highlights", highlights.count);
+		GpuBuffer gpuData = HighlightPasses.write(buffer, radius, boundary, highlights.data, 0, highlights.count);
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
-		if (shapes && !meshes.isEmpty()) drawMeshes(encoder, gpuData);
-		for (int l : SHAPE_LAYERS) if (masked[l] && layers[l].count > 0) prepare(encoder, layers[l], masks[l], main, gpuData, radius, w, h);
-		if (entities) prepare(encoder, layers[ENTITIES], Minecraft.getInstance().levelRenderer.entityOutlineTarget, main, gpuData, radius, w, h);
-	}
-
-	/** Retained meshes into the shapes mask: their quads, with each vertex's palette index added to the base id. */
-	private void drawMeshes(CommandEncoder encoder, GpuBuffer gpuData) {
-		// Inside the level pass: the model-view matrix is the camera's view, as for MeshRenderer.
-		Matrix4f modelView = RenderSystem.getModelViewMatrixCopy();
-		int maxIndices = 0;
-		for (MeshDraw d : meshes) maxIndices = Math.max(maxIndices, Math.max(d.mesh().indexCount(0), d.mesh().indexCount(2)));
-		if (maxIndices == 0) return;
-		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
-		GpuBuffer indexBuffer = indices.getBuffer(maxIndices);
-		GpuBufferSlice[] transforms = new GpuBufferSlice[meshes.size()];
-		for (int i = 0; i < meshes.size(); i++) {
-			MeshDraw d = meshes.get(i);
-			WorldMesh m = d.mesh();
-			// The base id rides in the colour modulator, the same bytes as an encoded outline colour.
-			Vector4f base = new Vector4f((d.baseId() & 0xFF) / 255f, (d.baseId() >> 8 & 0xFF) / 255f, 0, 1);
-			Vector3f offset = new Vector3f((float) (m.originX() - camX), (float) (m.originY() - camY), (float) (m.originZ() - camZ));
-			transforms[i] = RenderSystem.getDynamicUniforms().writeTransform(modelView, base, offset, IDENTITY);
-		}
-		for (int layer : SHAPE_LAYERS) {
-			if (!masked[layer]) continue;
-			drawMeshes(encoder, gpuData, layer, transforms, indexBuffer, indices.type());
-		}
-	}
-
-	private void drawMeshes(CommandEncoder encoder, GpuBuffer gpuData, int layer, GpuBufferSlice[] transforms, GpuBuffer indexBuffer,
-							IndexType indexType) {
-		boolean any = false;
-		for (MeshDraw d : meshes) any |= d.layer() == layer;
-		if (!any) return;
-		TextureTarget mask = masks[layer];
-		try (RenderPass pass = encoder.createRenderPass(() -> "Myriad highlight meshes", mask.getColorTextureView(), Optional.empty(),
-			mask.getDepthTextureView(), OptionalDouble.empty())) {
-			pass.setPipeline(MyriadPipelines.HIGHLIGHT_MESH);
-			RenderSystem.bindDefaultUniforms(pass);
-			pass.setUniform("Highlights", gpuData);
-			pass.setIndexBuffer(indexBuffer, indexType);
-			for (int i = 0; i < meshes.size(); i++) {
-				if (meshes.get(i).layer() != layer) continue;
-				WorldMesh m = meshes.get(i).mesh();
-				pass.setUniform("DynamicTransforms", transforms[i]);
-				for (int part : new int[]{0, 2}) {
-					GpuBuffer vertices = m.buffer(part);
-					int n = m.indexCount(part);
-					if (vertices == null || n == 0) continue;
-					pass.setVertexBuffer(0, vertices.slice());
-					pass.drawIndexed(n, 1, 0, 0, 0);
-				}
-			}
-		}
-	}
-
-	private void prepare(CommandEncoder encoder, Layer layer, RenderTarget mask, RenderTarget main, GpuBuffer gpuData, int radius, int w, int h) {
-		if (mask == null || mask.getColorTextureView() == null || layer.area == null) return;
-		resize(layer, w, h);
-		GpuSampler nearestSampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
-		GpuTextureView source = mask.getColorTextureView();
-		int[] area = layer.area;
-		if (layer.anyDepthTested) {
-			try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_RESOLVE, layer.resolved.getColorTextureView(), gpuData, grow(area, 2 * radius, 2 * radius, w, h))) {
-				pass.bindTexture("Mask", source, nearestSampler);
-				pass.bindTexture("MaskDepth", mask.getDepthTextureView(), nearestSampler);
-				pass.bindTexture("SceneDepth", main.getDepthTextureView(), nearestSampler);
-				pass.draw(3, 1, 0, 0);
-			}
-			source = layer.resolved.getColorTextureView();
-		}
-		try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_SPREAD, layer.spread.getColorTextureView(), gpuData, grow(area, radius, 2 * radius, w, h))) {
-			pass.bindTexture("InSampler", source, nearestSampler);
-			pass.draw(3, 1, 0, 0);
-		}
-		System.arraycopy(grow(area, radius, radius, w, h), 0, layer.compositeRect, 0, 4);
-		layer.prepared = true;
+		if (shapes && !meshes.isEmpty()) HighlightPasses.drawMeshes(encoder, gpuData, meshes, masks, masked, highlights);
+		for (int l : SHAPE_LAYERS) if (masked[l] && layers[l].count > 0) HighlightPasses.prepare(encoder, layers[l], masks[l], main, gpuData, radius, w, h);
+		if (entities) HighlightPasses.prepare(encoder, layers[ENTITIES], Minecraft.getInstance().levelRenderer.entityOutlineTarget, main, gpuData, radius, w, h);
 	}
 
 	/** After the level is drawn, before the hand: below-shapes, shapes over them, then entities, onto the main target. */
@@ -701,95 +459,8 @@ public final class HighlightRenderer {
 			if (!layer.prepared) continue;
 			layer.prepared = false;
 			if (encoder == null) encoder = RenderSystem.getDevice().createCommandEncoder();
-			composite(encoder, layer, main, buffer.currentBuffer());
+			HighlightPasses.composite(encoder, layer, main, buffer.currentBuffer());
 		}
-	}
-
-	/** One layer onto the main target: outlines, glows and built-in fills, then addons' fills over their highlights' insides. */
-	private void composite(CommandEncoder encoder, Layer layer, RenderTarget main, GpuBuffer gpuData) {
-		composite(encoder, MyriadPipelines.HIGHLIGHT_COMPOSITE, layer, main, gpuData);
-		for (int fill : layer.customFills) {
-			RenderPipeline pipeline = FILLS.get(fill);
-			if (pipeline != null) composite(encoder, pipeline, layer, main, gpuData);
-		}
-	}
-
-	private void composite(CommandEncoder encoder, RenderPipeline pipeline, Layer layer, RenderTarget main, GpuBuffer gpuData) {
-		try (RenderPass pass = begin(encoder, pipeline, main.getColorTextureView(), gpuData, layer.compositeRect)) {
-			pass.bindTexture("SpreadSampler", layer.spread.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
-			pass.draw(3, 1, 0, 0);
-		}
-	}
-
-	private RenderPass begin(CommandEncoder encoder, RenderPipeline pipeline, GpuTextureView target, GpuBuffer gpuData, int[] rect) {
-		RenderPass pass = encoder.createRenderPass(() -> "Myriad highlights", target, Optional.empty(), null, OptionalDouble.empty());
-		pass.setPipeline(pipeline);
-		RenderSystem.bindDefaultUniforms(pass);
-		pass.setUniform("Highlights", gpuData);
-		pass.enableScissor(rect[0], rect[1], rect[2], rect[3]);
-		return pass;
-	}
-
-	/**
-	 * Projects every highlight with this frame's camera: fills in the gradient rectangles and each layer's framebuffer
-	 * area {x0, y0, x1, y1} that holds its silhouettes (null if none is on screen). Pixel rows count up from the bottom
-	 * of the image (OpenGL) or down from the top (Vulkan), the same way texel rows and gl_FragCoord do on each, so the
-	 * shaders and scissor agree either way.
-	 */
-	private void screenArea(int w, int h) {
-		projection.mul(view, viewProjection);
-		float[] r = new float[4];
-		int[][] box = new int[layers.length][];
-		for (int l = 0; l < box.length; l++) box[l] = new int[]{Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MIN_VALUE};
-		for (int id = 0; id < count; id++) {
-			int b = id * 12, i = id * FLOATS;
-			if (!project(b, w, h, r)) {
-				r[0] = 0;
-				r[1] = 0;
-				r[2] = w;
-				r[3] = h;
-			}
-			data[i + 8] = r[0];
-			data[i + 9] = r[1];
-			data[i + 10] = r[2];
-			data[i + 11] = r[3];
-			if (!project(b + 6, w, h, r)) {
-				r[0] = 0;
-				r[1] = 0;
-				r[2] = w;
-				r[3] = h;
-			}
-			int[] a = box[layerOf[id]];
-			a[0] = Math.min(a[0], (int) Math.floor(r[0]));
-			a[1] = Math.min(a[1], (int) Math.floor(r[1]));
-			a[2] = Math.max(a[2], (int) Math.ceil(r[2]));
-			a[3] = Math.max(a[3], (int) Math.ceil(r[3]));
-		}
-		for (int l = 0; l < layers.length; l++) {
-			int[] a = box[l];
-			int x0 = Math.max(0, a[0] - 1), y0 = Math.max(0, a[1] - 1), x1 = Math.min(w, a[2] + 1), y1 = Math.min(h, a[3] + 1);
-			layers[l].area = x1 <= x0 || y1 <= y0 ? null : new int[]{x0, y0, x1, y1};
-		}
-	}
-
-	/** The pixel rectangle around the box at {@code bounds[b]}; false if part of it is behind the camera. */
-	private boolean project(int b, int w, int h, float[] out) {
-		float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE, maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
-		for (int k = 0; k < 8; k++) {
-			double x = bounds[b + ((k & 1) == 0 ? 0 : 3)], y = bounds[b + ((k & 2) == 0 ? 1 : 4)], z = bounds[b + ((k & 4) == 0 ? 2 : 5)];
-			viewProjection.transform(corner.set((float) (x - camX), (float) (y - camY), (float) (z - camZ), 1));
-			if (corner.w <= 1e-4f) return false;
-			float px = (corner.x / corner.w * 0.5f + 0.5f) * w, py = (corner.y / corner.w * 0.5f + 0.5f) * h;
-			minX = Math.min(minX, px);
-			minY = Math.min(minY, py);
-			maxX = Math.max(maxX, px);
-			maxY = Math.max(maxY, py);
-		}
-		out[0] = minX;
-		out[1] = minY;
-		out[2] = maxX;
-		out[3] = maxY;
-		return true;
 	}
 
 	/**
@@ -824,11 +495,11 @@ public final class HighlightRenderer {
 		if (!drawingHand) return 0;
 		float tickDelta = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
 		HighlightEvent.Hand e = Myriad.events().post(handEvent.reset(part, hand, side, item, tickDelta));
-		if (e.style() == null || count >= MAX_HIGHLIGHTS) return 0;
+		if (e.style() == null || highlights.count >= MAX_HIGHLIGHTS) return 0;
 		RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
 		int w = main.width, h = main.height;
 		if (handBase < 0) {
-			handBase = count;
+			handBase = highlights.count;
 			handArea[0] = handArea[1] = Float.MAX_VALUE;
 			handArea[2] = handArea[3] = -Float.MAX_VALUE;
 			TextureTarget mask = masks[HAND];
@@ -836,7 +507,7 @@ public final class HighlightRenderer {
 			else if (mask.width != w || mask.height != h) mask.resize(w, h);
 			RenderSystem.getDevice().createCommandEncoder().clearColorAndDepthTextures(mask.getColorTexture(), new Vector4f(0), mask.getDepthTexture(), 0.0);
 		}
-		AABB none = new AABB(camX, camY, camZ, camX, camY, camZ);
+		AABB none = new AABB(highlights.camX, highlights.camY, highlights.camZ, highlights.camX, highlights.camY, highlights.camZ);
 		int id = add(HAND, e.style(), e.color(), none, none);
 		if (id < 0) return 0;
 		// Where it lands on screen: the hand's projection, the model-view it's drawn with, then its pose.
@@ -859,12 +530,12 @@ public final class HighlightRenderer {
 			r[2] = w;
 			r[3] = h;
 		}
-		System.arraycopy(r, 0, data, id * FLOATS + 8, 4);
+		System.arraycopy(r, 0, highlights.data, id * HighlightTable.FLOATS + 8, 4);
 		handArea[0] = Math.min(handArea[0], r[0]);
 		handArea[1] = Math.min(handArea[1], r[1]);
 		handArea[2] = Math.max(handArea[2], r[2]);
 		handArea[3] = Math.max(handArea[3], r[3]);
-		return encode(id - handBase, groupOf[id]);
+		return encode(id - handBase, highlights.groupOf[id]);
 	}
 
 	/** The hand's mask: the outline target while the hand is drawn with highlights ({@link #handHighlighted}). */
@@ -892,56 +563,15 @@ public final class HighlightRenderer {
 		Layer layer = layers[HAND];
 		layer.area = new int[]{x0, y0, x1, y1};
 		layer.anyDepthTested = false;
-		float[] widths = fillData(handBase, count);
+		float[] widths = highlights.fillData(handBase, highlights.count);
 		int radius = Math.min(MAX_RADIUS, (int) Math.ceil(widths[0]) + 1);
 		int boundary = Math.min(radius, (int) Math.ceil(widths[1]) + 1);
-		handBuffer = ring(handBuffer, "Myriad hand highlights", count - handBase);
-		GpuBuffer gpuData = write(handBuffer, radius, boundary, handBase, count);
+		handBuffer = HighlightPasses.ring(handBuffer, "Myriad hand highlights", highlights.count - handBase);
+		GpuBuffer gpuData = HighlightPasses.write(handBuffer, radius, boundary, highlights.data, handBase, highlights.count);
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
-		prepare(encoder, layer, masks[HAND], main, gpuData, radius, w, h);
+		HighlightPasses.prepare(encoder, layer, masks[HAND], main, gpuData, radius, w, h);
 		if (!layer.prepared) return;
 		layer.prepared = false;
-		composite(encoder, layer, main, gpuData);
-	}
-
-	/** {@code area} grown by {@code dx}, {@code dy} and clamped to the screen, as a scissor {x, y, width, height}. */
-	private static int[] grow(int[] area, int dx, int dy, int w, int h) {
-		int x0 = Math.max(0, area[0] - dx), y0 = Math.max(0, area[1] - dy);
-		int x1 = Math.min(w, area[2] + dx), y1 = Math.min(h, area[3] + dy);
-		return new int[]{x0, y0, x1 - x0, y1 - y0};
-	}
-
-	/** {@code ring} moved on to this frame's slot, or a new one if it can't hold {@code highlights}. */
-	private static MappableRingBuffer ring(MappableRingBuffer ring, String name, int highlights) {
-		int bytes = (HEADER + highlights * TEXELS) * 16;
-		if (ring != null && ring.size() >= bytes) {
-			ring.rotate();
-			return ring;
-		}
-		if (ring != null) GpuGarbage.close(ring);
-		int size = Math.max(4096, Integer.highestOneBit(bytes - 1) << 1);
-		return new MappableRingBuffer(() -> name, GpuBuffer.USAGE_MAP_WRITE | GpuBuffer.USAGE_UNIFORM_TEXEL_BUFFER, size);
-	}
-
-	/** Writes the header and highlights {@code from} to {@code to} (as ids from 0) to {@code ring}'s current slot. */
-	private GpuBuffer write(MappableRingBuffer ring, int radius, int boundary, int from, int to) {
-		GpuBuffer gpu = ring.currentBuffer();
-		try (GpuBufferSlice.MappedView view = gpu.map(false, true)) {
-			FloatBuffer out = view.data().order(ByteOrder.nativeOrder()).asFloatBuffer();
-			out.put(radius).put((float) Minecraft.getInstance().getWindow().getGuiScale()).put(to - from).put(boundary);
-			out.put((float) ((System.nanoTime() - START) / 1e9 % 3600)).put(0).put(0).put(0);
-			out.put(data, from * FLOATS, (to - from) * FLOATS);
-		}
-		return gpu;
-	}
-
-	private static void resize(Layer layer, int w, int h) {
-		if (layer.spread == null) {
-			layer.resolved = new TextureTarget("Myriad highlights resolved (" + layer.name + ")", w, h, false, GpuFormat.RGBA8_UNORM);
-			layer.spread = new TextureTarget("Myriad highlights spread (" + layer.name + ")", w, h, false, GpuFormat.RGBA16_UNORM);
-		} else if (layer.spread.width != w || layer.spread.height != h) {
-			layer.resolved.resize(w, h);
-			layer.spread.resize(w, h);
-		}
+		HighlightPasses.composite(encoder, layer, main, gpuData);
 	}
 }

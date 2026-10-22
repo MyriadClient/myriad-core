@@ -43,9 +43,10 @@ and may change in any release. Addons declare the oldest core they support in `f
   checks: placement, rotations, inventory clicks and swaps, breaking, attacks, containers, No Durability, jobs and the
   deprecated `Tasks`. The Grim suite in Myriad Essentials retries its known flakes once, alone, at the end.
 - **Core's largest classes split along what they already did** (internal, no API change): the inventory, breaking,
-  placement and No Durability services, the commands, the desktop, and building. `./gradlew check` warns about impl
-  files over 600 lines and methods over 60. Behaviour is unchanged: core's tests and the Grim suite (40/40) pass on
-  the split code, and the desktop was checked in a dev client.
+  placement and No Durability services, the commands, the desktop, building, and the highlight renderer. `./gradlew
+  check` warns about impl files over 600 lines and methods over 60; no file is over now without a comment saying why.
+  Behaviour is unchanged: core's tests and the Grim suite (40/40) pass on the split code, and the desktop and every
+  kind of highlight (entities, shapes, retained meshes, the hand) were checked in a dev client.
 
 - **`Modules.guard` for code mixins run.** An event handler that keeps throwing is turned off by the bus, but a mixin
   calls straight into its module from the middle of vanilla's code, where an exception crashed the game. Now

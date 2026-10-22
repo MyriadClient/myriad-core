@@ -49,7 +49,7 @@ public final class CoreRendering implements Rendering {
 
 	@Override
 	public void registerFill(int shaderId, Identifier shader) {
-		HighlightRenderer.registerFill(shaderId, shader);
+		HighlightPasses.registerFill(shaderId, shader);
 	}
 
 	@Override
