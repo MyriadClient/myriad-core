@@ -18,7 +18,10 @@ import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
+import com.mojang.serialization.Lifecycle;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.RegistrationInfo;
 import net.minecraft.core.Registry;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -37,6 +40,8 @@ import net.minecraft.server.packs.repository.ServerPacksSource;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
 import net.minecraft.tags.TagLoader;
 import net.minecraft.stats.StatsCounter;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.damagesource.DamageSources;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -45,7 +50,9 @@ import net.minecraft.world.item.ItemStack;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -75,6 +82,8 @@ public final class Harness implements AutoCloseable {
 	private static boolean booted;
 	/** Vanilla's data-driven registries (dimension types, enchantments, ...), as the built-in data defines them. */
 	static HolderLookup.Provider lookup;
+	/** Every registry a client has once it joins: the built-in ones, and vanilla's data-driven ones as a server sends them. */
+	static RegistryAccess.Frozen registries;
 
 	public final Minecraft mc;
 	public final FakeLevel level;
@@ -97,6 +106,7 @@ public final class Harness implements AutoCloseable {
 		ClientPacketListener listener = Fields.allocate(ClientPacketListener.class);
 		Fields.set(listener, "localGameProfile", new GameProfile(UUID.fromString("00000000-0000-0000-0000-000000000001"), "Tester"));
 		Fields.set(listener, "playerInfoMap", new java.util.HashMap<>());
+		Fields.set(listener, "registryAccess", registries);
 		Fields.set(listener, "enabledFeatures", net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS);
 		Connection connection = new Connection(PacketFlow.CLIENTBOUND);
 		Fields.set(connection, "channel", channel);
@@ -105,6 +115,8 @@ public final class Harness implements AutoCloseable {
 		Fields.set(mc, "options", new Options(mc, new File(".")));
 		Fields.set(mc, "soundManager", Fields.allocate(net.minecraft.client.sounds.SoundManager.class));
 		Fields.set(level, "connection", listener);
+		Fields.set(level, "registryAccess", registries);
+		Fields.set(level, "damageSources", new DamageSources(registries));
 		Fields.set(level, "minecraft", mc);
 		player = new LocalPlayer(mc, level, listener, new StatsCounter(), null, Input.EMPTY, false, null);
 		level.add(player);
@@ -141,6 +153,10 @@ public final class Harness implements AutoCloseable {
 		}
 		lookup = VanillaRegistries.createLookup();
 		BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(p -> p.apply());
+		Map<ResourceKey<? extends Registry<?>>, Registry<?>> all = new HashMap<>();
+		BuiltInRegistries.REGISTRY.forEach(r -> all.put(r.key(), r));
+		lookup.listRegistries().forEach(r -> all.put(r.key(), frozenCopy(r)));
+		registries = new RegistryAccess.ImmutableRegistryAccess(all).freeze();
 		booted = true;
 	}
 
@@ -164,6 +180,14 @@ public final class Harness implements AutoCloseable {
 	public Harness give(int index, ItemStack stack) {
 		player.getInventory().setItem(index, stack);
 		return this;
+	}
+
+	/** A frozen registry holding what {@code lookup} lists (damage types, enchantments, ...). */
+	@SuppressWarnings("unchecked")
+	private static <T> Registry<T> frozenCopy(HolderLookup.RegistryLookup<T> lookup) {
+		MappedRegistry<T> registry = new MappedRegistry<>((ResourceKey<? extends Registry<T>>) (ResourceKey<?>) lookup.key(), Lifecycle.stable());
+		lookup.listElements().forEach(h -> registry.register(h.key(), h.value(), RegistrationInfo.BUILT_IN));
+		return registry.freeze();
 	}
 
 	/** Runs {@code action} at the start of the next tick, after core's own tick-start work, as a module's tick handler would. */

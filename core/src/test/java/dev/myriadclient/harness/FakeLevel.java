@@ -64,8 +64,9 @@ public final class FakeLevel extends ClientLevel {
 		else blocks.put(pos.immutable(), state);
 	}
 
-	/** Adds {@code entity} to the world (the harness adds the player). */
+	/** Adds {@code entity} to the world (the harness adds the player), with a network id as the server would give it. */
 	public void add(Entity entity) {
+		entity.setId(entities.size() + 1);
 		entities.add(entity);
 	}
 
