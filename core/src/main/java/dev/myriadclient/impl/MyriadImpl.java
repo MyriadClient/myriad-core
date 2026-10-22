@@ -220,6 +220,7 @@ public final class MyriadImpl implements MyriadApi {
 		for (Object part : inventory.parts()) events.subscribe(part);
 		events.subscribe(placement);
 		events.subscribe(breaking);
+		for (Object part : breaking.parts()) events.subscribe(part);
 		events.subscribe(building);
 		events.subscribe(blockAcks);
 		events.subscribe(serverStats);
