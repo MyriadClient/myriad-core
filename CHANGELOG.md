@@ -74,6 +74,37 @@ and may change in any release. Addons declare the oldest core they support in `f
   - With `-Dmyriad.dev` (set by the dev clients and core's tests), the services' entry points log a call from another
     thread, with the stack, once per call site (`Threads.assertRender()`). The Grim suite logged none.
 
+- **Profiler hints.** The Profiler window marks an owner with `*` and lists a hint under the table when its numbers
+  point at one of core's tools, and `.profiler` prints the hints too:
+  - a handler reading over 5,000 blocks a second through the level (250 a tick): a `ChunkCache`;
+  - over 2 ms a second in render handlers: a `TickCached`;
+  - a job whose tick ran past its 2 ms budget: its steps stopping when `ctx.budget()` runs out.
+  Running jobs have rows of their own ("Job Owner › job"), and `.profiler` shows the blocks a second each owner reads.
+  Reads are counted on the render thread, inside the handler that made them, only while profiling. The count is a
+  return-value hook on `Level.getBlockState`: a block read measured 24.9–26.5 ns without it and 25.9–26.8 ns with it
+  (three runs each, within the noise).
+- **Hook calls allocate less.** A hooked call worked out who it was for (the caller's id, class, addon, the profile and
+  server) on every call; recent callers' answers are now kept (weakly, so a job as caller isn't held). A call from a
+  module: 48–63 ns and 88 bytes before, 38–43 ns and 40 bytes after (the call handed to the contribution); from any
+  other object: 36–57 ns, 88 bytes before, 23–26 ns, 40 bytes after. Sending a service call to an addon's scoped
+  replacement allocated 80 bytes per call and now none, in about the same time (`HookCallsTest`).
+- `ChunkCache` spreads its work over ticks with `TickBudget`, as jobs do. Its budget and order (nearest chunks first)
+  are unchanged.
+- **`.bench`** (dev runs, `-Dmyriad.dev`): what core's hot paths cost on your machine, each run warm (the second of two
+  passes), as the mean time and bytes per call. The addon template's dev client sets `-Dmyriad.dev` now. 0.9.0's
+  numbers on the development machine, three runs:
+
+  | | time | allocated |
+  |---|---|---|
+  | post to 5 handlers | 21.0–26.8 ns | 0 B |
+  | hook call, not hooked | 2.8 ns | 0 B |
+  | hook call, hooked | 20.8–22.0 ns | 40 B |
+  | a block read through the level | 25.9–26.8 ns | 0 B |
+  | `BlockScan` over a chunk (stone) | 245–247 µs | 16 B |
+  | `Blueprint` positions in reach (18,432 positions) | 1.60–1.61 µs | 16 B |
+  | placement: solve a 5 by 3 wall (15 solves) | 23.9–26.4 µs | 36 KB |
+  | job tick, 50 steps | 453–704 ns | 16 B |
+
 ## 0.8.0
 
 - **Anti-cheat profiles are values, and addons can add their own.** `AntiCheat.Profile` was an enum of two (Vanilla,

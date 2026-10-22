@@ -9,12 +9,14 @@ import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.impl.event.MyriadEventBus;
 import dev.myriadclient.impl.event.Profiler;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 /**
- * Where the time goes: every module, service and listener with the milliseconds it spent in tick, render and other
- * handlers over the last second. Timing is only on while this window is open (or {@code .profiler on}).
+ * Where the time goes: every module, service, listener and running job with the milliseconds it spent in tick, render
+ * and other handlers over the last second, and hints where the numbers point at one of core's tools. Timing is only on
+ * while this window is open (or {@code .profiler on}).
  */
 public final class ProfilerPanel extends WidgetPanel {
 	private static final int ROWS = 25;
@@ -70,11 +72,14 @@ public final class ProfilerPanel extends WidgetPanel {
 		content.add(Spacer.divider());
 		double total = 0;
 		int shown = 0;
+		List<Profiler.Entry> hinted = new ArrayList<>();
 		for (Profiler.Entry e : entries) {
-			total += e.totalMs();
+			if (!e.isJob()) total += e.totalMs();
+			if (e.hint() != null) hinted.add(e);
 			if (shown++ >= ROWS) continue;
 			HBox row = new HBox(4);
-			row.addWeighted(new Label(e.name()).tooltip(e.addon()), 1);
+			String hint = e.hint();
+			row.addWeighted(new Label(hint != null ? e.name() + " *" : e.name()).tooltip(hint != null ? e.addon() + ": " + hint : e.addon()), 1);
 			row.addFixed(new Label(ms(e.tickMs())), 44);
 			row.addFixed(new Label(ms(e.renderMs())), 44);
 			row.addFixed(new Label(ms(e.otherMs())), 44);
@@ -83,6 +88,7 @@ public final class ProfilerPanel extends WidgetPanel {
 		}
 		content.add(Spacer.divider());
 		content.add(new Label(String.format(Locale.ROOT, "%d owners, %.2f ms/s in all", entries.size(), total)).dim());
+		for (Profiler.Entry e : hinted) content.add(new Label("* " + e.name() + ": " + e.hint()));
 	}
 
 	private static String ms(double v) {

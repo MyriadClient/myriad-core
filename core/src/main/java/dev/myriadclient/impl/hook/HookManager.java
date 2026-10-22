@@ -28,7 +28,9 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -53,13 +55,14 @@ public final class HookManager implements Hooks {
 	private static final Logger LOG = LoggerFactory.getLogger("Myriad/Hooks");
 	private static final String FILE = "hooks.json";
 	private static final ContributionImpl[] NONE = new ContributionImpl[0];
+	private static final int KNOWN = 64;
 
 	/** Who a call is for, and where: what a chain is cached by. */
 	private record Key(@Nullable MyriadId id, @Nullable Class<?> type, @Nullable String addon, AntiCheat.Profile profile, @Nullable String host) {
 	}
 
-	/** A service asked for by a caller: what a route is cached by. */
-	private record Route(Service<?> service, Key key) {
+	/** A caller and its key, kept so a call needn't work the key out again (the caller only weakly: it may be a job). */
+	private record Known(WeakReference<Object> caller, Key key) {
 	}
 
 	/** One hook's usable contributions, and the chains made from them so far. */
@@ -94,8 +97,10 @@ public final class HookManager implements Hooks {
 	private final Map<Service<?>, ContributionImpl> global = new ConcurrentHashMap<>();
 	/** Per service: the running replacements that serve only some callers, most specific first. */
 	private final Map<Service<?>, ContributionImpl[]> scoped = new ConcurrentHashMap<>();
-	/** Which scoped replacement serves a caller here (empty: none does), worked out once per caller. */
-	private final Map<Route, Optional<ContributionImpl>> routes = new ConcurrentHashMap<>();
+	/** Per service: which scoped replacement serves a caller here (empty: none does), worked out once per caller. */
+	private final Map<Service<?>, Map<Key, Optional<ContributionImpl>>> routes = new ConcurrentHashMap<>();
+	/** Recent callers' keys, by identity hash: a key worked out per call was most of what a hooked call allocated. */
+	private final Known[] known = new Known[KNOWN];
 	private final Map<Service<?>, Object> routers = Map.of(
 		Service.ROTATIONS, new ServiceRouters.RotationsRouter(this),
 		Service.INVENTORY, new ServiceRouters.InventoryRouter(this),
@@ -246,12 +251,24 @@ public final class HookManager implements Hooks {
 	public <I, O> O call(Hook<I, O> hook, @Nullable Object caller, I input, Function<? super I, ? extends O> fallback) {
 		Chains chains = hooked.get(hook);
 		if (chains == null) return fallback.apply(input);
-		ContributionImpl[] chain = chains.cache.computeIfAbsent(key(caller), chains::resolve);
+		Key k = key(caller);
+		ContributionImpl[] chain = chains.cache.get(k);
+		if (chain == null) chain = chains.cache.computeIfAbsent(k, chains::resolve);
 		if (chain.length == 0) return fallback.apply(input);
 		return new Call<>(chain, 0, caller, input, (Function<I, O>) fallback).run();
 	}
 
+	/** Who {@code caller} is and where this call is: the recent callers' keys first, while the profile and server hold. */
 	private Key key(@Nullable Object caller) {
+		int slot = caller == null ? 0 : System.identityHashCode(caller) & (KNOWN - 1);
+		Known k = known[slot];
+		if (k != null && k.caller.get() == caller && k.key.profile == profile && Objects.equals(k.key.host, host)) return k.key;
+		Key key = keyOf(caller);
+		known[slot] = new Known(new WeakReference<>(caller), key);
+		return key;
+	}
+
+	private Key keyOf(@Nullable Object caller) {
 		MyriadId id = caller instanceof Identified i ? i.id() : caller instanceof MyriadId m ? m : null;
 		Class<?> type = caller == null || caller instanceof MyriadId ? null : caller.getClass();
 		String addon = id != null ? id.namespace() : type != null ? addonOf(type) : null;
@@ -261,6 +278,7 @@ public final class HookManager implements Hooks {
 	public void setOwnerResolver(Function<Class<?>, String> resolver) {
 		ownerResolver = resolver;
 		addonOfClass.clear();
+		Arrays.fill(known, null);
 	}
 
 	private @Nullable String addonOf(Class<?> type) {
@@ -335,7 +353,8 @@ public final class HookManager implements Hooks {
 
 		@Override
 		public O proceed(I input) {
-			return new Call<>(chain, index + 1, owner, input, fallback).run();
+			// Past the last contribution there's only the default: no call to make for it.
+			return index + 1 >= chain.length ? fallback.apply(input) : new Call<>(chain, index + 1, owner, input, fallback).run();
 		}
 	}
 
@@ -464,10 +483,20 @@ public final class HookManager implements Hooks {
 		ContributionImpl[] here = scoped.get(service);
 		if (here == null || here.length == 0 || caller == null) return null;
 		Key k = key(caller);
-		ContributionImpl c = routes.computeIfAbsent(new Route(service, k), r -> {
-			for (ContributionImpl x : here) if (x.match().test(k.id, k.type, k.addon, k.profile, k.host)) return Optional.of(x);
-			return Optional.empty();
-		}).orElse(null);
+		Map<Key, Optional<ContributionImpl>> byKey = routes.get(service);
+		if (byKey == null) byKey = routes.computeIfAbsent(service, s -> new ConcurrentHashMap<>());
+		Optional<ContributionImpl> found = byKey.get(k);
+		if (found == null) {
+			found = Optional.empty();
+			for (ContributionImpl x : here) {
+				if (x.match().test(k.id, k.type, k.addon, k.profile, k.host)) {
+					found = Optional.of(x);
+					break;
+				}
+			}
+			byKey.put(k, found);
+		}
+		ContributionImpl c = found.orElse(null);
 		return c == null || c.instance == null ? null : c;
 	}
 

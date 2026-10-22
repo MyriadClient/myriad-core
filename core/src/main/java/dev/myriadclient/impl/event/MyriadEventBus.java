@@ -98,9 +98,10 @@ public final class MyriadEventBus implements EventBus {
 		}
 	}
 
-	/** Starts or stops timing every handler. */
+	/** Starts or stops timing every handler (on the render thread, whose block reads are counted while it's on). */
 	public void setProfiler(Profiler profiler) {
 		this.profiler = profiler;
+		Profiler.countBlockReadsOn(profiler != null ? Thread.currentThread() : null);
 	}
 
 	public Profiler profiler() {
@@ -191,13 +192,17 @@ public final class MyriadEventBus implements EventBus {
 	}
 
 	private void invoke(Listener l, Object event, Profiler profiler) {
-		long start = profiler != null ? System.nanoTime() : 0;
+		long start = 0, reads = 0;
+		if (profiler != null) {
+			start = System.nanoTime();
+			reads = Profiler.blockReads();
+		}
 		try {
 			l.invoker.accept(event);
 		} catch (Throwable t) {
 			onFailure(l, event, t);
 		}
-		if (profiler != null) profiler.record(l.ownerObject, l.owner, l.type, System.nanoTime() - start);
+		if (profiler != null) profiler.record(l.ownerObject, l.owner, l.type, System.nanoTime() - start, Profiler.blockReads() - reads);
 	}
 
 	@Override

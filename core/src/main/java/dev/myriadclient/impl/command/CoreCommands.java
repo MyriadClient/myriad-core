@@ -20,6 +20,7 @@ import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.api.util.Texts;
 import dev.myriadclient.impl.Diagnostics;
 import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.dev.Bench;
 import dev.myriadclient.impl.event.MyriadEventBus;
 import dev.myriadclient.impl.event.Profiler;
 import dev.myriadclient.impl.hook.HookManager;
@@ -30,6 +31,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -73,6 +76,7 @@ public final class CoreCommands {
 			ModuleCommands.modules(), ModuleCommands.binds(), say(), ConfigCommands.reload(), disconnect(),
 			fakePlayer(), menu()
 		)) ctx.registerCommand(c);
+		if (Boolean.getBoolean("myriad.dev")) ctx.registerCommand(bench());
 	}
 
 	private static Command addons() {
@@ -238,9 +242,11 @@ public final class CoreCommands {
 					int n = 0;
 					for (Profiler.Entry e : p.snapshot()) {
 						if (n++ >= 10) break;
-						info(String.format(Locale.ROOT, "%s: %.2f ms/s (tick %.2f, render %.2f)", e.name(), e.totalMs(), e.tickMs(), e.renderMs()));
+						String blocks = e.blockReads() > 0 ? String.format(Locale.ROOT, ", %,d blocks/s", e.blockReads()) : "";
+						info(String.format(Locale.ROOT, "%s: %.2f ms/s (tick %.2f, render %.2f%s)", e.name(), e.totalMs(), e.tickMs(), e.renderMs(), blocks));
 					}
 					if (n == 0) info("Nothing measured yet");
+					for (Profiler.Entry e : p.snapshot()) if (e.hint() != null) info(e.name() + ": " + e.hint());
 					return SINGLE_SUCCESS;
 				});
 				b.then(literal("on").executes(c -> {
@@ -253,6 +259,27 @@ public final class CoreCommands {
 					info("Profiling off");
 					return SINGLE_SUCCESS;
 				}));
+			}
+		};
+	}
+
+	/** Dev runs only: what core's hot paths cost here, for the CHANGELOG's numbers. */
+	private static Command bench() {
+		return new Command("bench", "Measures core's hot paths on this machine (the game stands still for a few seconds).") {
+			@Override
+			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
+				b.executes(c -> {
+					if (Minecraft.getInstance().player == null) {
+						error("Join a world first");
+						return SINGLE_SUCCESS;
+					}
+					Logger log = LoggerFactory.getLogger("Myriad/Bench");
+					Bench.run(r -> {
+						info(r.toString());
+						log.info("{}", r);
+					});
+					return SINGLE_SUCCESS;
+				});
 			}
 		};
 	}

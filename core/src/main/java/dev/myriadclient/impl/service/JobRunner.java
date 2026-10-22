@@ -11,6 +11,9 @@ import dev.myriadclient.api.job.JobEngine;
 import dev.myriadclient.api.job.JobEvent;
 import dev.myriadclient.api.job.Why;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.registry.Identified;
+import dev.myriadclient.impl.event.MyriadEventBus;
+import dev.myriadclient.impl.event.Profiler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,5 +74,13 @@ public final class JobRunner implements JobEngine.Host {
 	@Override
 	public void log(Job<?> job, String message) {
 		LOG.info("{}: {}", job, message);
+	}
+
+	@Override
+	public void ticked(Job<?> root, long nanos, long budgetNanos) {
+		Profiler profiler = ((MyriadEventBus) Myriad.events()).profiler();
+		if (profiler == null) return;
+		String addon = root.owner() instanceof Identified i ? i.id().namespace() : "myriad";
+		profiler.recordJob(root, addon, nanos, budgetNanos);
 	}
 }

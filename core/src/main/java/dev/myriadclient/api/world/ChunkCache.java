@@ -13,6 +13,7 @@ import dev.myriadclient.api.render.MeshBuilder;
 import dev.myriadclient.api.render.WorldMesh;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.util.Async;
+import dev.myriadclient.api.util.TickBudget;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrays;
@@ -93,7 +94,7 @@ public final class ChunkCache<T> {
 	private final IntSupplier range;
 	private final boolean neighbours;
 	private final boolean async;
-	private final long budgetNanos;
+	private final TickBudget budget;
 
 	private final Long2ObjectOpenHashMap<Entry<T>> entries = new Long2ObjectOpenHashMap<>();
 	/** Chunks with work pending (compute or remesh). */
@@ -127,7 +128,7 @@ public final class ChunkCache<T> {
 		this.range = b.range;
 		this.neighbours = b.neighbours;
 		this.async = b.async;
-		this.budgetNanos = (long) (b.budgetMillis * 1_000_000);
+		this.budget = TickBudget.of((long) (b.budgetMillis * 1_000_000));
 	}
 
 	/** A cache that runs while {@code owner} is enabled. */
@@ -372,7 +373,7 @@ public final class ChunkCache<T> {
 	private void process() {
 		applyComputed();
 		if (queue.isEmpty()) return;
-		long deadline = System.nanoTime() + budgetNanos;
+		budget.reset();
 		long[] keys = sortedQueue;
 		if (keys == null) {
 			keys = queue.toLongArray();
@@ -386,7 +387,7 @@ public final class ChunkCache<T> {
 			if (!queue.remove(key)) continue;
 			Entry<T> e = entries.get(key);
 			if (e != null) work(key, e);
-			if (System.nanoTime() > deadline) break;
+			if (!budget.hasTime()) break;
 		}
 		// What's left stays sorted; what was done is skipped next time by the queue check.
 		if (queue.isEmpty()) sortedQueue = null;

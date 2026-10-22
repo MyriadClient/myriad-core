@@ -46,6 +46,10 @@ public final class JobEngine implements Jobs {
 		void failed(Job<?> root, Why why);
 
 		void log(Job<?> job, String message);
+
+		/** A root job's tick took {@code nanos}, against {@code budgetNanos} (for the profiler). */
+		default void ticked(Job<?> root, long nanos, long budgetNanos) {
+		}
 	}
 
 	private final Host host;
@@ -128,6 +132,7 @@ public final class JobEngine implements Jobs {
 				long t0 = System.nanoTime();
 				s.tick();
 				s.node.lastNanos = System.nanoTime() - t0;
+				host.ticked(s.node, s.node.lastNanos, BUDGET_NANOS);
 				if (s.node.state() == Job.State.FAILED) unhandled(s.node);
 			}
 		} finally {
