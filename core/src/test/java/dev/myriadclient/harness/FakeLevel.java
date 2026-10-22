@@ -6,6 +6,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.prediction.BlockStatePredictionHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
@@ -123,6 +124,15 @@ public final class FakeLevel extends ClientLevel {
 	/** No sounds or particles for level events (a block breaking). */
 	@Override
 	public void levelEvent(@Nullable Entity source, int type, BlockPos pos, int data) {
+	}
+
+	/** No particles to draw. */
+	@Override
+	public void addParticle(ParticleOptions particle, double x, double y, double z, double dx, double dy, double dz) {
+	}
+
+	@Override
+	public void addParticle(ParticleOptions particle, boolean always, boolean decreased, double x, double y, double z, double dx, double dy, double dz) {
 	}
 
 	/** No crack overlay to draw. */

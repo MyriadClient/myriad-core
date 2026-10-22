@@ -1,8 +1,12 @@
 package dev.myriadclient.harness;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.service.AntiCheat;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
+import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
+import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -82,6 +86,30 @@ class InventoryHarnessTest {
 			h.tick();
 			assertEquals(List.of("SetCarriedItem"), h.kinds(2));
 			assertEquals(List.of(4, 0), slotsSent(h));
+		}
+	}
+
+	@Test
+	void onGrimAClickWhileWalkingWaitsForATickWithTheKeysUp() {
+		try (Harness h = withItems()) {
+			for (int x = -1; x <= 1; x++) for (int z = -1; z <= 30; z++) h.level.set(new BlockPos(x, 0, z), Blocks.STONE.defaultBlockState());
+			Myriad.antiCheat().choose(AntiCheat.Profile.GRIM);
+			h.give(9, new ItemStack(Items.DIAMOND, 3)).keys("forward").ticks(3);
+			boolean[] moved = {false};
+			h.everyTick(() -> {
+				if (!moved[0] && Myriad.inventory().prepareClick()) moved[0] = Myriad.inventory().move(9, 8);
+			});
+			h.ticks(5);
+			assertTrue(moved[0], "the click never went");
+			// The last input the server had before the click: no movement keys.
+			Input last = null;
+			for (Harness.Sent s : h.sent()) {
+				if (s.packet() instanceof ServerboundPlayerInputPacket p) last = p.input();
+				if (s.packet() instanceof ServerboundContainerClickPacket) break;
+			}
+			assertTrue(last != null && !last.forward() && !last.backward() && !last.left() && !last.right() && !last.jump(), "clicked with keys down: " + last);
+			// And walking resumes after.
+			assertTrue(h.sent(ServerboundPlayerInputPacket.class).getLast().input().forward());
 		}
 	}
 }

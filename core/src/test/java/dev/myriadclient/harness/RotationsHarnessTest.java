@@ -2,11 +2,17 @@ package dev.myriadclient.harness;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.service.Rotations;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
+import net.minecraft.world.entity.player.Input;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Server-side rotations as the movement packets carry them. */
 class RotationsHarnessTest {
@@ -45,6 +51,21 @@ class RotationsHarnessTest {
 			assertEquals(120f, look[0]);
 			assertEquals(10f, look[1]);
 			assertEquals(0f, h.player.getYRot(), "the camera turned");
+		}
+	}
+
+	@Test
+	void withMoveFixYouKeepGoingYourWayWithTheKeysReKeyedForTheSentYaw() {
+		try (Harness h = Harness.start()) {
+			for (int x = -40; x <= 40; x++) for (int z = -40; z <= 40; z++) h.level.set(new BlockPos(x, 0, z), Blocks.STONE.defaultBlockState());
+			// Camera south, holding forward (south); the sent yaw faces west, so south is to its left.
+			h.standAt(0.5, 1, 0.5, 0, 0).keys("forward");
+			h.everyTick(() -> Myriad.rotations().request(this, 90, Float.NaN, Rotations.PRIORITY_NORMAL, Rotations.Options.MOVE_FIX, null));
+			h.ticks(10);
+			Vec3 moved = h.player.position().subtract(0.5, 1, 0.5);
+			assertTrue(moved.z > 1 && Math.abs(moved.x) < 0.3, "walked " + moved + ", not south");
+			Input sent = h.sent(ServerboundPlayerInputPacket.class).getLast().input();
+			assertTrue(sent.left() && !sent.forward() && !sent.backward() && !sent.right(), "keys sent: " + sent);
 		}
 	}
 }
