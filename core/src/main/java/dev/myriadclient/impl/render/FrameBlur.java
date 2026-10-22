@@ -91,8 +91,11 @@ public final class FrameBlur {
 		height = fbH;
 		for (int i = 0; i <= MAX_LEVELS; i++) {
 			int w = Math.max(1, fbW >> (i + 1)), h = Math.max(1, fbH >> (i + 1));
-			if (levels[i] == null) levels[i] = new TextureTarget("Myriad blur " + i, w, h, false, GpuFormat.RGBA8_UNORM);
-			else levels[i].resize(w, h);
+			// New targets rather than resizing these: this frame's UI may already have recorded draws sampling the old
+			// view (the window was resized between recording and drawing), so it's freed a few frames late.
+			TextureTarget old = levels[i];
+			levels[i] = new TextureTarget("Myriad blur " + i, w, h, false, GpuFormat.RGBA8_UNORM);
+			if (old != null) GpuGarbage.close(old::destroyBuffers);
 		}
 		for (int i = 0; i < info.length; i++) {
 			if (info[i] == null) {
