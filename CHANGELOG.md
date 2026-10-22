@@ -76,6 +76,23 @@ and may change in any release. Addons declare the oldest core they support in `f
     repeats (they run at a tick's start, tasks at its end) and a step replaces a task sequence. Core's macros run as
     jobs; Automation's Kit Builder gathers, fills and delivers as one (`.invtest kit` 2/2 kits in 347-459 ticks,
     as before).
+- **Shulker boxes and ender chests from the inventory.** `Containers.openItem(owner, index, ticks, options)` puts the
+  box down beside you (sneaking, so a chest underneath isn't opened instead; turned first where the server checks
+  looks), opens it, and completes with an `ItemSession`: its `view()`, `where()`, and `finish()`, which closes it,
+  breaks it (with the Silk Touch pickaxe in your hotbar for an ender chest, the slot you had selected coming back
+  after), picks it up (stepping towards it if it bounced away) and puts it back in the slot it came from. Getting it
+  out is a job of the owner's; putting it back is Myriad's own, so a box is never left in the world because a module
+  turned off or its work failed, and one put down but not opened is picked back up too. Failures say why: `NO_ITEM`
+  (no box, or no Silk Touch pickaxe), `NO_ROOM` (nowhere beside you), `SERVER_REFUSED`, `TIMEOUT`.
+  `Steps.inItem(index, view -> step)` does the whole round trip as one step. Essentials' Inventory Tweaks opens boxes
+  with it (its own copy went: 161 lines to 55), and Automation's Shulker Load, Shulker Unload and Kit Builder too, its
+  `ShulkerSession` deleted.
+- **Fixed:** a crash ("Texture view Sampler1 has been closed") when the game window was resized while a Myriad window
+  with a blurred backdrop was showing: the blur's textures were resized in place between the UI recording its draws
+  and drawing them. They're replaced and the old ones freed a few frames later. (Seen as a dev client crashing when a
+  tiling window manager made room for another window.)
+- Every root job that fails or is cancelled says why in the log ("Kit Builder › Kit 1 ended: no room: the output is
+  full"): its notice is a toast, gone a moment later.
 
 ## 0.7.0
 

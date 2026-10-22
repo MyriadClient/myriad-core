@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -38,6 +39,7 @@ public final class Steps {
 	/** How long a transfer that moved nothing waits before trying again (the player may make room). */
 	private static final int ROOM_RETRY_TICKS = 20;
 	private static final int CLOSE_TICKS = 100;
+	private static final int OPEN_BOX_TICKS = 40, PUT_BACK_TICKS = 20 * 30;
 
 	private Steps() {
 	}
@@ -289,6 +291,45 @@ public final class Steps {
 				}
 			}
 		});
+	}
+
+	/**
+	 * Works in the shulker box (or ender chest) at inventory index {@code index}: put down beside you, opened, handed to
+	 * {@code work}, then closed, broken, picked up and put back in its slot, however {@code work} ends (cancelled
+	 * too: putting it back is Myriad's own job, so it finishes anyway). Produces the work's result once the box is back.
+	 * Failed: {@code NO_ITEM} (no box there, or no Silk Touch pickaxe for an ender chest), {@code NO_ROOM} (nowhere to
+	 * put it down), {@code SERVER_REFUSED}, {@code TIMEOUT}; and whatever {@code work} fails with.
+	 *
+	 * <pre>{@code
+	 * Steps.inItem(index, view -> Steps.untilClosed(view, 20 * 60 * 5))   // let the player browse it
+	 * }</pre>
+	 */
+	public static <T> Step<T> inItem(int index, Function<Containers.View, ? extends Step<T>> work) {
+		Step<Containers.ItemSession> out = Step.of("Getting it out", () -> new Step.Run<>() {
+			private @Nullable CompletableFuture<Containers.ItemSession> opening;
+
+			@Override
+			public void start(JobContext ctx) {
+				opening = Myriad.containers().openItem(ctx.job(), index, OPEN_BOX_TICKS, Placement.Options.forServer());
+			}
+
+			@Override
+			public Progress<Containers.ItemSession> tick(JobContext ctx) {
+				if (!opening.isDone()) return Progress.running();
+				try {
+					return Progress.done(opening.join());
+				} catch (RuntimeException e) {
+					return Progress.failed(Why.of(e));
+				}
+			}
+		});
+		return out.then(session -> {
+			Step<T> inside = work.apply(session.view());
+			return inside.finallyDo(session::finish)
+				.then(result -> Step.await("Putting it back", session::finish, PUT_BACK_TICKS).then(Step.supply("Back", () -> result)))
+				// The work failed: the box still goes back first, then the failure stands.
+				.recover(why -> Step.await("Putting it back", session::finish, PUT_BACK_TICKS).then(Step.<T>fail(why)));
+		}).named("Open box");
 	}
 
 	// ---- building -----------------------------------------------------------------------------------------------

@@ -68,6 +68,41 @@ public interface Containers {
 	}
 
 	/**
+	 * Opens the shulker box or ender chest at inventory index {@code inventoryIndex} (0-35) where you stand: places it
+	 * beside you on the floor (sneaking, so a chest underneath isn't opened instead), opens it, and completes with the
+	 * session once its contents have arrived. Where the server checks looks ({@code options}, usually
+	 * {@code Placement.Options.forServer()}) the placement and the opening click turn first. {@link ItemSession#finish()}
+	 * puts it back. An ender chest needs a Silk Touch pickaxe in the hotbar, or breaking it would only drop obsidian.
+	 * <p>
+	 * It runs as a job of {@code owner}'s (a module, or a job: then it ends with that job), so the Jobs window shows it.
+	 * Fails with a {@code JobException} whose reason says why: {@code NO_ITEM} (not a box there, or no Silk Touch
+	 * pickaxe), {@code NO_ROOM} (nowhere beside you to put it), {@code SERVER_REFUSED}, {@code TIMEOUT}. Once it's
+	 * placed, a failure or the owner turning off still breaks it and picks it back up. For work inside a box from a
+	 * job, {@code Steps.inItem} does the whole round trip.
+	 */
+	CompletableFuture<ItemSession> openItem(Object owner, int inventoryIndex, int ticks, Placement.Options options);
+
+	/**
+	 * A shulker box or ender chest from your inventory, placed and open ({@link #openItem}). Put it back with
+	 * {@link #finish()} when you're done, whatever happened.
+	 */
+	@ApiStatus.NonExtendable
+	interface ItemSession {
+		/** The open box. */
+		View view();
+
+		/** Where it stands. */
+		BlockPos where();
+
+		/**
+		 * Closes it, breaks it (with the Silk Touch pickaxe for an ender chest), picks it up and puts it back in the
+		 * slot it came from; completes once it's back, or fails saying where it was left. Runs as Myriad's own job, so
+		 * it finishes even if your module turns off meanwhile. Asking again returns the same future.
+		 */
+		CompletableFuture<Void> finish();
+	}
+
+	/**
 	 * Closes the open container (and its screen), if any, at a moment the server takes it: Grim flags a close made while
 	 * you move just as it refuses a click then (MultiActionsD), so where clicks have to wait for a still moment
 	 * ({@link Inventory#prepareClick()}), so does the close, first thing in a coming tick. {@link View#isOpen()} says

@@ -157,6 +157,11 @@ public final class ContainerTracker implements Containers {
 	}
 
 	@Override
+	public CompletableFuture<ItemSession> openItem(Object owner, int inventoryIndex, int ticks, Placement.Options options) {
+		return ItemBoxes.open(owner, inventoryIndex, ticks, options);
+	}
+
+	@Override
 	public CompletableFuture<View> open(@Nullable Object owner, BlockPos pos, int timeoutTicks, @Nullable Placement.Options options) {
 		if (pending != null) fail(new IllegalStateException("Replaced by another open()"));
 		CompletableFuture<View> f = new CompletableFuture<>();

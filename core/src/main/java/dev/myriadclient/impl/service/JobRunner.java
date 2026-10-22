@@ -8,6 +8,7 @@ import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.job.Job;
 import dev.myriadclient.api.job.JobEngine;
+import dev.myriadclient.api.job.JobEvent;
 import dev.myriadclient.api.job.Why;
 import dev.myriadclient.api.module.Module;
 import org.slf4j.Logger;
@@ -56,6 +57,8 @@ public final class JobRunner implements JobEngine.Host {
 
 	@Override
 	public void post(Object event) {
+		// Every root that fails or is cancelled says why in the log: notices are toasts, gone a moment later.
+		if (event instanceof JobEvent.Finished f && f.isRoot() && f.job().state() != Job.State.DONE) LOG.info("{} ended: {}", f.job(), f.job().why());
 		if (Myriad.events().hasListeners(event.getClass())) Myriad.events().post(event);
 	}
 
