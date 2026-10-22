@@ -94,6 +94,12 @@ and may change in any release. Addons declare the oldest core they support in `f
 - **`Build.owner()`**: who started a build. A build from `Steps.build`/`Steps.keepUp` belongs to the step's job, so
   the module that started the job finds it in `Myriad.building().running()` (to draw its plan).
 
+- **`.packets log on [all | words]`** writes every packet both ways, with its fields, to
+  `.minecraft/myriad/packets/<time>.log` until `.packets log off`: sent ones as they leave (a cancelled one isn't
+  sent, so isn't logged), received ones as they arrive, before any module sees them. Chunk, entity-movement, sound and
+  similar received packets are left out unless you add `all`; words keep only packets whose names contain them.
+  Nothing listens while it's off. The developer docs' Testing page has the recipe for checking an addon against a local
+  Grim server, as Essentials does; the addon template's dev client takes `-PquickPlayServer` and `-Pusername` for it.
 - **Profiler hints.** The Profiler window marks an owner with `*` and lists a hint under the table when its numbers
   point at one of core's tools, and `.profiler` prints the hints too:
   - a handler reading over 5,000 blocks a second through the level (250 a tick): a `ChunkCache`;

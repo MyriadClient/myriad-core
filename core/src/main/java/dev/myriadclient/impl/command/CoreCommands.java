@@ -21,6 +21,7 @@ import dev.myriadclient.api.util.Texts;
 import dev.myriadclient.impl.Diagnostics;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.dev.Bench;
+import dev.myriadclient.impl.dev.PacketLog;
 import dev.myriadclient.impl.event.MyriadEventBus;
 import dev.myriadclient.impl.event.Profiler;
 import dev.myriadclient.impl.hook.HookManager;
@@ -73,7 +74,7 @@ public final class CoreCommands {
 			ConfigCommands.profile(), ConfigCommands.friend(), addons(), update(), diagnostics(), help(),
 			ModuleCommands.panic(), baritone(), ConfigCommands.prefix(), antiCheat(), profiler(),
 			ConfigCommands.control(), hooks(), ConfigCommands.macro(), ConfigCommands.cape(), ConfigCommands.theme(),
-			JobCommands.jobs(), JobCommands.job(),
+			JobCommands.jobs(), JobCommands.job(), packets(),
 			ModuleCommands.modules(), ModuleCommands.binds(), say(), ConfigCommands.reload(), disconnect(),
 			fakePlayer(), menu()
 		)) ctx.registerCommand(c);
@@ -260,6 +261,27 @@ public final class CoreCommands {
 					info("Profiling off");
 					return SINGLE_SUCCESS;
 				}));
+			}
+		};
+	}
+
+	private static Command packets() {
+		return new Command("packets", "Logs every packet both ways to a file: .packets log on [all | words to keep], .packets log off.") {
+			@Override
+			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
+				b.then(literal("log").executes(c -> {
+					info(PacketLog.status());
+					return SINGLE_SUCCESS;
+				}).then(literal("on").executes(c -> {
+					info(PacketLog.start(List.of()));
+					return SINGLE_SUCCESS;
+				}).then(argument("filter", StringArgumentType.greedyString()).executes(c -> {
+					info(PacketLog.start(List.of(StringArgumentType.getString(c, "filter").trim().split("\\s+"))));
+					return SINGLE_SUCCESS;
+				}))).then(literal("off").executes(c -> {
+					info(PacketLog.stop());
+					return SINGLE_SUCCESS;
+				})));
 			}
 		};
 	}
