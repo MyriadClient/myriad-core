@@ -15,6 +15,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.KeyMapping;
+import net.minecraft.client.player.KeyboardInput;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
@@ -48,6 +50,8 @@ import net.minecraft.world.damagesource.DamageSources;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.MenuType;
@@ -63,7 +67,7 @@ import java.util.function.LongSupplier;
 
 /**
  * A Minecraft client just real enough to drive core's services the way the game does, with no window and no server:
- * a real {@link LocalPlayer} in a {@link FakeLevel}, core's own services wired as at startup (no addons, config or UI),
+ * a real {@link LocalPlayer} (vanilla's own tick, input and physics) in a {@link FakeLevel}, core's own services wired as at startup (no addons, config or UI),
  * and a connection whose packets go through the real send path (Myriad's mixins included) into a list, each with the
  * tick it went out in. {@link #tick()} runs a game tick in the game's order: tick start, the movement packet, tick end.
  * Incoming packets reach the services as they do in game, as {@code PacketEvent.Receive}; what a packet would change
@@ -107,11 +111,13 @@ public final class Harness implements AutoCloseable {
 		boot();
 		mc = Fields.allocate(Minecraft.class);
 		Fields.set(Minecraft.class, "instance", mc);
-		level = FakeLevel.create(lookup.lookupOrThrow(Registries.DIMENSION_TYPE).getOrThrow(BuiltinDimensionTypes.OVERWORLD));
+		level = FakeLevel.create(lookup.lookupOrThrow(Registries.DIMENSION_TYPE).getOrThrow(BuiltinDimensionTypes.OVERWORLD),
+			registries.lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS));
 		ClientPacketListener listener = Fields.allocate(ClientPacketListener.class);
 		Fields.set(listener, "localGameProfile", new GameProfile(UUID.fromString("00000000-0000-0000-0000-000000000001"), "Tester"));
 		Fields.set(listener, "playerInfoMap", new java.util.HashMap<>());
 		Fields.set(listener, "registryAccess", registries);
+		Fields.set(listener, "clientLoaded", true);
 		Fields.set(listener, "enabledFeatures", net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS);
 		Connection connection = new Connection(PacketFlow.CLIENTBOUND);
 		Fields.set(connection, "channel", channel);
@@ -122,8 +128,12 @@ public final class Harness implements AutoCloseable {
 		Fields.set(level, "connection", listener);
 		Fields.set(level, "registryAccess", registries);
 		Fields.set(level, "damageSources", new DamageSources(registries));
+		Fields.set(level, "palettedContainerFactory", PalettedContainerFactory.create(registries));
 		Fields.set(level, "minecraft", mc);
 		player = new LocalPlayer(mc, level, listener, new StatsCounter(), null, Input.EMPTY, false, null);
+		player.input = new KeyboardInput(mc.options);
+		// No sound engine, so no ambient sounds (underwater, biome, bubble columns).
+		Fields.set(player, "ambientSoundHandlers", new ArrayList<>());
 		level.add(player);
 		Fields.set(mc, "player", player);
 		Fields.set(mc, "level", level);
@@ -135,6 +145,8 @@ public final class Harness implements AutoCloseable {
 		Fields.set(renderer, "mainCamera", camera);
 		Fields.set(mc, "gameRenderer", renderer);
 		Fields.set(mc, "gui", FakeGui.create());
+		// The game's tutorial, at its "done" step (options.txt is absent, so it's at its default).
+		Fields.set(mc, "tutorial", new net.minecraft.client.tutorial.Tutorial(mc, mc.options));
 		Clock.use(() -> millis);
 		Fields.set(RateCounter.class, "millis", (LongSupplier) () -> millis);
 		myriad = MyriadImpl.forHarness();
@@ -166,7 +178,7 @@ public final class Harness implements AutoCloseable {
 		booted = true;
 	}
 
-	/** Stands the player at {@code x y z}, on the ground, looking along {@code yaw}/{@code pitch}. */
+	/** Stands the player at {@code x y z} (on whatever is below), looking along {@code yaw}/{@code pitch}, settled. */
 	public Harness standAt(double x, double y, double z, float yaw, float pitch) {
 		player.setPos(x, y, z);
 		player.setYRot(yaw);
@@ -179,6 +191,29 @@ public final class Harness implements AutoCloseable {
 		Fields.set(player, "zLast", z);
 		Fields.set(player, "yRotLast", yaw);
 		Fields.set(player, "xRotLast", pitch);
+		// Ticks of the player's own until it has settled (gravity comes after the move, so landing shows a tick late, and
+		// vanilla reports it): what they sent isn't the test's.
+		for (int i = 0; i < 5; i++) {
+			int before = channel.outboundMessages().size();
+			player.tick();
+			if (channel.outboundMessages().size() == before) break;
+		}
+		collect();
+		sent.removeIf(s -> s.tick() == tick);
+		return this;
+	}
+
+	/** Holds the movement keys named (forward, back, left, right, jump, sneak, sprint) down, the others up. */
+	public Harness keys(String... names) {
+		var o = mc.options;
+		Map<String, KeyMapping> all = Map.of("forward", o.keyUp, "back", o.keyDown, "left", o.keyLeft, "right", o.keyRight,
+			"jump", o.keyJump, "sneak", o.keyShift, "sprint", o.keySprint);
+		for (KeyMapping k : all.values()) k.setDown(false);
+		for (String n : names) {
+			KeyMapping k = all.get(n);
+			if (k == null) throw new IllegalArgumentException("No key " + n + "; one of " + all.keySet());
+			k.setDown(true);
+		}
 		return this;
 	}
 
@@ -210,8 +245,9 @@ public final class Harness implements AutoCloseable {
 
 	/**
 	 * One game tick, in the game's order: the tick-start event (the services, then anything {@link #onTick} asked for),
-	 * the game mode's tick, the movement packet (none while you stand still and don't turn, as in vanilla), the tick-end
-	 * packet, the tick-end event.
+	 * the game mode's tick, the player's own tick (its input from {@link #keys}, movement and physics on the fake level,
+	 * and the movement packet: none while you stand still and don't turn, as in vanilla), the tick-end packet, the
+	 * tick-end event.
 	 */
 	public Harness tick() {
 		tick++;
@@ -223,7 +259,7 @@ public final class Harness implements AutoCloseable {
 		nextTick.clear();
 		for (Runnable a : actions) a.run();
 		mc.gameMode.tick();
-		Fields.call(player, "sendPosition");
+		player.tick();
 		player.connection.send(ServerboundClientTickEndPacket.INSTANCE);
 		Myriad.events().post(TickEvent.Post.INSTANCE);
 		collect();

@@ -38,7 +38,11 @@ class PlacementHarnessTest {
 		try (Harness h = standingBesideAFloorBlock()) {
 			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
 			Placement.Attempt[] a = new Placement.Attempt[1];
-			h.onTick(() -> a[0] = Myriad.placement().place(this, TARGET, 0, Placement.Options.forServer())).tick();
+			// Turned this tick too, so there is a movement packet to come after the placement.
+			h.onTick(() -> {
+				a[0] = Myriad.placement().place(this, TARGET, 0, Placement.Options.forServer());
+				h.player.setYRot(-80);
+			}).tick();
 			assertTrue(a[0].sent(), "not sent: " + a[0].check());
 			List<String> kinds = h.kinds(1);
 			assertTrue(kinds.indexOf("UseItemOn") >= 0 && kinds.indexOf("UseItemOn") < kinds.indexOf("MovePlayer"), kinds.toString());

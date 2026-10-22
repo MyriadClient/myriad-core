@@ -1,9 +1,11 @@
 package dev.myriadclient.harness;
 
 import dev.myriadclient.api.Myriad;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -20,6 +22,7 @@ class InventoryHarnessTest {
 
 	private static Harness withItems() {
 		Harness h = Harness.start();
+		h.level.set(BlockPos.ZERO, Blocks.STONE.defaultBlockState());
 		h.standAt(0.5, 1, 0.5, 0, 0);
 		for (int i = 0; i < 9; i++) h.give(i, new ItemStack(Items.STONE, i + 1));
 		return h;

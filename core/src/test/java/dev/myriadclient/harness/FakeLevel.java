@@ -1,6 +1,7 @@
 package dev.myriadclient.harness;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.prediction.BlockStatePredictionHandler;
 import net.minecraft.core.BlockPos;
@@ -15,6 +16,7 @@ import net.minecraft.world.level.entity.LevelEntityGetter;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.dimension.DimensionType;
@@ -37,13 +39,14 @@ public final class FakeLevel extends ClientLevel {
 	private Map<BlockPos, BlockState> blocks;
 	private List<Entity> entities;
 	private BlockStatePredictionHandler predictions;
+	private FakeChunks chunks;
 
 	@SuppressWarnings("unused")
 	private FakeLevel() {
 		super(null, null, null, null, 0, 0, null, false, 0, 0);
 	}
 
-	static FakeLevel create(Holder<DimensionType> dimension) {
+	static FakeLevel create(Holder<DimensionType> dimension, Holder<Biome> biome) {
 		FakeLevel level = Fields.allocate(FakeLevel.class);
 		level.blocks = new HashMap<>();
 		level.entities = new ArrayList<>();
@@ -53,6 +56,7 @@ public final class FakeLevel extends ClientLevel {
 		Fields.set(level, "blockStatePredictionHandler", level.predictions);
 		Fields.set(level, "worldBorder", new WorldBorder());
 		Fields.set(level, "dimensionTypeRegistration", dimension);
+		level.chunks = FakeChunks.create(level, biome);
 		Fields.set(level, "random", RandomSource.create(0));
 		Fields.set(level, "soundSeedGenerator", RandomSource.create(0));
 		return level;
@@ -140,6 +144,11 @@ public final class FakeLevel extends ClientLevel {
 	@Override
 	public boolean hasChunk(int chunkX, int chunkZ) {
 		return true;
+	}
+
+	@Override
+	public ClientChunkCache getChunkSource() {
+		return chunks;
 	}
 
 	/** Collisions read blocks through each chunk: this level answers for all of them. */
