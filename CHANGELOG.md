@@ -137,6 +137,13 @@ and may change in any release. Addons declare the oldest core they support in `f
 - **Fixed:** `Placement.Forwarding` didn't hand on `use`, so while an addon's replacement of placement was in effect
   every hand click (a lever, a repeater's delay) was refused as unavailable. A test now checks that every service
   router and forwarding class hands on every method.
+- **Standard settings for acting.** `RotationSettings` (Turn Speed), `PlacementSettings` (Range, capped at what the
+  server allows, and Air Place), `BreakingSettings` (Mode: Packet, or Fast for every block at 70% of its time, which
+  past Grim means the decoy starts; Double Break with Fast) and `BuildingSettings` (those four, Actions Per Tick and
+  Break Wrong Blocks, the break settings shown while it's on) add the same settings with the same names to any
+  module and give the service's options built on `forServer()`, as `TargetSettings` and `BoxStyle` already do for
+  targets and looks. Essentials' Kill Aura, Packet Mine, and Automation's Printer and Portal Builder use them; their
+  saved values carry over (Packet Mine's Fast switch becomes Mode Fast).
 
 ## 0.7.0
 
