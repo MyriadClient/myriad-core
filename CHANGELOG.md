@@ -84,6 +84,13 @@ and may change in any release. Addons declare the oldest core they support in `f
   - `.jobs` lists them with their ids; `.job pause|resume|cancel <id|module>` and `.job cancel all`.
   - A job stuck for five seconds says so once, in a notice that replaces itself; again only after it got going and
     stuck again. Not for being out of reach, which moving puts right and a printer waits on whenever you're away.
+- **More steps**: `Steps.walkTo(pos)` and `walkNear(pos, radius)` walk there with Baritone (failing as `NO_PATHING`
+  without it, `BLOCKED` when it finds no way; pausing the job pauses Baritone). `Steps.fly(flight, f -> keepFlying)`
+  flies a `Flight`, steered once a tick until it should land, and is done once it's down; the landing is heard as it
+  happens and the flight stopped there (left running, a flight that lands in water takes off again in the same tick).
+  `Steps.acquire(what, count, sources)` makes sure you hold enough, trying each `MaterialSource` in turn (a container
+  at a place, the shulker boxes you carry, or your own) and stuck on `NO_ITEM` once they're spent.
+  `Baritone.pathNear(pos, range)`.
 - **`Build.owner()`**: who started a build. A build from `Steps.build`/`Steps.keepUp` belongs to the step's job, so
   the module that started the job finds it in `Myriad.building().running()` (to draw its plan).
 

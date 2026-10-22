@@ -36,7 +36,7 @@ public final class Baritone {
 
 	private static Method getSettings, getProvider, getPrimaryBaritone, getCommandManager, execute, getPathingBehavior, isPathing, cancelEverything,
 		getCustomGoalProcess, setGoalAndPath, isActive;
-	private static Class<?> goalBlock, goalXZ, goal;
+	private static Class<?> goalBlock, goalXZ, goalNear, goal;
 	/** Baritone's path and goal accessors, for drawing them; resolved on first use. */
 	private static Method getGoal, getCurrent, getNext, executorPath, executorPosition, positions, goalPos, goalX, goalZ, compositeGoals;
 	private static Class<?> goalRenderPos, goalXZType, goalComposite;
@@ -74,6 +74,11 @@ public final class Baritone {
 	/** Walks to a column, at whatever height. */
 	public static boolean pathTo(int x, int z) {
 		return path(goalXZ, new Class<?>[]{int.class, int.class}, x, z);
+	}
+
+	/** Walks to within {@code range} blocks of {@code pos}. */
+	public static boolean pathNear(BlockPos pos, int range) {
+		return path(goalNear, new Class<?>[]{BlockPos.class, int.class}, pos, range);
 	}
 
 	private static boolean path(Class<?> goalType, Class<?>[] params, Object... args) {
@@ -397,6 +402,7 @@ public final class Baritone {
 			goal = Class.forName("baritone.api.pathing.goals.Goal");
 			goalBlock = Class.forName("baritone.api.pathing.goals.GoalBlock");
 			goalXZ = Class.forName("baritone.api.pathing.goals.GoalXZ");
+			goalNear = Class.forName("baritone.api.pathing.goals.GoalNear");
 			getProvider = api.getMethod("getProvider");
 			getSettings = api.getMethod("getSettings");
 			getPrimaryBaritone = provider.getMethod("getPrimaryBaritone");

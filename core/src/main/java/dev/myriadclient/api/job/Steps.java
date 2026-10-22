@@ -4,6 +4,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.build.BlockRules;
 import dev.myriadclient.api.build.Blueprint;
 import dev.myriadclient.api.build.Build;
+import dev.myriadclient.api.elytra.Flight;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.Modules;
 import dev.myriadclient.api.service.Breaking;
@@ -12,10 +13,12 @@ import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
+import dev.myriadclient.api.util.Baritone;
 import dev.myriadclient.api.util.Client;
 import dev.myriadclient.api.util.MathUtil;
 import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.api.util.Reach;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.BlockItem;
@@ -25,11 +28,15 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -442,6 +449,63 @@ public final class Steps {
 		return Step.of("Keep up", () -> new Builds(blueprint, options.withKeepUp(true)));
 	}
 
+	// ---- getting about ------------------------------------------------------------------------------------------
+
+	/**
+	 * Walks to {@code pos} (your feet in that block) with Baritone, mining and placing as its settings allow. Failed:
+	 * {@code NO_PATHING} (Baritone isn't installed), {@code BLOCKED} (Baritone found no way, or gave up on the way).
+	 * Pausing the job pauses Baritone; cancelling it stops Baritone.
+	 */
+	public static Step<Void> walkTo(BlockPos pos) {
+		return Step.of("Walk to " + pos.toShortString(), () -> new Walk(() -> Baritone.pathTo(pos.getX(), pos.getY(), pos.getZ()),
+			p -> p.blockPosition().equals(pos), pos.toShortString()));
+	}
+
+	/** Walks to within {@code radius} blocks of {@code pos} with Baritone; as {@link #walkTo}. */
+	public static Step<Void> walkNear(BlockPos pos, int radius) {
+		return Step.of("Walk near " + pos.toShortString(), () -> new Walk(() -> Baritone.pathNear(pos, radius),
+			p -> p.blockPosition().distSqr(pos) <= (double) radius * radius, "within " + radius + " of " + pos.toShortString()));
+	}
+
+	/**
+	 * Flies {@code flight}: starts it, then once a tick asks {@code keepFlying}, which may steer it ({@code heading},
+	 * {@code speed}, {@code height}) and says whether to go on. Once it says no, the flight lands, and the step is done
+	 * when it's down (the flight stopped). Stuck while the flight is (its reason: {@code NO_ELYTRA}, {@code UNLOADED},
+	 * {@code SERVER_REFUSED} for setbacks over and over...). Failed with the flight's reason when it had to come down on
+	 * its own (the last elytra nearly worn out). Cancelled, the flight stops at once, wherever it is. Jobs tick after the
+	 * flight does, so what {@code keepFlying} sets is flown from the next tick.
+	 *
+	 * <pre>{@code
+	 * Steps.fly(Myriad.elytra().altitude(this), f -> {
+	 *     f.heading(yawTo(next));
+	 *     return !arrived();
+	 * })
+	 * }</pre>
+	 */
+	public static Step<Void> fly(Flight flight, Predicate<Flight> keepFlying) {
+		return Step.of("Fly", () -> new Fly(flight, keepFlying));
+	}
+
+	// ---- items --------------------------------------------------------------------------------------------------
+
+	/**
+	 * Makes sure your inventory holds {@code count} items matching {@code what}: done at once if it does, else each
+	 * source in turn fetches what's still missing (a source that fails is passed over), and it's done with the count held
+	 * once there's enough. Stuck: {@code NO_ITEM} ("×12 short") once every source was tried, so a {@code whenStuck}
+	 * around it can go and look elsewhere, then the sources are tried again.
+	 */
+	public static Step<Integer> acquire(Predicate<ItemStack> what, int count, List<? extends MaterialSource> sources) {
+		List<MaterialSource> from = List.copyOf(sources);
+		Step<Void> tries = Step.forEach("Fetching", () -> from, source -> Step.when(() -> Myriad.inventory().count(what) < count,
+			Step.choose("Fetch", () -> source.fetch(what, count - Myriad.inventory().count(what))).recover(why -> Step.supply("Passed over", () -> 0))));
+		Step<Integer> enough = Step.of("Enough", () -> ctx -> {
+			int held = Myriad.inventory().count(what);
+			return held >= count ? Progress.done(held) : Progress.stuck(Why.of(Why.NO_ITEM, "×" + (count - held) + " short"));
+		});
+		Step<Integer> once = Step.when(() -> Myriad.inventory().count(what) < count, tries).then(enough);
+		return once.named("Acquire " + count);
+	}
+
 	// ---- modules ------------------------------------------------------------------------------------------------
 
 	/** Holds these modules off until the enclosing step ends (the same as {@code Step.suspending}, as a step). */
@@ -569,6 +633,121 @@ public final class Steps {
 			if (moved > 0 || !couldMoveMore()) return Progress.done(moved);
 			waitUntil = ctx.ticks() + ROOM_RETRY_TICKS;
 			return Progress.stuck(Why.of(Why.NO_ROOM, ""));
+		}
+	}
+
+	/** Walking with Baritone: asked once, done on arrival, failed when Baritone stops short. */
+	private static final class Walk implements Step.Run<Void> {
+		/** Baritone works a path out before it walks: not walking yet isn't giving up, for a while. */
+		private static final int GRACE_TICKS = 40;
+		private final BooleanSupplier path;
+		private final Predicate<LocalPlayer> arrived;
+		private final String where;
+		private boolean asked, walking;
+
+		Walk(BooleanSupplier path, Predicate<LocalPlayer> arrived, String where) {
+			this.path = path;
+			this.arrived = arrived;
+			this.where = where;
+		}
+
+		@Override
+		public Progress<Void> tick(JobContext ctx) {
+			if (!Client.inGame()) return Progress.running();
+			if (arrived.test(Client.player())) return Progress.done();
+			if (!Baritone.isAvailable()) return Progress.failed(Why.of(Why.NO_PATHING, "Baritone isn't installed"));
+			if (!asked) {
+				asked = true;
+				if (!path.getAsBoolean()) return Progress.failed(Why.of(Why.NO_PATHING, "Baritone didn't take the goal"));
+				return Progress.running();
+			}
+			boolean pathing = Baritone.isPathing();
+			walking |= pathing;
+			if (!pathing && (walking || ctx.ticks() > GRACE_TICKS)) return Progress.failed(Why.of(Why.BLOCKED, "Baritone found no way " + where));
+			return Progress.running();
+		}
+
+		@Override
+		public void pause(JobContext ctx) {
+			Baritone.pause(ctx.job());
+		}
+
+		@Override
+		public void resume(JobContext ctx) {
+			Baritone.resume(ctx.job());
+		}
+
+		@Override
+		public void cancel(JobContext ctx) {
+			Baritone.resume(ctx.job());
+			if (asked && Baritone.isPathing()) Baritone.stop();
+		}
+
+		@Override
+		public String status() {
+			return where;
+		}
+	}
+
+	/**
+	 * A flight flown until {@code keepFlying} says land, then until it's down. The landing is heard as it happens
+	 * ({@link Flight#onLanded}) and the flight stopped there and then: a flight left running after it lands (in water,
+	 * say) takes off again within the same tick, before the job would see it down.
+	 */
+	private static final class Fly implements Step.Run<Void> {
+		/** The fly step flying each flight now, and the flights already listened to (a flight keeps its listeners). */
+		private static final Map<Flight, Fly> FLYING = new WeakHashMap<>();
+		private static final Set<Flight> HEARD = Collections.newSetFromMap(new WeakHashMap<>());
+		private final Flight flight;
+		private final Predicate<Flight> keepFlying;
+		private boolean landing, landed;
+		private @Nullable Why landedWhy;
+
+		Fly(Flight flight, Predicate<Flight> keepFlying) {
+			this.flight = flight;
+			this.keepFlying = keepFlying;
+		}
+
+		@Override
+		public void start(JobContext ctx) {
+			FLYING.put(flight, this);
+			if (HEARD.add(flight)) flight.onLanded(why -> {
+				Fly f = FLYING.get(flight);
+				if (f != null) f.landed(why);
+			});
+			flight.start();
+		}
+
+		private void landed(@Nullable Why why) {
+			landed = true;
+			landedWhy = why;
+			end();
+		}
+
+		private void end() {
+			if (FLYING.get(flight) == this) FLYING.remove(flight);
+			flight.stop();
+		}
+
+		@Override
+		public Progress<Void> tick(JobContext ctx) {
+			if (landed) return landedWhy == null ? Progress.done() : Progress.failed(landedWhy);
+			Flight.State state = flight.state();
+			if (!landing && state != Flight.State.LANDING && !keepFlying.test(flight)) {
+				landing = true;
+				flight.land();
+			}
+			return state == Flight.State.STUCK && flight.why() != null ? Progress.stuck(flight.why()) : Progress.running();
+		}
+
+		@Override
+		public void cancel(JobContext ctx) {
+			end();
+		}
+
+		@Override
+		public @Nullable String status() {
+			return flight.status();
 		}
 	}
 
