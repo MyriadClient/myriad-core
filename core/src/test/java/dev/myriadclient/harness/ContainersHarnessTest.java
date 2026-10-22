@@ -6,7 +6,10 @@ import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Placement;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
+import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
+import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
+import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -18,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Containers opened by code: the click, the view once its contents arrive, clicks in it, and closing. */
 class ContainersHarnessTest {
@@ -66,6 +70,80 @@ class ContainersHarnessTest {
 			assertEquals(List.of("ContainerClick", "ContainerClose"), h.kinds(h.currentTick()));
 			assertEquals(7, h.sent(ServerboundContainerClickPacket.class).getFirst().containerId());
 			assertFalse(view.isOpen());
+		}
+	}
+
+	@Test
+	void walkingOnGrimTheCloseWaitsForATickWithTheKeysUp() {
+		try (Harness h = besideAChest()) {
+			for (int x = -2; x <= 2; x++) for (int z = -30; z <= 2; z++) h.level.set(new BlockPos(x, 0, z), Blocks.STONE.defaultBlockState());
+			Myriad.antiCheat().choose(AntiCheat.Profile.GRIM);
+			@SuppressWarnings("unchecked") CompletableFuture<Containers.View>[] open = new CompletableFuture[1];
+			h.onTick(() -> open[0] = Myriad.containers().open(this, CHEST, 20, Placement.Options.forServer())).ticks(3);
+			h.serverOpensChest(7, List.of(new ItemStack(Items.DIAMOND, 5)));
+			Containers.View view = open[0].getNow(null);
+			// Walking away (north), the chest still open.
+			h.keys("back").ticks(3);
+			h.onTick(() -> Myriad.containers().close()).ticks(4);
+			assertFalse(view.isOpen(), "never closed");
+			Input last = null;
+			for (Harness.Sent s : h.sent()) {
+				if (s.packet() instanceof ServerboundPlayerInputPacket p) last = p.input();
+				if (s.packet() instanceof ServerboundContainerClosePacket) break;
+			}
+			assertTrue(last != null && !last.forward() && !last.backward() && !last.left() && !last.right() && !last.jump(), "closed with keys down: " + last);
+		}
+	}
+
+	/** A pickaxe borrowed from inventory slot 20 into the hotbar (full of dirt), then given back, with {@code chest} open meanwhile. */
+	private static List<ServerboundContainerClickPacket> borrowAndGiveBack(Harness h, Runnable chest, Runnable closeChest) {
+		for (int i = 0; i < 9; i++) h.give(i, new ItemStack(Items.DIRT));
+		h.give(20, new ItemStack(Items.DIAMOND_PICKAXE));
+		int[] slot = {-1};
+		h.onTick(() -> slot[0] = Myriad.inventory().borrow("miner", 20, s -> s.is(Items.DIRT))).tick();
+		assertTrue(slot[0] >= 0, "nothing borrowed");
+		// Still wanted: asked again with the hotbar slot it went to, as the javadoc says.
+		h.onTick(() -> Myriad.inventory().borrow("miner", slot[0], s -> s.is(Items.DIRT))).tick();
+		assertTrue(h.player.getInventory().getItem(slot[0]).is(Items.DIAMOND_PICKAXE));
+		chest.run();
+		h.clearSent();
+		h.onTick(() -> Myriad.inventory().giveBack("miner")).ticks(3);
+		closeChest.run();
+		h.ticks(3);
+		return h.sent(ServerboundContainerClickPacket.class);
+	}
+
+	@Test
+	void aGiveBackWaitsForAContainerAModuleOpenedToClose() {
+		try (Harness h = besideAChest()) {
+			Myriad.antiCheat().choose(AntiCheat.Profile.GRIM);
+			@SuppressWarnings("unchecked") CompletableFuture<Containers.View>[] open = new CompletableFuture[1];
+			int[] closedAt = {-1};
+			List<ServerboundContainerClickPacket> clicks = borrowAndGiveBack(h, () -> {
+				h.onTick(() -> open[0] = Myriad.containers().open(this, CHEST, 20, Placement.Options.forServer())).ticks(3);
+				h.serverOpensChest(7, List.of());
+				assertFalse(open[0].getNow(null).byHand());
+			}, () -> {
+				assertTrue(h.sent(ServerboundContainerClickPacket.class).isEmpty(), "gave back inside the module's container");
+				h.onTick(() -> Myriad.containers().close()).tick();
+				closedAt[0] = h.currentTick();
+			});
+			assertEquals(1, clicks.size(), "one click to put it back");
+			assertEquals(0, clicks.getFirst().containerId(), "put back through the player's own menu once the chest closed");
+			assertTrue(h.player.getInventory().getItem(20).is(Items.DIAMOND_PICKAXE), "not back in its slot");
+		}
+	}
+
+	@Test
+	void aGiveBackGoesThroughAContainerYouOpenedYourself() {
+		try (Harness h = besideAChest()) {
+			Myriad.antiCheat().choose(AntiCheat.Profile.GRIM);
+			List<ServerboundContainerClickPacket> clicks = borrowAndGiveBack(h, () -> h.serverOpensChest(9, List.of()), () -> {
+			});
+			assertEquals(1, clicks.size(), "one click to put it back");
+			assertEquals(9, clicks.getFirst().containerId(), "not through the open chest's menu");
+			assertTrue(h.player.containerMenu.containerId == 9, "the chest was closed for it");
+			assertTrue(h.player.getInventory().getItem(20).is(Items.DIAMOND_PICKAXE), "not back in its slot");
 		}
 	}
 }
