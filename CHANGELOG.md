@@ -137,6 +137,12 @@ and may change in any release. Addons declare the oldest core they support in `f
 - **Fixed:** `Placement.Forwarding` didn't hand on `use`, so while an addon's replacement of placement was in effect
   every hand click (a lever, a repeater's delay) was refused as unavailable. A test now checks that every service
   router and forwarding class hands on every method.
+- **Registry reads are free.** `Registry.values()`, a for-each and `size()` read a snapshot taken at the last change
+  instead of copying under a lock, and `ModuleRegistry.groups()` is kept until a module or group is added or removed
+  (the menu asks every frame; key binds walk every module on each key press). With 70 modules: `values()` 162 ns and
+  640 bytes a call before, 16 ns and none now; `groups()` 2.3 µs and 1.6 KB before, 26 ns and none; a for-each
+  421 ns and 648 bytes before, 49 ns and none. `values()` and `groups()` return the same unmodifiable instance until
+  something changes.
 - **The API loads without core's internals.** Nine API classes (`Renderer3D`, `WorldMesh`, `HighlightStyle`,
   `HighlightSettings`, `HighlightEvent`, `Ghosts`, `RenderStates`, `RenderLayers`, `Packets`) reached into
   `dev.myriadclient.impl` directly; they now go through `Myriad.render()` and `Myriad.packets()` (`Rendering`,

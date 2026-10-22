@@ -6,6 +6,7 @@ import dev.myriadclient.api.registry.Registry;
 import dev.myriadclient.api.util.MyriadId;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -19,6 +20,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ModuleRegistry extends Registry<Module> {
 	/** Exact class to instance, read without locking so per-frame lookups stay cheap. */
 	private final Map<Class<?>, Module> byClass = new ConcurrentHashMap<>();
+	/** {@link #groups()} as worked out from these module and group snapshots; worked out again once either changes. */
+	private volatile Groups groups;
+
+	private record Groups(Collection<Module> modules, Collection<ModuleGroup> declared, List<ModuleGroup> list) {
+	}
 
 	public ModuleRegistry() {
 		super("module");
@@ -76,22 +82,29 @@ public class ModuleRegistry extends Registry<Module> {
 
 	/**
 	 * Every group with modules, each one window in the menu: addons in the order their modules were registered, each
-	 * addon's groups in the order it declared them, then its own window.
+	 * addon's groups in the order it declared them, then its own window. Unmodifiable, and kept until a module or group
+	 * is added or removed (the menu asks every frame).
 	 */
 	public List<ModuleGroup> groups() {
+		Collection<Module> modules = values();
+		Collection<ModuleGroup> declared = Myriad.groups().values();
+		Groups cached = groups;
+		if (cached != null && cached.modules == modules && cached.declared == declared) return cached.list;
 		Set<ModuleGroup> found = new LinkedHashSet<>();
 		Map<String, Integer> addons = new HashMap<>();
-		for (Module m : values()) {
+		for (Module m : modules) {
 			found.add(m.group());
 			addons.putIfAbsent(m.group().addon(), addons.size());
 		}
-		List<ModuleGroup> declared = List.copyOf(Myriad.groups().values());
+		List<ModuleGroup> order = List.copyOf(declared);
 		List<ModuleGroup> out = new ArrayList<>(found);
 		out.sort(Comparator.comparingInt((ModuleGroup g) -> addons.get(g.addon())).thenComparingInt(g -> {
-			int i = declared.indexOf(g);
+			int i = order.indexOf(g);
 			return i < 0 ? Integer.MAX_VALUE : i;
 		}));
-		return out;
+		List<ModuleGroup> list = List.copyOf(out);
+		groups = new Groups(modules, declared, list);
+		return list;
 	}
 
 	/** @deprecated categories are tags now: use {@link #withTag(Tag)} */

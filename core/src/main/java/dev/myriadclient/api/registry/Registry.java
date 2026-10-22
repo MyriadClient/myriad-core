@@ -4,7 +4,6 @@ import dev.myriadclient.api.util.MyriadId;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -16,7 +15,9 @@ import java.util.function.Consumer;
 
 /**
  * An ordered, namespaced registry. Every entry remembers which addon registered it so a failing addon's
- * contributions can be rolled back and the UI can show where things came from.
+ * contributions can be rolled back and the UI can show where things came from. Reading it ({@link #values()}, a
+ * for-each, {@link #size()}) takes no lock and copies nothing: it reads the snapshot taken at the last change, so it's
+ * fine every frame.
  */
 public class Registry<T extends Identified> implements Iterable<T> {
 	private final String name;
@@ -24,6 +25,8 @@ public class Registry<T extends Identified> implements Iterable<T> {
 	private final Map<T, String> owners = new IdentityHashMap<>();
 	private final List<Consumer<T>> addListeners = new CopyOnWriteArrayList<>();
 	private final List<Consumer<T>> removeListeners = new CopyOnWriteArrayList<>();
+	/** The entries in order, copied on every change (rare) so reads (every frame) need neither a lock nor a copy. */
+	private volatile List<T> snapshot = List.of();
 
 	public Registry(String name) {
 		this.name = name;
@@ -42,6 +45,7 @@ public class Registry<T extends Identified> implements Iterable<T> {
 		if (entries.containsKey(id)) throw new IllegalArgumentException("Duplicate " + name + " id: " + id);
 		entries.put(id, entry);
 		owners.put(entry, owner);
+		snapshot = List.copyOf(entries.values());
 		for (Consumer<T> l : addListeners) l.accept(entry);
 		return entry;
 	}
@@ -50,6 +54,7 @@ public class Registry<T extends Identified> implements Iterable<T> {
 		T removed = entries.remove(id);
 		if (removed == null) return false;
 		owners.remove(removed);
+		snapshot = List.copyOf(entries.values());
 		for (Consumer<T> l : removeListeners) l.accept(removed);
 		return true;
 	}
@@ -70,8 +75,8 @@ public class Registry<T extends Identified> implements Iterable<T> {
 		return Optional.ofNullable(entries.get(id));
 	}
 
-	public synchronized <C extends T> Optional<C> get(Class<C> type) {
-		for (T t : entries.values()) if (t.getClass() == type) return Optional.of(type.cast(t));
+	public <C extends T> Optional<C> get(Class<C> type) {
+		for (T t : snapshot) if (t.getClass() == type) return Optional.of(type.cast(t));
 		return Optional.empty();
 	}
 
@@ -90,12 +95,13 @@ public class Registry<T extends Identified> implements Iterable<T> {
 		return list;
 	}
 
-	public synchronized Collection<T> values() {
-		return Collections.unmodifiableList(new ArrayList<>(entries.values()));
+	/** Every entry in order, as of the last change: unmodifiable, and the same instance until something changes. */
+	public Collection<T> values() {
+		return snapshot;
 	}
 
-	public synchronized int size() {
-		return entries.size();
+	public int size() {
+		return snapshot.size();
 	}
 
 	public void onAdd(Consumer<T> listener) {
@@ -108,6 +114,6 @@ public class Registry<T extends Identified> implements Iterable<T> {
 
 	@Override
 	public Iterator<T> iterator() {
-		return values().iterator();
+		return snapshot.iterator();
 	}
 }
