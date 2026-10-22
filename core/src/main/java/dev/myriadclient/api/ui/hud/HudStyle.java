@@ -40,13 +40,13 @@ public final class HudStyle {
 	 */
 	public HudStyle(Settings settings, Mode defaultMode, boolean withLabels) {
 		SettingGroup sg = settings.group("Colors");
-		mode = sg.enumSetting("Mode", defaultMode).description("How text is coloured. Category only applies to the module list.").build();
+		mode = sg.oneOf("Mode", defaultMode).description("How text is coloured. Category only applies to the module list.").build();
 		custom = sg.color("Color").defaultValue(SettingColor.role(SettingColor.Mode.ACCENT)).visible(() -> mode.get() == Mode.CUSTOM).build();
 		labels = withLabels
 			? sg.color("Labels").description("Colour of labels like \"FPS\".").defaultValue(SettingColor.role(SettingColor.Mode.TEXT, 0x99)).build()
 			: null;
-		rainbowSpeed = sg.doubleSetting("Rainbow Speed").defaultValue(1).range(0.1, 5).decimals(1).visible(() -> mode.get() == Mode.RAINBOW).build();
-		rainbowSpread = sg.doubleSetting("Rainbow Spread").description("Hue shift between lines.").defaultValue(0.06).range(0, 0.3).decimals(2)
+		rainbowSpeed = sg.decimal("Rainbow Speed").defaultValue(1).range(0.1, 5).decimals(1).visible(() -> mode.get() == Mode.RAINBOW).build();
+		rainbowSpread = sg.decimal("Rainbow Spread").description("Hue shift between lines.").defaultValue(0.06).range(0, 0.3).decimals(2)
 			.visible(() -> mode.get() == Mode.RAINBOW).build();
 		shadow = sg.bool("Shadow").defaultValue(true).build();
 	}

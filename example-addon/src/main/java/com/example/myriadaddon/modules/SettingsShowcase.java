@@ -51,10 +51,10 @@ public final class SettingsShowcase extends Module {
 	// protect(): private to the player. Shared configs say it's there but never carry its value, and taking a share in
 	// leaves yours alone. Coordinates (BlockPosSetting, like Origin below) and file paths are protected already.
 	private final StringSetting webhook = sgGeneral.string("Webhook").description("A Discord webhook URL (never shared).").protect().build();
-	private final IntSetting count = sgGeneral.intSetting("Count").defaultValue(3).range(0, 10).build();
+	private final IntSetting count = sgGeneral.integer("Count").defaultValue(3).range(0, 10).build();
 	// range() is the hard limit; sliderRange() only narrows the slider, so typed values can go further.
-	private final DoubleSetting speed = sgGeneral.doubleSetting("Speed").defaultValue(1.5).range(0, 20).sliderRange(0, 5).decimals(2).build();
-	private final EnumSetting<Flavour> flavour = sgGeneral.enumSetting("Flavour", Flavour.VANILLA).build();
+	private final DoubleSetting speed = sgGeneral.decimal("Speed").defaultValue(1.5).range(0, 20).sliderRange(0, 5).decimals(2).build();
+	private final EnumSetting<Flavour> flavour = sgGeneral.oneOf("Flavour", Flavour.VANILLA).build();
 
 	// Each group is a folding section in the menu.
 	private final SettingGroup sgColors = settings.group("Colors");

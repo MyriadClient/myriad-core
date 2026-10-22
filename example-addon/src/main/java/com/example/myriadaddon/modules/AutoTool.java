@@ -34,7 +34,7 @@ public final class AutoTool extends Module {
 	private static final MyriadId PACKET_MINE = MyriadId.of("myriad-essentials", "packet_mine");
 
 	private final BoolSetting switchBack = sgGeneral.bool("Switch Back").description("Return to the previous slot when you stop mining.").defaultValue(true).build();
-	private final IntSetting keepDurability = sgGeneral.intSetting("Keep Durability").description("Skip tools with this much durability or less, so they don't break.")
+	private final IntSetting keepDurability = sgGeneral.integer("Keep Durability").description("Skip tools with this much durability or less, so they don't break.")
 		.defaultValue(5).range(0, 100).build();
 
 	private int previousSlot = -1;

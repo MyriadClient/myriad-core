@@ -31,6 +31,9 @@ and may change in any release. Addons declare the oldest core they support in `f
   - **Source-breaking:** a `switch` over `AntiCheat.Profile` no longer compiles, and `Profile.name()` is the display
     name ("Grim", was "GRIM"). Compiled addons that only read `Profile.GRIM`/`VANILLA` or call `strict()` keep
     working. Essentials switches its elytra checks from `strict()` to `simulatesGlide()`.
+- **Setting builders named like the rest:** `integer(name)`, `decimal(name)` and `oneOf(name, default)` beside
+  `bool`, `string` and `color`. `intSetting`, `doubleSetting` and `enumSetting` are **deprecated, still working**, and
+  go in 1.0; core, the example addon, Essentials, Automation, Stash Hunter and the Boze bridge use the new names.
 
 ## 0.7.0
 

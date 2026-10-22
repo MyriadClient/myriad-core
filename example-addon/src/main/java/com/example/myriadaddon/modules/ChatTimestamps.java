@@ -34,7 +34,7 @@ public final class ChatTimestamps extends Module {
 		}
 	}
 
-	private final EnumSetting<Format> format = sgGeneral.enumSetting("Format", Format.HOURS_MINUTES).build();
+	private final EnumSetting<Format> format = sgGeneral.oneOf("Format", Format.HOURS_MINUTES).build();
 	private final ColorSetting color = sgGeneral.color("Color").defaultValue(SettingColor.role(SettingColor.Mode.TEXT, 0x88)).build();
 
 	public ChatTimestamps() {

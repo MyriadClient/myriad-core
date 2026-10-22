@@ -12,7 +12,7 @@ class KeepUnknownSettingsTest {
 	static class Older {
 		final Settings settings = new Settings();
 		final SettingGroup general = settings.group("General");
-		final DoubleSetting range = general.doubleSetting("Range").defaultValue(4.5).range(0, 6).build();
+		final DoubleSetting range = general.decimal("Range").defaultValue(4.5).range(0, 6).build();
 	}
 
 	private static JsonObject json(String s) {

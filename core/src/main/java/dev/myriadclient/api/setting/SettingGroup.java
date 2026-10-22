@@ -76,16 +76,37 @@ public class SettingGroup {
 		return bind(new BoolSetting.Builder(name));
 	}
 
-	public IntSetting.Builder intSetting(String name) {
+	/** A whole number: a slider over {@code range}, or a box to type in ({@code typed()}). */
+	public IntSetting.Builder integer(String name) {
 		return bind(new IntSetting.Builder(name));
 	}
 
-	public DoubleSetting.Builder doubleSetting(String name) {
+	/** A number with decimals: a slider over {@code range}, or a box to type in ({@code typed()}). */
+	public DoubleSetting.Builder decimal(String name) {
 		return bind(new DoubleSetting.Builder(name));
 	}
 
-	public <E extends Enum<E>> EnumSetting.Builder<E> enumSetting(String name, E defaultValue) {
+	/** One of an enum's constants ("which one"), starting at {@code defaultValue}. */
+	public <E extends Enum<E>> EnumSetting.Builder<E> oneOf(String name, E defaultValue) {
 		return bind(new EnumSetting.Builder<>(name, defaultValue));
+	}
+
+	/** @deprecated named like the other builders now: use {@link #integer(String)}. Removed in 1.0. */
+	@Deprecated
+	public IntSetting.Builder intSetting(String name) {
+		return integer(name);
+	}
+
+	/** @deprecated named like the other builders now: use {@link #decimal(String)}. Removed in 1.0. */
+	@Deprecated
+	public DoubleSetting.Builder doubleSetting(String name) {
+		return decimal(name);
+	}
+
+	/** @deprecated named like the other builders now: use {@link #oneOf(String, Enum)}. Removed in 1.0. */
+	@Deprecated
+	public <E extends Enum<E>> EnumSetting.Builder<E> enumSetting(String name, E defaultValue) {
+		return oneOf(name, defaultValue);
 	}
 
 	public StringSetting.Builder string(String name) {

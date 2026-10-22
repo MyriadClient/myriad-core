@@ -27,7 +27,7 @@ public abstract class HudPanel extends Panel {
 		this.title = title;
 		this.icon = icon;
 		this.sgGeneral = settings.group(title);
-		this.scale = sgGeneral.doubleSetting("Scale").defaultValue(defaultScale).range(0.5, 4).decimals(1).build();
+		this.scale = sgGeneral.decimal("Scale").defaultValue(defaultScale).range(0.5, 4).decimals(1).build();
 	}
 
 	@Override

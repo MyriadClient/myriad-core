@@ -24,7 +24,7 @@ public final class MacroModule extends Module {
 		RUN, TOGGLE
 	}
 
-	private final EnumSetting<Mode> mode = sgGeneral.enumSetting("Mode", Mode.RUN)
+	private final EnumSetting<Mode> mode = sgGeneral.oneOf("Mode", Mode.RUN)
 		.description("Run: each press runs Commands once. Toggle: on runs Commands, off runs Off Commands.").build();
 	// Protected: a macro can type a password (/login) or say where you are.
 	private final StringListSetting commands = sgGeneral.stringList("Commands")

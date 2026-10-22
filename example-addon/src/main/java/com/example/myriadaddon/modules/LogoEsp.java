@@ -27,11 +27,11 @@ import net.minecraft.world.entity.decoration.ArmorStand;
  * For the standard highlight options (glow, gradient, dots...) as settings, see {@code HighlightSettings}.
  */
 public final class LogoEsp extends Module {
-	private final DoubleSetting range = sgGeneral.doubleSetting("Range").defaultValue(48).range(4, 128).decimals(0).build();
+	private final DoubleSetting range = sgGeneral.decimal("Range").defaultValue(48).range(4, 128).decimals(0).build();
 	private final ColorSetting color = sgGeneral.color("Color").defaultValue(SettingColor.role(SettingColor.Mode.ACCENT)).build();
-	private final DoubleSetting size = sgGeneral.doubleSetting("Logo Size").description("Grid spacing of the logos, in pixels.")
+	private final DoubleSetting size = sgGeneral.decimal("Logo Size").description("Grid spacing of the logos, in pixels.")
 		.defaultValue(4).range(2, 12).decimals(1).onChanged(v -> rebuild()).build();
-	private final DoubleSetting opacity = sgGeneral.doubleSetting("Fill Opacity").defaultValue(0.8).range(0, 1).decimals(2).onChanged(v -> rebuild()).build();
+	private final DoubleSetting opacity = sgGeneral.decimal("Fill Opacity").defaultValue(0.8).range(0, 1).decimals(2).onChanged(v -> rebuild()).build();
 
 	private HighlightStyle style;
 

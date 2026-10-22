@@ -39,8 +39,8 @@ import java.util.Set;
 public final class BlockSearch extends Module {
 	private final RegistryListSetting<Block> blocks = sgGeneral.blocks("Blocks").description("The blocks to highlight.")
 		.defaultValue(Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE, Blocks.ANCIENT_DEBRIS, Blocks.SPAWNER).build();
-	private final IntSetting range = sgGeneral.intSetting("Range").description("Chunks around you.").defaultValue(6).range(1, 16).build();
-	private final EnumSetting<Renderer3D.ShapeMode> shape = sgGeneral.enumSetting("Shape", Renderer3D.ShapeMode.BOTH).build();
+	private final IntSetting range = sgGeneral.integer("Range").description("Chunks around you.").defaultValue(6).range(1, 16).build();
+	private final EnumSetting<Renderer3D.ShapeMode> shape = sgGeneral.oneOf("Shape", Renderer3D.ShapeMode.BOTH).build();
 	private final ColorSetting color = sgGeneral.color("Color").defaultValue(SettingColor.role(SettingColor.Mode.CYAN)).build();
 	private final BoolSetting throughWalls = sgGeneral.bool("Through Walls").defaultValue(true).build();
 

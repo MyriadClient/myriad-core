@@ -49,7 +49,7 @@ public final class TargetSettings {
 		ignoreCreative = sg.bool("Ignore Creative").build();
 		friends = sg.bool("Friends").description("Also target friends.").build();
 		throughWalls = sg.bool("Through Walls").defaultValue(true).build();
-		sort = sg.enumSetting("Sort", Targets.Sort.DISTANCE).description("Which target to prefer.").build();
+		sort = sg.oneOf("Sort", Targets.Sort.DISTANCE).description("Which target to prefer.").build();
 	}
 
 	public Set<Targets.Type> types() {

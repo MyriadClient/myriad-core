@@ -62,16 +62,16 @@ public final class HighlightSettings {
 	 * default (off suits highlighting something you can see, like the block you're looking at).
 	 */
 	public HighlightSettings(SettingGroup group, Supplier<Boolean> visible, boolean throughWallsByDefault) {
-		outlineWidth = group.doubleSetting("Outline Width").description("In pixels; 0 for no outline.")
+		outlineWidth = group.decimal("Outline Width").description("In pixels; 0 for no outline.")
 			.defaultValue(2).range(0, 6).decimals(1).visible(visible).build();
-		glow = group.doubleSetting("Glow").description("A soft glow beyond the outline, in pixels; 0 for none.")
+		glow = group.decimal("Glow").description("A soft glow beyond the outline, in pixels; 0 for none.")
 			.defaultValue(0).range(0, 24).decimals(0).visible(visible).build();
-		fill = group.enumSetting("Fill", FillMode.NONE).description("What's drawn inside the outline.").visible(visible).build();
-		fillOpacity = group.doubleSetting("Fill Opacity").defaultValue(0.3).range(0, 1).decimals(2)
+		fill = group.oneOf("Fill", FillMode.NONE).description("What's drawn inside the outline.").visible(visible).build();
+		fillOpacity = group.decimal("Fill Opacity").defaultValue(0.3).range(0, 1).decimals(2)
 			.visible(() -> visible.get() && fill.get() != FillMode.NONE).build();
-		dotSpacing = group.doubleSetting("Dot Spacing").description("Distance between dots, in pixels.")
+		dotSpacing = group.decimal("Dot Spacing").description("Distance between dots, in pixels.")
 			.defaultValue(2.5).range(2, 24).decimals(1).visible(() -> visible.get() && fill.get() == FillMode.DOTS).build();
-		dotSize = group.doubleSetting("Dot Size").description("Dot diameter, in pixels.")
+		dotSize = group.decimal("Dot Size").description("Dot diameter, in pixels.")
 			.defaultValue(1).range(0.5, 12).decimals(1).visible(() -> visible.get() && fill.get() == FillMode.DOTS).build();
 		gradient = group.bool("Gradient").description("Fade to a second colour towards the bottom.").visible(visible).build();
 		gradientColor = group.color("Gradient Color").defaultValue(SettingColor.role(SettingColor.Mode.SECONDARY))

@@ -46,14 +46,14 @@ public final class Waypoints extends Module {
 	private final WaypointStore store;
 
 	// General: the first group, open when the player unfolds the module.
-	private final IntSetting maxDistance = sgGeneral.intSetting("Max Distance").description("Hide waypoints further than this (0 shows all).")
+	private final IntSetting maxDistance = sgGeneral.integer("Max Distance").description("Hide waypoints further than this (0 shows all).")
 		.defaultValue(0).range(0, 100_000).sliderRange(0, 10_000).build();
 	private final BoolSetting deathWaypoints = sgGeneral.bool("Death Waypoints").description("Add a \"Death\" waypoint where you die.").defaultValue(true).build();
 
 	private final SettingGroup sgWorld = settings.group("In World");
 	private final BoolSetting box = sgWorld.bool("Box").defaultValue(true).build();
 	private final BoolSetting beam = sgWorld.bool("Beam").description("A line up into the sky from the waypoint.").defaultValue(true).build();
-	private final IntSetting beamHeight = sgWorld.intSetting("Beam Height").defaultValue(64).range(1, 320).visible(beam::get).build();
+	private final IntSetting beamHeight = sgWorld.integer("Beam Height").defaultValue(64).range(1, 320).visible(beam::get).build();
 	private final BoolSetting throughWalls = sgWorld.bool("Through Walls").defaultValue(true).build();
 	// A theme role as the default: the colour follows the theme until the player picks their own.
 	private final ColorSetting color = sgWorld.color("Color").description("For waypoints without a colour of their own.")
@@ -63,8 +63,8 @@ public final class Waypoints extends Module {
 	private final BoolSetting labels = sgLabels.bool("Labels").defaultValue(true).build();
 	private final BoolSetting distance = sgLabels.bool("Distance").defaultValue(true).visible(labels::get).build();
 	private final BoolSetting coords = sgLabels.bool("Coordinates").visible(labels::get).build();
-	private final EnumSetting<WorldLabel.Background> background = sgLabels.enumSetting("Background", WorldLabel.Background.ROUNDED).visible(labels::get).build();
-	private final DoubleSetting scale = sgLabels.doubleSetting("Scale").defaultValue(1).range(0.5, 3).decimals(1).visible(labels::get).build();
+	private final EnumSetting<WorldLabel.Background> background = sgLabels.oneOf("Background", WorldLabel.Background.ROUNDED).visible(labels::get).build();
+	private final DoubleSetting scale = sgLabels.decimal("Scale").defaultValue(1).range(0.5, 3).decimals(1).visible(labels::get).build();
 
 	public Waypoints(WaypointStore store) {
 		super(Tags.WORLD, "Waypoints", "Shows saved positions in the world. Manage them with .waypoint or the Waypoints window.");

@@ -19,9 +19,9 @@ class SettingsTest {
 		final Settings settings = new Settings();
 		final SettingGroup general = settings.group("General");
 		final BoolSetting bool = general.bool("Rotate").defaultValue(true).build();
-		final IntSetting count = general.intSetting("Count").defaultValue(3).range(0, 10).build();
-		final DoubleSetting range = general.doubleSetting("Range").defaultValue(4.5).range(0, 6).decimals(1).build();
-		final EnumSetting<Mode> mode = general.enumSetting("Mode", Mode.FAST).build();
+		final IntSetting count = general.integer("Count").defaultValue(3).range(0, 10).build();
+		final DoubleSetting range = general.decimal("Range").defaultValue(4.5).range(0, 6).decimals(1).build();
+		final EnumSetting<Mode> mode = general.oneOf("Mode", Mode.FAST).build();
 		final SettingGroup colors = settings.group("Colors");
 		final ColorSetting players = colors.color("Players").defaultValue(0xFF112233).build();
 		final StringListSetting words = colors.stringList("Words").defaultValue("a", "b").build();

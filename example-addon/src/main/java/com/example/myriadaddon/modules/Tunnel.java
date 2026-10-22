@@ -31,9 +31,9 @@ import net.minecraft.world.phys.AABB;
  */
 public final class Tunnel extends Module {
 	// Public so the addon's "Digging" control panel can set them, typed (see ExampleAddon).
-	public final IntSetting width = sgGeneral.intSetting("Width").defaultValue(1).range(1, 5).build();
-	public final IntSetting height = sgGeneral.intSetting("Height").defaultValue(2).range(2, 4).build();
-	private final IntSetting length = sgGeneral.intSetting("Length").description("Blocks ahead to dig.").defaultValue(64).range(1, 10_000).sliderRange(1, 256).build();
+	public final IntSetting width = sgGeneral.integer("Width").defaultValue(1).range(1, 5).build();
+	public final IntSetting height = sgGeneral.integer("Height").defaultValue(2).range(2, 4).build();
+	private final IntSetting length = sgGeneral.integer("Length").description("Blocks ahead to dig.").defaultValue(64).range(1, 10_000).sliderRange(1, 256).build();
 	private final BoolSetting showPlan = sgGeneral.bool("Show Plan").description("Outline what's left to dig and anything in the way.").defaultValue(true).build();
 
 	private Build build;

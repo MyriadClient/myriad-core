@@ -16,7 +16,7 @@ class SettingLayersTest {
 	static class Mod {
 		final Settings settings = new Settings();
 		final SettingGroup general = settings.group("General");
-		final IntSetting width = general.intSetting("Width").defaultValue(1).range(1, 5).build();
+		final IntSetting width = general.integer("Width").defaultValue(1).range(1, 5).build();
 	}
 
 	@Test

@@ -43,7 +43,7 @@ import java.util.function.IntSupplier;
  * {@link WorldMesh}, so what you found is drawn every frame without a render handler.
  *
  * <pre>{@code
- * private final IntSetting range = sgGeneral.intSetting("Range").defaultValue(8).range(1, 32).build();
+ * private final IntSetting range = sgGeneral.integer("Range").defaultValue(8).range(1, 32).build();
  *
  * private final ChunkCache<List<BlockPos>> debris = ChunkCache.of(this, chunk -> {
  *         List<BlockPos> found = new ArrayList<>();

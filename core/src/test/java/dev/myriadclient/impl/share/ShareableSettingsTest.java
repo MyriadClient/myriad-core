@@ -15,8 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ShareableSettingsTest {
 	private final Settings settings = new Settings();
 	private final SettingGroup general = settings.group("General");
-	private final IntSetting range = general.intSetting("Range").defaultValue(4).range(1, 10).build();
-	private final IntSetting delay = general.intSetting("Delay").defaultValue(2).range(0, 10).build();
+	private final IntSetting range = general.integer("Range").defaultValue(4).range(1, 10).build();
+	private final IntSetting delay = general.integer("Delay").defaultValue(2).range(0, 10).build();
 	private final StringSetting webhook = general.string("Webhook").protect().build();
 	private final SettingGroup module = settings.group("Module");
 	private final BoolSetting hold = module.bool("Hold").build();

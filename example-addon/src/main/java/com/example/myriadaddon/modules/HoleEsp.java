@@ -28,7 +28,7 @@ import java.util.List;
  * </ul>
  */
 public final class HoleEsp extends Module {
-	private final IntSetting range = sgGeneral.intSetting("Range").description("Chunks around you.").defaultValue(3).range(1, 8).build();
+	private final IntSetting range = sgGeneral.integer("Range").description("Chunks around you.").defaultValue(3).range(1, 8).build();
 	private final ColorSetting bedrock = sgGeneral.color("Bedrock").defaultValue(SettingColor.role(SettingColor.Mode.GREEN)).build();
 	private final ColorSetting obsidian = sgGeneral.color("Obsidian").defaultValue(SettingColor.role(SettingColor.Mode.YELLOW)).build();
 

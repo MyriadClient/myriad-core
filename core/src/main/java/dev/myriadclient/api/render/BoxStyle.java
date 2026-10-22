@@ -40,10 +40,10 @@ public final class BoxStyle {
 
 	/** As {@link #BoxStyle(SettingGroup, Supplier)}, with Through Walls on or off by default. */
 	public BoxStyle(SettingGroup group, Supplier<Boolean> visible, boolean throughWallsByDefault) {
-		shape = group.enumSetting("Shape", Renderer3D.ShapeMode.BOTH).description("Outline, fill, or both.").visible(visible).build();
-		fillOpacity = group.doubleSetting("Fill Opacity").defaultValue(0.2).range(0, 1).decimals(2)
+		shape = group.oneOf("Shape", Renderer3D.ShapeMode.BOTH).description("Outline, fill, or both.").visible(visible).build();
+		fillOpacity = group.decimal("Fill Opacity").defaultValue(0.2).range(0, 1).decimals(2)
 			.visible(() -> visible.get() && shape.get() != Renderer3D.ShapeMode.LINES).build();
-		lineWidth = group.doubleSetting("Line Width").defaultValue(1.5).range(0.5, 5).decimals(1)
+		lineWidth = group.decimal("Line Width").defaultValue(1.5).range(0.5, 5).decimals(1)
 			.visible(() -> visible.get() && shape.get() != Renderer3D.ShapeMode.FILL).build();
 		throughWalls = group.bool("Through Walls").defaultValue(throughWallsByDefault).visible(visible).build();
 	}

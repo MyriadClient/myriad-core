@@ -402,7 +402,7 @@ Modules are subscribed to the event bus only while enabled, so their `@Subscribe
 
 ```java
 public final class MyModule extends Module {
-    private final DoubleSetting range = sgGeneral.doubleSetting("Range").defaultValue(4.5).range(0, 6).build();
+    private final DoubleSetting range = sgGeneral.decimal("Range").defaultValue(4.5).range(0, 6).build();
     private final SettingGroup sgRender = settings.group("Render");          // later groups start folded
     private final ColorSetting color = sgRender.color("Color").defaultValue(SettingColor.role(SettingColor.Mode.RED)).build();
 
