@@ -124,7 +124,7 @@ public final class Harness implements AutoCloseable {
 		Fields.set(listener, "connection", connection);
 		// The game's own defaults (the test's working folder has no options.txt).
 		Fields.set(mc, "options", new Options(mc, new File(".")));
-		Fields.set(mc, "soundManager", Fields.allocate(net.minecraft.client.sounds.SoundManager.class));
+		Fields.set(mc, "soundManager", FakeSounds.create());
 		Fields.set(level, "connection", listener);
 		Fields.set(level, "registryAccess", registries);
 		Fields.set(level, "damageSources", new DamageSources(registries));
