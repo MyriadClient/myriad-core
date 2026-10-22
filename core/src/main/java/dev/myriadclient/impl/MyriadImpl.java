@@ -2,10 +2,6 @@ package dev.myriadclient.impl;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.MyriadApi;
-import dev.myriadclient.api.render.Rendering;
-import dev.myriadclient.api.util.PacketChannel;
-import dev.myriadclient.impl.network.CorePacketChannel;
-import dev.myriadclient.impl.render.CoreRendering;
 import dev.myriadclient.api.addon.Addon;
 import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.command.Command;
@@ -13,15 +9,19 @@ import dev.myriadclient.api.config.ConfigManager;
 import dev.myriadclient.api.control.Controls;
 import dev.myriadclient.api.elytra.Elytra;
 import dev.myriadclient.api.event.EventBus;
+import dev.myriadclient.api.event.events.ScreenOpenEvent;
+import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.hook.Hooks;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.job.Jobs;
 import dev.myriadclient.api.map.Maps;
 import dev.myriadclient.api.module.Category;
+import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.registry.Registry;
+import dev.myriadclient.api.render.Rendering;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Building;
@@ -45,6 +45,7 @@ import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.layout.Layout;
+import dev.myriadclient.api.util.PacketChannel;
 import dev.myriadclient.impl.addon.AddonLoader;
 import dev.myriadclient.impl.command.CommandManager;
 import dev.myriadclient.impl.config.ConfigManagerImpl;
@@ -57,6 +58,8 @@ import dev.myriadclient.impl.keybind.KeybindManager;
 import dev.myriadclient.impl.map.MapsImpl;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
+import dev.myriadclient.impl.network.CorePacketChannel;
+import dev.myriadclient.impl.render.CoreRendering;
 import dev.myriadclient.impl.service.AntiCheatTracker;
 import dev.myriadclient.impl.service.BreakManager;
 import dev.myriadclient.impl.service.BuildManager;
@@ -73,11 +76,13 @@ import dev.myriadclient.impl.service.ServerStatsTracker;
 import dev.myriadclient.impl.service.TaskScheduler;
 import dev.myriadclient.impl.service.TickSpeedManager;
 import dev.myriadclient.impl.share.ShareManager;
+import dev.myriadclient.impl.ui.MyriadTitleScreen;
 import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.ui.panels.ConsoleLog;
 import dev.myriadclient.impl.update.UpdateManager;
 import dev.myriadclient.impl.wheel.WheelManager;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.TextColor;
@@ -106,6 +111,8 @@ public final class MyriadImpl implements MyriadApi {
 	private final Registry<KeyAction> keyActions = new Registry<>("key action");
 	private final Registry<AddonSettings> addonSettings = new Registry<>("addon settings");
 	private final ConfigManagerImpl config = new ConfigManagerImpl(this);
+	/** Null in the test harness, which never starts. */
+	private SafeMode safeMode;
 	private final NotificationManager notifications = new NotificationManager();
 	private final RotationManager rotations = new RotationManager();
 	private final InventoryManager inventory = new InventoryManager();
@@ -181,18 +188,57 @@ public final class MyriadImpl implements MyriadApi {
 
 	private void start() {
 		long t0 = System.nanoTime();
+		// First, so a crash while addons start counts.
+		safeMode = new SafeMode(config.root().resolve(".running"), System.currentTimeMillis());
 		wireServices();
 
 		addonLoader.discover();
 		addonLoader.registerTags();
 		addonLoader.initialize();
 		config.load();
+		if (safeMode.active()) startSafe();
 		addonLoader.postInitialize();
 		updates.start(events);
 		// Registries stay open: an addon that bridges another mod registers once that mod is ready, which may be later.
 
 		LOG.info("Myriad ready: {} addons, {} modules, {} panels, {} commands in {} ms", addonLoader.addons().size(), modules.size(),
 			panels.size(), commands.size(), (System.nanoTime() - t0) / 1_000_000);
+	}
+
+	/**
+	 * Safe mode ({@link SafeMode}): every module off, saved so, and once the game is up a dialog listing which were on,
+	 * offering to turn them back on.
+	 */
+	private void startSafe() {
+		List<Module> were = SafeMode.turnOff(modules.values());
+		String names = String.join(", ", were.stream().map(Module::name).toList());
+		LOG.warn("The game crashed {} times in a row within a minute of starting: every module is off (on before: {})", safeMode.earlyCrashes(),
+			names.isEmpty() ? "none" : names);
+		if (were.isEmpty()) return;
+		// Over the first title screen (opened before it, the desktop would be replaced by it, cancelling the dialog), or
+		// the first world when quick play skips the title screen.
+		boolean[] shown = {false};
+		Runnable show = () -> {
+			if (shown[0]) return;
+			shown[0] = true;
+			Minecraft.getInstance().schedule(() -> windowManager.confirm("Safe mode",
+				"The game crashed twice in a row within a minute of starting, so every module is off. These were on: " + names + ".",
+				"Turn them back on", () -> were.forEach(m -> m.setEnabled(true)), null));
+		};
+		events.listen(ScreenOpenEvent.class, e -> {
+			if (e.screen() instanceof TitleScreen || e.screen() instanceof MyriadTitleScreen) show.run();
+		});
+		events.listen(WorldEvent.Join.class, e -> show.run());
+	}
+
+	/** Each client tick (not in the harness). */
+	public void tickSafeMode() {
+		if (safeMode != null) safeMode.tick(System.currentTimeMillis());
+	}
+
+	/** The game is stopping cleanly: this run wasn't a crash. */
+	public void stoppedCleanly() {
+		if (safeMode != null) safeMode.stopped();
 	}
 
 	/** The services on the event bus and behind their hooks, and the bus's links to the rest. */

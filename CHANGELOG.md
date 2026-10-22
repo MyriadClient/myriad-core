@@ -36,6 +36,13 @@ and may change in any release. Addons declare the oldest core they support in `f
   failures against the module under test. The mixin pattern in the docs and the addon template now uses it:
   `if (m != null) Modules.guard(m, () -> ...)`.
 
+- **Safe mode after a crash loop.** When the game crashes twice in a row within a minute of starting, the next start
+  has every module off, as `.panic` leaves them, and a window lists the ones that were on with **Turn them back on**.
+  A `.running` file in `.minecraft/myriad/` tracks it: written at start, marked once the game has run a minute, and
+  removed when the game closes normally. A game closed by force in its first minute counts as a crash. Mirrors of
+  other mods' modules are left as they are.
+- `-PopenDesktop` (and `-Dmyriad.openDesktop`) open the desktop again with Myriad's own title screen on.
+
 ## 0.8.0
 
 - **Anti-cheat profiles are values, and addons can add their own.** `AntiCheat.Profile` was an enum of two (Vanilla,

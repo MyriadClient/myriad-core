@@ -51,6 +51,7 @@ public class MyriadClient implements ClientModInitializer {
 			myriad.windowManager().tick();
 			VanillaKeys.sync();
 			myriad.configImpl().tick();
+			myriad.tickSafeMode();
 		});
 
 		HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("myriad", "hud"), (ctx, tickCounter) -> {
@@ -104,7 +105,8 @@ public class MyriadClient implements ClientModInitializer {
 		if (Boolean.getBoolean("myriad.openDesktop")) {
 			boolean[] done = {false};
 			bus.listen(ScreenOpenEvent.class, e -> {
-				if (!done[0] && e.screen() instanceof TitleScreen) {
+				// Myriad's own title screen takes vanilla's place in this same event, maybe before this listener sees it.
+				if (!done[0] && (e.screen() instanceof TitleScreen || e.screen() instanceof MyriadTitleScreen)) {
 					done[0] = true;
 					Minecraft.getInstance().schedule(() -> myriad.windowManager().open());
 				}
@@ -135,6 +137,7 @@ public class MyriadClient implements ClientModInitializer {
 		ClientLifecycleEvents.CLIENT_STOPPING.register(mc -> {
 			bus.post(ShutdownEvent.INSTANCE);
 			myriad.configImpl().shutdown();
+			myriad.stoppedCleanly();
 		});
 	}
 }
