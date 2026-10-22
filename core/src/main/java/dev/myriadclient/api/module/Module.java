@@ -9,11 +9,13 @@ import dev.myriadclient.api.setting.KeybindSetting;
 import dev.myriadclient.api.setting.SavedSettings;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.Settings;
+import dev.myriadclient.api.util.Client;
 import dev.myriadclient.api.util.MyriadId;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +54,9 @@ public abstract class Module implements Identified {
 	private ModuleGroup group;
 	private MyriadId id;
 	private boolean enabled;
+	/** Who holds the module off ({@link Modules#suspend}), by identity; and whether the player has it on meanwhile. */
+	private final List<Object> suspenders = new ArrayList<>(0);
+	private boolean onAfterSuspension;
 	private final List<Runnable[]> bindings = new ArrayList<>(0);
 	private List<String> formerNames = List.of();
 	private List<Class<? extends Module>> conflicts = List.of();
@@ -163,6 +168,19 @@ public abstract class Module implements Identified {
 	}
 
 	private void setEnabled(boolean enable, boolean feedback) {
+		if (!suspenders.isEmpty()) {
+			// Held off: the player's choice is kept for when the last suspender lets go.
+			if (enable != onAfterSuspension) {
+				onAfterSuspension = enable;
+				Myriad.config().markDirty();
+			}
+			if (enable && feedback) info("Suspended by " + suspendedBy() + ": it comes back on when that's done.");
+			return;
+		}
+		switchTo(enable, feedback);
+	}
+
+	private void switchTo(boolean enable, boolean feedback) {
 		if (enable == enabled) return;
 		enabled = enable;
 		if (enable) {
@@ -195,14 +213,55 @@ public abstract class Module implements Identified {
 				LOG.error("{} failed to disable cleanly", id, t);
 			}
 			stopBindings();
+			// After its own clean-up, so what it held off doesn't come back while it's still flying, say.
+			Modules.resume(this);
 		}
 		Myriad.events().post(new ModuleToggleEvent(this, enabled));
 		Myriad.config().markDirty();
-		if (feedback && chatFeedback.get() && mc.player != null && !holdMode.get()) {
+		if (feedback && chatFeedback.get() && Client.inGame() && !holdMode.get()) {
 			// One line per module: toggling it again replaces the line instead of adding another.
 			Myriad.chat(Component.literal(name).withStyle(ChatFormatting.WHITE).append(Component.literal(enabled ? " enabled" : " disabled")
 				.withStyle(enabled ? ChatFormatting.GREEN : ChatFormatting.RED)), "myriad:toggle:" + id);
 		}
+	}
+
+	/**
+	 * Whether something holds the module off ({@link Modules#suspend}) while the player has it on: it comes back on by
+	 * itself once the last suspender lets go, and saves as on meanwhile.
+	 */
+	public boolean isSuspended() {
+		return !suspenders.isEmpty() && onAfterSuspension;
+	}
+
+	/** Who holds it off, for people ("Search", "Search › Flying the route"), or null when it isn't {@linkplain #isSuspended suspended}. */
+	public @Nullable String suspendedBy() {
+		if (!isSuspended()) return null;
+		StringBuilder s = new StringBuilder();
+		for (Object o : suspenders) {
+			if (!s.isEmpty()) s.append(", ");
+			s.append(o instanceof Module m ? m.name() : o.toString());
+		}
+		return s.toString();
+	}
+
+	/** Whether the profile should save it as on: on, or held off while the player has it on. */
+	@ApiStatus.Internal
+	public boolean savesEnabled() {
+		return suspenders.isEmpty() ? enabled : onAfterSuspension;
+	}
+
+	void suspend(Object owner) {
+		for (Object o : suspenders) if (o == owner) return;
+		if (suspenders.isEmpty()) onAfterSuspension = enabled;
+		suspenders.add(owner);
+		switchTo(false, false);
+	}
+
+	/** Lets go of {@code owner}'s hold; the module comes back on with the last one, if the player has it on. */
+	boolean release(Object owner) {
+		if (!suspenders.removeIf(o -> o == owner)) return false;
+		if (suspenders.isEmpty() && onAfterSuspension) switchTo(true, false);
+		return true;
 	}
 
 	private void stopBindings() {

@@ -40,6 +40,13 @@ and may change in any release. Addons declare the oldest core they support in `f
   forgot `@Subscribe(inGame = true)` fails with a reason instead of a `NullPointerException` somewhere later;
   `Client.inGame()` for code that also runs on the title screen. Automation's tick handlers moved onto
   `inGame = true` and lost their null checks.
+- **Holding a module off while you work.** `Modules.suspend(owner, module)` (also by class, or by id for another
+  addon's module) turns a module off and keeps it off while any owner holds it; `Modules.resume(owner)`, or the owner
+  module turning off, lets go, and the module comes back on with its last suspender if the player has it on. The menu
+  shows "suspended by Search" on its row, a player turning it on meanwhile only takes effect afterwards, and the
+  profile saves it as the player has it, so a crash mid-search no longer leaves Elytra Fly saved as off.
+  `Module.isSuspended()`/`suspendedBy()` for UIs; Essentials' Module List keeps suspended modules listed, faded.
+  Stash Hunter's Search holds Elytra Fly and Auto Armor this way instead of turning them off and on by hand.
 
 ## 0.7.0
 

@@ -213,7 +213,7 @@ public final class ConfigManagerImpl implements ConfigManager {
 			// Settings saved by a newer version of the module keep their version, so they aren't migrated again later.
 			int version = Math.max(m.settingsVersion(), intOr(prev, "version", 1));
 			JsonObject o = new JsonObject();
-			o.addProperty("enabled", m.isEnabled());
+			o.addProperty("enabled", m.savesEnabled());
 			if (version > 1) o.addProperty("version", version);
 			o.add("settings", m.settings.toJson(prevSettings));
 			modules.add(m.id().toString(), o);

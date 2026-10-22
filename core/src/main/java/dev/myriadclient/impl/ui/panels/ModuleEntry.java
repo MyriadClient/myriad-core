@@ -82,13 +82,17 @@ class ModuleEntry extends CardEntry {
 	@Override
 	protected float drawBadges(Canvas c, float right, float cy) {
 		if (module.keybind.get().isSet()) right = badge(c, module.keybind.get().displayName(), right, cy, theme().textDim.argb(), false) - 4;
+		String by = module.suspendedBy();
+		if (by != null) right = badge(c, "suspended by " + by, right, cy, theme().accent.argb(), true) - 4;
 		return right;
 	}
 
 	/** Description, then the source addon and the tags as pills (in the main tag's current colour). */
 	@Override
 	protected String tooltipText() {
+		String by = module.suspendedBy();
 		return (module.description().isEmpty() ? "" : module.description() + "\n")
+			+ (by == null ? "" : by + " holds it off for now; it comes back on when that's done.\n")
 			+ badgeLine(" " + source + "@" + String.format("%08X", module.tag().color()), tagNames());
 	}
 
