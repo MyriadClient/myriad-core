@@ -57,24 +57,24 @@ final class LauncherScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-		return wm.launcherOpen() && closeIfDone(wm.mouseClicked(event.x(), event.y(), event.button()));
+		return wm.launcherOpen() && closeIfDone(wm.input().mouseClicked(event.x(), event.y(), event.button()));
 	}
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-		return wm.launcherOpen() && wm.mouseScrolled(mouseX, mouseY, verticalAmount);
+		return wm.launcherOpen() && wm.input().mouseScrolled(mouseX, mouseY, verticalAmount);
 	}
 
 	@Override
 	public boolean keyPressed(KeyEvent event) {
-		return wm.launcherOpen() && closeIfDone(wm.keyPressed(event.key(), event.scancode(), event.modifiers()));
+		return wm.launcherOpen() && closeIfDone(wm.input().keyPressed(event.key(), event.scancode(), event.modifiers()));
 	}
 
 	@Override
 	public boolean charTyped(CharacterEvent event) {
 		if (!wm.launcherOpen()) return false;
 		boolean handled = false;
-		for (char chr : Character.toChars(event.codepoint())) handled |= wm.charTyped(chr, 0);
+		for (char chr : Character.toChars(event.codepoint())) handled |= wm.input().charTyped(chr, 0);
 		return handled;
 	}
 

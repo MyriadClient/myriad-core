@@ -22,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
@@ -283,7 +284,41 @@ public final class ThemeManager {
 
 	/** Saves edits to the active theme a moment after the last change. Called every tick. */
 	public void tick() {
+		followLive();
 		if (dirty && System.currentTimeMillis() - dirtyAt > 400) commit();
+	}
+
+	private int livePoll;
+	private String liveSignature = "";
+	private MyriadId liveTheme;
+
+	/** Re-applies the active theme when it follows something outside the game (Theme.live) and that changed. */
+	private void followLive() {
+		Entry current = active();
+		Supplier<String> live = current.preset() == null ? null : current.preset().live();
+		if (live == null) {
+			liveTheme = null;
+			return;
+		}
+		if (!current.id().equals(liveTheme)) {
+			// The theme was applied when it was picked; start watching from here.
+			liveTheme = current.id();
+			liveSignature = safeSignature(live);
+			return;
+		}
+		if (++livePoll % 40 != 0) return;
+		String sig = safeSignature(live);
+		if (sig.equals(liveSignature)) return;
+		liveSignature = sig;
+		reapply();
+	}
+
+	private static String safeSignature(Supplier<String> live) {
+		try {
+			return String.valueOf(live.get());
+		} catch (Throwable t) {
+			return "";
+		}
 	}
 
 	/** Saves pending edits to the active theme now. */

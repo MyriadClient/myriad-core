@@ -37,38 +37,38 @@ public final class DesktopScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-		return wm.mouseClicked(event.x(), event.y(), event.button());
+		return wm.input().mouseClicked(event.x(), event.y(), event.button());
 	}
 
 	@Override
 	public void mouseMoved(double mouseX, double mouseY) {
-		wm.mouseMoved(mouseX, mouseY);
+		wm.input().mouseMoved(mouseX, mouseY);
 	}
 
 	@Override
 	public boolean mouseReleased(MouseButtonEvent event) {
-		return wm.mouseReleased(event.x(), event.y(), event.button());
+		return wm.input().mouseReleased(event.x(), event.y(), event.button());
 	}
 
 	@Override
 	public boolean mouseDragged(MouseButtonEvent event, double deltaX, double deltaY) {
-		return wm.mouseDragged(event.x(), event.y(), event.button());
+		return wm.input().mouseDragged(event.x(), event.y(), event.button());
 	}
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-		return wm.mouseScrolled(mouseX, mouseY, verticalAmount);
+		return wm.input().mouseScrolled(mouseX, mouseY, verticalAmount);
 	}
 
 	@Override
 	public boolean keyPressed(KeyEvent event) {
-		return wm.keyPressed(event.key(), event.scancode(), event.modifiers());
+		return wm.input().keyPressed(event.key(), event.scancode(), event.modifiers());
 	}
 
 	@Override
 	public boolean charTyped(CharacterEvent event) {
 		boolean handled = false;
-		for (char chr : Character.toChars(event.codepoint())) handled |= wm.charTyped(chr, 0);
+		for (char chr : Character.toChars(event.codepoint())) handled |= wm.input().charTyped(chr, 0);
 		return handled;
 	}
 

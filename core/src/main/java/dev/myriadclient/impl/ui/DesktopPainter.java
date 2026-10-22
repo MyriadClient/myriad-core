@@ -159,7 +159,7 @@ final class DesktopPainter {
 		try {
 			for (WindowImpl w : new ArrayList<>(wm.workspaces[Desktop.HUD_WORKSPACE].floating)) {
 				if (!w.isHudElement()) continue;
-				Rect r = wm.hudRect(w);
+				Rect r = wm.hud.rect(w);
 				drawHudElement(c, w, r, false);
 			}
 			wm.notifications().render(c, wm.screenW, wm.screenH, 0);
@@ -207,7 +207,7 @@ final class DesktopPainter {
 		boolean interactive = !outgoing && t >= 1;
 		for (WindowImpl w : ws.drawOrder()) {
 			if (ws.index == Desktop.HUD_WORKSPACE && w.isHudElement()) {
-				drawHudElement(c, w, wm.hudRect(w), true);
+				drawHudElement(c, w, wm.hud.rect(w), true);
 				continue;
 			}
 			drawWindow(c, w, w.current(), w == ws.focused, interactive);
@@ -388,7 +388,7 @@ final class DesktopPainter {
 		c.rect(0, wm.screenH * 2 / 3, wm.screenW, 0.5f, ColorUtil.withAlpha(theme.textDim.argb(), 25));
 		for (WindowImpl w : wm.workspaces[Desktop.HUD_WORKSPACE].floating) {
 			if (!w.isHudElement()) continue;
-			Rect r = wm.hudRect(w);
+			Rect r = wm.hud.rect(w);
 			boolean hover = r.inset(-2).contains(wm.mouseX, wm.mouseY);
 			boolean dragging = wm.drag != null && wm.drag.window == w;
 			c.outline(r.x() - 2, r.y() - 2, r.w() + 4, r.h() + 4, 3, 1, hover || dragging ? theme.accent.argb() : ColorUtil.withAlpha(theme.textDim.argb(), 80));
@@ -398,8 +398,8 @@ final class DesktopPainter {
 				c.text(FontFamily.SANS, c.defaultFontSize() * 0.85f, label, r.x(), ly, theme.accent.argb());
 			}
 			if (dragging) {
-				if (wm.snappedX) c.rect(r.centerX(), 0, 0.5f, wm.screenH, guide);
-				if (wm.snappedY) c.rect(0, r.centerY(), wm.screenW, 0.5f, guide);
+				if (wm.hud.snappedX) c.rect(r.centerX(), 0, 0.5f, wm.screenH, guide);
+				if (wm.hud.snappedY) c.rect(0, r.centerY(), wm.screenW, 0.5f, guide);
 			}
 		}
 		String hint = "HUD · drag to move · right-click for settings · Alt+Space to add elements";
