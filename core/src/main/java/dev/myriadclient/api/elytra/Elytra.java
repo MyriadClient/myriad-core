@@ -10,7 +10,8 @@ import org.jetbrains.annotations.ApiStatus;
  * <li>{@link NoDurability}: gliding without wearing the elytra, and catching a glide dropped in mid-air;</li>
  * <li>{@link ChestSwap}: swapping the worn elytra with a chestplate in mid-air;</li>
  * <li>{@link GlideHold}: riding out a moment the server stops the glide, unseen by Grim;</li>
- * <li>{@link Pilot}: a flight module flying the local player by its own rotation, and holding the glide open.</li>
+ * <li>{@link Pilot}: a flight module flying the local player by its own rotation, and holding the glide open;</li>
+ * <li>{@link Flight}: a flight that flies itself along a heading ({@link #altitude}, {@link #control}).</li>
  * </ul>
  * To change the glide's movement itself (fly it at a set speed, boost it), listen to {@link GlideEvent}.
  *
@@ -55,6 +56,22 @@ public interface Elytra {
 	NoDurability noDurability(NoDurability.Owner owner);
 
 	ChestSwap chestSwap();
+
+	/**
+	 * A flight for {@code owner} that crosses open country without fireworks, for any server: it dives until fast, pulls
+	 * up and eases back to level, which holds its height, about 27 blocks a second (about 18 with No Durability where
+	 * Grim simulates the glide, so 2b2t's chunks come in ahead of it). It takes off only from the air. The owner says
+	 * whether to keep the elytra from wearing and hears its messages.
+	 */
+	Flight altitude(NoDurability.Owner owner);
+
+	/**
+	 * A flight for {@code owner} that flies straight along its heading at a set speed, holding a height, only where the
+	 * server doesn't simulate the glide ({@code AntiCheat.Profile#simulatesGlide()} false: NoCheatPlus, singleplayer);
+	 * Grim sets it back from the first tick. Speed builds as fast as NoCheatPlus's elytra check allows. It takes off from
+	 * the ground by itself while it has a speed.
+	 */
+	Flight control(NoDurability.Owner owner);
 
 	GlideHold glideHold();
 }

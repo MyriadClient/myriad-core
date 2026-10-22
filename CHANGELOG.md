@@ -137,6 +137,15 @@ and may change in any release. Addons declare the oldest core they support in `f
 - **Fixed:** `Placement.Forwarding` didn't hand on `use`, so while an addon's replacement of placement was in effect
   every hand click (a lever, a repeater's delay) was refused as unavailable. A test now checks that every service
   router and forwarding class hands on every method.
+- **Flights that fly themselves.** `Myriad.elytra().altitude(owner)` and `control(owner)` give a `Flight` steered by
+  a heading: Altitude's dive-and-climb cycle that holds its height without fireworks (about 27 blocks a second, 18
+  with No Durability on Grim), and Control's straight flight at a set speed where the glide isn't simulated, which
+  takes off by itself. Both keep No Durability (as the owner says), the mid-air catch, Preserve, a spare before the
+  worn elytra can't last the way down, slowing for unloaded chunks and riding out setbacks; `land()`, `onLanded(why)`,
+  and `state()`/`why()` (`CLIMBING`, `CRUISING`, `LANDING`, `DOWN`, `STUCK`) say how it's going. Essentials' Altitude
+  and Control are now settings over them, and Stash Hunter's Search flies them instead of its own copy (518 lines
+  gone). On the Grim test server Altitude flies as before: 605 blocks in 30 s with No Durability (606 before), 1722
+  blocks before landing on a wearing elytra (1722).
 - **Standard settings for acting.** `RotationSettings` (Turn Speed), `PlacementSettings` (Range, capped at what the
   server allows, and Air Place), `BreakingSettings` (Mode: Packet, or Fast for every block at 70% of its time, which
   past Grim means the decoy starts; Double Break with Fast) and `BuildingSettings` (those four, Actions Per Tick and

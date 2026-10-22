@@ -2,6 +2,7 @@ package dev.myriadclient.impl.elytra;
 
 import dev.myriadclient.api.elytra.ChestSwap;
 import dev.myriadclient.api.elytra.Elytra;
+import dev.myriadclient.api.elytra.Flight;
 import dev.myriadclient.api.elytra.GlideHold;
 import dev.myriadclient.api.elytra.NoDurability;
 
@@ -108,6 +109,16 @@ public final class ElytraManager implements Elytra {
 	@Override
 	public NoDurability noDurability(NoDurability.Owner owner) {
 		return new NoDurabilityEngine(owner);
+	}
+
+	@Override
+	public Flight altitude(NoDurability.Owner owner) {
+		return new AltitudeFlight(owner);
+	}
+
+	@Override
+	public Flight control(NoDurability.Owner owner) {
+		return new ControlFlight(owner);
 	}
 
 	@Override
