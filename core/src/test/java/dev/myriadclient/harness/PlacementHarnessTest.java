@@ -4,6 +4,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.util.MathUtil;
+import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -101,6 +102,33 @@ class PlacementHarnessTest {
 			assertEquals(9, attempts.stream().filter(Placement.Attempt::sent).count());
 			assertTrue(attempts.stream().filter(x -> !x.sent()).allMatch(x -> x.check() == Placement.Check.RATE_LIMITED),
 				attempts.stream().map(Placement.Attempt::check).toList().toString());
+		}
+	}
+
+	@Test
+	void anAirPlacementsSwapBackLandsOnTheBlocksOwnSlotEvenWhenTheServersSlotMovedMeanwhile() {
+		try (Harness h = Harness.start()) {
+			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
+			h.level.set(BlockPos.ZERO, Blocks.STONE.defaultBlockState());
+			h.standAt(0.5, 1, 0.5, -90, 0);
+			h.give(3, new ItemStack(Items.OBSIDIAN, 16)).give(5, new ItemStack(Items.DIAMOND_SWORD));
+			h.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.OFFHAND, new ItemStack(Items.TOTEM_OF_UNDYING));
+			ServerInventory server = ServerInventory.of(h.player);
+			Placement.Attempt[] a = new Placement.Attempt[1];
+			h.onTick(() -> {
+				// Nothing beside it: an air placement, from the off hand.
+				a[0] = Myriad.placement().place(this, new BlockPos(2, 2, 0), 3, Placement.Options.forServer().withAirPlace(true));
+				// Another module moves the server's slot in the same tick.
+				Myriad.inventory().hold("weapon", 5, 20);
+			}).ticks(3);
+			assertTrue(a[0].sent(), "not sent: " + a[0].check());
+			long swaps = h.sent(ServerboundPlayerActionPacket.class).stream().filter(p -> p.getAction() == ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND).count();
+			assertEquals(2, swaps, "not through the off hand and back");
+			server.apply(h.sent());
+			assertTrue(server.hotbar(3).is(Items.OBSIDIAN), "the block went back to slot " + server.held() + ", not its own: slot 3 has " + server.hotbar(3));
+			assertTrue(server.offHand().is(Items.TOTEM_OF_UNDYING), "the off hand kept " + server.offHand());
+			assertTrue(server.hotbar(5).is(Items.DIAMOND_SWORD));
+			assertEquals(5, server.held(), "the hold's slot isn't the server's at the end");
 		}
 	}
 }
