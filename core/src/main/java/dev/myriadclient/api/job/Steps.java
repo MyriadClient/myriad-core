@@ -1,6 +1,7 @@
 package dev.myriadclient.api.job;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.build.BlockRules;
 import dev.myriadclient.api.build.Blueprint;
 import dev.myriadclient.api.build.Build;
 import dev.myriadclient.api.module.Module;
@@ -12,10 +13,14 @@ import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.util.Client;
+import dev.myriadclient.api.util.MathUtil;
 import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.util.Reach;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -78,6 +83,94 @@ public final class Steps {
 			@Override
 			Placement.Attempt attempt(JobContext ctx) {
 				return Myriad.placement().place(ctx.job(), hit, slot, options);
+			}
+		});
+	}
+
+	/**
+	 * Makes the block at {@code pos} {@code wanted}, with the block in hotbar {@code slot}: placed with a
+	 * {@link Placement#solve solved} click so it faces the right way, one more added where the block takes several
+	 * (candles, layers, a slab's other half), then clicked by hand into its setting (a repeater's delay, a lever, a door
+	 * open or shut). Done once it's there; what the game sets itself (connections, power) isn't waited for. Stuck:
+	 * {@code WRONG_ANGLE} (no click from here: move), {@code OUT_OF_REACH}, {@code NOT_VISIBLE}, {@code NO_SUPPORT},
+	 * {@code ENTITY_IN_WAY}, {@code BLOCKED} (another block, or this one facing another way), {@code RATE_LIMITED};
+	 * {@code NO_SUPPORT} for a door's top half or a bed's head until the other half is placed, which brings it.
+	 * Failed: {@code SERVER_REFUSED}, {@code UNSUPPORTED} (a block no click makes, or no block in the slot).
+	 */
+	public static Step<Void> placeState(BlockPos pos, BlockState wanted, int slot, Placement.Options options) {
+		return Step.of("Place " + wanted.getBlock().getName().getString() + " at " + pos.toShortString(), () -> new Step.Run<>() {
+			private @Nullable CompletableFuture<Boolean> sent;
+
+			@Override
+			public Progress<Void> tick(JobContext ctx) {
+				BlockState current = Client.level().getBlockState(pos);
+				if (sent != null) {
+					if (!sent.isDone()) return Progress.running();
+					boolean ok = sent.join();
+					sent = null;
+					if (!ok && !BlockRules.matches(current, wanted, true)) return Progress.failed(Why.of(Why.SERVER_REFUSED, pos.toShortString(), pos));
+				}
+				if (BlockRules.matches(current, wanted, true)) return Progress.done();
+				// The top half of a door, the head of a bed: placed with the other half.
+				if (BlockRules.placedWithNeighbour(wanted))
+					return current.is(wanted.getBlock()) ? Progress.done() : Progress.stuck(Why.of(Why.NO_SUPPORT, pos.toShortString(), pos));
+				Placement.Attempt a;
+				if (current.is(wanted.getBlock())) {
+					if (!BlockRules.placedMatches(current, wanted) || BlockRules.count(current) > BlockRules.count(wanted))
+						return Progress.stuck(Why.of(Why.BLOCKED, pos.toShortString(), pos));
+					if (BlockRules.count(current) < BlockRules.count(wanted)) a = solved(ctx);
+					else {
+						if (BlockRules.clicksToMatch(current, wanted) < 0) return Progress.failed(Why.of(Why.UNSUPPORTED, pos.toShortString(), pos));
+						BlockHitResult hit = handHit(current);
+						if (hit == null) {
+							if (Reach.hitFor(pos, options.visibleFaces(), options.range()) != null) return Progress.stuck(Why.of(Why.WRONG_ANGLE, pos.toShortString(), pos));
+							return Progress.stuck(Why.of(Reach.canReach(pos, options.range()) ? Why.NOT_VISIBLE : Why.OUT_OF_REACH, pos.toShortString(), pos));
+						}
+						a = Myriad.placement().use(ctx.job(), hit, -1, options.withSneak(false));
+					}
+				} else if (!current.canBeReplaced()) return Progress.stuck(Why.of(Why.BLOCKED, pos.toShortString(), pos));
+				else a = solved(ctx);
+				if (a == null) return Progress.failed(Why.of(Why.UNSUPPORTED, pos.toShortString(), pos));
+				if (a.sent()) {
+					sent = a.result();
+					return Progress.running();
+				}
+				Why why = Why.of(a.check(), pos);
+				if (why == null) return Progress.running();
+				return why.is(Why.UNSUPPORTED) ? Progress.failed(why) : Progress.stuck(why);
+			}
+
+			/**
+			 * The nearest point of the block you can click by hand (seen, if the options want it) from where clicking keeps
+			 * it facing the way it does: a fence gate or door swings away from where you stand.
+			 */
+			private @Nullable BlockHitResult handHit(BlockState current) {
+				Vec3 eyes = Client.player().getEyePosition();
+				double r2 = options.range() * options.range();
+				BlockHitResult best = null;
+				double bestD = Double.MAX_VALUE;
+				for (Direction face : Direction.values()) {
+					for (Vec3 p : Reach.clickPoints(pos, face, false)) {
+						double d = eyes.distanceToSqr(p);
+						if (d > r2 || d >= bestD) continue;
+						// With a few degrees to spare: the look that gets there may come out a little off.
+						float yaw = MathUtil.anglesTo(eyes, p)[0];
+						if (!BlockRules.clickKeepsFacing(current, yaw - 5) || !BlockRules.clickKeepsFacing(current, yaw + 5)) continue;
+						BlockHitResult hit = new BlockHitResult(p, face, pos, false);
+						if (options.visibleFaces() && !Reach.canSee(hit)) continue;
+						best = hit;
+						bestD = d;
+					}
+				}
+				return best;
+			}
+
+			/** The solved click's attempt, or a refused one saying why there's no click; null without a block item. */
+			private Placement.@Nullable Attempt solved(JobContext ctx) {
+				if (slot < 0 || slot > 8 || !(Client.player().getInventory().getItem(slot).getItem() instanceof BlockItem)) return null;
+				Placement.Solution s = Myriad.placement().solve(pos, wanted, slot, options);
+				if (!s.found()) return Placement.Attempt.refused(pos, s.check());
+				return Myriad.placement().place(ctx.job(), s.click(), slot, options);
 			}
 		});
 	}

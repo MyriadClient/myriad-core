@@ -41,7 +41,13 @@ public interface Build {
 		/** It's the block you're standing on. */
 		SUPPORTS_YOU,
 		/** No click from here places it facing the right way; move and it may become possible. */
-		WRONG_ANGLE
+		WRONG_ANGLE,
+		/** Every hotbar slot holds something the build doesn't use: free one for its blocks. */
+		NO_SLOT,
+		/** The server refused the block there a few times in a row; it's tried again a little later. */
+		REFUSED,
+		/** Something a build can't make: a block with no item, a fluid, a portal, or a setting no click reaches. */
+		UNSUPPORTED
 	}
 
 	record Step(BlockPos pos, Target target, Status status) {

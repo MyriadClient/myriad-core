@@ -142,6 +142,7 @@ public final class Why {
 			case NO_SUPPORT -> NO_SUPPORT;
 			case NOT_VISIBLE -> NOT_VISIBLE;
 			case RATE_LIMITED -> RATE_LIMITED;
+			case WRONG_ANGLE -> WRONG_ANGLE;
 			case OCCUPIED -> BLOCKED;
 			case UNAVAILABLE -> UNSUPPORTED;
 		};
@@ -165,6 +166,9 @@ public final class Why {
 			case UNBREAKABLE -> UNBREAKABLE;
 			case FLUID -> FLUID;
 			case WRONG_ANGLE -> WRONG_ANGLE;
+			case NO_SLOT -> NO_SLOT;
+			case REFUSED -> SERVER_REFUSED;
+			case UNSUPPORTED -> UNSUPPORTED;
 		};
 		return c == null ? null : of(c, pos.toShortString(), pos);
 	}

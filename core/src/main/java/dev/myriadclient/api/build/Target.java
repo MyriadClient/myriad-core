@@ -14,6 +14,8 @@ import net.minecraft.world.level.block.state.properties.Property;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * What one position of a {@link Blueprint} should be: empty, a certain block, a block in a certain orientation, or
@@ -133,11 +135,68 @@ public interface Target {
 	}
 
 	/**
+	 * {@code state} as near exactly as a build can make it: its block, placed the way it faces (facing, half, axis,
+	 * hinge, attachment, rotation), as many of it (candles, sea pickles, layers, a double slab), and clicked into its
+	 * setting by hand (a repeater's delay, a comparator's mode, a note, open or closed, a lever) unless the build's
+	 * options leave settings be ({@code Building.Options.withClickSettings}). What the game keeps changing on its own
+	 * (connections, power, waterlogging) is left to it. The top half of a door and the head of a bed come with the
+	 * other half. For printing a schematic. One target per state, so asking for the same state twice is cheap.
+	 */
+	static Target exact(BlockState state) {
+		return Exact.of(state);
+	}
+
+	/**
 	 * Any full, solid block. Placing uses ordinary building blocks from your inventory: full cubes that don't fall and
 	 * don't open a screen when clicked (no chests, no sand).
 	 */
 	static Target solid() {
 		return Solid.INSTANCE;
+	}
+
+	/** {@link #exact}. */
+	final class Exact implements Target {
+		private static final Map<BlockState, Exact> ALL = new ConcurrentHashMap<>();
+		private final BlockState state;
+
+		private Exact(BlockState state) {
+			this.state = state;
+		}
+
+		static Exact of(BlockState state) {
+			return ALL.computeIfAbsent(state, Exact::new);
+		}
+
+		/** The state wanted. */
+		public BlockState state() {
+			return state;
+		}
+
+		@Override
+		public boolean matches(BlockGetter level, BlockPos pos, BlockState current) {
+			if (BlockRules.placedWithNeighbour(state)) return current.is(state.getBlock()) || current.canBeReplaced();
+			return BlockRules.matches(current, state, true);
+		}
+
+		@Override
+		public boolean wantsAir() {
+			return state.isAir();
+		}
+
+		@Override
+		public int preference(ItemStack stack) {
+			return !stack.isEmpty() && stack.is(BlockRules.item(state)) ? 0 : -1;
+		}
+
+		@Override
+		public BlockState orientedState() {
+			return state;
+		}
+
+		@Override
+		public String describe() {
+			return state.getBlock().getName().getString();
+		}
 	}
 
 	final class Air implements Target {

@@ -36,16 +36,16 @@ public interface Building {
 	 * what you need with the {@code with} methods, so options added in later versions keep their defaults in your code.
 	 */
 	final class Options {
-		public static final Options DEFAULT = new Options(Placement.Options.DEFAULT, Breaking.Options.DEFAULT, true, true, 4, 0, false);
-		public static final Options STRICT = new Options(Placement.Options.STRICT, Breaking.Options.STRICT, true, true, 1, 0, false);
+		public static final Options DEFAULT = new Options(Placement.Options.DEFAULT, Breaking.Options.DEFAULT, true, true, 4, 0, false, true);
+		public static final Options STRICT = new Options(Placement.Options.STRICT, Breaking.Options.STRICT, true, true, 1, 0, false, true);
 
 		private final Placement.Options placing;
 		private final Breaking.Options breaking;
-		private final boolean breakWrong, avoidFluids, keepUp;
+		private final boolean breakWrong, avoidFluids, keepUp, clickSettings;
 		private final int placesPerTick, priority;
 
 		private Options(Placement.Options placing, Breaking.Options breaking, boolean breakWrong, boolean avoidFluids, int placesPerTick,
-		                int priority, boolean keepUp) {
+		                int priority, boolean keepUp, boolean clickSettings) {
 			this.placing = Objects.requireNonNull(placing);
 			this.breaking = Objects.requireNonNull(breaking);
 			this.breakWrong = breakWrong;
@@ -53,6 +53,7 @@ public interface Building {
 			this.placesPerTick = Math.max(1, placesPerTick);
 			this.priority = priority;
 			this.keepUp = keepUp;
+			this.clickSettings = clickSettings;
 		}
 
 		/**
@@ -91,7 +92,7 @@ public interface Building {
 			return avoidFluids;
 		}
 
-		/** Most placements started per tick. */
+		/** Most placements and hand clicks (settings) started per tick; breaks go at the breaking service's own pace. */
 		public int placesPerTick() {
 			return placesPerTick;
 		}
@@ -110,48 +111,63 @@ public interface Building {
 		}
 
 		public Options withPlacing(Placement.Options placing) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
 		}
 
 		public Options withBreaking(Breaking.Options breaking) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
 		}
 
 		public Options withBreakWrong(boolean breakWrong) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
 		}
 
 		public Options withAvoidFluids(boolean avoidFluids) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
 		}
 
 		public Options withPlacesPerTick(int placesPerTick) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
 		}
 
 		public Options withPriority(int priority) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
 		}
 
 		public Options withKeepUp(boolean keepUp) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
+		}
+
+		/**
+		 * Click blocks into their setting by hand after placing them, where the target says (a repeater's delay, a
+		 * comparator's mode, a note, open or closed, a lever: {@link dev.myriadclient.api.build.Target#exact}). On by
+		 * default; off, a block placed the right way counts as done whatever its setting.
+		 */
+		public Options withClickSettings(boolean clickSettings) {
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
+		}
+
+		/** Whether settings are clicked; see {@link #withClickSettings}. */
+		public boolean clickSettings() {
+			return clickSettings;
 		}
 
 		@Override
 		public boolean equals(Object o) {
 			return o instanceof Options x && x.placing.equals(placing) && x.breaking.equals(breaking) && x.breakWrong == breakWrong
-				&& x.avoidFluids == avoidFluids && x.placesPerTick == placesPerTick && x.priority == priority && x.keepUp == keepUp;
+				&& x.avoidFluids == avoidFluids && x.placesPerTick == placesPerTick && x.priority == priority && x.keepUp == keepUp
+				&& x.clickSettings == clickSettings;
 		}
 
 		@Override
 		public int hashCode() {
-			return Objects.hash(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp);
+			return Objects.hash(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
 		}
 
 		@Override
 		public String toString() {
 			return "Building.Options[placing=" + placing + ", breaking=" + breaking + ", breakWrong=" + breakWrong + ", avoidFluids="
-				+ avoidFluids + ", placesPerTick=" + placesPerTick + ", priority=" + priority + ", keepUp=" + keepUp + "]";
+				+ avoidFluids + ", placesPerTick=" + placesPerTick + ", priority=" + priority + ", keepUp=" + keepUp + ", clickSettings=" + clickSettings + "]";
 		}
 	}
 

@@ -9,8 +9,11 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -85,9 +88,9 @@ public final class Reach {
 
 	/**
 	 * A click on the block at {@code pos} for opening, breaking or using it: the nearest point within {@code range}
-	 * on the nearest face, preferring faces you can see. Each face is tried at its point nearest the eyes (so the whole
-	 * reach counts), then at its centre in case something hides the edge. With {@code mustSee}, only visible faces
-	 * count (strict anti-cheats check this). Null if no face qualifies.
+	 * on the nearest face of its real outline (a slab's top is half way up), preferring faces you can see. Each face is
+	 * tried at its point nearest the eyes (so the whole reach counts), then at its centre in case something hides the
+	 * edge. With {@code mustSee}, only visible faces count (strict anti-cheats check this). Null if no face qualifies.
 	 */
 	public static @Nullable BlockHitResult hitFor(BlockPos pos, boolean mustSee, double range) {
 		if (mc().level == null || mc().player == null) return null;
@@ -96,23 +99,16 @@ public final class Reach {
 		BlockHitResult best = null, bestHidden = null;
 		double bestDist = Double.MAX_VALUE, bestHiddenDist = Double.MAX_VALUE;
 		for (Direction face : Direction.values()) {
-			boolean exposed = faceExposed(pos, face);
-			for (Vec3 point : new Vec3[]{nearestOnFace(pos, face, eyes), Positions.faceCenter(pos, face)}) {
+			for (Vec3 point : clickPoints(pos, face, false)) {
 				double d = eyes.distanceToSqr(point);
 				if (d > r2) continue;
-				// Seeing a face means the ray from the eyes lands on this face of this block: not on one in front of it, nor
-				// on another face it enters through first (the top, for the top of a side face seen from above).
-				BlockHitResult ray = mc().level.clip(new ClipContext(eyes, point, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, mc().player));
-				boolean visible = exposed && (ray.getType() == HitResult.Type.MISS || ray.getBlockPos().equals(pos) && ray.getDirection() == face);
 				BlockHitResult hit = new BlockHitResult(point, face, pos, false);
-				if (visible) {
+				if (canSee(hit)) {
 					if (d < bestDist) {
 						best = hit;
 						bestDist = d;
 					}
-					break;
-				}
-				if (d < bestHiddenDist) {
+				} else if (d < bestHiddenDist) {
 					bestHidden = hit;
 					bestHiddenDist = d;
 				}
@@ -121,20 +117,77 @@ public final class Reach {
 		return best != null || mustSee ? best : bestHidden;
 	}
 
-	/** How far in from the edges {@link #nearestOnFace} stays, so the ray lands on the face rather than its rim. */
-	private static final double EDGE_INSET = 0.01;
+	/** How far a point is moved off the surface to check it's on the outside of the outline there. */
+	private static final double PROBE = 0.01;
+	/** Where across a face part the spread points sit, as shares of its width from one edge. */
+	private static final double[] SPREAD = {0.2, 0.5, 0.8};
 
-	/** The point of {@code face} of the block at {@code pos} nearest to {@code from}. */
-	private static Vec3 nearestOnFace(BlockPos pos, Direction face, Vec3 from) {
-		double x = Math.clamp(from.x, pos.getX() + EDGE_INSET, pos.getX() + 1 - EDGE_INSET);
-		double y = Math.clamp(from.y, pos.getY() + EDGE_INSET, pos.getY() + 1 - EDGE_INSET);
-		double z = Math.clamp(from.z, pos.getZ() + EDGE_INSET, pos.getZ() + 1 - EDGE_INSET);
-		double plane = face.getAxisDirection() == Direction.AxisDirection.POSITIVE ? 1 : 0;
-		return switch (face.getAxis()) {
-			case X -> new Vec3(pos.getX() + plane, y, z);
-			case Y -> new Vec3(x, pos.getY() + plane, z);
-			case Z -> new Vec3(x, y, pos.getZ() + plane);
+	/**
+	 * Points where the block at {@code pos} can really be clicked on its side facing {@code face}: on its outline (a
+	 * slab's top is half way up, a candle is a sliver in the middle, a stair has two tops), not the cube around it, and
+	 * only where no other part of the block covers it. For each part of the outline with a side that way, its centre
+	 * and its point nearest your eyes (a little in from the edges), and with {@code spread} a 3x3 grid over it too,
+	 * for blocks where where you click matters (a slab's half, a door's hinge). For an empty space (air), the cube's.
+	 */
+	public static List<Vec3> clickPoints(BlockPos pos, Direction face, boolean spread) {
+		List<Vec3> out = new ArrayList<>();
+		if (mc().level == null) return out;
+		VoxelShape shape = mc().level.getBlockState(pos).getShape(mc().level, pos);
+		if (shape.isEmpty()) shape = Shapes.block();
+		Vec3 eyes = eyes();
+		Direction.Axis axis = face.getAxis();
+		Direction.Axis u = axis == Direction.Axis.X ? Direction.Axis.Y : Direction.Axis.X, v = axis == Direction.Axis.Z ? Direction.Axis.Y : Direction.Axis.Z;
+		for (AABB part : shape.toAabbs()) {
+			AABB b = part.move(pos);
+			double at = face.getAxisDirection() == Direction.AxisDirection.POSITIVE ? b.max(axis) : b.min(axis);
+			double u0 = b.min(u), u1 = b.max(u), v0 = b.min(v), v1 = b.max(v);
+			double inset = Math.min(0.05, Math.min(u1 - u0, v1 - v0) / 4);
+			addOutside(out, shape, pos, face, point(axis, at, u, (u0 + u1) / 2, v, (v0 + v1) / 2));
+			addOutside(out, shape, pos, face, point(axis, at, u, Math.clamp(eyes.get(u), u0 + inset, u1 - inset), v, Math.clamp(eyes.get(v), v0 + inset, v1 - inset)));
+			if (!spread) continue;
+			for (double fu : SPREAD) {
+				for (double fv : SPREAD) {
+					if (fu != 0.5 || fv != 0.5) addOutside(out, shape, pos, face, point(axis, at, u, u0 + (u1 - u0) * fu, v, v0 + (v1 - v0) * fv));
+				}
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Whether a look from your eyes at {@code hit}'s point would land on that face of that block: the face points
+	 * towards you (you're past the plane it's in, a slab's top half way up) and nothing comes first, neither another
+	 * block nor another face of this one (from above, a look at the top of a side face enters through the top).
+	 */
+	public static boolean canSee(BlockHitResult hit) {
+		if (mc().level == null || mc().player == null) return false;
+		Vec3 e = eyes(), p = hit.getLocation();
+		boolean exposed = switch (hit.getDirection()) {
+			case UP -> e.y > p.y;
+			case DOWN -> e.y < p.y;
+			case EAST -> e.x > p.x;
+			case WEST -> e.x < p.x;
+			case SOUTH -> e.z > p.z;
+			case NORTH -> e.z < p.z;
 		};
+		if (!exposed) return false;
+		BlockHitResult ray = mc().level.clip(new ClipContext(e, p, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, mc().player));
+		return ray.getType() == HitResult.Type.MISS || ray.getBlockPos().equals(hit.getBlockPos()) && ray.getDirection() == hit.getDirection();
+	}
+
+	/** Adds {@code p} if it's on the outside of {@code shape}, facing {@code face}. */
+	private static void addOutside(List<Vec3> out, VoxelShape shape, BlockPos pos, Direction face, Vec3 p) {
+		Vec3 n = Vec3.atLowerCornerOf(face.getUnitVec3i());
+		BlockHitResult hit = shape.clip(p.add(n.scale(PROBE)), p.subtract(n.scale(PROBE)), pos);
+		if (hit != null && hit.getDirection() == face && hit.getLocation().distanceToSqr(p) < PROBE * PROBE * 4) out.add(p);
+	}
+
+	private static Vec3 point(Direction.Axis axis, double at, Direction.Axis u, double uValue, Direction.Axis v, double vValue) {
+		double[] xyz = new double[3];
+		xyz[axis.ordinal()] = at;
+		xyz[u.ordinal()] = uValue;
+		xyz[v.ordinal()] = vValue;
+		return new Vec3(xyz[0], xyz[1], xyz[2]);
 	}
 
 	/**

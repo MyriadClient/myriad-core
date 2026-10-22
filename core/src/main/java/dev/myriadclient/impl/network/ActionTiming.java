@@ -30,7 +30,8 @@ import java.util.Deque;
  * at the start of the next tick, before anything else. The server then still has the rotation they were aimed with.
  * <p>
  * Core's own services act at the start of the tick and never wait here; this catches anything else (an addon acting at
- * the end of a tick, or in a callback).
+ * the end of a tick, or in a callback). The one exception is {@link #holdRestOfTick()}, after a click whose look reaches
+ * the server only in the movement packet after it.
  */
 public final class ActionTiming {
 	/** Runs before every other tick-start handler, so held actions go out before anything new. */
@@ -64,9 +65,19 @@ public final class ActionTiming {
 			|| p instanceof ServerboundPlayerCommandPacket || p instanceof ServerboundPlayerActionPacket;
 	}
 
-	/** Whether this tick's movement has gone out, so an action sent now is held for the next tick. */
+	/** Whether an action sent now is held for the next tick: this tick's movement has gone out, or something asked. */
 	public boolean isLate() {
 		return afterMovement;
+	}
+
+	/**
+	 * Holds this tick's remaining actions for the next tick, as if the movement packet had gone out. For a placement
+	 * aimed by the look in the movement packet after it: Grim (RotationPlace) decides a placement at the next movement
+	 * packet with that packet's look, but a slot change before it makes Grim decide at once, with only the look the
+	 * server had at the click.
+	 */
+	public void holdRestOfTick() {
+		afterMovement = true;
 	}
 
 	/** Called for every packet that went out: a movement or tick-end packet closes this tick's window for actions. */

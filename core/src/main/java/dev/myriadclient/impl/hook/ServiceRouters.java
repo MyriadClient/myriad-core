@@ -7,6 +7,7 @@ import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -306,6 +307,16 @@ final class ServiceRouters {
 		@Override
 		public Placement.Attempt use(Object owner, BlockHitResult hit, int hotbarSlot, Placement.Options options) {
 			return of(owner).use(owner, hit, hotbarSlot, options);
+		}
+
+		@Override
+		public Placement.Attempt place(Object owner, Placement.Click click, int hotbarSlot, Placement.Options options) {
+			return of(owner).place(owner, click, hotbarSlot, options);
+		}
+
+		@Override
+		public Placement.Solution solve(BlockPos pos, BlockState wanted, int hotbarSlot, Placement.Options options) {
+			return all().solve(pos, wanted, hotbarSlot, options);
 		}
 
 		@Override

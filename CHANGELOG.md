@@ -93,6 +93,50 @@ and may change in any release. Addons declare the oldest core they support in `f
   tiling window manager made room for another window.)
 - Every root job that fails or is cancelled says why in the log ("Kit Builder › Kit 1 ended: no room: the output is
   full"): its notice is a toast, gone a moment later.
+- **Blocks placed facing the way they're meant to.** `Placement.solve(pos, wanted, slot, options)` works out the click
+  that makes `wanted` come out at `pos`: the face, the point on it, the look, and whether the server is to see you
+  sneaking (placing against a chest or a repeater without opening or clicking it). It tries every face at a few points
+  the way the game itself would place the item there, so facing, half, axis, hinge, attachment and rotation come out
+  as asked, and on a block that already has fewer of itself (candles, layers, a slab's other half) it adds one. The
+  answer is a `Placement.Solution`: a `Placement.Click` to hand to `place(owner, click, slot, options)`, or a `Check`
+  saying why not, with `WRONG_ANGLE` new for "no click from where you stand". Where the server checks looks the click
+  turns first and is checked once more against the look the server really has before it goes, so a look that came out
+  a hair different can't place the block the wrong way. Click points follow blocks' real outlines (`Reach.hitFor`,
+  `clickTargets`, and the new `Reach.clickPoints` and `Reach.canSee(hit)`): a slab's top is half way up.
+  - **Aimed clicks.** Some facings no look on the block gives (an observer facing you from below, say): those are
+    clicked with a clean rotation and looked at in the next movement packet (`Click.aimed()`), since Grim checks a
+    placement at the next movement packet, against that packet's look and the one before. Grim decides at once, with
+    only the look before, if a slot change or a reply to one of its pings reaches it first (it did when a build broke
+    something in the same tick, and Grim then flagged every placement after). So after an aimed click the rest of that
+    tick's actions wait for the next tick, the breaking service stays out of that tick (a break started then would be
+    counted a tick early: FastBreak), and an aimed click the server refuses, or a slot change or ping reply that got
+    out anyway, turns aimed clicks off until Grim's own count has run down.
+  - **Blocks that face where you look wait for your head.** The server takes an observer's, piston's, dispenser's or
+    crafter's facing from your head's yaw, and turns your head to your look only on its own tick of you: a turned
+    click that reached it in the same server tick as its look came out facing the way you looked before (in
+    singleplayer every such block of a session, or none, depending on how the client's and server's ticks line up).
+    Such a click now waits a tick longer unless the look before gives the same block.
+  - **`Building` places every block through `solve`.** `Target.exact(state)` asks for a state as near as clicks make
+    it: placed the way it faces, as many of it, and clicked into its setting by hand (a repeater's delay, a
+    comparator's mode, a note, open or shut, a lever), for printing schematics; `Building.Options.withClickSettings(false)`
+    leaves settings be. Blocks the click doesn't shape go first, so oriented ones have more to be placed against; then
+    bottom up and nearest first. `Build.Status` gains `NO_SLOT` (every hotbar slot holds something the build doesn't
+    use), `REFUSED` (the server refused it a few times; tried again later) and `UNSUPPORTED`.
+  - `Steps.placeState(pos, state, slot, options)` makes one block a state as a step: solved placement, one more where
+    it takes several, then its setting.
+  - Myriad Automation's Printer and Portal Builder build on this, and its own engine (`BuildJob`, `ClickSolver`,
+    `StateRules`, `BlockShapes`, `TargetWorld`, `Clicker`) is gone. Its acceptance run places 236 states of 31 tricky
+    blocks, standing still. In singleplayer, strict 141 to 143 right and 1 wrong over three fresh sessions (the old
+    engine 133 and 4), lenient 210 and 1 (193 and 4), air placement 197 and 3 (160 and 13), lenient air placement
+    235 and 1 (236 and 0); the one wrong is a fence gate that would swing round if opened from where you stand. On
+    the Grim test server with strict options: 140 to 141 right, 1 wrong (the old engine 138 and 1), as 1.20.4 143
+    right, on crafting tables (every click sneaking) 141 to 142 right, all with no flags. Planning a 40x12x40 blueprint with 658
+    positions in reach (`.buildbench`, warm): 33 µs a tick with everything built, 47 µs with everything blocked, 114 µs
+    with nothing to build with (the old engine 20, 58 and 104), allocating 144 to 240 bytes a tick (13 KB with
+    nothing to build with before); finding clicks stays capped at 1 ms a tick.
+- **Fixed:** `Placement.Forwarding` didn't hand on `use`, so while an addon's replacement of placement was in effect
+  every hand click (a lever, a repeater's delay) was refused as unavailable. A test now checks that every service
+  router and forwarding class hands on every method.
 
 ## 0.7.0
 

@@ -2,121 +2,54 @@ package dev.myriadclient.impl.service;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.build.Blueprint;
-import dev.myriadclient.api.build.Build.Status;
 import dev.myriadclient.api.build.Build;
-import dev.myriadclient.api.build.Target;
 import dev.myriadclient.api.event.Priority;
 import dev.myriadclient.api.event.Subscribe;
+import dev.myriadclient.api.event.events.BlockUpdateEvent;
+import dev.myriadclient.api.event.events.TeleportEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
-import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Building;
-import dev.myriadclient.api.service.Placement;
-import dev.myriadclient.api.util.MathUtil;
-import dev.myriadclient.api.util.Reach;
 import dev.myriadclient.impl.MyriadImpl;
-import dev.myriadclient.impl.mixin.BlockItemAccessor;
-import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.context.BlockPlaceContext;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.Property;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.item.Item;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 
 /**
- * Plans and runs builds. Each tick, for every running build, only the blueprint positions in reach are looked at:
- * each gets a {@link Status} from cheap checks, breaks are handed to {@link Breaking} (top down, nearest first), and
- * the best few placements (bottom up, nearest first) get the full placement check and are placed through
- * {@link Placement}. Whether the whole blueprint is done is checked at most every few seconds, and only once nothing
- * in reach is left to do.
+ * Runs builds ({@link BuildRun}, one each): ticks them before the placement and breaking services act this tick, so
+ * what's planned now goes out now, and tells them when the server changes a block or moves you. What all builds share
+ * lives here: one inventory move a tick between them, and each item's hotbar slot worked out once a tick.
  */
 public final class BuildManager implements Building {
-	/** Most breaks handed to the breaking service per build per tick; the rest wait, so ordering stays fresh. */
-	private static final int BREAKS_QUEUED = 8;
-	/** Most placement candidates given the full (raycasting) check per build per tick. */
-	private static final int PLACES_CHECKED = 24;
-	/** Ticks between full "is the blueprint done" scans. */
-	private static final int SCAN_INTERVAL = 100;
-
 	private final Minecraft mc = Minecraft.getInstance();
-	private final List<BuildImpl> builds = new ArrayList<>();
+	private final PlacementManager placement;
+	private final List<BuildRun> builds = new ArrayList<>();
+	/** Each item's hotbar slot this tick (or why there's none), asked once however many positions want it. */
+	private final Reference2IntOpenHashMap<Item> slots = new Reference2IntOpenHashMap<>();
 	private boolean movedMaterialThisTick;
 
-	private final class BuildImpl implements Build {
-		final Object owner;
-		final Blueprint blueprint;
-		final Options options;
-		final CompletableFuture<Boolean> finished = new CompletableFuture<>();
-		volatile List<Step> steps = List.of();
-		volatile int remaining = -1;
-		volatile boolean running = true, done;
-		int lastScan = -SCAN_INTERVAL, age;
+	public BuildManager(PlacementManager placement) {
+		this.placement = placement;
+	}
 
-		BuildImpl(Object owner, Blueprint blueprint, Options options) {
-			this.owner = owner;
-			this.blueprint = blueprint;
-			this.options = options;
-		}
-
-		@Override
-		public List<Step> steps() {
-			return steps;
-		}
-
-		@Override
-		public int remaining() {
-			return remaining;
-		}
-
-		@Override
-		public boolean isDone() {
-			return done;
-		}
-
-		@Override
-		public boolean isRunning() {
-			return running;
-		}
-
-		@Override
-		public void stop() {
-			end(false);
-		}
-
-		void end(boolean completed) {
-			if (!running) return;
-			running = false;
-			Myriad.breaking().cancel(this);
-			Myriad.placement().cancel(this);
-			finished.complete(completed);
-		}
-
-		@Override
-		public CompletableFuture<Boolean> finished() {
-			return finished;
-		}
+	PlacementManager placement() {
+		return placement;
 	}
 
 	@Override
 	public Build start(Object owner, Blueprint blueprint, Options options) {
-		BuildImpl b = new BuildImpl(owner, blueprint, options);
+		BuildRun b = new BuildRun(this, owner, blueprint, options);
 		builds.add(b);
 		return b;
 	}
 
 	@Override
 	public void stop(Object owner) {
-		for (BuildImpl b : new ArrayList<>(builds)) if (b.owner == owner) b.stop();
+		for (BuildRun b : new ArrayList<>(builds)) if (b.owner == owner) b.stop();
 	}
 
 	@Override
@@ -124,16 +57,17 @@ public final class BuildManager implements Building {
 		return builds.stream().filter(Build::isRunning).map(Build.class::cast).toList();
 	}
 
-	/** Before the breaking and placement services run this tick, so what's planned now happens now. */
 	@Subscribe(priority = Priority.HIGH)
 	private void onTick(TickEvent.Pre e) {
-		builds.removeIf(b -> !b.running);
+		builds.removeIf(b -> !b.isRunning());
 		if (builds.isEmpty() || mc.player == null || mc.level == null) return;
 		movedMaterialThisTick = false;
-		for (BuildImpl b : new ArrayList<>(builds)) {
+		slots.clear();
+		for (BuildRun b : new ArrayList<>(builds)) {
 			try {
-				tick(b);
-			} catch (RuntimeException ex) {
+				b.tick();
+			} catch (RuntimeException | LinkageError ex) {
+				// A linkage error is another mod (a schematic mod) at a version whose methods changed: stop rather than crash.
 				MyriadImpl.LOG.error("Build for {} failed", b.owner, ex);
 				b.stop();
 			}
@@ -141,244 +75,39 @@ public final class BuildManager implements Building {
 	}
 
 	@Subscribe
+	private void onBlockUpdate(BlockUpdateEvent e) {
+		for (BuildRun b : builds) b.blockUpdated(e.pos());
+	}
+
+	@Subscribe
+	private void onTeleport(TeleportEvent e) {
+		for (BuildRun b : builds) b.teleported();
+	}
+
+	@Subscribe
 	private void onLeave(WorldEvent.Leave e) {
-		for (BuildImpl b : new ArrayList<>(builds)) b.stop();
+		for (BuildRun b : new ArrayList<>(builds)) b.stop();
 		builds.clear();
 	}
 
-	private void tick(BuildImpl b) {
-		b.age++;
-		Options o = b.options;
-		Vec3 eyes = mc.player.getEyePosition();
-		double reach = Math.max(o.placing().range(), o.breaking().range());
-
-		// The positions in reach, side by side; breaks and places by index into them.
-		List<BlockPos> positions = new ArrayList<>();
-		List<Target> targets = new ArrayList<>();
-		List<Status> status = new ArrayList<>();
-		IntArrayList breaks = new IntArrayList(), places = new IntArrayList();
-		b.blueprint.near(eyes, reach + 1, (pos, target) -> {
-			if (!mc.level.isLoaded(pos)) return;
-			Status s = evaluate(pos, target, eyes, o);
-			if (s == Status.BREAK) breaks.add(positions.size());
-			else if (s == Status.PLACE) places.add(positions.size());
-			positions.add(pos.immutable());
-			targets.add(target);
-			status.add(s);
-		});
-
-		// Top down, so falling blocks land in space that's already clear; then nearest first.
-		breaks.sort((i, j) -> {
-			int byY = Integer.compare(positions.get(j).getY(), positions.get(i).getY());
-			return byY != 0 ? byY : Double.compare(eyes.distanceToSqr(Vec3.atCenterOf(positions.get(i))), eyes.distanceToSqr(Vec3.atCenterOf(positions.get(j))));
-		});
-		for (int k = 0; k < breaks.size() && k < BREAKS_QUEUED; k++) {
-			int i = breaks.getInt(k);
-			Breaking.Attempt a = Myriad.breaking().breakBlock(b, positions.get(i), o.priority(), o.breaking());
-			if (a.accepted()) status.set(i, Status.WAITING);
-		}
-
-		// Bottom up, so each placement has something under or beside it; then nearest first.
-		places.sort((i, j) -> {
-			int byY = Integer.compare(positions.get(i).getY(), positions.get(j).getY());
-			return byY != 0 ? byY : Double.compare(eyes.distanceToSqr(Vec3.atCenterOf(positions.get(i))), eyes.distanceToSqr(Vec3.atCenterOf(positions.get(j))));
-		});
-		int placed = 0, checked = 0;
-		for (int k = 0; k < places.size(); k++) {
-			if (placed >= o.placesPerTick() || checked >= PLACES_CHECKED) break;
-			checked++;
-			int i = places.getInt(k);
-			Status s = place(b, positions.get(i), targets.get(i));
-			status.set(i, s);
-			if (s == Status.WAITING) placed++;
-		}
-
-		List<Build.Step> steps = new ArrayList<>(positions.size());
-		boolean workLeft = false;
-		for (int i = 0; i < positions.size(); i++) {
-			steps.add(new Build.Step(positions.get(i), targets.get(i), status.get(i)));
-			if (status.get(i) != Status.DONE) workLeft = true;
-		}
-		b.steps = steps;
-
-		// Whole-blueprint check, only when there's nothing left to do here.
-		if (!workLeft && b.age - b.lastScan >= SCAN_INTERVAL) {
-			b.lastScan = b.age;
-			int[] left = {0};
-			b.blueprint.forEach((pos, target) -> {
-				if (!mc.level.isLoaded(pos) || !target.matches(mc.level, pos, mc.level.getBlockState(pos))) left[0]++;
-			});
-			b.remaining = left[0];
-			b.done = left[0] == 0;
-			if (b.done && !o.keepUp()) b.end(true);
-		} else if (workLeft) {
-			b.done = false;
-		}
+	/** {@code item}'s hotbar slot (or why there's none) if a build already worked it out this tick, else {@link Integer#MIN_VALUE}. */
+	int slotThisTick(Item item) {
+		return slots.getOrDefault(item, Integer.MIN_VALUE);
 	}
 
-	/** The cheap part of planning a position: everything but the placement's raycasts and material. */
-	private Status evaluate(BlockPos pos, Target target, Vec3 eyes, Options o) {
-		BlockState state = mc.level.getBlockState(pos);
-		if (target.matches(mc.level, pos, state)) return Status.DONE;
-		if (Myriad.breaking().isPending(pos) || Myriad.placement().isPending(pos)) return Status.WAITING;
-		double dist = eyes.distanceToSqr(Vec3.atCenterOf(pos));
-		boolean inTheWay = target.wantsAir() || !state.canBeReplaced();
-		if (inTheWay) {
-			if (!target.wantsAir() && !o.breakWrong()) return Status.BLOCKED;
-			if (!Reach.canReach(pos, o.breaking().range())) return Status.OUT_OF_RANGE;
-			switch (Myriad.breaking().check(pos, o.breaking())) {
-				case UNBREAKABLE -> {
-					return Status.UNBREAKABLE;
-				}
-				case OUT_OF_RANGE -> {
-					return Status.OUT_OF_RANGE;
-				}
-				case PENDING, UNAVAILABLE -> {
-					return Status.WAITING;
-				}
-				case NOTHING_THERE -> {
-					// A fluid: nothing to break; a non-air target places into it below.
-					if (target.wantsAir()) return Status.DONE;
-				}
-				case OK -> {
-					if (supportsPlayer(pos)) return Status.SUPPORTS_YOU;
-					if (o.avoidFluids() && holdsBackFluid(pos)) return Status.FLUID;
-					return Status.BREAK;
-				}
-			}
-		}
-		if (dist > o.placing().range() * o.placing().range()) return Status.OUT_OF_RANGE;
-		return Status.PLACE;
-	}
-
-	/** Gets the material and places, or says why it couldn't. */
-	private Status place(BuildImpl b, BlockPos pos, Target target) {
-		int slot = materialSlot(target);
-		if (slot == -2) return Status.NO_ITEM;
-		if (slot < 0) return Status.WAITING;
-		Placement.Options po = b.options.placing();
-		Placement.Attempt attempt;
-		BlockState oriented = target.orientedState();
-		if (oriented != null) {
-			Placement.Check check = Myriad.placement().check(pos, po);
-			if (!check.ok()) return status(check);
-			BlockHitResult hit = orientedClick(pos, oriented, slot, po);
-			if (hit == null) return Status.WRONG_ANGLE;
-			// The orientation follows the rotation, so it's always sent.
-			Placement.Options rotated = po.withRotate(true);
-			attempt = Myriad.placement().place(b, hit, slot, rotated);
-		} else {
-			attempt = Myriad.placement().place(b, pos, slot, po);
-		}
-		return attempt.sent() ? Status.WAITING : status(attempt.check());
-	}
-
-	private static Status status(Placement.Check check) {
-		return switch (check) {
-			case OK -> Status.PLACE;
-			case OCCUPIED -> Status.BLOCKED;
-			case OUT_OF_RANGE -> Status.OUT_OF_RANGE;
-			case ENTITY_IN_WAY -> Status.ENTITY_IN_WAY;
-			case NO_SUPPORT -> Status.NO_SUPPORT;
-			case NOT_VISIBLE -> Status.NOT_VISIBLE;
-			case UNAVAILABLE, PENDING, RATE_LIMITED -> Status.WAITING;
-		};
+	/** Keeps {@code item}'s hotbar slot (or why there's none) for the rest of this tick, and returns it. */
+	int rememberSlot(Item item, int slot) {
+		slots.put(item, slot);
+		return slot;
 	}
 
 	/**
-	 * The hotbar slot with the best item for {@code target}; otherwise moves one in from the inventory (one move a
-	 * tick) and returns -1 to wait for it, or -2 if there's none at all.
+	 * Makes one inventory move for a build if none has been made this tick and a click can go (Grim cancels inventory
+	 * clicks while you move: keys are released for a tick first if needed). Returns what {@code move} did.
 	 */
-	private int materialSlot(Target target) {
-		var inv = mc.player.getInventory();
-		int best = -1, bestPref = Integer.MAX_VALUE;
-		for (int i = 0; i < 9; i++) {
-			int pref = target.preference(inv.getItem(i));
-			if (pref >= 0 && pref < bestPref) {
-				best = i;
-				bestPref = pref;
-			}
-		}
-		if (best >= 0) return best;
-		if (Myriad.inventory().findInInventory(s -> target.preference(s) >= 0) < 0) return -2;
-		// Grim cancels inventory clicks while you move: keys are released for a tick first if needed.
-		if (!movedMaterialThisTick && Myriad.inventory().prepareClick()) {
-			movedMaterialThisTick = true;
-			Myriad.inventory().ensureInHotbar(s -> target.preference(s) >= 0, -1);
-		}
-		return -1;
-	}
-
-	/**
-	 * A click that places {@code oriented} the right way: for each face it could be placed against and a few points
-	 * on it, what vanilla would place with the rotation that looks at that point. The rotation is nudged a few
-	 * degrees both ways to make sure it isn't on an edge where a small error flips the result.
-	 */
-	private BlockHitResult orientedClick(BlockPos pos, BlockState oriented, int slot, Placement.Options po) {
-		ItemStack stack = mc.player.getInventory().getItem(slot);
-		if (!(stack.getItem() instanceof BlockItem item)) return null;
-		Vec3 eyes = mc.player.getEyePosition();
-		List<Property<?>> props = Target.Orientation.PROPERTIES.stream().filter(oriented::hasProperty).toList();
-		float yaw = mc.player.getYRot(), pitch = mc.player.getXRot(), yawO = mc.player.yRotO, pitchO = mc.player.xRotO;
-		try {
-			for (BlockHitResult face : Myriad.placement().clickTargets(pos)) {
-				if (po.visibleFaces() && !Reach.faceExposed(face.getBlockPos(), face.getDirection())) continue;
-				for (Vec3 point : pointsOn(face)) {
-					BlockHitResult hit = new BlockHitResult(point, face.getDirection(), face.getBlockPos(), false);
-					float[] rot = MathUtil.anglesTo(eyes, point);
-					if (places(item, stack, hit, rot[0], rot[1], oriented, props)
-						&& places(item, stack, hit, rot[0] + 3, rot[1] + 3, oriented, props)
-						&& places(item, stack, hit, rot[0] - 3, rot[1] - 3, oriented, props)) return hit;
-				}
-			}
-			return null;
-		} finally {
-			mc.player.setYRot(yaw);
-			mc.player.setXRot(pitch);
-			mc.player.yRotO = yawO;
-			mc.player.xRotO = pitchO;
-		}
-	}
-
-	/** Whether placing with {@code hit} while facing {@code yaw}/{@code pitch} gives {@code oriented}'s orientation. */
-	private boolean places(BlockItem item, ItemStack stack, BlockHitResult hit, float yaw, float pitch, BlockState oriented, List<Property<?>> props) {
-		mc.player.setYRot(yaw);
-		mc.player.setXRot(Math.clamp(pitch, -90, 90));
-		mc.player.yRotO = mc.player.getYRot();
-		mc.player.xRotO = mc.player.getXRot();
-		BlockState result = ((BlockItemAccessor) item).myriad$placementState(new BlockPlaceContext(mc.player, InteractionHand.MAIN_HAND, stack, hit));
-		if (result == null || !result.is(oriented.getBlock())) return false;
-		for (Property<?> p : props) if (!result.getValue(p).equals(oriented.getValue(p))) return false;
-		return true;
-	}
-
-	/** The face's centre, and points towards its edges for blocks that care where they're clicked (slabs, stairs). */
-	private static List<Vec3> pointsOn(BlockHitResult face) {
-		Vec3 c = face.getLocation();
-		List<Vec3> points = new ArrayList<>(5);
-		points.add(c);
-		if (face.getDirection().getAxis() == Direction.Axis.Y) {
-			points.add(c.add(0.3, 0, 0));
-			points.add(c.add(-0.3, 0, 0));
-			points.add(c.add(0, 0, 0.3));
-			points.add(c.add(0, 0, -0.3));
-		} else {
-			points.add(c.add(0, 0.3, 0));
-			points.add(c.add(0, -0.3, 0));
-		}
-		return points;
-	}
-
-	private boolean supportsPlayer(BlockPos pos) {
-		return mc.player.onGround() && !mc.player.getAbilities().flying && pos.equals(mc.player.getOnPos());
-	}
-
-	/** A fluid above or beside would flow into the space. */
-	private boolean holdsBackFluid(BlockPos pos) {
-		for (Direction d : Direction.values()) {
-			if (d == Direction.DOWN) continue;
-			if (!mc.level.getFluidState(pos.relative(d)).isEmpty()) return true;
-		}
-		return false;
+	boolean moveMaterial(BooleanSupplier move) {
+		if (movedMaterialThisTick || !Myriad.inventory().prepareClick()) return false;
+		movedMaterialThisTick = true;
+		return move.getAsBoolean();
 	}
 }

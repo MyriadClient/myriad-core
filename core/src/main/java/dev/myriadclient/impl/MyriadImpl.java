@@ -115,7 +115,7 @@ public final class MyriadImpl implements MyriadApi {
 	private final MapsImpl maps = new MapsImpl();
 	private final ControlManager controls = new ControlManager();
 	private final WheelManager wheels = new WheelManager();
-	private final BuildManager building = new BuildManager();
+	private final BuildManager building = new BuildManager(placement);
 	private final FriendsManager friends = new FriendsManager(config.root());
 	private final ServerStatsTracker serverStats = new ServerStatsTracker();
 	private final MenuSync menuSync = new MenuSync();

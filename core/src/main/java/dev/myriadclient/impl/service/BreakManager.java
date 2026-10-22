@@ -17,6 +17,7 @@ import dev.myriadclient.api.util.Mining;
 import dev.myriadclient.api.util.Packets;
 import dev.myriadclient.api.util.Reach;
 import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -395,6 +396,9 @@ public final class BreakManager implements Breaking {
 		swapBackNow = false;
 		if (serverDelayedPos != null && !mc.level.getBlockState(serverDelayedPos).is(serverDelayedBlock)) serverDelayedPos = null;
 		validate();
+		// This tick's actions are held for the next (an aimed placement went out): a start sent now would only reach the
+		// server a tick after it was counted from, and the finish would come that much early by Grim's clock (FastBreak).
+		if (ActionTiming.get().isLate()) return;
 		fetchTool();
 		rebreak();
 		instants();

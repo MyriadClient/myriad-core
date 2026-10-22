@@ -5,8 +5,10 @@ import dev.myriadclient.api.hook.Replacement;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.util.Reach;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.Objects;
@@ -181,7 +183,12 @@ public interface Placement {
 		 * this tick's air placements (it comes back first thing next tick), or an unrotated {@link Options#sneak()}
 		 * placement was asked for after the tick's movement packet; try again next tick.
 		 */
-		RATE_LIMITED;
+		RATE_LIMITED,
+		/**
+		 * There are faces to click, but no click from where you stand makes the block come out the way it's wanted
+		 * ({@link #solve}): facing, half, axis, hinge. From somewhere else one may.
+		 */
+		WRONG_ANGLE;
 
 		public boolean ok() {
 			return this == OK;
@@ -204,8 +211,167 @@ public interface Placement {
 		}
 	}
 
+	/**
+	 * A click that makes a block come out a particular way, from {@link #solve}: the face and point to click, whether
+	 * the server is to see the sneak key down for it (placing against a chest or a repeater without opening or
+	 * clicking it), and the look to click with. Hand it to {@link #place(Object, Click, int, Options)}.
+	 */
+	final class Click {
+		private final BlockPos pos;
+		private final BlockHitResult hit;
+		private final boolean sneak, air, lookAtHit;
+		private final float yaw, pitch, aimYaw, aimPitch;
+		private final BlockState wanted;
+		private final int count;
+
+		@ApiStatus.Internal
+		public Click(BlockPos pos, BlockHitResult hit, boolean sneak, boolean air, float yaw, float pitch, boolean lookAtHit, float aimYaw, float aimPitch,
+		             BlockState wanted, int count) {
+			this.pos = pos.immutable();
+			this.hit = Objects.requireNonNull(hit);
+			this.sneak = sneak;
+			this.air = air;
+			this.yaw = yaw;
+			this.pitch = pitch;
+			this.lookAtHit = lookAtHit;
+			this.aimYaw = aimYaw;
+			this.aimPitch = aimPitch;
+			this.wanted = Objects.requireNonNull(wanted);
+			this.count = count;
+		}
+
+		/** Where the block goes (for more of a block, the block itself). */
+		public BlockPos pos() {
+			return pos;
+		}
+
+		/** The face and point clicked. */
+		public BlockHitResult hit() {
+			return hit;
+		}
+
+		/** Whether the server sees the sneak key down for the click. */
+		public boolean sneak() {
+			return sneak;
+		}
+
+		/** Whether it clicks the empty space itself (an air placement, through the off hand). */
+		public boolean air() {
+			return air;
+		}
+
+		/** Whether the look turns first (to {@link #yaw()}/{@link #pitch()}); otherwise it clicks at once with the look you have. */
+		public boolean turns() {
+			return !Float.isNaN(yaw);
+		}
+
+		public float yaw() {
+			return yaw;
+		}
+
+		public float pitch() {
+			return pitch;
+		}
+
+		/** Whether the click lands where that look meets the block, rather than exactly on {@link #hit()}. */
+		public boolean lookAtHit() {
+			return lookAtHit;
+		}
+
+		/**
+		 * Whether the look goes to the point clicked in the movement packet right after the click
+		 * ({@link #aimYaw()}/{@link #aimPitch()}): for blocks whose facing no look on them gives. Grim checks a placement
+		 * at the next movement packet, against that packet's look and the one before (its RotationPlace check), so the
+		 * block is placed with the look before and the look after is on it. The rest of that tick's actions wait for the
+		 * next tick: a slot change before the movement packet makes Grim check at once, with only the look before.
+		 */
+		public boolean aimed() {
+			return !Float.isNaN(aimYaw);
+		}
+
+		public float aimYaw() {
+			return aimYaw;
+		}
+
+		public float aimPitch() {
+			return aimPitch;
+		}
+
+		/** The state it was solved for. */
+		public BlockState wanted() {
+			return wanted;
+		}
+
+		/** How many of the block there are once it's clicked (a second candle, the other half of a slab: 2). */
+		public int count() {
+			return count;
+		}
+
+		@Override
+		public String toString() {
+			return "Placement.Click[" + pos.toShortString() + " on " + hit.getBlockPos().toShortString() + " " + hit.getDirection()
+				+ (turns() ? " turned " + yaw + "/" + pitch : "") + (aimed() ? " aimed" : "") + (sneak ? " sneaking" : "") + (air ? " air" : "") + "]";
+		}
+	}
+
+	/** A click from {@link #solve}, or why there's none ({@link #check()}). */
+	final class Solution {
+		private final @Nullable Click click;
+		private final Check check;
+
+		private Solution(@Nullable Click click, Check check) {
+			this.click = click;
+			this.check = check;
+		}
+
+		@ApiStatus.Internal
+		public static Solution of(Click click) {
+			return new Solution(Objects.requireNonNull(click), Check.OK);
+		}
+
+		@ApiStatus.Internal
+		public static Solution none(Check why) {
+			return new Solution(null, why);
+		}
+
+		public boolean found() {
+			return click != null;
+		}
+
+		/** The click, or null. */
+		public @Nullable Click click() {
+			return click;
+		}
+
+		/**
+		 * {@link Check#OK} with a click; otherwise why not: {@link Check#WRONG_ANGLE} (no click from here makes it come
+		 * out right), {@link Check#NOT_VISIBLE}, {@link Check#OUT_OF_RANGE}, {@link Check#NO_SUPPORT} (nothing it can
+		 * stay on yet), {@link Check#OCCUPIED} (something else is there), {@link Check#UNAVAILABLE} (not a block item).
+		 */
+		public Check check() {
+			return check;
+		}
+	}
+
 	/** Whether a block could go at {@code pos} now: {@link Check#OK}, or the reason it can't. */
 	Check check(BlockPos pos, Options options);
+
+	/**
+	 * Works out a click that makes {@code wanted} come out at {@code pos} with the item in hotbar {@code slot}: the
+	 * face, where on it, which way to look, whether to sneak. Every face that could be clicked is tried at a few points
+	 * the way the game itself would place the item there, so facing, half, axis, hinge, attachment and rotation come out
+	 * as {@code wanted} has them. If {@code pos} already holds fewer of the same block (candles, sea pickles, layers, a
+	 * slab's other half), the click adds one more. Where the server checks looks ({@link Options#rotate()}), the look
+	 * goes onto the point clicked and a click is only kept if a look a little off still gives the same result; when no
+	 * such look does, it may click with a clean rotation and look at the block in the packet after
+	 * ({@link Click#aimed()}). Without, the look you have is tried first, then clean rotations.
+	 * <p>
+	 * It doesn't check {@code wanted}'s other properties (connections, power, waterlogging: the game sets those).
+	 * Simulating clicks costs tens of microseconds; ask again when something changed (you moved, a neighbour came).
+	 */
+	default Solution solve(BlockPos pos, BlockState wanted, int hotbarSlot, Options options) {
+		return Solution.none(Check.UNAVAILABLE);
+	}
 
 	default boolean canPlace(BlockPos pos, Options options) {
 		return check(pos, options).ok();
@@ -235,6 +401,20 @@ public interface Placement {
 	}
 
 	Attempt place(Object owner, BlockHitResult hit, int hotbarSlot, Options options);
+
+	/**
+	 * Makes a {@link #solve}d click with the item in {@code hotbarSlot}. A click that turns asks for its look, and goes
+	 * at the start of the tick after it's been sent, checked once more against the look the server really has (a look
+	 * that came out a hair different can't place the block the wrong way: the attempt's result is then false). A block
+	 * that faces where you look (an observer, a piston, a crafter) waits a tick longer unless the look before gives the
+	 * same: the server takes its facing from your head, which it turns to your look only on its own tick of you. The
+	 * movement packet after the click repeats its look, or with {@link Click#aimed()} looks at the block. A click that
+	 * doesn't turn goes at once. Range, swing and pending follow {@code options}; sneak, air placement and the look come
+	 * from the click.
+	 */
+	default Attempt place(Object owner, Click click, int hotbarSlot, Options options) {
+		return Attempt.refused(click.pos(), Check.UNAVAILABLE);
+	}
 
 	/**
 	 * Right-clicks the block {@code hit} names, to use it rather than place against it: open a container, toggle a
@@ -321,6 +501,21 @@ public interface Placement {
 		@Override
 		public Attempt place(Object owner, BlockHitResult hit, int hotbarSlot, Options options) {
 			return core.place(owner, hit, hotbarSlot, options);
+		}
+
+		@Override
+		public Attempt place(Object owner, Click click, int hotbarSlot, Options options) {
+			return core.place(owner, click, hotbarSlot, options);
+		}
+
+		@Override
+		public Solution solve(BlockPos pos, BlockState wanted, int hotbarSlot, Options options) {
+			return core.solve(pos, wanted, hotbarSlot, options);
+		}
+
+		@Override
+		public Attempt use(Object owner, BlockHitResult hit, int hotbarSlot, Options options) {
+			return core.use(owner, hit, hotbarSlot, options);
 		}
 
 		@Override

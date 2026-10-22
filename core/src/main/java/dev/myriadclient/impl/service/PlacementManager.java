@@ -4,6 +4,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Priority;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.MovementPacketsEvent;
+import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.ScreenOpenEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
@@ -22,7 +23,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.common.ServerboundPongPacket;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
@@ -35,6 +41,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -100,18 +107,45 @@ public final class PlacementManager implements Placement {
 	private record Aim(BlockHitResult hit, double eyeHeight) {
 	}
 
-	/** A placement, or with {@code use} a click that uses the block, waiting for its rotation. */
-	private record Queued(Object owner, BlockPos pos, Aim aim, int slot, Options options, CompletableFuture<Boolean> result, int expires, boolean use) {
+	/**
+	 * A placement, or with {@code use} a click that uses the block, waiting for its rotation. A solved {@code click}
+	 * waits for the look it was solved with ({@code sendYaw}/{@code sendPitch}, a hair off at random) rather than one
+	 * aimed at its point.
+	 */
+	private record Queued(Object owner, BlockPos pos, Aim aim, int slot, Options options, CompletableFuture<Boolean> result, int expires, boolean use,
+	                      @Nullable Click click, float sendYaw, float sendPitch) {
 		BlockHitResult target() {
 			return aim.hit;
 		}
 	}
 
+	/** How far a solved click's look is sent off the one asked for, at random, in degrees (DuplicateRotPlace, as for points). */
+	private static final double LOOK_JITTER = 0.25;
+	/** How close the look the server has must be to a solved click's, in degrees, for it to be made. */
+	private static final float FACING_TOLERANCE = 0.05f;
+
 	private final Minecraft mc = Minecraft.getInstance();
 	private final BlockAckTracker acks;
 	private final Map<BlockPos, CompletableFuture<Boolean>> pending = new HashMap<>();
 	private final List<Queued> queue = new ArrayList<>();
+	private final ClickSolver solver = new ClickSolver(this);
 	private int tick;
+	/**
+	 * The look to send in this tick's movement packet after a solved click (NaN: none): the same look again, so a server
+	 * that applies a click a packet late (Paper over a real connection, now and then) places it the same; or for an
+	 * aimed click, the look onto the block Grim's RotationPlace wants.
+	 */
+	private float followYaw = Float.NaN, followPitch = Float.NaN, sentFollowYaw = Float.NaN, sentFollowPitch = Float.NaN;
+	private boolean followAimed;
+	/** An aimed click went out and the movement packet after it hasn't yet. */
+	private boolean aimedInFlight;
+	/** The yaw the server had at the start of the last tick (NaN: none yet). */
+	private float yawTickAgo = Float.NaN;
+	/**
+	 * A copy of Grim's RotationPlace buffer: once an aimed click was decided without its next look on the block, it checks
+	 * every placement's own look until about ten have passed, and an aimed click's own look never is (see {@link #aimedAllowed()}).
+	 */
+	private double rotationPlaceBuffer;
 
 	public PlacementManager(BlockAckTracker acks) {
 		this.acks = acks;
@@ -120,6 +154,48 @@ public final class PlacementManager implements Placement {
 	@Override
 	public boolean isPending(BlockPos pos) {
 		return pending.containsKey(pos);
+	}
+
+	@Override
+	public Solution solve(BlockPos pos, BlockState wanted, int hotbarSlot, Options o) {
+		if (hotbarSlot < 0 || hotbarSlot > 8 || mc.player == null) return Solution.none(Check.UNAVAILABLE);
+		return solver.solve(pos.immutable(), wanted, placing(hotbarSlot), o);
+	}
+
+	/** Whether the look after a solved click is still to go out this tick: a break's turn now would take its place. */
+	boolean followPending() {
+		return !Float.isNaN(followYaw);
+	}
+
+	/** Whether a solved click may be aimed (looking at the block only in the packet after it): not while Grim would check its own look. */
+	boolean aimedAllowed() {
+		return rotationPlaceBuffer <= 0;
+	}
+
+	@Override
+	public Attempt place(Object owner, Click c, int hotbarSlot, Options o) {
+		BlockPos pos = c.pos();
+		if (hotbarSlot < 0 || hotbarSlot > 8 || mc.player == null) return Attempt.refused(pos, Check.UNAVAILABLE);
+		// The click carries its own look, sneak and air placement; range, swing and the rest stay the caller's.
+		Options co = o.withRotate(false).withSneak(c.sneak()).withAirPlace(c.air() || o.airPlace());
+		BlockPlaceContext context = placeContext(c.hit(), hotbarSlot);
+		if (!context.getClickedPos().equals(pos)) return Attempt.refused(pos, Check.OCCUPIED);
+		Check check = spaceCheck(pos, co, context);
+		if (!check.ok()) return Attempt.refused(pos, check);
+		if (!c.turns()) return submit(owner, pos, new Aim(c.hit(), mc.player.getEyeHeight()), hotbarSlot, co);
+		// One look at a time: it joins the clicks waiting if they want the same one, otherwise it's asked for again later
+		// (queued behind a different look, it would only run out of time waiting).
+		for (Queued q : queue) {
+			if (q.click == null || !near(c.yaw(), c.pitch(), q.click.yaw(), q.click.pitch())) return Attempt.refused(pos, Check.RATE_LIMITED);
+		}
+		CompletableFuture<Boolean> result = new CompletableFuture<>();
+		pending.put(pos, result);
+		result.whenComplete((placed, t) -> pending.remove(pos, result));
+		ThreadLocalRandom r = ThreadLocalRandom.current();
+		float yaw = c.yaw() + (float) r.nextDouble(-LOOK_JITTER, LOOK_JITTER);
+		float pitch = Math.clamp(c.pitch() + (float) r.nextDouble(-LOOK_JITTER, LOOK_JITTER), -89.9f, 89.9f);
+		queue.add(new Queued(owner, pos, new Aim(c.hit(), mc.player.getEyeHeight()), hotbarSlot, co, result, tick + QUEUE_TICKS, false, c, yaw, pitch));
+		return new Attempt(pos, Check.OK, result);
 	}
 
 	@Override
@@ -384,7 +460,7 @@ public final class PlacementManager implements Placement {
 		CompletableFuture<Boolean> result = new CompletableFuture<>();
 		pending.put(pos, result);
 		result.whenComplete((answered, t) -> pending.remove(pos, result));
-		if (o.rotate()) queue.add(new Queued(owner, pos, new Aim(hit, eyeHeight), hotbarSlot, o, result, tick + QUEUE_TICKS, true));
+		if (o.rotate()) queue.add(new Queued(owner, pos, new Aim(hit, eyeHeight), hotbarSlot, o, result, tick + QUEUE_TICKS, true, null, Float.NaN, Float.NaN));
 		else clickUse(hit, hotbarSlot, o, result);
 		return new Attempt(pos, Check.OK, result);
 	}
@@ -430,7 +506,7 @@ public final class PlacementManager implements Placement {
 		CompletableFuture<Boolean> result = new CompletableFuture<>();
 		pending.put(key, result);
 		result.whenComplete((placed, t) -> pending.remove(key, result));
-		if (o.rotate()) queue.add(new Queued(owner, key, aim, slot, o, result, tick + QUEUE_TICKS, false));
+		if (o.rotate()) queue.add(new Queued(owner, key, aim, slot, o, result, tick + QUEUE_TICKS, false, null, Float.NaN, Float.NaN));
 		else click(key, aim.hit, slot, o, result);
 		return new Attempt(key, Check.OK, result);
 	}
@@ -573,11 +649,27 @@ public final class PlacementManager implements Placement {
 	}
 
 	/** Swaps the main and off hand, on the client and the server, as the swap key does. */
-	/** Asks to face the first queued placement; it's clicked once that rotation has been sent. */
+	/**
+	 * Asks to face the first queued placement; it's clicked once that rotation has been sent. The look after a solved
+	 * click comes first: it has to be this tick's.
+	 */
 	@Subscribe
 	private void onTickStart(TickEvent.Pre e) {
-		if (queue.isEmpty() || mc.player == null) return;
-		Aim aim = queue.getFirst().aim;
+		if (mc.player == null) return;
+		if (!Float.isNaN(followYaw)) {
+			Myriad.rotations().request(this, followYaw, followPitch, Rotations.PRIORITY_HIGH, MOVE_FIX, null);
+			sentFollowYaw = followYaw;
+			sentFollowPitch = followPitch;
+			followYaw = followPitch = Float.NaN;
+			return;
+		}
+		if (queue.isEmpty()) return;
+		Queued first = queue.getFirst();
+		if (first.click != null) {
+			Myriad.rotations().request(this, first.sendYaw, first.sendPitch, Rotations.PRIORITY_HIGH, MOVE_FIX, null);
+			return;
+		}
+		Aim aim = first.aim;
 		float[] r = anglesFromNextPosition(aim.hit.getLocation(), aim.eyeHeight);
 		Myriad.rotations().request(this, r[0], r[1], Rotations.PRIORITY_HIGH, MOVE_FIX, null);
 	}
@@ -589,7 +681,8 @@ public final class PlacementManager implements Placement {
 	 */
 	@Subscribe(priority = Priority.HIGH)
 	private void onBeforeRotationSent(MovementPacketsEvent e) {
-		if (queue.isEmpty() || mc.player == null) return;
+		// A solved click's look is exact already, and the look after one isn't to be moved.
+		if (queue.isEmpty() || mc.player == null || queue.getFirst().click != null || !Float.isNaN(sentFollowYaw)) return;
 		Aim aim = queue.getFirst().aim;
 		float[] r = MathUtil.anglesTo(eyes(aim.eyeHeight), aim.hit.getLocation());
 		Myriad.rotations().request(this, r[0], r[1], REFINED_PRIORITY, MOVE_FIX, null);
@@ -602,13 +695,37 @@ public final class PlacementManager implements Placement {
 	 */
 	@Subscribe(priority = RotationManager.ACT_PRIORITY - 10)
 	private void onClickTime(TickEvent.Pre e) {
-		if (queue.isEmpty() || mc.player == null) return;
+		if (mc.player == null) return;
 		float yaw = Myriad.rotations().serverYaw(), pitch = Myriad.rotations().serverPitch();
+		float headYaw = Float.isNaN(yawTickAgo) ? yaw : yawTickAgo;
+		yawTickAgo = yaw;
+		if (!Float.isNaN(sentFollowYaw)) {
+			// Did the look after the last solved click get there? If an aimed one's didn't, Grim's buffer is up.
+			if (followAimed && !near(yaw, pitch, sentFollowYaw, sentFollowPitch)) rotationPlaceBuffer = 1;
+			sentFollowYaw = sentFollowPitch = Float.NaN;
+		}
+		if (queue.isEmpty()) return;
+		// Solved clicks and the rest never share a tick: the look after a solved click moves on (to its aim), so a click
+		// that only happened to fall under its look would be checked by Grim (RotationPlace) against that next look and
+		// fail. Whichever kind is first goes.
+		boolean solvedTurn = queue.getFirst().click != null;
 		Iterator<Queued> it = queue.iterator();
 		while (it.hasNext()) {
 			Queued q = it.next();
 			if (q.result.isDone()) {
 				it.remove();
+				continue;
+			}
+			if ((q.click != null) != solvedTurn) continue;
+			if (q.click != null) {
+				if (!handsFree(q.slot) || q.click.air() && !airReady(q.slot) || !near(yaw, pitch, q.sendYaw, q.sendPitch)) continue;
+				// A block facing where you look (an observer, a piston, a crafter) goes by your head's yaw on the server
+				// (LivingEntity.getViewYRot), which turns to your yaw only on the server's tick of you: until a tick has
+				// passed, it may still be the yaw before. Held a tick unless the yaw before gives the same.
+				if (Math.abs(Mth.wrapDegrees(headYaw - yaw)) > FACING_TOLERANCE && !solver.places(q.click, q.click.hit(), placing(q.slot), headYaw, pitch)) continue;
+				it.remove();
+				clickSolved(q, yaw, pitch);
+				if (aimedInFlight) break;
 				continue;
 			}
 			if (q.use) {
@@ -638,6 +755,69 @@ public final class PlacementManager implements Placement {
 		}
 	}
 
+	/**
+	 * Makes a solved click now that the server has its look: where that look lands on the block when it's meant to, and
+	 * only if it still gives what it was solved for with that look. Then the next movement packet's look.
+	 */
+	private void clickSolved(Queued q, float yaw, float pitch) {
+		Click c = q.click;
+		BlockHitResult hit = c.hit();
+		if (c.lookAtHit()) {
+			BlockHitResult look = outlineHit(hit.getBlockPos(), yaw, pitch, q.options.range());
+			// Thin blocks (a closed gate, a lever) can be missed by a hair; the cube around them is what servers check.
+			if (look == null) look = Reach.rayHit(yaw, pitch, hit.getBlockPos(), q.options.range());
+			if (look == null) {
+				q.result.complete(false);
+				return;
+			}
+			hit = new BlockHitResult(look.getLocation(), look.getDirection(), hit.getBlockPos(), false);
+		}
+		if (!solver.places(c, hit, placing(q.slot), yaw, pitch) || !Myriad.limits().canSend(PacketLimits.Kind.INTERACT, 1)) {
+			q.result.complete(false);
+			return;
+		}
+		click(q.pos, hit, q.slot, q.options, q.result);
+		ThreadLocalRandom r = ThreadLocalRandom.current();
+		followAimed = c.aimed();
+		followYaw = c.aimed() ? c.aimYaw() + (float) r.nextDouble(-LOOK_JITTER, LOOK_JITTER) : q.sendYaw;
+		followPitch = c.aimed() ? Math.clamp(c.aimPitch() + (float) r.nextDouble(-LOOK_JITTER, LOOK_JITTER), -89.9f, 89.9f) : q.sendPitch;
+		if (!c.aimed()) rotationPlaceBuffer = Math.max(0, rotationPlaceBuffer - 0.1);
+		else {
+			// Grim decides it at the next movement packet, by that packet's look, unless a slot change gets there first.
+			aimedInFlight = true;
+			ActionTiming.get().holdRestOfTick();
+			// Refused: Grim's buffer is likely up, raised by something this copy doesn't see (another placement, against air).
+			q.result.thenAccept(placed -> {
+				if (!placed) rotationPlaceBuffer = 1;
+			});
+		}
+	}
+
+	/**
+	 * Between an aimed click and the movement packet after it, a slot change or a reply to one of Grim's pings makes Grim
+	 * decide the placement at once, with only the click's own look, which isn't on the block: its buffer is up. Slot
+	 * changes are held meanwhile (see {@link ActionTiming#holdRestOfTick()}); this catches what still gets out.
+	 */
+	@Subscribe(priority = Priority.LOWEST)
+	private void onSendAfterAimed(PacketEvent.Send e) {
+		if (!aimedInFlight || e.isCancelled()) return;
+		Packet<?> p = e.packet();
+		if (p instanceof ServerboundMovePlayerPacket) aimedInFlight = false;
+		else if (p instanceof ServerboundPongPacket || p instanceof ServerboundSetCarriedItemPacket && !ActionTiming.get().isLate()) rotationPlaceBuffer = 1;
+	}
+
+	/** Where a look of {@code yaw}/{@code pitch} from the eyes meets the outline of the block at {@code pos}, within {@code range}. */
+	private @Nullable BlockHitResult outlineHit(BlockPos pos, float yaw, float pitch, double range) {
+		Vec3 from = mc.player.getEyePosition();
+		VoxelShape shape = mc.level.getBlockState(pos).getShape(mc.level, pos);
+		if (shape.isEmpty()) return null;
+		return shape.clip(from, from.add(MathUtil.direction(yaw, pitch).scale(range)), pos);
+	}
+
+	private static boolean near(float yaw, float pitch, float toYaw, float toPitch) {
+		return Math.abs(Mth.wrapDegrees(yaw - toYaw)) <= FACING_TOLERANCE && Math.abs(pitch - toPitch) <= FACING_TOLERANCE;
+	}
+
 	@Subscribe
 	private void onTickEnd(TickEvent.Post e) {
 		tick++;
@@ -655,6 +835,10 @@ public final class PlacementManager implements Placement {
 		for (Queued q : new ArrayList<>(queue)) q.result.complete(false);
 		queue.clear();
 		pending.clear();
+		followYaw = followPitch = sentFollowYaw = sentFollowPitch = Float.NaN;
+		rotationPlaceBuffer = 0;
+		aimedInFlight = false;
+		yawTickAgo = Float.NaN;
 	}
 
 	@Override
@@ -672,7 +856,9 @@ public final class PlacementManager implements Placement {
 			BlockState state = mc.level.getBlockState(neighbour);
 			if (state.canBeReplaced() || (BlockInfo.isClickable(state) && !sneaks && !mc.player.isShiftKeyDown())) continue;
 			Direction face = dir.getOpposite();
-			Vec3 hitVec = Vec3.atCenterOf(neighbour).add(Vec3.atLowerCornerOf(face.getUnitVec3i()).scale(0.5));
+			// The middle of the neighbour's real side (a slab's top is half way up), the cube's if it has none there.
+			List<Vec3> points = Reach.clickPoints(neighbour, face, false);
+			Vec3 hitVec = points.isEmpty() ? Vec3.atCenterOf(neighbour).add(Vec3.atLowerCornerOf(face.getUnitVec3i()).scale(0.5)) : points.getFirst();
 			out.add(new BlockHitResult(hitVec, face, neighbour, false));
 		}
 		out.sort(Comparator.<BlockHitResult, Boolean>comparing(h -> !visible(h)).thenComparingDouble(h -> eyes.distanceToSqr(h.getLocation())));
