@@ -451,6 +451,11 @@ public final class MyriadImpl implements MyriadApi {
 		return jobs.engine();
 	}
 
+	/** The engine's tie to the game, with what the Jobs window lists beyond the running jobs. */
+	public JobRunner jobRunner() {
+		return jobs;
+	}
+
 	@Override
 	public Breaking breaking() {
 		return hooks.router(Service.BREAKING);

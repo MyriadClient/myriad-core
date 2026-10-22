@@ -3,6 +3,7 @@ package dev.myriadclient.impl.ui;
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.control.ControlPanel;
+import dev.myriadclient.api.job.Job;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.Tag;
@@ -15,6 +16,7 @@ import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.api.util.FuzzyMatch;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.macro.MacroManager;
+import dev.myriadclient.impl.service.JobText;
 import dev.myriadclient.impl.ui.panels.AddonNames;
 import dev.myriadclient.impl.ui.panels.CorePanels;
 import dev.myriadclient.impl.ui.panels.MenuGroups;
@@ -126,6 +128,11 @@ final class Launcher {
 			list.add(new Entry(c.icon(), "Control: " + c.name(), c.modules().size() + " modules · " + (c.isActive() ? "on" : "off"),
 				c::toggle, () -> CorePanels.openControl(c), Kind.OTHER, true, c.isPreset() ? c.id().namespace() : "", tags("control")));
 		}
+		for (Job<?> j : Myriad.jobs().running()) {
+			String detail = JobText.detail(j);
+			list.add(new Entry("\uf0ae", "Job: " + JobText.owner(j) + " · " + j.name(), detail.isEmpty() ? JobText.state(j.state()) : detail,
+				() -> CorePanels.openJob(j), null, Kind.OTHER, false, "", tags("job")));
+		}
 		for (WheelImpl w : MyriadImpl.get().wheelManager().all()) {
 			list.add(new Entry(w.icon(), "Wheel: " + w.name(), w.slots().size() + " on it" + (w.keybind.get().isSet() ? " · " + w.keybind.get().displayName() : ""),
 				() -> CorePanels.openWheel(w), null, Kind.OTHER, false, "", tags("wheel")));
@@ -142,7 +149,8 @@ final class Launcher {
 			if (!t.isListed()) continue;
 			list.add(new Entry(t.icon() == null ? "" : t.icon(), t.name(), t.isHud() ? "HUD element" : "Panel",
 				() -> wm.openPanel(t.id(), new JsonObject()),
-				() -> wm.openPanel(t.id(), new JsonObject(), wm.activeWorkspace(), true), Kind.OTHER, false, t.id().namespace(), t.isHud() ? tags("hud", "panel") : tags("panel")));
+				() -> wm.openPanel(t.id(), new JsonObject(), wm.activeWorkspace(), true), Kind.OTHER, false, t.id().namespace(),
+				t.isHud() ? tags("hud", "panel") : t.id().equals(CorePanels.JOBS) ? tags("panel", "job") : tags("panel")));
 		}
 		for (ModuleGroup g : MenuGroups.all()) {
 			String title = g.isAddonWindow() ? g.name() : g.name() + " · " + AddonNames.of(g.addon());

@@ -116,6 +116,11 @@ final class BuildRun implements Build {
 	// ---- Build --------------------------------------------------------------------------------------------------
 
 	@Override
+	public Object owner() {
+		return owner;
+	}
+
+	@Override
 	public List<Step> steps() {
 		if (stepsTick != tick && running) {
 			stepsTick = tick;

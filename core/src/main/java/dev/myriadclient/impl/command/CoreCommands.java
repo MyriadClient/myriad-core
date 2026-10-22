@@ -73,6 +73,7 @@ public final class CoreCommands {
 			ConfigCommands.profile(), ConfigCommands.friend(), addons(), update(), diagnostics(), help(),
 			ModuleCommands.panic(), baritone(), ConfigCommands.prefix(), antiCheat(), profiler(),
 			ConfigCommands.control(), hooks(), ConfigCommands.macro(), ConfigCommands.cape(), ConfigCommands.theme(),
+			JobCommands.jobs(), JobCommands.job(),
 			ModuleCommands.modules(), ModuleCommands.binds(), say(), ConfigCommands.reload(), disconnect(),
 			fakePlayer(), menu()
 		)) ctx.registerCommand(c);

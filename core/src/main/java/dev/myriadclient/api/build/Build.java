@@ -53,6 +53,13 @@ public interface Build {
 	record Step(BlockPos pos, Target target, Status status) {
 	}
 
+	/**
+	 * Who started it: what was passed to {@code Building.start}. For {@code Steps.build} and {@code Steps.keepUp} that's
+	 * the step's job, so a module that started the job finds its build among {@code Myriad.building().running()} by
+	 * the job's root (to draw its plan, say).
+	 */
+	Object owner();
+
 	/** The positions in reach as of this tick, with what's happening at each. */
 	List<Step> steps();
 

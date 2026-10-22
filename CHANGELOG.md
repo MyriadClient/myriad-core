@@ -74,6 +74,19 @@ and may change in any release. Addons declare the oldest core they support in `f
   - With `-Dmyriad.dev` (set by the dev clients and core's tests), the services' entry points log a call from another
     thread, with the stack, once per call site (`Threads.assertRender()`). The Grim suite logged none.
 
+- **Jobs you can see.** Every running job, from any addon, in one place:
+  - The **Jobs** window lists them by the module that started them, with the step each is on, its live status, why
+    it's waiting when it's stuck, a progress bar and how long it has run, and the steps under it; **Pause**/**Resume**,
+    **Cancel** and **Cancel all**. A job that ended stays listed for ten seconds with how it ended.
+  - The **Jobs** HUD element: a line per job ("Printer Printing · 142 left · stuck: no item: cobblestone"), with how
+    many to list and whether to keep ended ones a moment.
+  - `#job` in the launcher lists the running jobs (picking one opens the window on it) and the window.
+  - `.jobs` lists them with their ids; `.job pause|resume|cancel <id|module>` and `.job cancel all`.
+  - A job stuck for five seconds says so once, in a notice that replaces itself; again only after it got going and
+    stuck again. Not for being out of reach, which moving puts right and a printer waits on whenever you're away.
+- **`Build.owner()`**: who started a build. A build from `Steps.build`/`Steps.keepUp` belongs to the step's job, so
+  the module that started the job finds it in `Myriad.building().running()` (to draw its plan).
+
 - **Profiler hints.** The Profiler window marks an owner with `*` and lists a hint under the table when its numbers
   point at one of core's tools, and `.profiler` prints the hints too:
   - a handler reading over 5,000 blocks a second through the level (250 a tick): a `ChunkCache`;

@@ -40,6 +40,14 @@ public final class NotificationManager implements Notifications {
 		while (entries.size() > MAX) entries.removeFirst();
 	}
 
+	/** The notifications up now, as "title: message", with "×n" when one was sent again while showing (for tests). */
+	public synchronized List<String> showing() {
+		long now = System.currentTimeMillis();
+		List<String> out = new ArrayList<>();
+		for (Entry e : entries) if (now <= e.expires) out.add(e.title + ": " + e.message + (e.count > 1 ? " ×" + e.count : ""));
+		return out;
+	}
+
 	private static int levelColor(Level level, ThemeSettings theme) {
 		return switch (level) {
 			case INFO -> theme.accent.argb();

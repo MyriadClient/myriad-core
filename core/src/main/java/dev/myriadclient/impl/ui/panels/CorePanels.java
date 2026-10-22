@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.AddonContext;
 import dev.myriadclient.api.control.ControlPanel;
+import dev.myriadclient.api.job.Job;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.ui.PanelType;
@@ -31,6 +32,8 @@ public final class CorePanels {
 	public static final MyriadId KEYBINDS = MyriadId.of("myriad", "keybinds");
 	public static final MyriadId HUD_ELEMENTS = MyriadId.of("myriad", "hud_elements");
 	public static final MyriadId PROFILER = MyriadId.of("myriad", "profiler");
+	public static final MyriadId JOBS = MyriadId.of("myriad", "jobs");
+	public static final MyriadId JOBS_HUD = MyriadId.of("myriad", "jobs_hud");
 	public static final MyriadId CONTROLS = MyriadId.of("myriad", "controls");
 	public static final MyriadId HOOKS = MyriadId.of("myriad", "hooks");
 	public static final MyriadId SHARE = MyriadId.of("myriad", "share");
@@ -63,6 +66,8 @@ public final class CorePanels {
 		ctx.registerPanel(PanelType.builder(HUD_ELEMENTS, "HUD").icon("\uf2d2").factory(() -> new HudElementsPanel(wm)).build());
 		ctx.registerPanel(PanelType.builder(KEYBINDS, "Keybinds").icon("").factory(() -> new KeybindsPanel(wm)).build());
 		ctx.registerPanel(PanelType.builder(PROFILER, "Profiler").icon("\uf0e4").factory(ProfilerPanel::new).build());
+		ctx.registerPanel(PanelType.builder(JOBS, "Jobs").icon("\uf0ae").factory(JobsPanel::new).build());
+		ctx.registerPanel(PanelType.builder(JOBS_HUD, "Jobs").icon("\uf0ae").factory(JobsHud::new).hud().build());
 		ctx.registerPanel(PanelType.builder(SHARE, "Share").icon("\uf1e0").factory(SharePanel::new).build());
 		ctx.registerPanel(PanelType.builder(HOOKS, "Hooks").icon("\uf1e6").factory(HooksPanel::new).build());
 		ctx.registerPanel(PanelType.builder(CONTROLS, "Control Panels").icon("\uf1de").factory(ControlPanelsPanel::new).build());
@@ -85,6 +90,11 @@ public final class CorePanels {
 	 * Opens a module's settings. By default an existing settings window on the active workspace is re-targeted
 	 * (an "inspector"), so browsing modules doesn't pile up windows; {@code newWindow} always opens another one.
 	 */
+	/** Opens the Jobs window with {@code job} picked out. */
+	public static void openJob(Job<?> job) {
+		JobsPanel.open(job);
+	}
+
 	/** Opens a wheel's window. */
 	public static void openWheel(WheelImpl wheel) {
 		WheelsPanel.open(wheel);
