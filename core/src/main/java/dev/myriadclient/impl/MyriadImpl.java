@@ -158,8 +158,45 @@ public final class MyriadImpl implements MyriadApi {
 		return instance;
 	}
 
+	/**
+	 * Myriad with its services wired as {@link #bootstrap()} wires them, but no addons, config, UI or updates: for the
+	 * test harness, which supplies its own client.
+	 */
+	public static MyriadImpl forHarness() {
+		Minecraft client = Minecraft.getInstance();
+		dev.myriadclient.api.module.Module.bindClient(client);
+		Panel.bindClient(client);
+		Command.bindClient(client);
+		instance = new MyriadImpl();
+		Myriad.install(instance);
+		instance.wireServices();
+		return instance;
+	}
+
+	/** Forgets the harness's Myriad. */
+	public static void uninstall() {
+		instance = null;
+		Myriad.install(null);
+	}
+
 	private void start() {
 		long t0 = System.nanoTime();
+		wireServices();
+
+		addonLoader.discover();
+		addonLoader.registerTags();
+		addonLoader.initialize();
+		config.load();
+		addonLoader.postInitialize();
+		updates.start(events);
+		// Registries stay open: an addon that bridges another mod registers once that mod is ready, which may be later.
+
+		LOG.info("Myriad ready: {} addons, {} modules, {} panels, {} commands in {} ms", addonLoader.addons().size(), modules.size(),
+			panels.size(), commands.size(), (System.nanoTime() - t0) / 1_000_000);
+	}
+
+	/** The services on the event bus and behind their hooks, and the bus's links to the rest. */
+	private void wireServices() {
 		events.setOwnerResolver(addonLoader::ownerOf);
 		events.setInGameCheck(() -> mc.level != null && mc.player != null);
 		Setting.setGlobalChangeHook(config::markDirty);
@@ -192,17 +229,6 @@ public final class MyriadImpl implements MyriadApi {
 		events.subscribe(jobs);
 		events.subscribe(keybindManager);
 		events.subscribe(commandManager);
-
-		addonLoader.discover();
-		addonLoader.registerTags();
-		addonLoader.initialize();
-		config.load();
-		addonLoader.postInitialize();
-		updates.start(events);
-		// Registries stay open: an addon that bridges another mod registers once that mod is ready, which may be later.
-
-		LOG.info("Myriad ready: {} addons, {} modules, {} panels, {} commands in {} ms", addonLoader.addons().size(), modules.size(),
-			panels.size(), commands.size(), (System.nanoTime() - t0) / 1_000_000);
 	}
 
 	public List<Registry<?>> registries() {

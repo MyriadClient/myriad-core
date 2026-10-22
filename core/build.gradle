@@ -27,10 +27,14 @@ dependencies {
 	testImplementation platform("org.junit:junit-bom:5.11.4")
 	testImplementation "org.junit.jupiter:junit-jupiter"
 	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+	testImplementation "net.fabricmc:fabric-loader-junit:${rootProject.loader_version}"
 }
 
 test {
 	useJUnitPlatform()
+	// The harness runs Minecraft's classes under Fabric's loader, which keeps its game folder (logs, config) here.
+	workingDir = file("build/test-run")
+	doFirst { workingDir.mkdirs() }
 	testLogging {
 		events "passed", "skipped", "failed"
 		exceptionFormat "full"
