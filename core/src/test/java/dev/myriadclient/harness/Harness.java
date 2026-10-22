@@ -22,6 +22,8 @@ import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.game.ServerboundClientTickEndPacket;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.stats.StatsCounter;
 import net.minecraft.world.entity.player.Input;
@@ -67,6 +69,7 @@ public final class Harness implements AutoCloseable {
 	private final EmbeddedChannel channel = new EmbeddedChannel();
 	private final List<Sent> sent = new ArrayList<>();
 	private final List<Runnable> nextTick = new ArrayList<>();
+	private final List<Runnable> everyTick = new ArrayList<>();
 	private int tick;
 
 	private Harness() {
@@ -142,15 +145,28 @@ public final class Harness implements AutoCloseable {
 		return this;
 	}
 
-	/** One game tick: the tick-start event (the services and anything {@link #onTick} asked for), the movement packet, the tick-end event. */
+	/** Runs {@code action} at the start of every tick from now on, as a module's tick handler would. */
+	public Harness everyTick(Runnable action) {
+		everyTick.add(action);
+		return this;
+	}
+
+	/**
+	 * One game tick, in the game's order: the tick-start event (the services, then anything {@link #onTick} asked for),
+	 * the game mode's tick, the movement packet (none while you stand still and don't turn, as in vanilla), the tick-end
+	 * packet, the tick-end event.
+	 */
 	public Harness tick() {
 		tick++;
 		Ticks.advance();
 		Myriad.events().post(TickEvent.Pre.INSTANCE);
-		List<Runnable> actions = List.copyOf(nextTick);
+		List<Runnable> actions = new ArrayList<>(everyTick);
+		actions.addAll(nextTick);
 		nextTick.clear();
 		for (Runnable a : actions) a.run();
+		mc.gameMode.tick();
 		Fields.call(player, "sendPosition");
+		player.connection.send(ServerboundClientTickEndPacket.INSTANCE);
 		Myriad.events().post(TickEvent.Post.INSTANCE);
 		collect();
 		return this;
@@ -180,10 +196,22 @@ public final class Harness implements AutoCloseable {
 		return out;
 	}
 
-	/** The kinds of packet sent in tick {@code t}, in order ("SetCarriedItem", "MovePlayer", ...). */
+	/** The kinds of packet sent in tick {@code t}, in order ("SetCarriedItem", "MovePlayer", ...), leaving out the tick-end packet every tick has. */
 	public List<String> kinds(int t) {
 		List<String> out = new ArrayList<>();
-		for (Sent s : sent()) if (s.tick() == t) out.add(kind(s.packet()));
+		for (Sent s : sent()) if (s.tick() == t && !(s.packet() instanceof ServerboundClientTickEndPacket)) out.add(kind(s.packet()));
+		return out;
+	}
+
+	/** The look (yaw, pitch) each movement packet so far carried, or the one before when it carried none, per tick. */
+	public List<float[]> looks() {
+		List<float[]> out = new ArrayList<>();
+		float yaw = Float.NaN, pitch = Float.NaN;
+		for (ServerboundMovePlayerPacket p : sent(ServerboundMovePlayerPacket.class)) {
+			yaw = p.getYRot(yaw);
+			pitch = p.getXRot(pitch);
+			out.add(new float[]{yaw, pitch});
+		}
 		return out;
 	}
 
