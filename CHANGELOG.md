@@ -137,6 +137,12 @@ and may change in any release. Addons declare the oldest core they support in `f
 - **Fixed:** `Placement.Forwarding` didn't hand on `use`, so while an addon's replacement of placement was in effect
   every hand click (a lever, a repeater's delay) was refused as unavailable. A test now checks that every service
   router and forwarding class hands on every method.
+- **Fresh and saved chunks.** `world.ChunkAge` says which chunks the server generated as you came near (so nobody had
+  been there) and which it had saved, from the order of each section's block palette as it was sent:
+  `ChunkAge.use(owner)` starts remembering, `isFresh(chunkX, chunkZ)` asks, and `ChunkEvent.Loaded.isFresh()` reads the
+  chunk arriving. A chunk with no section that can tell counts as saved, so nothing is skipped on a guess. Lifted from
+  Stash Hunter, whose Old Chunks Only now asks it. In singleplayer, ground visited in an earlier session read 0 of 208
+  chunks fresh, and new ground 178 of 178.
 - **Flights that fly themselves.** `Myriad.elytra().altitude(owner)` and `control(owner)` give a `Flight` steered by
   a heading: Altitude's dive-and-climb cycle that holds its height without fireworks (about 27 blocks a second, 18
   with No Durability on Grim), and Control's straight flight at a set speed where the glide isn't simulated, which

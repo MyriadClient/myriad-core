@@ -1,5 +1,6 @@
 package dev.myriadclient.api.event.events;
 
+import dev.myriadclient.api.world.ChunkAge;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.jetbrains.annotations.ApiStatus;
@@ -19,6 +20,8 @@ public abstract class ChunkEvent {
 	/** A chunk's blocks and block entities arrived. Scan it here instead of rescanning the world. */
 	public static final class Loaded extends ChunkEvent {
 		private final LevelChunk chunk;
+		/** 1 fresh, -1 saved, 0 not read yet. */
+		private int fresh;
 
 		@ApiStatus.Internal
 		public Loaded(LevelChunk chunk) {
@@ -28,6 +31,15 @@ public abstract class ChunkEvent {
 
 		public LevelChunk chunk() {
 			return chunk;
+		}
+
+		/**
+		 * Whether the server generated the chunk just now, as you came near, rather than loading it saved: see
+		 * {@link ChunkAge}. Read from the blocks as they arrived, once, on the first call.
+		 */
+		public boolean isFresh() {
+			if (fresh == 0) fresh = ChunkAge.isFresh(chunk) ? 1 : -1;
+			return fresh > 0;
 		}
 	}
 
