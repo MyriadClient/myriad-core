@@ -1,6 +1,6 @@
 package dev.myriadclient.api.render;
 
-import dev.myriadclient.impl.render.EntityRenderStateAccess;
+import dev.myriadclient.api.Myriad;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.world.entity.Entity;
 import org.jetbrains.annotations.Nullable;
@@ -21,6 +21,6 @@ public final class RenderStates {
 
 	/** The entity {@code state} was last built from, or null for states not made by an entity renderer. */
 	public static @Nullable Entity entity(EntityRenderState state) {
-		return ((EntityRenderStateAccess) state).myriad$entity();
+		return Myriad.render().entity(state);
 	}
 }

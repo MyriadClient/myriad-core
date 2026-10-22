@@ -1,11 +1,11 @@
 package dev.myriadclient.api.event.events;
 
+import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.render.HighlightSettings;
 import dev.myriadclient.api.render.HighlightStyle;
 import dev.myriadclient.api.render.WorldMesh;
 import dev.myriadclient.api.world.ChunkCache;
-import dev.myriadclient.impl.render.HighlightRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.ApiStatus;
@@ -152,7 +152,7 @@ public abstract class HighlightEvent {
 
 		/** Highlights a box (world coordinates) in {@code color} (ARGB). Boxes off screen are skipped cheaply. */
 		public void box(AABB box, HighlightStyle style, int color) {
-			HighlightRenderer.INSTANCE.box(box, style, color, below);
+			Myriad.render().highlightBox(box, style, color, below);
 		}
 
 		/**
@@ -160,7 +160,7 @@ public abstract class HighlightEvent {
 		 * or the full block if it has no shape.
 		 */
 		public void block(BlockPos pos, HighlightStyle style, int color) {
-			HighlightRenderer.INSTANCE.block(pos, style, color, 0, below);
+			Myriad.render().highlightBlock(pos, style, color, 0, below);
 		}
 
 		/**
@@ -169,7 +169,7 @@ public abstract class HighlightEvent {
 		 * crosshair wants, instead of flickering against them where their faces meet.
 		 */
 		public void block(BlockPos pos, HighlightStyle style, int color, double grow) {
-			HighlightRenderer.INSTANCE.block(pos, style, color, grow, below);
+			Myriad.render().highlightBlock(pos, style, color, grow, below);
 		}
 
 		/**
@@ -180,7 +180,7 @@ public abstract class HighlightEvent {
 		 * {@link #paletteColor}{@code (i)}. Up to 256 colours.
 		 */
 		public void mesh(WorldMesh mesh, HighlightStyle style, int... palette) {
-			HighlightRenderer.INSTANCE.mesh(mesh, style, palette, below);
+			Myriad.render().highlightMesh(mesh, style, palette, below);
 		}
 
 		/** The vertex colour that picks {@code index} from a mesh's palette (see {@link #mesh}). */

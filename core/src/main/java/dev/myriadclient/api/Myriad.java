@@ -16,6 +16,7 @@ import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.registry.Registry;
+import dev.myriadclient.api.render.Rendering;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Building;
@@ -36,6 +37,7 @@ import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.layout.Layout;
+import dev.myriadclient.api.util.PacketChannel;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.Version;
 import net.fabricmc.loader.api.VersionParsingException;
@@ -222,6 +224,18 @@ public final class Myriad {
 	 */
 	public static Elytra elytra() {
 		return api().elytra();
+	}
+
+	/** Core's renderer, behind the rendering helpers ({@code Renderer3D}, {@code WorldMesh}, ...): use those. */
+	@ApiStatus.Internal
+	public static Rendering render() {
+		return api().render();
+	}
+
+	/** Core's networking, behind {@code Packets}: use that. */
+	@ApiStatus.Internal
+	public static PacketChannel packets() {
+		return api().packets();
 	}
 
 	/** The map mods installed alongside Myriad (Xaero's Minimap): their waypoints, empty without one. */

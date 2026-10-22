@@ -1,7 +1,7 @@
 package dev.myriadclient.api.render;
 
+import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.HighlightEvent;
-import dev.myriadclient.impl.render.HighlightRenderer;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.ApiStatus;
 
@@ -255,7 +255,7 @@ public final class HighlightStyle {
 			if (existing != null) return existing;
 			Fill fill = new Fill(shader.toString(), FIRST_CUSTOM + CUSTOM.size());
 			CUSTOM.put(shader, fill);
-			HighlightRenderer.registerFill(fill.shaderId, shader);
+			Myriad.render().registerFill(fill.shaderId, shader);
 			return fill;
 		}
 

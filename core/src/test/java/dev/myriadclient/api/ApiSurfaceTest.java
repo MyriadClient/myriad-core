@@ -13,6 +13,7 @@ import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -24,7 +25,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * The public API is what addons compile against, so it must not expose internals: a type from {@code dev.myriadclient.impl}
  * in a public signature would tie every addon to code that changes without notice. This walks every public type in
- * {@code dev.myriadclient.api} and fails on any public or protected member that mentions one.
+ * {@code dev.myriadclient.api} and fails on any public or protected member that mentions one. Nor may the API use
+ * {@code impl} inside, so it loads without it (a test harness puts its own behind {@code MyriadApi}): no API class file
+ * may refer to an {@code impl} class at all.
  */
 class ApiSurfaceTest {
 	private static final String IMPL = "dev.myriadclient.impl.";
@@ -47,6 +50,29 @@ class ApiSurfaceTest {
 			}
 		}
 		assertTrue(leaks.isEmpty(), "Public API exposes internal types:\n" + String.join("\n", leaks));
+	}
+
+	@Test
+	void apiClassesNeverReferToImpl() throws Exception {
+		Path root = Path.of(Myriad.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+		// A class file names every class it uses in its constant pool, slashed: imports, fully qualified names, casts.
+		byte[] impl = "dev/myriadclient/impl/".getBytes(StandardCharsets.UTF_8);
+		List<String> users = new ArrayList<>();
+		try (Stream<Path> files = Files.walk(root.resolve("dev/myriadclient/api"))) {
+			for (Path p : (Iterable<Path>) files.filter(f -> f.toString().endsWith(".class"))::iterator) {
+				if (contains(Files.readAllBytes(p), impl)) users.add(root.relativize(p).toString());
+			}
+		}
+		assertTrue(users.isEmpty(), "API classes that use dev.myriadclient.impl (route them through MyriadApi):\n" + String.join("\n", users));
+	}
+
+	private static boolean contains(byte[] haystack, byte[] needle) {
+		outer:
+		for (int i = 0; i <= haystack.length - needle.length; i++) {
+			for (int j = 0; j < needle.length; j++) if (haystack[i + j] != needle[j]) continue outer;
+			return true;
+		}
+		return false;
 	}
 
 	private static boolean visible(Member m) {

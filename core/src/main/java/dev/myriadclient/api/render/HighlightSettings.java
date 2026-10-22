@@ -1,12 +1,12 @@
 package dev.myriadclient.api.render;
 
+import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.setting.BoolSetting;
 import dev.myriadclient.api.setting.ColorSetting;
 import dev.myriadclient.api.setting.DoubleSetting;
 import dev.myriadclient.api.setting.EnumSetting;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.setting.SettingGroup;
-import dev.myriadclient.impl.render.HighlightRenderer;
 
 import java.util.function.Supplier;
 
@@ -81,7 +81,7 @@ public final class HighlightSettings {
 
 	/** The style these settings describe; rebuilt at most once a frame (theme and rainbow colours change over time). */
 	public HighlightStyle style() {
-		long frame = HighlightRenderer.INSTANCE.frame();
+		long frame = Myriad.render().frame();
 		if (style == null || builtFrame != frame) {
 			builtFrame = frame;
 			HighlightStyle s = HighlightStyle.OUTLINE

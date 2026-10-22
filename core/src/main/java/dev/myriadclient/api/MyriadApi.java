@@ -15,6 +15,7 @@ import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.registry.Registry;
+import dev.myriadclient.api.render.Rendering;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Building;
@@ -35,6 +36,7 @@ import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.layout.Layout;
+import dev.myriadclient.api.util.PacketChannel;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.ApiStatus;
 
@@ -92,6 +94,12 @@ public interface MyriadApi {
 	Containers containers();
 
 	Elytra elytra();
+
+	@ApiStatus.Internal
+	Rendering render();
+
+	@ApiStatus.Internal
+	PacketChannel packets();
 
 	Maps maps();
 

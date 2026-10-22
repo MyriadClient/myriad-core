@@ -3,9 +3,8 @@ package dev.myriadclient.api.render;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.MeshData;
+import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.impl.render.GpuGarbage;
-import dev.myriadclient.impl.render.MeshRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -137,7 +136,7 @@ public final class WorldMesh implements AutoCloseable {
 
 	private void freeBuffers() {
 		for (int i = 0; i < buffers.length; i++) {
-			if (buffers[i] != null) GpuGarbage.close(buffers[i]);
+			if (buffers[i] != null) Myriad.render().freeLater(buffers[i]);
 			buffers[i] = null;
 			indexCounts[i] = 0;
 		}
@@ -146,8 +145,7 @@ public final class WorldMesh implements AutoCloseable {
 	private void setRegistered(boolean on) {
 		if (on == registered) return;
 		registered = on;
-		if (on) MeshRenderer.add(this);
-		else MeshRenderer.remove(this);
+		Myriad.render().showMesh(this, on);
 	}
 
 	// ---- for the renderer ------------------------------------------------------------------------------------------

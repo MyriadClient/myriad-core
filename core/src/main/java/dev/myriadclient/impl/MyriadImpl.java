@@ -2,6 +2,10 @@ package dev.myriadclient.impl;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.MyriadApi;
+import dev.myriadclient.api.render.Rendering;
+import dev.myriadclient.api.util.PacketChannel;
+import dev.myriadclient.impl.network.CorePacketChannel;
+import dev.myriadclient.impl.render.CoreRendering;
 import dev.myriadclient.api.addon.Addon;
 import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.command.Command;
@@ -112,6 +116,8 @@ public final class MyriadImpl implements MyriadApi {
 	private final PlacementManager placement = new PlacementManager(blockAcks);
 	private final BreakManager breaking = new BreakManager();
 	private final ElytraManager elytra = new ElytraManager();
+	private final CoreRendering render = new CoreRendering();
+	private final CorePacketChannel packets = new CorePacketChannel(blockAcks);
 	private final MapsImpl maps = new MapsImpl();
 	private final ControlManager controls = new ControlManager();
 	private final WheelManager wheels = new WheelManager();
@@ -327,6 +333,16 @@ public final class MyriadImpl implements MyriadApi {
 	@Override
 	public Elytra elytra() {
 		return elytra;
+	}
+
+	@Override
+	public Rendering render() {
+		return render;
+	}
+
+	@Override
+	public PacketChannel packets() {
+		return packets;
 	}
 
 	@Override

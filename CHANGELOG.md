@@ -137,6 +137,12 @@ and may change in any release. Addons declare the oldest core they support in `f
 - **Fixed:** `Placement.Forwarding` didn't hand on `use`, so while an addon's replacement of placement was in effect
   every hand click (a lever, a repeater's delay) was refused as unavailable. A test now checks that every service
   router and forwarding class hands on every method.
+- **The API loads without core's internals.** Nine API classes (`Renderer3D`, `WorldMesh`, `HighlightStyle`,
+  `HighlightSettings`, `HighlightEvent`, `Ghosts`, `RenderStates`, `RenderLayers`, `Packets`) reached into
+  `dev.myriadclient.impl` directly; they now go through `Myriad.render()` and `Myriad.packets()` (`Rendering`,
+  `PacketChannel`, marked internal: keep using the helpers), which a test harness can fill with its own.
+  `ApiSurfaceTest` fails on any API class file that refers to an `impl` class, imports and fully qualified names
+  alike. Nothing changes for addons.
 - **Fresh and saved chunks.** `world.ChunkAge` says which chunks the server generated as you came near (so nobody had
   been there) and which it had saved, from the order of each section's block palette as it was sent:
   `ChunkAge.use(owner)` starts remembering, `isFresh(chunkX, chunkZ)` asks, and `ChunkEvent.Loaded.isFresh()` reads the

@@ -1,6 +1,6 @@
 package dev.myriadclient.api.render;
 
-import dev.myriadclient.impl.render.WorldRenderQueue;
+import dev.myriadclient.api.Myriad;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
@@ -23,44 +23,44 @@ public final class Renderer3D {
 
 	/** This frame's shape target, the same one {@code Render3DEvent.shapes()} returns. */
 	public static ShapeBuilder shapes() {
-		return WorldRenderQueue.INSTANCE;
+		return Myriad.render().shapes();
 	}
 
 	/** A box with a translucent fill and/or outline. {@code throughWalls} draws it without depth testing. */
 	public static void box(AABB box, int fillColor, int lineColor, ShapeMode mode, boolean throughWalls) {
-		WorldRenderQueue.INSTANCE.box(box, fillColor, lineColor, mode, throughWalls);
+		Myriad.render().shapes().box(box, fillColor, lineColor, mode, throughWalls);
 	}
 
 	public static void line(Vec3 from, Vec3 to, int color, boolean throughWalls) {
-		WorldRenderQueue.INSTANCE.line(from, to, color, throughWalls);
+		Myriad.render().shapes().line(from, to, color, throughWalls);
 	}
 
 	public static void line(Vec3 from, Vec3 to, int fromColor, int toColor, boolean throughWalls) {
-		WorldRenderQueue.INSTANCE.line(from, to, fromColor, toColor, throughWalls);
+		Myriad.render().shapes().line(from, to, fromColor, toColor, throughWalls);
 	}
 
 	/** A line from the centre of the screen to {@code to}. */
 	public static void tracer(Vec3 to, int color) {
-		WorldRenderQueue.INSTANCE.tracer(to, color);
+		Myriad.render().tracer(to, color);
 	}
 
 	/** See {@link ShapeBuilder#blockShape(BlockPos, int, int, ShapeMode, boolean)}. */
 	public static void blockShape(BlockPos pos, int fillColor, int lineColor, ShapeMode mode, boolean throughWalls) {
-		WorldRenderQueue.INSTANCE.blockShape(pos, fillColor, lineColor, mode, throughWalls);
+		Myriad.render().shapes().blockShape(pos, fillColor, lineColor, mode, throughWalls);
 	}
 
 	/** One face of the block at {@code pos}, filled (e.g. the side a placement will click). */
 	public static void side(BlockPos pos, Direction face, int color, boolean throughWalls) {
-		WorldRenderQueue.INSTANCE.side(pos, face, color, throughWalls);
+		Myriad.render().shapes().side(pos, face, color, throughWalls);
 	}
 
 	/** A flat ring around {@code center} (e.g. a range indicator at the player's feet). */
 	public static void circle(Vec3 center, double radius, int color, boolean throughWalls) {
-		WorldRenderQueue.INSTANCE.circle(center, radius, color, throughWalls);
+		Myriad.render().shapes().circle(center, radius, color, throughWalls);
 	}
 
 	/** Line width in pixels for the lines queued after this call. Resets to the default (2) every frame. */
 	public static void lineWidth(float width) {
-		WorldRenderQueue.INSTANCE.lineWidth(width);
+		Myriad.render().shapes().lineWidth(width);
 	}
 }

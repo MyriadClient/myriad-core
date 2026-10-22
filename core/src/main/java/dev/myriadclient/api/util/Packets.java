@@ -1,7 +1,6 @@
 package dev.myriadclient.api.util;
 
-import dev.myriadclient.impl.MyriadImpl;
-import dev.myriadclient.impl.network.PacketGate;
+import dev.myriadclient.api.Myriad;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.prediction.PredictiveAction;
 import net.minecraft.core.BlockPos;
@@ -28,7 +27,7 @@ public final class Packets {
 	 * part of your own trick (a crit hop, a desync fix) and that other features shouldn't react to or rewrite.
 	 */
 	public static void sendSilently(Packet<?> packet) {
-		PacketGate.runSilently(() -> send(packet));
+		if (Myriad.isReady()) Myriad.packets().runSilently(() -> send(packet));
 	}
 
 	/**
@@ -58,8 +57,8 @@ public final class Packets {
 	 */
 	public static CompletableFuture<BlockState> sendSequenced(BlockPos pos, PredictiveAction creator) {
 		Minecraft mc = Minecraft.getInstance();
-		if (mc.gameMode == null || mc.level == null || MyriadImpl.get() == null) return CompletableFuture.failedFuture(new CancellationException("Not in a world"));
+		if (mc.gameMode == null || mc.level == null || !Myriad.isReady()) return CompletableFuture.failedFuture(new CancellationException("Not in a world"));
 		sendSequenced(creator);
-		return MyriadImpl.get().blockAcks().track(MyriadImpl.get().blockAcks().currentSequence(), pos);
+		return Myriad.packets().answerTo(pos);
 	}
 }

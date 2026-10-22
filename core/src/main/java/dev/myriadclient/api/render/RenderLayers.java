@@ -1,6 +1,6 @@
 package dev.myriadclient.api.render;
 
-import dev.myriadclient.impl.render.MyriadPipelines;
+import dev.myriadclient.api.Myriad;
 import net.minecraft.client.renderer.rendertype.RenderType;
 
 /**
@@ -13,16 +13,16 @@ public final class RenderLayers {
 
 	/** Lines (position, colour, normal = direction, line width). */
 	public static RenderType lines(boolean throughWalls) {
-		return throughWalls ? MyriadPipelines.LINES_XRAY : MyriadPipelines.LINES;
+		return Myriad.render().layer(Rendering.Layer.LINES, throughWalls);
 	}
 
 	/** Quads in a flat colour (position, colour). */
 	public static RenderType quads(boolean throughWalls) {
-		return throughWalls ? MyriadPipelines.QUADS_XRAY : MyriadPipelines.QUADS;
+		return Myriad.render().layer(Rendering.Layer.QUADS, throughWalls);
 	}
 
 	/** Entity models in a flat colour: pass to {@code submitModel} with the colour as the tint. */
 	public static RenderType flatModel(boolean throughWalls) {
-		return throughWalls ? MyriadPipelines.MODEL_XRAY : MyriadPipelines.MODEL;
+		return Myriad.render().layer(Rendering.Layer.MODEL, throughWalls);
 	}
 }

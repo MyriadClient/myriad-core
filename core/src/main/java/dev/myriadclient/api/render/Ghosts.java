@@ -1,7 +1,7 @@
 package dev.myriadclient.api.render;
 
 import dev.myriadclient.api.event.events.Render3DEvent;
-import dev.myriadclient.impl.render.GhostRenderer;
+import dev.myriadclient.api.Myriad;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.world.phys.Vec3;
 
@@ -22,7 +22,7 @@ public final class Ghosts {
 
 	/** Submits {@code state} at {@code feet} (world coordinates) this frame, faded to {@code alpha} (0-1). From a {@link Render3DEvent}. */
 	public static void submit(Render3DEvent event, LivingEntityRenderState state, Vec3 feet, float alpha) {
-		GhostRenderer.submit(event, state, feet, alpha, null, 0);
+		Myriad.render().ghost(event, state, feet, alpha, null, 0);
 	}
 
 	/**
@@ -31,6 +31,6 @@ public final class Ghosts {
 	 * held items included). The highlight starts the frame after the first one asked.
 	 */
 	public static void submit(Render3DEvent event, LivingEntityRenderState state, Vec3 feet, float alpha, HighlightStyle style, int color) {
-		GhostRenderer.submit(event, state, feet, alpha, style, color);
+		Myriad.render().ghost(event, state, feet, alpha, style, color);
 	}
 }
