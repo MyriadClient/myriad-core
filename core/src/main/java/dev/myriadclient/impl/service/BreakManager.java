@@ -19,6 +19,7 @@ import dev.myriadclient.api.util.Reach;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
+import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -253,7 +254,7 @@ public final class BreakManager implements Breaking {
 		if (nothingThere(state)) return false;
 		float rate = rate(state, pos, toolSlot(Options.PACKET, state, pos));
 		if (rate <= 0 || rate * ((tick - rebreakStart) * tpsFactor() + 1) < PACKET_THRESHOLD) return false;
-		return fast || grim.finishOk(System.currentTimeMillis());
+		return fast || grim.finishOk(Clock.millis());
 	}
 
 	// ---- ticking ------------------------------------------------------------------------------------------------
@@ -324,7 +325,7 @@ public final class BreakManager implements Breaking {
 	@Subscribe(priority = Priority.LOWEST, packets = {ServerboundPlayerActionPacket.class, ServerboundMovePlayerPacket.class, ServerboundSwingPacket.class})
 	private void onSend(PacketEvent.Send e) {
 		if (e.isCancelled() || mc.player == null || mc.level == null) return;
-		long now = System.currentTimeMillis();
+		long now = Clock.millis();
 		switch (e.packet()) {
 			case ServerboundPlayerActionPacket p when p.getAction() == Action.START_DESTROY_BLOCK -> grim.started(p.getPos(), grimDamage(p.getPos()), now);
 			case ServerboundPlayerActionPacket p when p.getAction() == Action.STOP_DESTROY_BLOCK -> grim.finished(now);
@@ -367,7 +368,7 @@ public final class BreakManager implements Breaking {
 		int level = slot >= 0 ? Mining.efficiency(mc.player.getInventory().getItem(slot)) : 0;
 		if (level == 0) return 0;
 		level = Math.min(level, Mining.efficiency(mc.player.getInventory().getItem(Myriad.inventory().serverSlot())));
-		long since = System.currentTimeMillis() - efficiencyWindowMs();
+		long since = Clock.millis() - efficiencyWindowMs();
 		for (long[] sample : heldEfficiency) if (sample[0] >= since) level = Math.min(level, (int) sample[1]);
 		return level;
 	}
@@ -382,7 +383,7 @@ public final class BreakManager implements Breaking {
 
 	/** Notes the Efficiency of what the server holds this tick, keeping a few seconds of it. */
 	private void sampleEfficiency() {
-		long now = System.currentTimeMillis();
+		long now = Clock.millis();
 		heldEfficiency.addLast(new long[]{now, Mining.efficiency(mc.player.getInventory().getItem(Myriad.inventory().serverSlot()))});
 		while (heldEfficiency.size() > 1 && now - heldEfficiency.peekFirst()[0] > 5000) heldEfficiency.pollFirst();
 	}
@@ -490,7 +491,7 @@ public final class BreakManager implements Breaking {
 			rebreakStart = tick;
 			if (primary != null && primary.phase == Phase.MINING) {
 				primary.started = tick;
-				primary.startedMs = System.currentTimeMillis();
+				primary.startedMs = Clock.millis();
 				primary.progress = 0;
 			}
 		}
@@ -553,7 +554,7 @@ public final class BreakManager implements Breaking {
 	 */
 	private boolean startAllowed(Job j) {
 		if (j.keepsGap()) return gapOver();
-		return !j.grimTimed() || grim.startOk(System.currentTimeMillis());
+		return !j.grimTimed() || grim.startOk(Clock.millis());
 	}
 
 	/**
@@ -565,7 +566,7 @@ public final class BreakManager implements Breaking {
 	private boolean grimLets(Job j) {
 		if (!j.grimTimed()) return true;
 		if (decoyTick == tick) return false;
-		long now = System.currentTimeMillis();
+		long now = Clock.millis();
 		if (grim.finishOk(now)) return true;
 		if (j.grim() && grim.startOk(now) && budget(1)) decoyStart(j);
 		return false;
@@ -595,7 +596,7 @@ public final class BreakManager implements Breaking {
 		});
 		j.phase = Phase.MINING;
 		j.started = tick;
-		j.startedMs = System.currentTimeMillis();
+		j.startedMs = Clock.millis();
 		j.progress = 0;
 		primary = j;
 		rebreakPos = j.pos;
@@ -641,7 +642,7 @@ public final class BreakManager implements Breaking {
 		j.deadline = Integer.MAX_VALUE;
 		j.lastSent = tick;
 		if (action == Action.STOP_DESTROY_BLOCK) {
-			lastStopMs = System.currentTimeMillis();
+			lastStopMs = Clock.millis();
 			if (j.keepsGap()) finishCooldown = FINISH_GAP;
 		}
 		// Waiting for the server: the block stays on screen until its update says it's gone.
@@ -832,7 +833,7 @@ public final class BreakManager implements Breaking {
 	}
 
 	private static long msSince(long ms) {
-		return System.currentTimeMillis() - ms;
+		return Clock.millis() - ms;
 	}
 
 	private static boolean budget(int packets) {

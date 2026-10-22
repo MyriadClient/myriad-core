@@ -7,6 +7,7 @@ import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.util.ItemInfo;
 import dev.myriadclient.api.util.Packets;
 import dev.myriadclient.api.util.Slots;
+import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.protocol.game.ClientboundSoundPacket;
@@ -130,7 +131,7 @@ final class ChestSwapper {
 	public static boolean swap() {
 		Pair pair = pair();
 		if (pair == null) return false;
-		long now = System.currentTimeMillis();
+		long now = Clock.millis();
 		int index = pair.hand() == InteractionHand.OFF_HAND ? Slots.OFF_HAND : pair.slot();
 		// Masked from the elytra's side (a mask shows what each slot held when it began): the elytra shows as worn
 		// throughout, the chestplate where you keep it. Renewed at each swap while it lasts.
@@ -185,7 +186,7 @@ final class ChestSwapper {
 	 */
 	public static boolean settled() {
 		// Capped, so a glide waiting on it stays well short of the 20 ticks (1 s) that wear the elytra.
-		return System.currentTimeMillis() - lastSwapMs > Math.min(Myriad.server().ping() + SETTLE_MARGIN_MS, MAX_SETTLE_MS);
+		return Clock.millis() - lastSwapMs > Math.min(Myriad.server().ping() + SETTLE_MARGIN_MS, MAX_SETTLE_MS);
 	}
 
 	/** Puts the elytra back on if a chestplate is worn and the elytra is at hand. */
@@ -217,7 +218,7 @@ final class ChestSwapper {
 		int from = -1;
 		for (int i = 9; i < 36 && from < 0; i++) if (wanted.test(inv.getItem(i)) && !Myriad.inventory().isSpared(inv.getItem(i))) from = i;
 		for (int i = 9; i < 36 && from < 0; i++) if (wanted.test(inv.getItem(i))) from = i;
-		long now = System.currentTimeMillis();
+		long now = Clock.millis();
 		if (from < 0) {
 			if (missingSinceMs == 0) missingSinceMs = now;
 			return now - missingSinceMs > MISSING_MS ? ChestSwap.Need.MISSING : ChestSwap.Need.WAITING;
@@ -262,12 +263,12 @@ final class ChestSwapper {
 			if (equippable != null) sounds.add(equippable.equipSound().value());
 		}
 		muted = sounds;
-		muteUntil = System.currentTimeMillis() + MUTE_MS;
+		muteUntil = Clock.millis() + MUTE_MS;
 	}
 
 	/** Network thread: an equip sound from a recent swap, played where the server has you. */
 	private static boolean isSwapSound(ClientboundSoundPacket sound) {
-		if (System.currentTimeMillis() > muteUntil || !muted.contains(sound.getSound().value())) return false;
+		if (Clock.millis() > muteUntil || !muted.contains(sound.getSound().value())) return false;
 		var p = mc().player;
 		return p != null && p.distanceToSqr(sound.getX(), sound.getY(), sound.getZ()) < MUTE_RANGE * MUTE_RANGE;
 	}

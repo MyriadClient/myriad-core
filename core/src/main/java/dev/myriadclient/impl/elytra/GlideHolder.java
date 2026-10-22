@@ -6,6 +6,7 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TeleportEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.common.ClientboundPingPacket;
@@ -151,12 +152,12 @@ final class GlideHolder {
 		int bit = e.packet() instanceof ClientboundSetEntityDataPacket data ? ownGlideBit(data) : -1;
 		if (bit >= 0) {
 			ownGlide = bit;
-			ownGlideMs = System.currentTimeMillis();
+			ownGlideMs = Clock.millis();
 		}
 		if (bit == 1) glideArrivedMs = ownGlideMs;
 		if (e.packet() instanceof ClientboundSetEntityDataPacket data && owner != null && !clearArriving && endsOwnGlide(data)) {
 			holdFrom = lastPing;
-			clearArrivedMs = System.currentTimeMillis();
+			clearArrivedMs = Clock.millis();
 			clearArriving = true;
 		}
 	}
@@ -172,7 +173,7 @@ final class GlideHolder {
 		return -1;
 	}
 
-	/** Whether the server has said it glides you since {@code ms} ({@code System.currentTimeMillis()}), while armed. */
+	/** Whether the server has said it glides you since {@code ms} ({@code Clock.millis()}), while armed. */
 	public static boolean glidingSince(long ms) {
 		return INSTANCE.glideArrivedMs >= ms;
 	}
@@ -180,7 +181,7 @@ final class GlideHolder {
 	@Subscribe(packets = ServerboundPlayerCommandPacket.class)
 	private void onSend(PacketEvent.Send e) {
 		if (((ServerboundPlayerCommandPacket) e.packet()).getAction() == ServerboundPlayerCommandPacket.Action.START_FALL_FLYING)
-			startSentMs = System.currentTimeMillis();
+			startSentMs = Clock.millis();
 	}
 
 	/**
@@ -196,7 +197,7 @@ final class GlideHolder {
 		GlideHolder h = INSTANCE;
 		if (h.owner != owner || h.ownGlide != 0) return false;
 		long rtt = Myriad.server().ping();
-		return h.ownGlideMs >= h.startSentMs + rtt - ANSWER_EARLY_MS || System.currentTimeMillis() >= h.startSentMs + rtt + ANSWER_LATE_MS;
+		return h.ownGlideMs >= h.startSentMs + rtt - ANSWER_EARLY_MS || Clock.millis() >= h.startSentMs + rtt + ANSWER_LATE_MS;
 	}
 
 	/** Whether {@code data} is the server turning the local player's glide off while the client still glides. */
@@ -226,7 +227,7 @@ final class GlideHolder {
 	public static boolean holdAnswer(int id) {
 		GlideHolder h = INSTANCE;
 		if (h.owner != null && h.clearArriving && !h.holdingAnswers && (h.holdFrom == NONE || id == h.holdFrom)) h.holdingAnswers = true;
-		if (h.holdingAnswers && System.currentTimeMillis() - h.clearArrivedMs > MAX_HOLD_MS) {
+		if (h.holdingAnswers && Clock.millis() - h.clearArrivedMs > MAX_HOLD_MS) {
 			h.flush();
 			h.exposed = true;
 		}

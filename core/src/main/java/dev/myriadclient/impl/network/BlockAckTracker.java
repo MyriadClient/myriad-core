@@ -4,6 +4,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
@@ -40,7 +41,7 @@ public final class BlockAckTracker {
 	 */
 	public CompletableFuture<BlockState> track(int sequence, BlockPos pos) {
 		CompletableFuture<BlockState> future = new CompletableFuture<>();
-		pending.add(new Pending(sequence, pos.immutable(), System.currentTimeMillis() + timeoutMs(), future));
+		pending.add(new Pending(sequence, pos.immutable(), Clock.millis() + timeoutMs(), future));
 		return future;
 	}
 
@@ -61,7 +62,7 @@ public final class BlockAckTracker {
 	@Subscribe
 	private void onTick(TickEvent.Post e) {
 		if (pending.isEmpty()) return;
-		long now = System.currentTimeMillis();
+		long now = Clock.millis();
 		List<Pending> expired = new ArrayList<>();
 		pending.removeIf(p -> now > p.deadline && expired.add(p));
 		for (Pending p : expired) p.future.completeExceptionally(new TimeoutException("No answer from the server for the action at " + p.pos.toShortString()));

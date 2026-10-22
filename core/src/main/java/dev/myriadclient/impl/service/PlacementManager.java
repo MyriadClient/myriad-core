@@ -19,6 +19,7 @@ import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
 import dev.myriadclient.impl.network.JoinedVersion;
+import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
 import net.minecraft.core.BlockPos;
@@ -519,7 +520,7 @@ public final class PlacementManager implements Placement {
 		BlockState was = mc.level.getBlockState(pos);
 		// Clicking the empty space itself: an air placement.
 		boolean air = airClick(target, pos);
-		if (placing(slot).getItem() instanceof SignItem) signPlacedAt = System.currentTimeMillis();
+		if (placing(slot).getItem() instanceof SignItem) signPlacedAt = Clock.millis();
 		InventoryManager inventory = MyriadImpl.get().inventoryManager() instanceof InventoryManager i ? i : null;
 		if (inventory != null && inventory.undoSlotThisTick() == slot) {
 			// This slot's block is in the off hand for this tick's air placements: this one goes from there too (against
@@ -618,7 +619,7 @@ public final class PlacementManager implements Placement {
 	/** A sign placed by a module would leave its editor open over the game, stopping whatever placed it: it's kept closed. */
 	@Subscribe
 	private void onScreenOpen(ScreenOpenEvent e) {
-		if (e.screen() instanceof AbstractSignEditScreen && System.currentTimeMillis() - signPlacedAt < SIGN_EDITOR_MS) e.cancel();
+		if (e.screen() instanceof AbstractSignEditScreen && Clock.millis() - signPlacedAt < SIGN_EDITOR_MS) e.cancel();
 	}
 
 	/**

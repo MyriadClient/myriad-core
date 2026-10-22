@@ -5,7 +5,9 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.util.Ticks;
+import dev.myriadclient.api.util.RateCounter;
 import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.util.Clock;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Camera;
@@ -17,6 +19,8 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.Registry;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
@@ -28,6 +32,10 @@ import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ServerboundClientTickEndPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.repository.ServerPacksSource;
+import net.minecraft.server.packs.resources.MultiPackResourceManager;
+import net.minecraft.tags.TagLoader;
 import net.minecraft.stats.StatsCounter;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.level.block.Block;
@@ -39,6 +47,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 
 /**
  * A Minecraft client just real enough to drive core's services the way the game does, with no window and no server:
@@ -76,6 +85,9 @@ public final class Harness implements AutoCloseable {
 	private final List<Runnable> nextTick = new ArrayList<>();
 	private final List<Runnable> everyTick = new ArrayList<>();
 	private int tick;
+	/** The services' clock (see {@link Clock}): starts well past zero, and moves {@link #TICK_MS} a tick. */
+	private long millis = 1_000_000;
+	public static final long TICK_MS = 50;
 
 	private Harness() {
 		boot();
@@ -105,6 +117,8 @@ public final class Harness implements AutoCloseable {
 		GameRenderer renderer = Fields.allocate(GameRenderer.class);
 		Fields.set(renderer, "mainCamera", camera);
 		Fields.set(mc, "gameRenderer", renderer);
+		Clock.use(() -> millis);
+		Fields.set(RateCounter.class, "millis", (LongSupplier) () -> millis);
 		myriad = MyriadImpl.forHarness();
 	}
 
@@ -113,11 +127,18 @@ public final class Harness implements AutoCloseable {
 		return new Harness();
 	}
 
-	/** The game's registries, once per JVM, with item components bound as a server's resources would bind them. */
+	/** The game's registries, once per JVM, frozen, with tags and item components bound as a server's resources would bind them. */
 	private static synchronized void boot() {
 		if (booted) return;
 		SharedConstants.tryDetectVersion();
 		Bootstrap.bootStrap();
+		// Fabric leaves the built-in registries open for mods until they've initialised; there are none here.
+		Fields.callStatic(BuiltInRegistries.class, "freeze");
+		// Tags (which tools mine what, which blocks are climbable) from the game's own data, as a server loads them.
+		try (var resources = new MultiPackResourceManager(PackType.SERVER_DATA, List.of(ServerPacksSource.createVanillaPackSource()))) {
+			TagLoader.loadTagsForExistingRegistries(resources, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY))
+				.forEach(Registry.PendingTags::apply);
+		}
 		lookup = VanillaRegistries.createLookup();
 		BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(p -> p.apply());
 		booted = true;
@@ -164,6 +185,7 @@ public final class Harness implements AutoCloseable {
 	 */
 	public Harness tick() {
 		tick++;
+		millis += TICK_MS;
 		Ticks.advance();
 		Myriad.events().post(TickEvent.Pre.INSTANCE);
 		List<Runnable> actions = new ArrayList<>(everyTick);
@@ -245,6 +267,17 @@ public final class Harness implements AutoCloseable {
 		return this;
 	}
 
+	/** Moves the clock on {@code ms} without a tick (the server taking a while to answer, within a tick). */
+	public Harness pass(long ms) {
+		millis += ms;
+		return this;
+	}
+
+	/** The services' clock now. */
+	public long millis() {
+		return millis;
+	}
+
 	public int currentTick() {
 		return tick;
 	}
@@ -267,6 +300,8 @@ public final class Harness implements AutoCloseable {
 	@Override
 	public void close() {
 		MyriadImpl.uninstall();
+		Clock.use(null);
+		Fields.set(RateCounter.class, "millis", (LongSupplier) () -> System.nanoTime() / 1_000_000L);
 		Fields.set(Minecraft.class, "instance", null);
 		channel.finishAndReleaseAll();
 	}

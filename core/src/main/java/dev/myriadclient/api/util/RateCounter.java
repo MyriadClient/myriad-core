@@ -1,6 +1,7 @@
 package dev.myriadclient.api.util;
 
 import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.function.LongSupplier;
 
 /**
  * Counts events over the last second: clicks per second, packets per second, placements per second. Lock-free, so it
@@ -9,6 +10,8 @@ import java.util.concurrent.atomic.AtomicLongArray;
  */
 public final class RateCounter {
 	private static final int BUCKETS = 20;
+	/** Milliseconds on a monotonic clock; core's test harness puts its own tick-driven clock here. */
+	private static volatile LongSupplier millis = () -> System.nanoTime() / 1_000_000L;
 
 	private final long bucketMs;
 	private final AtomicLongArray counts = new AtomicLongArray(BUCKETS);
@@ -49,6 +52,6 @@ public final class RateCounter {
 	}
 
 	private static long now() {
-		return System.nanoTime() / 1_000_000L;
+		return millis.getAsLong();
 	}
 }

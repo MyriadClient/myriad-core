@@ -62,6 +62,17 @@ final class Fields {
 		}
 	}
 
+	/** Calls static method {@code name} of {@code type} with no arguments, private or not. */
+	static void callStatic(Class<?> type, String name) {
+		try {
+			Method m = type.getDeclaredMethod(name);
+			m.setAccessible(true);
+			m.invoke(null);
+		} catch (ReflectiveOperationException e) {
+			throw new IllegalStateException(e);
+		}
+	}
+
 	private static Field find(Class<?> type, String name) {
 		for (Class<?> c = type; c != null; c = c.getSuperclass()) {
 			try {

@@ -12,6 +12,7 @@ import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.util.ItemInfo;
 import dev.myriadclient.api.util.Packets;
+import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
@@ -122,7 +123,7 @@ final class NoDurabilityEngine implements NoDurability {
 	private int sinceChunkWait = Integer.MAX_VALUE;
 	private String lastChunkWait = "";
 	/**
-	 * When the last start went out ({@code System.currentTimeMillis()}, 0 for none yet this round). Now and then 2b2t
+	 * When the last start went out ({@code Clock.millis()}, 0 for none yet this round). Now and then 2b2t
 	 * ignores one: no glide comes back, and neither the server nor Grim glides you while the client does, so Grim sets
 	 * you back every second or two. A setback with no glide back since the start says so; the elytra then goes on, the
 	 * start goes again once the server has it ({@link #recovering}), and the swapping waits for the server's glide
@@ -431,7 +432,7 @@ final class NoDurabilityEngine implements NoDurability {
 
 	/** Whether the last start has had time to come back as a glide from the server, and hasn't. */
 	private boolean startLost() {
-		return startMs > 0 && System.currentTimeMillis() - startMs > Myriad.server().ping() + 150 && !GlideHolder.glidingSince(startMs);
+		return startMs > 0 && Clock.millis() - startMs > Myriad.server().ping() + 150 && !GlideHolder.glidingSince(startMs);
 	}
 
 	/** Whether swaps have had to wait for chunks lately (Altitude slows down for them). */
@@ -491,7 +492,7 @@ final class NoDurabilityEngine implements NoDurability {
 		if (rocketWanted) fireRocket();
 		startNow = true;
 		sinceStart = 0;
-		startMs = System.currentTimeMillis();
+		startMs = Clock.millis();
 		if (swapBack) ChestSwapper.swap();
 	}
 

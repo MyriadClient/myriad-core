@@ -11,6 +11,7 @@ import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.util.Interactions;
 import dev.myriadclient.api.util.Reach;
 import dev.myriadclient.api.util.Slots;
+import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
@@ -62,7 +63,7 @@ public final class ContainerTracker implements Containers {
 	public void onOpened(int syncId) {
 		closeTracked();
 		if (mc.player == null || mc.player.containerMenu.containerId != syncId || syncId == 0) return;
-		BlockPos pos = lastClicked != null && System.currentTimeMillis() - lastClickedAt < CLICK_WINDOW_MS ? lastClicked : null;
+		BlockPos pos = lastClicked != null && Clock.millis() - lastClickedAt < CLICK_WINDOW_MS ? lastClicked : null;
 		AbstractContainerMenu menu = mc.player.containerMenu;
 		// Something else opened instead of what open() asked for (a server plugin's menu, say): it isn't that container.
 		if (pending != null && pendingPos != null && mc.level != null && !ContainerKinds.opens(mc.level.getBlockState(pendingPos), menu)) {
@@ -96,7 +97,7 @@ public final class ContainerTracker implements Containers {
 	private void onSend(PacketEvent.Send e) {
 		if (e.packet() instanceof ServerboundUseItemOnPacket p) {
 			lastClicked = p.getHitResult().getBlockPos().immutable();
-			lastClickedAt = System.currentTimeMillis();
+			lastClickedAt = Clock.millis();
 		}
 	}
 

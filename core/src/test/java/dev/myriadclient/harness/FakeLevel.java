@@ -115,6 +115,16 @@ public final class FakeLevel extends ClientLevel {
 	public void playLocalSound(double x, double y, double z, SoundEvent sound, SoundSource category, float volume, float pitch, boolean delayed) {
 	}
 
+	/** No sounds or particles for level events (a block breaking). */
+	@Override
+	public void levelEvent(@Nullable Entity source, int type, BlockPos pos, int data) {
+	}
+
+	/** No crack overlay to draw. */
+	@Override
+	public void destroyBlockProgress(int breakerId, BlockPos pos, int progress) {
+	}
+
 	/** No block entities (chests and the like are only blocks here). */
 	@Override
 	public @Nullable BlockEntity getBlockEntity(BlockPos pos) {

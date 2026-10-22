@@ -16,6 +16,7 @@ import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.mixin.LocalPlayerAccessor;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.JoinedVersion;
+import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -958,13 +959,13 @@ public final class InventoryManager implements Inventory {
 		if (mc.player == null) return;
 		var inv = mc.player.getInventory();
 		Mask m = masks.get(owner);
-		if (m == null || System.currentTimeMillis() > m.untilMs) {
+		if (m == null || Clock.millis() > m.untilMs) {
 			m = new Mask();
 			m.armor = mc.player.getArmorValue();
 			masks.put(owner, m);
 		}
 		for (int i : inventoryIndexes) if (valid(i)) m.held.putIfAbsent(i, inv.getItem(i).copy());
-		m.untilMs = System.currentTimeMillis() + holdMs;
+		m.untilMs = Clock.millis() + holdMs;
 	}
 
 	@Override
@@ -975,7 +976,7 @@ public final class InventoryManager implements Inventory {
 	/** The live mask covering {@code index}, if any. */
 	private Mask maskAt(int index) {
 		if (masks.isEmpty()) return null;
-		long now = System.currentTimeMillis();
+		long now = Clock.millis();
 		for (Mask m : masks.values()) if (now <= m.untilMs && m.held.containsKey(index)) return m;
 		return null;
 	}
@@ -1054,7 +1055,7 @@ public final class InventoryManager implements Inventory {
 	private void tickBorrows(TickEvent.Pre e) {
 		ticks++;
 		if (!masks.isEmpty()) {
-			long now = System.currentTimeMillis();
+			long now = Clock.millis();
 			masks.values().removeIf(m -> now > m.untilMs);
 		}
 		if (borrows.isEmpty() || mc.player == null) return;
