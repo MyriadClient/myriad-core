@@ -51,6 +51,8 @@ public class EnumSetSetting<E extends Enum<E>> extends Setting<Set<E>> {
 
 	@Override
 	protected Set<E> copy(Set<E> v) {
+		// Also runs from Setting's constructor, before type is set: the default is an EnumSet already there.
+		if (v instanceof EnumSet<E> set) return set.clone();
 		return v == null || v.isEmpty() ? EnumSet.noneOf(type) : EnumSet.copyOf(v);
 	}
 
@@ -83,7 +85,8 @@ public class EnumSetSetting<E extends Enum<E>> extends Setting<Set<E>> {
 	@Override
 	public boolean parse(String input) {
 		String in = input.trim();
-		if (in.equalsIgnoreCase("clear")) {
+		// "none" is how an empty set shows.
+		if (in.equalsIgnoreCase("clear") || in.equalsIgnoreCase("none")) {
 			set(EnumSet.noneOf(type));
 			return true;
 		}

@@ -3,6 +3,7 @@ package dev.myriadclient.api.setting;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 
+import java.util.Locale;
 import java.util.function.Supplier;
 
 public class DoubleSetting extends Setting<Double> {
@@ -78,7 +79,8 @@ public class DoubleSetting extends Setting<Double> {
 
 	@Override
 	public String valueString() {
-		return String.format("%." + decimals + "f", get());
+		// The same in every locale, so what's shown can be typed back.
+		return String.format(Locale.ROOT, "%." + decimals + "f", get());
 	}
 
 	public static class Builder extends Setting.Builder<DoubleSetting.Builder, Double, DoubleSetting> {

@@ -6,6 +6,28 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.9.0 (unreleased)
+
+- **Settings keep their values through every round trip.** A table test (`SettingRoundTripTest`) puts each setting
+  type through JSON both ways, `encode`/`decode`, `.set` with what it shows, bad JSON, and a save that keeps keys it
+  doesn't know. It found five bugs, now fixed:
+  - `enumSet(name, type)` with no default crashed when built (the empty default was copied before the type was known).
+  - Decimals showed in the player's locale ("2,50" in German), which `.set` didn't take back. They show with a dot
+    everywhere.
+  - An empty enum set showed "none" and refused it. `.set` now takes "none".
+  - A string list showed "a, b" but only took `add`, `remove` and `clear`. It now also takes the whole list.
+  - Block positions, module lists and registry lists threw on JSON of the wrong shape (an object where a string
+    belongs) instead of keeping their value. A profile still loaded, since `Settings.fromJson` catches per setting,
+    but `decode` passed the exception on.
+- **A test harness for core's services** (tests only, nothing ships): core's tests run the real client code in the
+  game's own classes, with a fake level and connection, and check the packets the services send against what Grim
+  checks: placement, rotations, inventory clicks and swaps, breaking, attacks, containers, No Durability, jobs and the
+  deprecated `Tasks`. The Grim suite in Myriad Essentials retries its known flakes once, alone, at the end.
+- **Core's largest classes split along what they already did** (internal, no API change): the inventory, breaking,
+  placement and No Durability services, the commands, the desktop, and building. `./gradlew check` warns about impl
+  files over 600 lines and methods over 60. Behaviour is unchanged: core's tests and the Grim suite (40/40) pass on
+  the split code, and the desktop was checked in a dev client.
+
 ## 0.8.0
 
 - **Anti-cheat profiles are values, and addons can add their own.** `AntiCheat.Profile` was an enum of two (Vanilla,

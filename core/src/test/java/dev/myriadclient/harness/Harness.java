@@ -178,6 +178,11 @@ public final class Harness implements AutoCloseable {
 		return new Harness();
 	}
 
+	/** The game's registries, frozen with their tags, for tests that need items or blocks but no client. */
+	public static void bootRegistries() {
+		boot();
+	}
+
 	/** The game's registries, once per JVM, frozen, with tags and item components bound as a server's resources would bind them. */
 	private static synchronized void boot() {
 		if (booted) return;

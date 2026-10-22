@@ -59,7 +59,14 @@ public class ModuleListSetting extends Setting<Set<MyriadId>> {
 	public void fromJson(JsonElement json) {
 		if (json == null || !json.isJsonArray()) return;
 		Set<MyriadId> ids = new LinkedHashSet<>();
-		for (JsonElement e : json.getAsJsonArray()) ids.add(MyriadId.parse(e.getAsString()));
+		for (JsonElement e : json.getAsJsonArray()) {
+			if (!e.isJsonPrimitive()) continue;
+			try {
+				ids.add(MyriadId.parse(e.getAsString()));
+			} catch (IllegalArgumentException ignored) {
+				// Not an id: left out, the rest kept.
+			}
+		}
 		set(ids);
 	}
 

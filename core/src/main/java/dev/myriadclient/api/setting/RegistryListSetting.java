@@ -77,7 +77,7 @@ public class RegistryListSetting<T> extends Setting<Set<T>> {
 		if (json == null || !json.isJsonArray()) return;
 		Set<T> set = new LinkedHashSet<>();
 		for (JsonElement e : json.getAsJsonArray()) {
-			Identifier id = Identifier.tryParse(e.getAsString());
+			Identifier id = e.isJsonPrimitive() ? Identifier.tryParse(e.getAsString()) : null;
 			if (id == null) continue;
 			registry.getOptional(id).filter(filter).ifPresent(set::add);
 		}

@@ -59,7 +59,12 @@ public class StringListSetting extends Setting<List<String>> {
 			remove(in.substring(7).trim());
 			return true;
 		}
-		return false;
+		// The whole list, as it shows: "2b2t.org, 6b6t.org".
+		List<String> list = new ArrayList<>();
+		for (String part : in.split(",")) if (!part.isBlank()) list.add(part.trim());
+		if (list.isEmpty()) return false;
+		set(list);
+		return true;
 	}
 
 	@Override

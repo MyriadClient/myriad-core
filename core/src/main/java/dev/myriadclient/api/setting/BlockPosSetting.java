@@ -28,10 +28,10 @@ public class BlockPosSetting extends Setting<BlockPos> {
 
 	@Override
 	public void fromJson(JsonElement json) {
-		if (json != null && json.isJsonArray() && json.getAsJsonArray().size() == 3) {
-			JsonArray a = json.getAsJsonArray();
-			set(new BlockPos(a.get(0).getAsInt(), a.get(1).getAsInt(), a.get(2).getAsInt()));
-		}
+		if (json == null || !json.isJsonArray() || json.getAsJsonArray().size() != 3) return;
+		JsonArray a = json.getAsJsonArray();
+		for (JsonElement e : a) if (!e.isJsonPrimitive() || !e.getAsJsonPrimitive().isNumber()) return;
+		set(new BlockPos(a.get(0).getAsInt(), a.get(1).getAsInt(), a.get(2).getAsInt()));
 	}
 
 	/** "x y z" (commas also work). */
