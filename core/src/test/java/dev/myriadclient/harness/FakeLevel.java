@@ -1,5 +1,6 @@
 package dev.myriadclient.harness;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.prediction.BlockStatePredictionHandler;
 import net.minecraft.core.BlockPos;
@@ -35,6 +36,7 @@ import java.util.function.Consumer;
 public final class FakeLevel extends ClientLevel {
 	private Map<BlockPos, BlockState> blocks;
 	private List<Entity> entities;
+	private BlockStatePredictionHandler predictions;
 
 	@SuppressWarnings("unused")
 	private FakeLevel() {
@@ -47,7 +49,8 @@ public final class FakeLevel extends ClientLevel {
 		level.entities = new ArrayList<>();
 		Fields.set(level, "isClientSide", true);
 		Fields.set(level, "dragonParts", new ArrayList<>());
-		Fields.set(level, "blockStatePredictionHandler", new BlockStatePredictionHandler());
+		level.predictions = new BlockStatePredictionHandler();
+		Fields.set(level, "blockStatePredictionHandler", level.predictions);
 		Fields.set(level, "worldBorder", new WorldBorder());
 		Fields.set(level, "dimensionTypeRegistration", dimension);
 		Fields.set(level, "random", RandomSource.create(0));
@@ -75,11 +78,27 @@ public final class FakeLevel extends ClientLevel {
 		return blocks.getOrDefault(pos, Blocks.AIR.defaultBlockState());
 	}
 
-	/** The client's own changes (a predicted placement) land in the block map too. */
+	/**
+	 * The client's own changes land in the block map too, and while it's guessing (a placement awaiting the server's
+	 * answer) the state before is kept for that answer, as the client's level does.
+	 */
 	@Override
 	public boolean setBlock(BlockPos pos, BlockState state, int flags, int recursionLeft) {
+		BlockStatePredictionHandler predictions = predictions();
+		BlockState before = getBlockState(pos);
 		set(pos, state);
+		if (predictions.isPredicting() && before != state) predictions.retainKnownServerState(pos, before, Minecraft.getInstance().player);
 		return true;
+	}
+
+	/** A block the server sent: filed away while the client's guess there is unanswered, else put in at once. */
+	@Override
+	public void setServerVerifiedBlockState(BlockPos pos, BlockState state, int flags) {
+		if (!predictions().updateKnownServerState(pos, state)) set(pos, state);
+	}
+
+	private BlockStatePredictionHandler predictions() {
+		return predictions;
 	}
 
 	/** Silent: there's no sound engine. */

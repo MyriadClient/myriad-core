@@ -15,6 +15,7 @@ import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -22,11 +23,15 @@ import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.game.ClientboundBlockChangedAckPacket;
+import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ServerboundClientTickEndPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.stats.StatsCounter;
 import net.minecraft.world.entity.player.Input;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
 import net.minecraft.world.item.ItemStack;
 
@@ -88,6 +93,7 @@ public final class Harness implements AutoCloseable {
 		Fields.set(mc, "options", new Options(mc, new File(".")));
 		Fields.set(mc, "soundManager", Fields.allocate(net.minecraft.client.sounds.SoundManager.class));
 		Fields.set(level, "connection", listener);
+		Fields.set(level, "minecraft", mc);
 		player = new LocalPlayer(mc, level, listener, new StatsCounter(), null, Input.EMPTY, false, null);
 		level.add(player);
 		Fields.set(mc, "player", player);
@@ -180,6 +186,23 @@ public final class Harness implements AutoCloseable {
 	/** Delivers {@code packet} from the server, as the connection does: through {@code PacketEvent.Receive}. */
 	public Harness receive(Packet<?> packet) {
 		Myriad.events().post(new PacketEvent.Receive(packet));
+		return this;
+	}
+
+	/**
+	 * The server sets the block at {@code pos}, as its block update does: while the client's own guess there is
+	 * unanswered it's filed away until the acknowledgement, as vanilla does.
+	 */
+	public Harness serverBlock(BlockPos pos, BlockState state) {
+		receive(new ClientboundBlockUpdatePacket(pos, state));
+		level.setServerVerifiedBlockState(pos, state, Block.UPDATE_ALL);
+		return this;
+	}
+
+	/** The server acknowledges every block action up to {@code sequence}, as vanilla handles it. */
+	public Harness ack(int sequence) {
+		receive(new ClientboundBlockChangedAckPacket(sequence));
+		level.handleBlockChangedAck(sequence);
 		return this;
 	}
 
