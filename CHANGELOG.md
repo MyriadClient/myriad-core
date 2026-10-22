@@ -137,24 +137,13 @@ and may change in any release. Addons declare the oldest core they support in `f
 - **Fixed:** `Placement.Forwarding` didn't hand on `use`, so while an addon's replacement of placement was in effect
   every hand click (a lever, a repeater's delay) was refused as unavailable. A test now checks that every service
   router and forwarding class hands on every method.
-- **Registry reads are free.** `Registry.values()`, a for-each and `size()` read a snapshot taken at the last change
-  instead of copying under a lock, and `ModuleRegistry.groups()` is kept until a module or group is added or removed
-  (the menu asks every frame; key binds walk every module on each key press). With 70 modules: `values()` 162 ns and
-  640 bytes a call before, 16 ns and none now; `groups()` 2.3 µs and 1.6 KB before, 26 ns and none; a for-each
-  421 ns and 648 bytes before, 49 ns and none. `values()` and `groups()` return the same unmodifiable instance until
-  something changes.
-- **The API loads without core's internals.** Nine API classes (`Renderer3D`, `WorldMesh`, `HighlightStyle`,
-  `HighlightSettings`, `HighlightEvent`, `Ghosts`, `RenderStates`, `RenderLayers`, `Packets`) reached into
-  `dev.myriadclient.impl` directly; they now go through `Myriad.render()` and `Myriad.packets()` (`Rendering`,
-  `PacketChannel`, marked internal: keep using the helpers), which a test harness can fill with its own.
-  `ApiSurfaceTest` fails on any API class file that refers to an `impl` class, imports and fully qualified names
-  alike. Nothing changes for addons.
-- **Fresh and saved chunks.** `world.ChunkAge` says which chunks the server generated as you came near (so nobody had
-  been there) and which it had saved, from the order of each section's block palette as it was sent:
-  `ChunkAge.use(owner)` starts remembering, `isFresh(chunkX, chunkZ)` asks, and `ChunkEvent.Loaded.isFresh()` reads the
-  chunk arriving. A chunk with no section that can tell counts as saved, so nothing is skipped on a guess. Lifted from
-  Stash Hunter, whose Old Chunks Only now asks it. In singleplayer, ground visited in an earlier session read 0 of 208
-  chunks fresh, and new ground 178 of 178.
+- **Standard settings for acting.** `RotationSettings` (Turn Speed), `PlacementSettings` (Range, capped at what the
+  server allows, and Air Place), `BreakingSettings` (Mode: Packet, or Fast for every block at 70% of its time, which
+  past Grim means the decoy starts; Double Break with Fast) and `BuildingSettings` (those four, Actions Per Tick and
+  Break Wrong Blocks, the break settings shown while it's on) add the same settings with the same names to any
+  module and give the service's options built on `forServer()`, as `TargetSettings` and `BoxStyle` already do for
+  targets and looks. Essentials' Kill Aura, Packet Mine, and Automation's Printer and Portal Builder use them; their
+  saved values carry over (Packet Mine's Fast switch becomes Mode Fast).
 - **Flights that fly themselves.** `Myriad.elytra().altitude(owner)` and `control(owner)` give a `Flight` steered by
   a heading: Altitude's dive-and-climb cycle that holds its height without fireworks (about 27 blocks a second, 18
   with No Durability on Grim), and Control's straight flight at a set speed where the glide isn't simulated, which
@@ -164,13 +153,24 @@ and may change in any release. Addons declare the oldest core they support in `f
   and Control are now settings over them, and Stash Hunter's Search flies them instead of its own copy (518 lines
   gone). On the Grim test server Altitude flies as before: 605 blocks in 30 s with No Durability (606 before), 1722
   blocks before landing on a wearing elytra (1722).
-- **Standard settings for acting.** `RotationSettings` (Turn Speed), `PlacementSettings` (Range, capped at what the
-  server allows, and Air Place), `BreakingSettings` (Mode: Packet, or Fast for every block at 70% of its time, which
-  past Grim means the decoy starts; Double Break with Fast) and `BuildingSettings` (those four, Actions Per Tick and
-  Break Wrong Blocks, the break settings shown while it's on) add the same settings with the same names to any
-  module and give the service's options built on `forServer()`, as `TargetSettings` and `BoxStyle` already do for
-  targets and looks. Essentials' Kill Aura, Packet Mine, and Automation's Printer and Portal Builder use them; their
-  saved values carry over (Packet Mine's Fast switch becomes Mode Fast).
+- **Fresh and saved chunks.** `world.ChunkAge` says which chunks the server generated as you came near (so nobody had
+  been there) and which it had saved, from the order of each section's block palette as it was sent:
+  `ChunkAge.use(owner)` starts remembering, `isFresh(chunkX, chunkZ)` asks, and `ChunkEvent.Loaded.isFresh()` reads the
+  chunk arriving. A chunk with no section that can tell counts as saved, so nothing is skipped on a guess. Lifted from
+  Stash Hunter, whose Old Chunks Only now asks it. In singleplayer, ground visited in an earlier session read 0 of 208
+  chunks fresh, and new ground 178 of 178.
+- **The API loads without core's internals.** Nine API classes (`Renderer3D`, `WorldMesh`, `HighlightStyle`,
+  `HighlightSettings`, `HighlightEvent`, `Ghosts`, `RenderStates`, `RenderLayers`, `Packets`) reached into
+  `dev.myriadclient.impl` directly; they now go through `Myriad.render()` and `Myriad.packets()` (`Rendering`,
+  `PacketChannel`, marked internal: keep using the helpers), which a test harness can fill with its own.
+  `ApiSurfaceTest` fails on any API class file that refers to an `impl` class, imports and fully qualified names
+  alike. Nothing changes for addons.
+- **Registry reads are free.** `Registry.values()`, a for-each and `size()` read a snapshot taken at the last change
+  instead of copying under a lock, and `ModuleRegistry.groups()` is kept until a module or group is added or removed
+  (the menu asks every frame; key binds walk every module on each key press). With 70 modules: `values()` 162 ns and
+  640 bytes a call before, 16 ns and none now; `groups()` 2.3 µs and 1.6 KB before, 26 ns and none; a for-each
+  421 ns and 648 bytes before, 49 ns and none. `values()` and `groups()` return the same unmodifiable instance until
+  something changes.
 
 ## 0.7.0
 
