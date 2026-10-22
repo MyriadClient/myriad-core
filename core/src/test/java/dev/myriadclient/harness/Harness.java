@@ -31,11 +31,17 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.PacketProcessor;
 import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.network.protocol.common.ClientboundPingPacket;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockChangedAckPacket;
 import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
 import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
+import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
+import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ServerboundClientTickEndPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
@@ -47,6 +53,7 @@ import net.minecraft.tags.TagLoader;
 import net.minecraft.stats.StatsCounter;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.damagesource.DamageSources;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -56,6 +63,8 @@ import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
+
+import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -102,6 +111,11 @@ public final class Harness implements AutoCloseable {
 	private final List<Sent> sent = new ArrayList<>();
 	private final List<Runnable> nextTick = new ArrayList<>();
 	private final List<Runnable> everyTick = new ArrayList<>();
+	private @Nullable ServerGlide serverGlide;
+	private boolean grimPings;
+	private int nextPing = 1;
+	/** Pings delivered, with the harness tick each arrived in (id to tick). */
+	private final Map<Integer, Integer> pingsDelivered = new HashMap<>();
 	private int tick;
 	/** The services' clock (see {@link Clock}): starts well past zero, and moves {@link #TICK_MS} a tick. */
 	private long millis = 1_000_000;
@@ -111,6 +125,9 @@ public final class Harness implements AutoCloseable {
 		boot();
 		mc = Fields.allocate(Minecraft.class);
 		Fields.set(Minecraft.class, "instance", mc);
+		// The test's thread is the game thread: packet handlers check it.
+		Fields.set(mc, "gameThread", Thread.currentThread());
+		Fields.set(mc, "packetProcessor", new PacketProcessor(Thread.currentThread()));
 		level = FakeLevel.create(lookup.lookupOrThrow(Registries.DIMENSION_TYPE).getOrThrow(BuiltinDimensionTypes.OVERWORLD),
 			registries.lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS));
 		ClientPacketListener listener = Fields.allocate(ClientPacketListener.class);
@@ -118,6 +135,8 @@ public final class Harness implements AutoCloseable {
 		Fields.set(listener, "playerInfoMap", new java.util.HashMap<>());
 		Fields.set(listener, "registryAccess", registries);
 		Fields.set(listener, "clientLoaded", true);
+		Fields.set(listener, "minecraft", mc);
+		Fields.set(listener, "level", level);
 		Fields.set(listener, "enabledFeatures", net.minecraft.world.flag.FeatureFlags.DEFAULT_FLAGS);
 		Connection connection = new Connection(PacketFlow.CLIENTBOUND);
 		Fields.set(connection, "channel", channel);
@@ -231,6 +250,58 @@ public final class Harness implements AutoCloseable {
 		return registry.freeze();
 	}
 
+	/**
+	 * Plays the server's side of the glide from now on ({@link ServerGlide}): each tick it takes what the client sent,
+	 * ticks, and sends the player's flags back when its glide started or stopped, as vanilla does.
+	 */
+	public ServerGlide serverGlides(boolean glidingNow) {
+		return serverGlides(glidingNow, false);
+	}
+
+	/** As {@link #serverGlides(boolean)}, with Grim's ping sent just before each change of the player's flags, as Grim does. */
+	public ServerGlide serverGlides(boolean glidingNow, boolean grimPings) {
+		this.grimPings = grimPings;
+		serverGlide = new ServerGlide(player);
+		if (glidingNow) serverGlide.receive(new ServerboundPlayerCommandPacket(player, ServerboundPlayerCommandPacket.Action.START_FALL_FLYING), player);
+		return serverGlide;
+	}
+
+	private void serverTick() {
+		for (Sent s : sent) if (s.tick() == tick) serverGlide.receive(s.packet(), player);
+		if (!serverGlide.tick(player)) return;
+		byte flags = player.getEntityData().get(Entity.DATA_SHARED_FLAGS_ID);
+		flags = (byte) (serverGlide.gliding() ? flags | 1 << 7 : flags & ~(1 << 7));
+		var data = new ClientboundSetEntityDataPacket(player.getId(), List.of(SynchedEntityData.DataValue.create(Entity.DATA_SHARED_FLAGS_ID, flags)));
+		if (grimPings) {
+			pingsDelivered.put(nextPing, tick);
+			deliver(new ClientboundPingPacket(nextPing++), data);
+		} else {
+			deliver(data);
+		}
+	}
+
+	/**
+	 * Delivers {@code packets}, arriving together, as the connection does: each passes {@code PacketEvent.Receive} as it
+	 * arrives (on the network thread, so all of them before any is handled; it may drop or replace them), then the
+	 * client's own handlers run in order on the game thread, with whatever Myriad hooks into them.
+	 */
+	@SuppressWarnings("unchecked")
+	public Harness deliver(Packet<?>... packets) {
+		List<Packet<?>> arrived = new ArrayList<>();
+		for (Packet<?> packet : packets) {
+			PacketEvent.Receive e = Myriad.events().post(new PacketEvent.Receive(packet));
+			if (!e.isCancelled()) arrived.add(e.packet());
+		}
+		for (Packet<?> packet : arrived) ((Packet<ClientGamePacketListener>) packet).handle(player.connection);
+		collect();
+		return this;
+	}
+
+	/** The pings delivered so far (by {@link #serverGlides(boolean, boolean)}), with the tick each arrived in. */
+	public Map<Integer, Integer> pingsDelivered() {
+		return Map.copyOf(pingsDelivered);
+	}
+
 	/** Runs {@code action} at the start of the next tick, after core's own tick-start work, as a module's tick handler would. */
 	public Harness onTick(Runnable action) {
 		nextTick.add(action);
@@ -263,6 +334,7 @@ public final class Harness implements AutoCloseable {
 		player.connection.send(ServerboundClientTickEndPacket.INSTANCE);
 		Myriad.events().post(TickEvent.Post.INSTANCE);
 		collect();
+		if (serverGlide != null) serverTick();
 		return this;
 	}
 
