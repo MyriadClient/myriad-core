@@ -47,6 +47,35 @@ and may change in any release. Addons declare the oldest core they support in `f
   profile saves it as the player has it, so a crash mid-search no longer leaves Elytra Fly saved as off.
   `Module.isSuspended()`/`suspendedBy()` for UIs; Essentials' Module List keeps suspended modules listed, faded.
   Stash Hunter's Search holds Elytra Fly and Auto Armor this way instead of turning them off and on by hand.
+- **Jobs: long-running work you can see.** Opening a chest and taking what's needed, building until done, filling a
+  box: every addon was writing these as state machines on tick or chains of futures, each a different shape, none of
+  them able to say what it was doing. Now the work is a `Step`, a value that describes it, and `Myriad.jobs().start(this,
+  step)` runs it as a `Job` with a state, a reason when it's waiting, progress, and children.
+  - **Stuck is not failed.** A step reports `running`, `stuck(why)`, `done(value)` or `failed(why)` each tick. A build
+    waiting for cobblestone is stuck: it carries on by itself when cobblestone arrives, and a `whenStuck` remedy can
+    fetch some meanwhile. `Why` is an open set of codes (`Why.NO_ITEM`, `OUT_OF_REACH`, `NO_ROOM`... or an addon's own)
+    with a detail and a subject; `Why.of(Placement.Check, pos)` and `Why.of(Build.Status, pos)` translate the
+    services' answers, and `Why.of(throwable)` reads a failed job's reason back from a future.
+  - **Composing:** `then` (passing the result on), `sequence`, `all`, `race`, `forEach`, `when`, `choose`, `repeat`;
+    and policies that cover a step and everything under it: `timeout`, `stuckFor`, `whenStuck`, `recover`, `retry`,
+    `require`, `suspending` (holds modules off while it runs), `finallyDo`, `onDone`, `onFailed`, `peek`. A step's
+    `toString()` is its tree; policies show as pills on the job they wrap, and a retry starts over inside the same job.
+  - **The services as steps** (`Steps`): `place`, `use`, `breakBlock`, `lookAt`/`face`, `selectSlot`,
+    `ensureInHotbar`, `borrow`, `openContainer`, `take`, `put`, `arrange`, `closeContainer`, `untilClosed`, `build`,
+    `keepUp`, `suspend`. Each passes the job as the owner, so cancelling a job cancels what it asked for and two jobs
+    of one module don't cancel each other's. Your own steps implement `Step.Run` (one method, `tick`); `JobContext`
+    gives them the job, a `TickBudget`, events delivered on their tick (`ctx.on`), progress and a status line.
+  - **The runner** ticks every job once a tick in `TickEvent.Pre` at the new `Priority.JOBS` (990): after actions held
+    from the last tick go out, before the services act, so what a step asks for goes out that tick. A sequence moves
+    through steps that finish at once in the same tick. Turning a module off cancels its jobs (`OWNER_OFF`), leaving the
+    world cancels all of them (`LEFT_WORLD`), and a root job that fails with nobody listening shows a notice.
+    `JobEvent.Started`/`Changed`/`Finished` go on the bus. Measured (unit level, no game): an idle runner 11 ns a tick,
+    one running job about 70 ns a tick, a 50-step sequence that runs to the end each tick 4.4 µs (86 ns a step).
+  - `TickBudget` (`api.util`): "as much as fits in 2 ms, then carry on next tick", for jobs and loops of your own.
+  - **`Tasks` is deprecated** (still working, gone in 1.0): `Myriad.jobs().later/every` replace its delays and
+    repeats (they run at a tick's start, tasks at its end) and a step replaces a task sequence. Core's macros run as
+    jobs; Automation's Kit Builder gathers, fills and delivers as one (`.invtest kit` 2/2 kits in 347-459 ticks,
+    as before).
 
 ## 0.7.0
 

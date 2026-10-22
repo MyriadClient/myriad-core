@@ -472,9 +472,9 @@ Shared services keep addons from fighting over the same state:
 | `Myriad.building()` | the planner: describe a shape as a `Blueprint` (`box`, `of(map)`, `dynamic(...)`) of `Target`s (`air()`, `solid()`, `anyOf(...)`, `state(...)` for orientation), and it breaks and places what's in reach each tick in a working order (top-down breaks, bottom-up placements, materials into the hotbar, oriented blocks clicked so they face the right way). `Build.steps()` says what's happening at each position or why it's stuck (`NO_ITEM`, `FLUID`, `WRONG_ANGLE`, ...); `keepUp` maintains the shape (surround) |
 | `Myriad.containers()` | `open(pos, timeout)` a chest/barrel/shulker and get a `View` once its contents arrive: `find`, `count`, `quickMove`, `swapWithHotbar`, `drop`, `close` |
 | `Myriad.elytra()` | elytra flight shared by every flight module: `noDurability(owner)` (glide without wearing the elytra: chestplate swaps where Grim simulates the glide, glide breaks elsewhere, and a catch for a glide dropped in mid-air), `chestSwap()`, `glideHold()` (ride out a moment the server stops the glide), and `addPilot` for a module flying by its own rotation (`steers`) or holding the glide open (`holdsGlide`); `GlideEvent` replaces the glide's movement |
-| `Myriad.tasks()` | work over ticks: `later`, `every`, and `sequence` (run / wait / waitUntil / `await` a future / `require` a condition, with timeouts, `retry(n)` and `onFail`). A module's tasks are cancelled when it's disabled |
+| `Myriad.jobs()` | long-running work as jobs: a `Step` (the services as steps in `Steps`: place, break, open, take, build; your own `Step.Run`), composed with `then`/`sequence`/`all`/`race`/`forEach` and policies (`timeout`, `retry`, `whenStuck`, `recover`, `suspending`), run for your module with a state, a reason when it's stuck, and progress. A module's jobs are cancelled when it's disabled; `later`/`every` for delays and repeats (`Myriad.tasks()` is deprecated) |
 | `Myriad.limits()` | the shared packet budget for block actions, interactions and inventory clicks; `placement()` and `inventory()` respect it, `urgent(...)` skips it for must-happen actions (totems) |
-| `Myriad.antiCheat()` | the player's anti-cheat profile (Auto, Grim, Vanilla) and what Auto detected; the services' `forServer()` presets and `inventory().safeToClick()` follow it |
+| `Myriad.antiCheat()` | what the server checks, as a profile (Vanilla, Grim, NoCheatPlus, or an addon's own), the player's choice or what Auto detected; the services' `forServer()` presets and `inventory().safeToClick()` follow its answers |
 | `Myriad.tickSpeed()` | client tick speed ("timer") per owner, multiplied together so features don't overwrite each other; cleared when a module is disabled |
 | `Myriad.server()` | TPS, ping, address, lag (`isLagging(ms)`), rubberbands (`rubberbandedWithin(ms)`), packets per second, totem pops, `reconnect()` to the last server |
 | `Myriad.runCommand(line)` | runs a Myriad command from code (macros, binds, clickable chat) |
@@ -541,7 +541,7 @@ How the pieces fit the kinds of addons people build:
   onto it first where the server checks looks.
   `Building.Options.forServer()` rotates for everything and clicks only visible faces where the server checks, and goes
   fast where it doesn't. Each placement's `result()` says whether the server kept the block, `FadeMap` with
-  `Renderer3D.blockShape` shows the plan, `tasks()` paces it, and it pauses while `server().isLagging(...)` or right
+  `Renderer3D.blockShape` shows the plan, a job (`Steps.build`) runs it, and it pauses while `server().isLagging(...)` or right
   after a rubberband. A `FileSetting` picks the schematic and a `BlockPosSetting` its origin. Integrations with other
   mods (Litematica, Baritone) belong in the addon: keep any code touching their classes in its own class, only load it
   after `FabricLoader.getInstance().isModLoaded("litematica")`, and put mixins into them under `compat.litematica`.
@@ -550,7 +550,7 @@ How the pieces fit the kinds of addons people build:
   server checks looks), reads them in `ContainerEvent.Loaded`/`SlotUpdated` (including ones the player opens by hand:
   `view().byHand()`, and `opener()` says which module opened the rest), moves items with `view.take`/`put`, sorts or
   fills one to an exact layout with `view.arrange(Containers.Arrangement.of(slots, layout))` (or runs click planners of
-  its own with `view.run`), and runs multi-step jobs with `tasks().sequence(...)`. It saves what it learns with `ctx.storage()`, says
+  its own with `view.run`), and runs each visit as a job (`Steps.openContainer`, `take`, `closeContainer`). It saves what it learns with `ctx.storage()`, says
   where an item is with `ItemTooltipEvent`, reads shulkers with `ItemInfo.contents`, and marks chests with
   `WorldLabel.Segment.item(...)` icons.
 - **A crystal PvP suite** picks targets with `TargetSettings`, finds placements with `Crystals.bases` and scores them

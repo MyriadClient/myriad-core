@@ -27,7 +27,12 @@ import java.util.function.Supplier;
  *
  * A sequence fails when a step throws, a {@link Sequence#require} check is false, an {@link Sequence#await}ed
  * future fails or a wait times out (with a {@link TimeoutException}).
+ *
+ * @deprecated jobs do all of this and more: {@code Myriad.jobs().later/every} for delays and repeats (they run at the
+ * start of a tick, where these run at its end), and a {@code Step} started as a job for sequences, with nesting,
+ * results, a reason when it's stuck, and the Jobs window. Removed in 1.0.
  */
+@Deprecated
 @ApiStatus.NonExtendable
 public interface Tasks {
 	/** Runs {@code action} after {@code ticks} ticks (0 = the next time tasks run, at the end of this tick or the next). */

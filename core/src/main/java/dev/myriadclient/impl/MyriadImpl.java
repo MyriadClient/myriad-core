@@ -10,13 +10,13 @@ import dev.myriadclient.api.control.Controls;
 import dev.myriadclient.api.elytra.Elytra;
 import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.hook.Hooks;
-import dev.myriadclient.api.map.Maps;
-import dev.myriadclient.api.share.ConfigShares;
 import dev.myriadclient.api.hook.Service;
+import dev.myriadclient.api.job.Jobs;
+import dev.myriadclient.api.map.Maps;
 import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.ModuleGroup;
-import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.module.ModuleRegistry;
+import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.registry.Registry;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Breaking;
@@ -34,6 +34,7 @@ import dev.myriadclient.api.service.Tasks;
 import dev.myriadclient.api.service.TickSpeed;
 import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.setting.SettingColor;
+import dev.myriadclient.api.share.ConfigShares;
 import dev.myriadclient.api.ui.BarWidget;
 import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.Panel;
@@ -44,12 +45,10 @@ import dev.myriadclient.impl.addon.AddonLoader;
 import dev.myriadclient.impl.command.CommandManager;
 import dev.myriadclient.impl.config.ConfigManagerImpl;
 import dev.myriadclient.impl.control.ControlManager;
-import dev.myriadclient.impl.wheel.WheelManager;
 import dev.myriadclient.impl.elytra.ElytraManager;
 import dev.myriadclient.impl.elytra.LeavingGlide;
 import dev.myriadclient.impl.event.MyriadEventBus;
 import dev.myriadclient.impl.hook.HookManager;
-import dev.myriadclient.impl.share.ShareManager;
 import dev.myriadclient.impl.keybind.KeybindManager;
 import dev.myriadclient.impl.map.MapsImpl;
 import dev.myriadclient.impl.network.ActionTiming;
@@ -60,6 +59,7 @@ import dev.myriadclient.impl.service.BuildManager;
 import dev.myriadclient.impl.service.ContainerTracker;
 import dev.myriadclient.impl.service.FriendsManager;
 import dev.myriadclient.impl.service.InventoryManager;
+import dev.myriadclient.impl.service.JobRunner;
 import dev.myriadclient.impl.service.MenuSync;
 import dev.myriadclient.impl.service.NotificationManager;
 import dev.myriadclient.impl.service.PacketLimiter;
@@ -68,9 +68,11 @@ import dev.myriadclient.impl.service.RotationManager;
 import dev.myriadclient.impl.service.ServerStatsTracker;
 import dev.myriadclient.impl.service.TaskScheduler;
 import dev.myriadclient.impl.service.TickSpeedManager;
+import dev.myriadclient.impl.share.ShareManager;
 import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.ui.panels.ConsoleLog;
 import dev.myriadclient.impl.update.UpdateManager;
+import dev.myriadclient.impl.wheel.WheelManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -119,6 +121,7 @@ public final class MyriadImpl implements MyriadApi {
 	private final MenuSync menuSync = new MenuSync();
 	private final ContainerTracker containers = new ContainerTracker(menuSync);
 	private final TaskScheduler tasks = new TaskScheduler();
+	private final JobRunner jobs = new JobRunner();
 	private final WindowManager windowManager = new WindowManager();
 	private final CommandManager commandManager = new CommandManager(commands);
 	private final KeybindManager keybindManager = new KeybindManager();
@@ -180,6 +183,7 @@ public final class MyriadImpl implements MyriadApi {
 		events.subscribe(menuSync);
 		events.subscribe(containers);
 		events.subscribe(tasks);
+		events.subscribe(jobs);
 		events.subscribe(keybindManager);
 		events.subscribe(commandManager);
 
@@ -344,8 +348,14 @@ public final class MyriadImpl implements MyriadApi {
 	}
 
 	@Override
+	@SuppressWarnings("deprecation")
 	public Tasks tasks() {
 		return tasks;
+	}
+
+	@Override
+	public Jobs jobs() {
+		return jobs.engine();
 	}
 
 	@Override

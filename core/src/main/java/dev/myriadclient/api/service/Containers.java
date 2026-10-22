@@ -17,8 +17,9 @@ import java.util.function.ToIntFunction;
 
 /**
  * Containers (chests, barrels, shulkers, furnaces, …): opening one at a position, reading it once its contents have
- * arrived, and moving items. Pair it with {@code Myriad.tasks()} for multi-step jobs, and listen to
- * {@code ContainerEvent} to see containers the player opens by hand.
+ * arrived, and moving items. For work in several steps, start them as a job ({@code Steps.openContainer},
+ * {@code take}, {@code closeContainer}), and listen to {@code ContainerEvent} to see containers the player opens by
+ * hand.
  *
  * <pre>{@code
  * Myriad.containers().open(chestPos, 20).thenAccept(view -> {

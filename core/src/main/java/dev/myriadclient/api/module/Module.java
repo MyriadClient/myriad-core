@@ -180,6 +180,7 @@ public abstract class Module implements Identified {
 		switchTo(enable, feedback);
 	}
 
+	@SuppressWarnings("deprecation")
 	private void switchTo(boolean enable, boolean feedback) {
 		if (enable == enabled) return;
 		enabled = enable;
@@ -203,6 +204,7 @@ public abstract class Module implements Identified {
 		} else {
 			Myriad.events().unsubscribe(this);
 			Myriad.tasks().cancel(this);
+			Myriad.jobs().cancel(this);
 			Myriad.tickSpeed().clear(this);
 			Myriad.breaking().cancel(this);
 			Myriad.building().stop(this);

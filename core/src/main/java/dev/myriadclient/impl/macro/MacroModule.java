@@ -1,8 +1,8 @@
 package dev.myriadclient.impl.macro;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.job.Step;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.service.Tasks;
 import dev.myriadclient.api.setting.EnumSetting;
 import dev.myriadclient.api.setting.IconSetting;
 import dev.myriadclient.api.setting.StringListSetting;
@@ -10,6 +10,7 @@ import dev.myriadclient.impl.MyriadImpl;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -36,8 +37,13 @@ public final class MacroModule extends Module {
 		sgGeneral.action("Delete Macro", () -> MacroManager.delete(this)).description("Remove this macro for good.").build();
 	}
 
-	/** Owns the Off Commands' run, which outlives the module being on (turning off cancels the module's own tasks). */
-	private final Object offRun = new Object();
+	/** Owns the Off Commands' run, which outlives the module being on (turning off cancels the module's own jobs). */
+	private final Object offRun = new Object() {
+		@Override
+		public String toString() {
+			return name() + " (off)";
+		}
+	};
 
 	MacroModule(String name) {
 		super(MacroManager.TAG, name, "A macro: runs its commands when pressed.");
@@ -45,7 +51,7 @@ public final class MacroModule extends Module {
 
 	@Override
 	protected void onEnable() {
-		run(commands.get(), this, mode.get() == Mode.RUN ? () -> {
+		run(name(), commands.get(), this, mode.get() == Mode.RUN ? () -> {
 			// Run: off again once its lines are done (and not before, so waits in it aren't cut short).
 			if (isEnabled()) setEnabledSilently(false);
 		} : null);
@@ -53,27 +59,28 @@ public final class MacroModule extends Module {
 
 	@Override
 	protected void onDisable() {
-		if (mode.get() == Mode.TOGGLE) run(offCommands.get(), offRun, null);
+		if (mode.get() == Mode.TOGGLE) run(name() + " off", offCommands.get(), offRun, null);
 	}
 
-	private static void run(List<String> lines, Object owner, Runnable done) {
-		Tasks.Sequence seq = Myriad.tasks().sequence(owner);
+	/** Runs the lines as a job: each line a step, {@code wait} lines a delay. */
+	private static void run(String name, List<String> lines, Object owner, Runnable done) {
+		List<Step<?>> steps = new ArrayList<>();
 		for (String raw : lines) {
 			String line = raw.strip();
 			if (line.isEmpty()) continue;
 			String lower = line.toLowerCase(Locale.ROOT);
 			if (lower.startsWith("wait ")) {
 				try {
-					seq.wait(Math.max(0, Integer.parseInt(line.substring(5).strip())));
+					steps.add(Step.delay(Math.max(0, Integer.parseInt(line.substring(5).strip()))));
 				} catch (NumberFormatException e) {
-					seq.run(() -> Myriad.chat(Component.literal("Macro: '" + line + "' isn't a number of ticks")));
+					steps.add(Step.run(line, () -> Myriad.chat(Component.literal("Macro: '" + line + "' isn't a number of ticks"))));
 				}
 				continue;
 			}
-			seq.run(() -> line(line));
+			steps.add(Step.run(line, () -> line(line)));
 		}
-		if (done != null) seq.onFinish(done);
-		seq.start();
+		Step<Void> all = Step.sequence(name, steps.toArray(Step<?>[]::new));
+		Myriad.jobs().start(owner, done == null ? all : all.onDone(v -> done.run()));
 	}
 
 	/**
