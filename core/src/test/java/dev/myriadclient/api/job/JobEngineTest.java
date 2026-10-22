@@ -335,4 +335,24 @@ class JobEngineTest {
 	private void fire(Object event) {
 		for (Consumer<Object> l : List.copyOf(listeners)) l.accept(event);
 	}
+
+	@Test
+	void eachRootJobGetsItsOwnBudgetAndItsTimeIsRecorded() {
+		Object owner = new Object();
+		long[] firstSaw = new long[1], secondSaw = new long[1];
+		// The first spends its whole budget; the second still gets all of its own.
+		Job<Void> greedy = engine.start(owner, Step.of("Greedy", () -> ctx -> {
+			firstSaw[0] = ctx.budget().remainingNanos();
+			while (ctx.budget().hasTime()) Thread.onSpinWait();
+			return Progress.running();
+		}));
+		engine.start(owner, Step.of("Second", () -> ctx -> {
+			secondSaw[0] = ctx.budget().remainingNanos();
+			return Progress.running();
+		}));
+		ticks(1);
+		assertTrue(firstSaw[0] > JobEngine.BUDGET_NANOS / 2, "the first had " + firstSaw[0]);
+		assertTrue(secondSaw[0] > JobEngine.BUDGET_NANOS / 2, "the second was left " + secondSaw[0] + " ns of the first's budget");
+		assertTrue(((JobNode<?>) greedy).lastNanos >= JobEngine.BUDGET_NANOS, "the greedy job's tick wasn't recorded: " + ((JobNode<?>) greedy).lastNanos);
+	}
 }
