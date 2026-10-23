@@ -1,0 +1,64 @@
+plugins {
+	id 'java-gradle-plugin'
+	id 'maven-publish'
+}
+
+// The plugin is released with core, under core's version, and carries the versions core was built with as an addon's
+// defaults (see AddonPlugin), so they're read from core's gradle.properties rather than repeated here.
+def core = new Properties()
+file("../gradle.properties").withInputStream { core.load(it) }
+
+group = core.group
+version = core.version
+
+dependencies {
+	// Applied to every addon, so an addon builds with the Loom core was built with.
+	implementation "net.fabricmc:fabric-loom:${core.loom_version}"
+
+	testImplementation platform("org.junit:junit-bom:5.11.4")
+	testImplementation "org.junit.jupiter:junit-jupiter"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+gradlePlugin {
+	plugins {
+		addon {
+			id = "dev.myriadclient.addon"
+			implementationClass = "dev.myriadclient.gradle.AddonPlugin"
+			displayName = "Myriad addon"
+			description = "Builds a Myriad addon: Loom, Myriad's maven, the API-only check, a dev client with Essentials, and publishAddon."
+		}
+	}
+}
+
+def versions = tasks.register("addonVersions", WriteProperties) {
+	destinationFile = layout.buildDirectory.file("generated/versions/dev/myriadclient/gradle/versions.properties")
+	property("myriad_version", core.version)
+	property("minecraft_version", core.minecraft_version)
+	property("loader_version", core.loader_version)
+	property("fabric_api_version", core.fabric_api_version)
+}
+sourceSets.main.resources.srcDir(files(layout.buildDirectory.dir("generated/versions")).builtBy(versions))
+
+test {
+	useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+	it.options.encoding = "UTF-8"
+}
+
+java {
+	withSourcesJar()
+}
+
+publishing {
+	repositories {
+		maven {
+			name = "myriad"
+			url = "https://maven.myriadclient.dev/releases"
+			credentials(PasswordCredentials)
+		}
+	}
+}

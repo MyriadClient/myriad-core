@@ -16,6 +16,17 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 
 ## 0.10.0 (unreleased)
 
+- **A Gradle plugin for addons: `id 'dev.myriadclient.addon' version '0.10.0'`.** Released with core, under its
+  version, from Myriad's maven. It applies Loom and sets up what every addon's build repeated: Myriad's maven (for
+  `dev.myriadclient` only); Minecraft, Fabric and Myriad at the versions that release was built with (each overridable
+  in `gradle.properties`); Essentials on the dev client when `essentials_version` is set; the dev client's switches
+  (`-PopenDesktop`, `-Photswap`, `-PrunDir`, `-PquickPlay`, `-PquickPlayServer`, `-Pusername`, `-PscreenshotEvery`,
+  `-PauditMixins`) with dev checks and the dev console on; `checkApiOnly` before every compile; Java 25, a sources
+  jar, `fabric.mod.json`'s `${version}`, `${myriad_version}` and `${minecraft_version}`; a maven publication, and
+  `publishAddon` (build and test, then publish to Myriad's maven).
+  `-PcoreDir=../myriad` takes the plugin from a core checkout as well as core's jar, so unreleased changes need no
+  publishing step. The template's build file is now 14 lines (from 70); Essentials, Automation and Stash Hunter build
+  on it with the same jars as before. Core itself builds with Loom 1.18.4, pinned, which the plugin brings.
 - **The developer guide moved to the site.** The README keeps the product, install and building, with a short
   "Writing an addon" and links; everything its 475-line guide said is on myriadclient.dev/docs/develop, including the
   conventions (on the addon page), the full helpers table, and a new page on how the pieces fit bigger addons. The

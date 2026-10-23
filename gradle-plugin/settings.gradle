@@ -1,0 +1,13 @@
+// A build of its own (included by the root's settings), so an addon can take the plugin straight from a checkout:
+// `-PcoreDir=../myriad` in the template's settings includes this build in place of the released plugin.
+dependencyResolutionManagement {
+	repositories {
+		maven {
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net/'
+		}
+		mavenCentral()
+	}
+}
+
+rootProject.name = 'myriad-gradle'

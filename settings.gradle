@@ -12,3 +12,6 @@ pluginManagement {
 rootProject.name = 'myriad-root'
 
 include 'core', 'example-addon'
+
+// The dev.myriadclient.addon Gradle plugin, released with core (`./gradlew :gradle-plugin:build`).
+includeBuild 'gradle-plugin'

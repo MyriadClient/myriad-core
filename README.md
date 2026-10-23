@@ -78,6 +78,7 @@ Requires JDK 25+.
 ```bash
 ./gradlew build                          # core/ and example-addon/ → */build/libs/*.jar
 ./gradlew :core:test                     # unit tests: event bus, settings, config, layout, the API surface
+./gradlew :gradle-plugin:build           # the addon Gradle plugin (dev.myriadclient.addon)
 ./gradlew :core:runClient                # core only (no modules)
 ./gradlew :example-addon:runClient       # core + the released Essentials + the example addon
 ./gradlew :example-addon:runClient -PessentialsDir=../myriad-essentials   # …with the Essentials jar built in that checkout
@@ -91,6 +92,7 @@ Requires JDK 25+.
 ```
 core/           mod id "myriad"             the platform: API, event bus, config, commands, renderer, menu
 example-addon/  mod id "myriad-example"     the reference addon: a complete feature set, written to be read (not released)
+gradle-plugin/  dev.myriadclient.addon      the Gradle plugin addons build with, released with core
 ```
 
 The stock modules live in [myriad-essentials](https://github.com/MyriadClient/myriad-essentials), with the Grim test
@@ -98,7 +100,7 @@ server and suite that check them against 2b2t's anti-cheat. The dev client takes
 `run/myriad-dev-inbox` (commands, movement, the menu, screenshots); the README's pictures are taken that way.
 
 Releases are tagged: `git tag v0.1.0 && git push origin v0.1.0` builds, tests, attaches the core jar to a GitHub
-release and publishes it to the maven at `https://maven.myriadclient.dev/releases`. Essentials and the other addons
+release and publishes it, with the addon Gradle plugin, to the maven at `https://maven.myriadclient.dev/releases`. Essentials and the other addons
 release from their own repositories, to the same maven. Every build checks `dev.myriadclient.api` against the last
 release (`api_baseline` in `gradle.properties`, moved once a release is published) and fails on a change that would
 break addons built against it; the report is in `core/build/reports/api`.
@@ -282,8 +284,10 @@ An addon is an ordinary Fabric mod with a `myriad` entrypoint, built against `de
 maven (`https://maven.myriadclient.dev/releases`, with sources and javadoc). Two projects get you going:
 
 - [**myriad-addon-template**](https://github.com/MyriadClient/myriad-addon-template) is the project to start from: a
-  module, a mixin-driven module and a HUD element, wired up and building. `./gradlew runClient` starts the game with
-  Myriad, Essentials and your addon.
+  module, a mixin-driven module and a HUD element, wired up and building. Its build is a dozen lines on Myriad's
+  Gradle plugin (`id 'dev.myriadclient.addon'`, versioned with core), which brings Loom, Minecraft, Fabric and Myriad
+  at the versions that release was built with, a dev client with Essentials, the check that you use only the API, and
+  publishing. `./gradlew runClient` starts the game with Myriad, Essentials and your addon.
 - [`example-addon/`](example-addon) is the reference: a complete feature set (waypoints with a module, command, window,
   HUD element and versioned saved data, plus Auto Tool, Tunnel, Block Search, Trajectories, Hole ESP, Chat Timestamps
   and a settings showcase) written to be read. Its [README](example-addon/README.md) maps each file to the pattern it
