@@ -16,6 +16,12 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 
 ## 0.10.0 (unreleased)
 
+- **The developer guide moved to the site.** The README keeps the product, install and building, with a short
+  "Writing an addon" and links; everything its 475-line guide said is on myriadclient.dev/docs/develop, including the
+  conventions (on the addon page), the full helpers table, and a new page on how the pieces fit bigger addons. The
+  latest release's javadoc is at myriadclient.dev/api, refreshed by the site's rebuild after each release, and the API
+  reference map shows the four tiers (kernel, systems, UI, libraries). Examples that still used categories now use tags
+  and groups.
 - **The versioning policy for 1.0, written down** (above, in the README and on the Compatibility page): 1.x releases
   are source- and binary-compatible for the same Minecraft version, a new Minecraft version is a minor release that may
   deprecate but removes nothing, removals need a major, patches never change the API; until 1.0 a minor may also remove
