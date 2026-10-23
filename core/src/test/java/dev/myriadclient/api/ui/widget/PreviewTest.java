@@ -1,6 +1,9 @@
 package dev.myriadclient.api.ui.widget;
 
+import dev.myriadclient.api.render.Canvas;
 import org.junit.jupiter.api.Test;
+
+import java.lang.reflect.Proxy;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -52,6 +55,35 @@ class PreviewTest {
 		p.mouseDragged(126, 64, 1, 0, 0);
 		assertEquals(6, p.panX(), 1e-4);
 		assertEquals(4, p.panY(), 1e-4);
+	}
+
+	/** A canvas that draws nothing, so a widget tree can lay out and take input. */
+	private static Canvas nothing() {
+		return (Canvas) Proxy.newProxyInstance(Canvas.class.getClassLoader(), new Class<?>[]{Canvas.class}, (proxy, method, args) -> {
+			Class<?> r = method.getReturnType();
+			if (r == boolean.class) return false;
+			if (r == float.class) return 0f;
+			if (r == int.class) return 0;
+			if (r == double.class) return 0d;
+			return null;
+		});
+	}
+
+	@Test
+	void aDragReachesItInAWindowsWidgetTree() {
+		// As the Preview window holds it: drags go to the widget the tree marked pressed, which its container does.
+		Preview p = Preview.viewModel().view(-30, 10);
+		VBox holder = new VBox(0, 0);
+		holder.add(p);
+		WidgetRoot root = new WidgetRoot(holder);
+		root.render(nothing(), 200, 120, 0, 0);
+		assertTrue(root.mouseClicked(100, 60, 0));
+		assertTrue(root.mouseDragged(110, 60, 0, 0, 0));
+		assertEquals(-22, p.yaw(), 1e-4);
+		root.mouseReleased(110, 60, 0);
+		root.mouseClicked(100, 60, 1);
+		root.mouseDragged(104, 63, 1, 0, 0);
+		assertEquals(4, p.panX(), 1e-4);
 	}
 
 	@Test

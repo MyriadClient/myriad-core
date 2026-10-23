@@ -12,6 +12,7 @@ import dev.myriadclient.api.ui.widget.Dropdown;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Preview;
 import dev.myriadclient.api.ui.widget.RegistryPicker;
+import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.ui.widget.Widget;
 import dev.myriadclient.api.ui.widget.WidgetRoot;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -99,7 +100,10 @@ final class PreviewPanel extends Panel {
 			case BLOCK -> Preview.block(block.get());
 			case VIEW_MODEL -> Preview.viewModel();
 		};
-		view = new WidgetRoot(preview);
+		// In a container: it's the container that marks the widget pressed, which drags go to.
+		VBox holder = new VBox(0, 0);
+		holder.add(preview);
+		view = new WidgetRoot(holder);
 		rowHeight = Widget.ROW;
 	}
 
