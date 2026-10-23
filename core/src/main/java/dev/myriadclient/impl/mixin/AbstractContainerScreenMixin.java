@@ -9,6 +9,7 @@ import dev.myriadclient.impl.service.InventoryManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -18,6 +19,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(AbstractContainerScreen.class)
 public abstract class AbstractContainerScreenMixin {
@@ -62,6 +64,17 @@ public abstract class AbstractContainerScreenMixin {
 		if (Myriad.isReady() && Myriad.events().hasListeners(ContainerScreenEvent.SlotDrawn.class)) {
 			Myriad.events().post(new ContainerScreenEvent.SlotDrawn((AbstractContainerScreen<?>) (Object) this, slot, graphics));
 		}
+	}
+
+	/**
+	 * A mouse button let go while an arrangement (a sort) runs here does nothing: vanilla clicks the slot under the mouse
+	 * on a release whenever the cursor holds something, to put it down, and while a sort runs it's the sort's (shown
+	 * empty). That click would drop it there, and count as yours (stopping the sort): the release of the right-click
+	 * that opened the chest, or of a middle-click sort.
+	 */
+	@Inject(method = "mouseReleased", at = @At("HEAD"), cancellable = true)
+	private void myriad$release(MouseButtonEvent event, CallbackInfoReturnable<Boolean> cir) {
+		if (Myriad.isReady() && MyriadImpl.get().containerTracker().arranging(((AbstractContainerScreen<?>) (Object) this).getMenu())) cir.setReturnValue(true);
 	}
 
 	@Inject(method = "slotClicked", at = @At("HEAD"), cancellable = true)

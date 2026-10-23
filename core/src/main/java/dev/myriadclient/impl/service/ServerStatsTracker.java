@@ -157,6 +157,18 @@ public final class ServerStatsTracker implements ServerStats {
 	 * that's higher. Some servers (2b2t) show everyone at 0 in the tab list; joined as a version without sequenced
 	 * actions (ViaFabricPlus, before 1.19), the acknowledgements are made up on your side and come back at once.
 	 */
+	/**
+	 * The slowest of the last few round trips (at least {@link #ping()}): how long to wait for the server's answer to be
+	 * sure it's in, where the median would often be beaten by jitter.
+	 */
+	public int slowestRoundTrip() {
+		int slowest = ping();
+		synchronized (rtts) {
+			for (int r : rtts) slowest = Math.max(slowest, r);
+		}
+		return slowest;
+	}
+
 	@Override
 	public int ping() {
 		Minecraft mc = Minecraft.getInstance();

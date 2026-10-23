@@ -93,7 +93,7 @@ final class InventoryClicks {
 	boolean moveToHotbar(int inventoryIndex, int hotbarSlot) {
 		if (mc.player == null || hotbarSlot < 0 || hotbarSlot > 8 || inventoryIndex < 0 || inventoryIndex >= 36) return false;
 		if (inventoryIndex == hotbarSlot) return true;
-		if (!canClick(1)) return false;
+		if (!answered(inventoryIndex, hotbarSlot) || !canClick(1)) return false;
 		return clickSwap(inventoryIndex, hotbarSlot);
 	}
 
@@ -122,6 +122,16 @@ final class InventoryClicks {
 			&& Myriad.limits().canSend(PacketLimits.Kind.INVENTORY, clicks) && gate.prepareClick();
 	}
 
+	/**
+	 * Whether the server has answered the last click on each of these slots: with lag, an answer to an earlier click can
+	 * still be on its way and show a slot's old contents, and a click made on that (to put a totem in the off hand that
+	 * looks empty again, say) undoes what the server already did. A click on them waits until then (see SlotsInFlight).
+	 */
+	private boolean answered(int... indexes) {
+		for (int i : indexes) if (!inventory.settled(i)) return false;
+		return true;
+	}
+
 	static boolean valid(int index) {
 		return index >= 0 && index <= Slots.OFF_HAND;
 	}
@@ -131,8 +141,9 @@ final class InventoryClicks {
 	}
 
 	boolean move(int from, int to) {
-		if (!canClick(3) || !valid(from) || !valid(to)) return false;
+		if (!valid(from) || !valid(to)) return false;
 		if (from == to) return true;
+		if (!answered(from, to) || !canClick(3)) return false;
 		if (Slots.isHotbar(to)) return clickSwap(from, to);
 		if (Slots.isHotbar(from)) return clickSwap(to, from);
 		// Armour into its own empty slot: a shift click puts it there.
@@ -151,7 +162,7 @@ final class InventoryClicks {
 		if (!valid(from) || !valid(to) || from == to) return false;
 		var inv = mc.player == null ? null : mc.player.getInventory();
 		if (inv == null || !ItemStack.isSameItemSameComponents(inv.getItem(from), inv.getItem(to)) || inv.getItem(from).isEmpty()) return false;
-		if (!canClick(3)) return false;
+		if (!answered(from, to) || !canClick(3)) return false;
 		// Pick the source up, drop it on the target (they combine), and put any remainder back.
 		click(from, 0, ContainerInput.PICKUP);
 		click(to, 0, ContainerInput.PICKUP);
@@ -185,7 +196,7 @@ final class InventoryClicks {
 	}
 
 	boolean swapWithOffhand(int inventoryIndex) {
-		if (mc.player == null || !valid(inventoryIndex) || inventoryIndex == Slots.OFF_HAND) return false;
+		if (mc.player == null || !valid(inventoryIndex) || inventoryIndex == Slots.OFF_HAND || !answered(inventoryIndex, Slots.OFF_HAND)) return false;
 		// From the hotbar while a click would have to wait: the swap-hands key with that slot held, which isn't a click.
 		// Not after an attack or use this tick, which Grim (PacketOrderG) cancels it after.
 		if (Slots.isHotbar(inventoryIndex) && !gate.safeToClick() && !inventory.actedThisTick() && mc.getConnection() != null && !mc.player.isSpectator()) {
@@ -218,13 +229,13 @@ final class InventoryClicks {
 	}
 
 	boolean quickMove(int inventoryIndex) {
-		if (!canClick(1) || !valid(inventoryIndex)) return false;
+		if (!valid(inventoryIndex) || !answered(inventoryIndex) || !canClick(1)) return false;
 		click(inventoryIndex, 0, ContainerInput.QUICK_MOVE);
 		return true;
 	}
 
 	boolean drop(int inventoryIndex, boolean wholeStack) {
-		if (!canClick(1) || !valid(inventoryIndex)) return false;
+		if (!valid(inventoryIndex) || !answered(inventoryIndex) || !canClick(1)) return false;
 		click(inventoryIndex, wholeStack ? 1 : 0, ContainerInput.THROW);
 		return true;
 	}

@@ -259,6 +259,11 @@ public final class DevConsole {
 					selfTest.start();
 				}
 				case "status" -> status();
+				// Closes whatever screen is open (a container's as the game does, telling the server).
+				case "closescreen" -> {
+					if (mc.gui.screen() instanceof AbstractContainerScreen<?>) mc.player.closeContainer();
+					else if (mc.gui.screen() != null) mc.gui.setScreen(null);
+				}
 				case "echo" -> LOG.info("[dev] echo {}", line.substring(4).strip());
 				case "screenshot" -> Screenshot.grab(mc.gameDirectory, a[1] + ".png", mc.gameRenderer.mainRenderTarget(), 1, message -> {
 				});

@@ -14,6 +14,28 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.10.1 (unreleased)
+
+- **A sort never stops on a click you didn't make.** Letting go of a mouse button in a container screen made vanilla
+  click the slot under the mouse whenever the cursor held something, to put it down, and while a sort runs the cursor
+  holds the sort's stack (shown empty): the release of the right-click that opened the chest, or of a middle-click
+  sort, dropped that stack there and counted as your click, stopping the sort ("You clicked in the container").
+  Releases now do nothing in a screen while a sort runs in it.
+- **No stack left showing on the cursor after a stopped sort.** An answer the server sent before the sort put its stack
+  down could arrive after and show it back on the cursor, with nothing to correct it; a stopped sort now asks the
+  server for the menu once it's put down and ends only once that shows the cursor empty (putting it down again if not).
+- **Inventory clicks wait for the server's answer to the last click on the same slots.** With lag, an answer to an
+  earlier click can still be on its way and show a slot's old contents; a click made on that undoes what the server
+  already did. With the test server answering every click as 2b2t does, Offhand swapped the totem in, saw the off hand
+  empty again, and swapped it back out, over and over. Moves, swaps, the off hand swap, shift-clicks and drops now wait
+  as borrows and builds already did, and that wait is the slowest of the last few round trips rather than the median,
+  which jitter often beat.
+- Tested with shulker boxes in the mix (they don't stack and each carries its contents): sorting a double chest of 20
+  boxes and part stacks with Auto Sort and by middle-click, with boxes in your inventory, and your own inventory, every
+  box coming out with its own contents and nothing on the cursor, through a 200 ms (each way, 60 ms jitter) proxy with
+  the server answering every click: all pass.
+- Dev console: `closescreen` closes whatever screen is open.
+
 ## 0.10.0
 
 - **Building leaves your hotbar as it was.** A build (the Printer, Portal Builder, any `Steps.build`) moved blocks into

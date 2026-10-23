@@ -1,8 +1,8 @@
 package dev.myriadclient.impl.service;
 
-import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.util.Slots;
 import dev.myriadclient.api.util.Ticks;
+import dev.myriadclient.impl.MyriadImpl;
 
 /**
  * Inventory slots the server may still be about to answer for. With lag, an inventory update the server sent about a
@@ -45,8 +45,11 @@ final class SlotsInFlight {
 		return settled(index) && (index < 0 || index >= used.length || Ticks.current() - used[index] >= roundTrip());
 	}
 
-	/** A round trip in ticks, as long as the server takes to answer what you do (Server.ping); at least one. */
+	/**
+	 * A round trip in ticks, as long as the server takes to answer what you do: the slowest of the last few, as with
+	 * jitter the median is often beaten by an answer still on its way. At least one.
+	 */
 	static int roundTrip() {
-		return Math.clamp((Myriad.server().ping() + 49) / 50, 1, MAX_WINDOW);
+		return Math.clamp((MyriadImpl.get().serverStatsTracker().slowestRoundTrip() + 49) / 50, 1, MAX_WINDOW);
 	}
 }

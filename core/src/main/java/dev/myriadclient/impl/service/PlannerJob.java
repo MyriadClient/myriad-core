@@ -38,6 +38,11 @@ final class PlannerJob implements MenuJob {
 	private long lastClickAt = Long.MIN_VALUE / 2;
 	/** Stopped (see {@link #stop}): what's on the cursor is put down, then it ends with this. */
 	private @Nullable String stopping;
+	/** After a stop: whether the server confirmed the cursor's empty since the last put-down, and put-downs made. */
+	private boolean confirmed;
+	private int putDowns;
+	/** Put-downs a stop makes before giving up (each one confirmed with the server). */
+	private static final int PUT_DOWNS = 5;
 	/**
 	 * What the menu shows while this runs, by slot: the end result where it's known ({@link Arranger#finishedView}, a
 	 * sort), so the clicks behind it don't show. With a server that answers every click, a burst of them comes back as
@@ -74,7 +79,7 @@ final class PlannerJob implements MenuJob {
 	@Override
 	public boolean tick(MenuSync sync) {
 		if (mc.player == null || mc.gameMode == null || mc.player.containerMenu != menu) return fail("The container closed");
-		if (stopping != null) return putDown();
+		if (stopping != null) return putDown(sync);
 		if (check != null) {
 			if (!check.isDone()) return false;
 			check = null;
@@ -104,13 +109,26 @@ final class PlannerJob implements MenuJob {
 	}
 
 	/**
-	 * Puts down what's on the cursor, a click a tick: where the last pick-up came from if that's still empty, else the first
-	 * empty slot (the menu's own first, then yours), else onto the same item with room. Then ends with the stop's reason.
+	 * Puts down what's on the cursor: where the last pick-up came from if that's still empty, else the first empty slot
+	 * (the menu's own first, then yours), else onto the same item with room. Then the server is asked for the menu, and
+	 * it ends with the stop's reason once that shows an empty cursor: an answer to an earlier click arriving after the
+	 * put-down would otherwise show the stack back on the cursor, with nothing to correct it, or hide one still there.
 	 */
-	private boolean putDown() {
+	private boolean putDown(MenuSync sync) {
+		if (check != null) {
+			if (!check.isDone()) return false;
+			check = null;
+			confirmed = true;
+		}
 		ItemStack carried = menu.getCarried();
-		if (carried.isEmpty()) return fail(stopping);
+		if (carried.isEmpty()) {
+			if (confirmed) return fail(stopping);
+			check = sync.refresh(menu);
+			return false;
+		}
+		confirmed = false;
 		if (Ticks.current() - lastClickAt <= SlotsInFlight.roundTrip()) return false;
+		if (putDowns >= PUT_DOWNS) return fail(stopping + "; something stayed on the cursor");
 		int to = planner instanceof Arranger a ? a.vacatedSlot() : -1;
 		for (int i = 0; i < menu.slots.size() && to < 0; i++) if (menu.slots.get(i).getItem().isEmpty() && menu.slots.get(i).mayPlace(carried)) to = i;
 		for (int i = 0; i < menu.slots.size() && to < 0; i++) {
@@ -120,6 +138,7 @@ final class PlannerJob implements MenuJob {
 		if (to < 0) return fail(stopping + "; something stayed on the cursor (no room for it)");
 		if (!Myriad.limits().canSend(PacketLimits.Kind.INVENTORY, 1) || !Myriad.inventory().prepareClick()) return false;
 		click(to, 0, ContainerInput.PICKUP);
+		putDowns++;
 		return false;
 	}
 

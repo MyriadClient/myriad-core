@@ -164,7 +164,8 @@ class ContainersHarnessTest {
 			assertTrue(tracker.yourClick(menu));
 			assertFalse(tracker.showsFinished(menu), "still showing the sort after your click");
 			assertEquals(null, tracker.shown(menu, 0));
-			h.tick();
+			// It asks the server for the menu before it ends; the server answers.
+			ticksAnswering(h, menu, 30);
 			assertTrue(done.isCompletedExceptionally());
 			assertFalse(tracker.yourClick(menu), "with no sort running, clicks go through");
 		}
@@ -206,11 +207,21 @@ class ContainersHarnessTest {
 			assertFalse(menu.getCarried().isEmpty(), "the sort never carried anything");
 			int total = count(menu);
 			assertTrue(dev.myriadclient.impl.MyriadImpl.get().containerTracker().yourClick(menu));
-			// A round trip after its last click (at most a second), then a click to put it down.
-			h.ticks(30);
+			// A round trip after its last click (at most a second), a click to put it down, and the ask that confirms it.
+			ticksAnswering(h, menu, 60);
 			assertTrue(menu.getCarried().isEmpty(), "left on the cursor: " + menu.getCarried());
 			assertTrue(done.isCompletedExceptionally(), "the sort didn't end failed: " + done);
 			assertEquals(total, count(menu), "items lost or made");
+		}
+	}
+
+	/** Ticks {@code n} times, answering each ask for the whole menu (a click outside it) as the server does. */
+	private static void ticksAnswering(Harness h, net.minecraft.world.inventory.AbstractContainerMenu menu, int n) {
+		int answered = 0;
+		for (int t = 0; t < n; t++) {
+			h.tick();
+			long asks = h.sent(ServerboundContainerClickPacket.class).stream().filter(p -> p.slotNum() == -999).count();
+			for (; answered < asks; answered++) dev.myriadclient.impl.MyriadImpl.get().menuSync().onContents(menu.containerId);
 		}
 	}
 

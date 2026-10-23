@@ -127,6 +127,11 @@ public final class ContainerTracker implements Containers {
 		return transfers.peek() instanceof PlannerJob job ? job.shown(menu, slot) : null;
 	}
 
+	/** Whether an arrangement (a sort) is running in {@code menu}, stopping included. */
+	public boolean arranging(AbstractContainerMenu menu) {
+		return transfers.peek() instanceof PlannerJob job && job.runsIn(menu);
+	}
+
 	/** Whether {@code menu} shows a sort's result while it runs: the cursor shows nothing then. */
 	public boolean showsFinished(AbstractContainerMenu menu) {
 		return transfers.peek() instanceof PlannerJob job && job.showsFinished(menu);
