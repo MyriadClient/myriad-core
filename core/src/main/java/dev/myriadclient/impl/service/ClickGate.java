@@ -14,6 +14,7 @@ import net.minecraft.network.protocol.game.ClientboundLoginPacket;
 import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
+import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.phys.AABB;
 
@@ -44,12 +45,17 @@ final class ClickGate {
 	private boolean keysKept;
 	/** The still tick's sprint stays off until the player has moved. */
 	private boolean sprintBlocked;
+	/** The player tick the last block placement went out in (see beforeTravel). */
+	private int placedAt = Integer.MIN_VALUE / 2;
 
 	/** Lowest priority: what actually goes out, after other handlers have changed it. */
-	@Subscribe(priority = Priority.LOWEST, packets = {ServerboundPlayerInputPacket.class, ServerboundPlayerCommandPacket.class})
+	@Subscribe(priority = Priority.LOWEST, packets = {ServerboundPlayerInputPacket.class, ServerboundPlayerCommandPacket.class, ServerboundUseItemOnPacket.class})
 	private void onSend(PacketEvent.Send e) {
 		if (e.isCancelled()) return;
 		switch (e.packet()) {
+			case ServerboundUseItemOnPacket p -> {
+				if (mc.player != null) placedAt = mc.player.tickCount;
+			}
 			case ServerboundPlayerInputPacket p -> sentInput = p.input();
 			case ServerboundPlayerCommandPacket p when p.getAction() == ServerboundPlayerCommandPacket.Action.START_SPRINTING -> sentSprinting = true;
 			case ServerboundPlayerCommandPacket p when p.getAction() == ServerboundPlayerCommandPacket.Action.STOP_SPRINTING -> sentSprinting = false;
@@ -180,8 +186,14 @@ final class ClickGate {
 	 * Just before the player moves: a still tick stays without sprint even if it started again since its input
 	 * (ViaFabricPlus, joined as an older version, starts it from the held sprint key as those did), so the movement and
 	 * the sprint state the server gets agree.
+	 * <p>
+	 * A sprint start the server doesn't have yet waits a tick after a block placement, too: Grim predicts the movement
+	 * of a start sent just after a placement at walking speed, and on a diagonal (the movement fix turning forward into
+	 * forward and a strafe while the look is turned) sprinting goes 0.03 further, a Simulation flag that then decays.
+	 * Every such start flagged in the printer's sprinting and jumping passes, and none did once it waited the tick.
 	 */
 	void beforeTravel() {
+		if (!sprintBlocked && !sentSprinting && mc.player.isSprinting() && mc.player.tickCount - placedAt <= 1) sprintBlocked = true;
 		if (!sprintBlocked) return;
 		sprintBlocked = false;
 		if (mc.player.isSprinting()) {

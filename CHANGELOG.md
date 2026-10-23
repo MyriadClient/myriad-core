@@ -16,6 +16,14 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 
 ## 0.11.0 (unreleased)
 
+- **No Simulation flag when sprinting starts again just after a placement** (strict Grim, rotating placements while
+  sprinting or sprint-jumping). Grim predicts the movement of a sprint start sent right after a block placement at
+  walking speed; on a diagonal, which the movement fix presses while the look is turned to place, sprinting goes 0.03
+  further than that, one flag that decays over the next few ticks. Such a start now waits one tick after a placement
+  (only when the server doesn't have you sprinting already). Measured with Grim's per-tick debug against the packet
+  log: every flagged tick in the printer's sprinting and jumping passes was such a start; after the change, six passes
+  in a row with no flags (two to three flags a pass before).
+
 - **The Keybinds window sets every bind, Minecraft's included, and has a search.** Global holds Minecraft's own controls
   (other mods' too) by its categories, changed and saved as in its Controls screen (one key each, so a bind's modifiers
   are dropped there); Myriad holds its actions, the menu's keys, core's modules (macros) and the wheels; each addon has
