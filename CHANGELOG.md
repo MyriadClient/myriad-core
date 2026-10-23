@@ -14,7 +14,7 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
-## 0.10.0 (unreleased)
+## 0.10.0
 
 - **Building leaves your hotbar as it was.** A build (the Printer, Portal Builder, any `Steps.build`) moved blocks into
   the hotbar for good, so a print ended with the hotbar full of building blocks. It now remembers the inventory when it
