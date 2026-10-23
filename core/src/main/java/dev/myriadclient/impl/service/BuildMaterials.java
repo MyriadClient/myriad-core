@@ -55,7 +55,9 @@ final class BuildMaterials {
 	 */
 	private boolean borrow(int from) {
 		// Not while a block is in the off hand: a click now would put the server back on your slot before the swap back.
+		// Nor from a slot a click just changed, which may not hold what it shows yet.
 		if (Myriad.placement().offHandSlot() >= 0) return true;
+		if (MyriadImpl.get().inventoryManager() instanceof InventoryManager i && !i.settled(from)) return true;
 		int into = hotbarSlotToFill();
 		if (into < 0) return false;
 		if (!(MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory)) return false;
@@ -72,9 +74,9 @@ final class BuildMaterials {
 
 	/**
 	 * The hotbar slot a material is moved into: an empty one; else the one this build filled longest ago; else one
-	 * holding another of the blocks it builds with. Never a slot with anything else (your own things stay where you keep
-	 * them), nor the one you have selected or the server holds, so what you see in your hand doesn't change. -1 if
-	 * there's none.
+	 * holding another of the blocks it builds with; else any other, whose item goes back there when the build is done
+	 * ({@link HotbarRestore}). Never the one you have selected or the server holds, so what you see in your hand doesn't
+	 * change, nor one with something a module borrowed. -1 if there's none.
 	 */
 	private int hotbarSlotToFill() {
 		var inv = mc.player.getInventory();
@@ -85,12 +87,16 @@ final class BuildMaterials {
 		// Checked again: you may have put something of your own there since.
 		for (int i : filledSlots) if (free(i, selected, server, inventory) && materials.contains(inv.getItem(i).getItem())) return i;
 		for (int i = 8; i >= 0; i--) if (free(i, selected, server, inventory) && materials.contains(inv.getItem(i).getItem())) return i;
+		for (int i = 8; i >= 0; i--) if (free(i, selected, server, inventory)) return i;
 		return -1;
 	}
 
-	/** Not your selected slot or the one the server holds, and nothing done with it still on its way to the server. */
+	/**
+	 * Not your selected slot or the one the server holds, nothing a module borrowed in it, and nothing done with it still
+	 * on its way to the server.
+	 */
 	private static boolean free(int slot, int selected, int server, InventoryManager inventory) {
-		return slot != selected && slot != server && inventory.swappable(slot);
+		return slot != selected && slot != server && !inventory.lent(slot) && inventory.swappable(slot);
 	}
 
 	/** The hotbar slot with the best item for {@code target} (by its preference); otherwise moves one in, as {@link #slotFor(Item)}. */

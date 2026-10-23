@@ -36,6 +36,12 @@ public final class ServerInventory {
 		return new ServerInventory(player);
 	}
 
+	/** The server sends the whole menu: the client's copy becomes this one, as vanilla applies it, and core hears it. */
+	public void sendAll(LocalPlayer player) {
+		for (int i = 0; i < slots.length; i++) player.inventoryMenu.getSlot(i).set(slots[i].copy());
+		dev.myriadclient.impl.MyriadImpl.get().menuSync().onContents(0);
+	}
+
 	/** Takes {@code sent} in order, as the server would. */
 	public ServerInventory apply(List<Harness.Sent> sent) {
 		for (Harness.Sent s : sent) receive(s.packet());
@@ -76,6 +82,8 @@ public final class ServerInventory {
 	}
 
 	private void click(ServerboundContainerClickPacket p) {
+		// Outside the window with nothing on the cursor: changes nothing (an ask for the whole menu).
+		if (p.containerInput() == ContainerInput.PICKUP && p.slotNum() == -999) return;
 		if (p.containerInput() != ContainerInput.SWAP) throw new UnsupportedOperationException("ServerInventory doesn't model " + p.containerInput() + " clicks");
 		int a = p.slotNum(), b = p.buttonNum() == 40 ? OFF_HAND : HOTBAR + p.buttonNum();
 		ItemStack s = slots[a];

@@ -106,7 +106,9 @@ public final class MenuSync {
 		}
 		if (!Myriad.limits().canSend(PacketLimits.Kind.INVENTORY, 1)) return;
 		var inventory = Myriad.inventory();
-		if (!inventory.safeToClick() && !(++r.waited > WAIT_FOR_STILL && inventory.prepareClick())) return;
+		if (!inventory.safeToClick() && ++r.waited <= WAIT_FOR_STILL) return;
+		// Sprint stopped for the click (safeToClick only says it can be), or a still tick asked for.
+		if (!inventory.prepareClick()) return;
 		// Half the id range away: never one the server has, even with its own updates on the way.
 		((AbstractContainerMenuAccessor) r.menu).myriad$setStateId((r.menu.getStateId() + 16384) & 32767);
 		mc.gameMode.handleContainerInput(r.menu.containerId, -999, 0, ContainerInput.PICKUP, mc.player);

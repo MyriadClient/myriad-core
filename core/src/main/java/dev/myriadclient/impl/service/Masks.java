@@ -15,7 +15,8 @@ import java.util.Map;
 
 /**
  * What the inventory shows while modules move things (see {@code Inventory.mask}): masked slots show what they held when
- * masked, and a hotbar slot with something borrowed in it shows what was there before ({@link Borrows}).
+ * masked, and a hotbar slot with something borrowed or a build's material in it shows what was there before
+ * ({@link Borrows}, {@link HotbarRestore}).
  */
 final class Masks {
 	private static final class Mask {
@@ -38,11 +39,13 @@ final class Masks {
 
 	private final Minecraft mc = Minecraft.getInstance();
 	private final Borrows borrows;
+	private final HotbarRestore restore;
 	/** Display masks, by owner: what each masked slot held when masked, and until when. */
 	private final Map<Object, Mask> masks = new IdentityHashMap<>();
 
-	Masks(Borrows borrows) {
+	Masks(Borrows borrows, HotbarRestore restore) {
 		this.borrows = borrows;
+		this.restore = restore;
 	}
 
 	void mask(Object owner, long holdMs, int... inventoryIndexes) {
@@ -79,6 +82,11 @@ final class Masks {
 		if (mc.player == null || !InventoryClicks.valid(index)) return ItemStack.EMPTY;
 		var inv = mc.player.getInventory();
 		ItemStack real = inv.getItem(index);
+		// A build's material in a hotbar slot you don't hold shows what was there, through the build's own swaps too.
+		if (Slots.isHotbar(index) && index != inv.getSelectedSlot()) {
+			ItemStack was = restore.shown(index);
+			if (was != null) return was;
+		}
 		Mask m = maskAt(index);
 		if (m != null) {
 			// Something from outside the group turned up here (a pickup): it shows as it is.

@@ -32,6 +32,25 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
   ago. Without lag that's a tick, as before. Printing a row of 24 mixed blocks with 2b2t's settings through a 120 ms
   (each way) proxy: walking 15 right and 7 wrong before, 23 right and none wrong now; sprinting 14/6 before, 20/0 now;
   sprint-jumping 14/8 before, 15/0 now (the rest weren't placed in one pass, as a slot now waits for the server).
+- **Builds work with a full hotbar, and you don't see them use it.** With every hotbar slot holding something of yours,
+  a build stopped with "no slot" (Portal Builder said to free one). It now borrows any slot but the one you hold, and
+  what was there goes back when the build is done. While a build has a block in a slot, the hotbar shows what was there
+  before, so its moves don't flicker across your hotbar. Things a module borrowed (Middle Click's pearl) and a build's
+  blocks keep out of each other's slots.
+- **Air placement leaves your off hand as it was, and it doesn't show.** Each air placement swaps the block into the off
+  hand and back the next tick. With lag, the server's answers to the swap arrive after the swap back and showed the
+  block in your off hand again (on servers that answer at odd moments, for good); and a swap back an anti-cheat drops
+  would leave the block there on the server while you see your totem. The hands now show what they held until the
+  server has answered, and once a run of air placements is over the inventory is asked for once (a click that changes
+  nothing) and the block, if it really is in the off hand, is swapped back with what was there. Through a 120 ms
+  (each way) proxy, sprint-jumping past the suite's 24-block row with 2b2t's settings left a block in the off hand in
+  3 of 3 runs; now 0 of 3, with every block right.
+- **Clicks made on a view the server hasn't answered yet wait.** Borrows, builds and the hotbar put-back now wait a round
+  trip after a click changed a slot before acting on it, anywhere in the inventory (not only the hotbar): with lag, an
+  item could be found where it no longer was and borrowed twice, swapping two of your hotbar items. Without lag that's
+  a tick.
+- **The ask for the whole inventory no longer goes out mid-sprint.** It checked that a click could go (with a sprint
+  stop first) but didn't send the stop, so Grim's MultiActionsC flagged it while sprinting.
 - **`.packets log` shows inventory clicks** when you join through ViaFabricPlus as 1.21.4 or older: it sends those
   clicks itself, past the connection, so they were missing. They're logged as the game makes them.
 - **The colour picker's hue bar works on white and black.** With the square's marker in its top-left corner (white)

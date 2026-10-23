@@ -24,6 +24,7 @@ final class HotbarRestore {
 	private static final int GIVE_UP_TICKS = 600;
 
 	private final Minecraft mc = Minecraft.getInstance();
+	private final InventoryManager inventory;
 	private final InventoryClicks clicks;
 	private final ClickGate gate;
 	private final SlotsInFlight inFlight;
@@ -34,7 +35,8 @@ final class HotbarRestore {
 	private boolean building, restoring;
 	private int waited, ticks;
 
-	HotbarRestore(InventoryClicks clicks, ClickGate gate, SlotsInFlight inFlight) {
+	HotbarRestore(InventoryManager inventory, InventoryClicks clicks, ClickGate gate, SlotsInFlight inFlight) {
+		this.inventory = inventory;
 		this.clicks = clicks;
 		this.gate = gate;
 		this.inFlight = inFlight;
@@ -79,6 +81,8 @@ final class HotbarRestore {
 				used.clear(s);
 				continue;
 			}
+			// Something borrowed is in it (a module's): it goes back first, then this.
+			if (inventory.lent(s)) continue;
 			int m = source(s);
 			if (m < 0) {
 				// What was there is gone (used up, dropped): leave the slot as it is.
@@ -94,8 +98,11 @@ final class HotbarRestore {
 			return;
 		}
 		// Only from your own inventory screen (or none), within the click budget, at a moment the server takes clicks.
-		// The slot's last change or use answered first: a click on an old view would disagree with the server.
-		if (mc.player.containerMenu != mc.player.inventoryMenu || !inFlight.swappable(slot)) return;
+		// Both slots' last change (and the hotbar slot's last use) answered first: a click on an old view would disagree
+		// with the server. Not while
+		// an air placement's block is in the off hand: the slot the hotbar shows isn't what it holds until it's back.
+		if (mc.player.containerMenu != mc.player.inventoryMenu || !inFlight.swappable(slot) || !inFlight.settled(from) || inventory.undoPending()
+			|| inventory.restorePending()) return;
 		if (!gate.safeToClick() && !(++waited > WAIT_FOR_STILL && gate.prepareClick())) return;
 		if (!clicks.canClick(1)) return;
 		clicks.clickSwap(from, slot);
@@ -121,6 +128,33 @@ final class HotbarRestore {
 			}
 		}
 		return home >= 0 ? home : any;
+	}
+
+	/** Whether a build moved something into hotbar slot {@code s} that hasn't gone back yet. */
+	boolean uses(int s) {
+		return before != null && used.get(s);
+	}
+
+	/**
+	 * What hotbar slot {@code s} shows while a build has something of its own there: what it held before, wherever that
+	 * is now, so a build's moves don't show in the hotbar. Null when it shows what it holds (nothing moved in, the item
+	 * that was there is back or gone).
+	 */
+	@Nullable ItemStack shown(int s) {
+		if (!uses(s) || mc.player == null) return null;
+		var inv = mc.player.getInventory();
+		Item was = before[s];
+		if (same(inv.getItem(s), was)) return null;
+		if (was == null) return ItemStack.EMPTY;
+		ItemStack any = null;
+		for (int m = 9; m < 36; m++) {
+			ItemStack there = inv.getItem(m);
+			if (!there.is(was)) continue;
+			// Best the one moved out of here (it wasn't there before), else any of the kind.
+			if (before[m] != was) return there;
+			if (any == null) any = there;
+		}
+		return any;
 	}
 
 	private static boolean same(ItemStack stack, @Nullable Item item) {

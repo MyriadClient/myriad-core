@@ -156,6 +156,33 @@ class JobsHarnessTest {
 	}
 
 	@Test
+	void aBuildBorrowsASlotOfAFullHotbarWithoutShowingItAndPutsItBack() {
+		try (Harness h = standing()) {
+			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
+			// Every hotbar slot holds something of yours; the glass is only in the inventory.
+			h.give(0, new ItemStack(Items.DIAMOND_SWORD));
+			for (int i = 1; i < 9; i++) h.give(i, new ItemStack(Items.STICK, i));
+			h.give(20, new ItemStack(Items.GLASS, 16));
+			Job<Void> job = Myriad.jobs().start("builder", Steps.build(Blueprint.of(Map.of(new BlockPos(1, 1, 0), Target.exact(Blocks.GLASS.defaultBlockState()))),
+				Building.Options.forServer()));
+			int borrowed = -1;
+			for (int t = 0; t < 10 && borrowed < 0; t++) {
+				h.tick();
+				for (int i = 1; i < 9; i++) if (h.player.getInventory().getItem(i).is(Items.GLASS)) borrowed = i;
+			}
+			assertTrue(borrowed > 0, "no hotbar slot took the glass");
+			assertTrue(Myriad.inventory().shownInHotbar(borrowed).is(Items.STICK), "slot " + borrowed + " shows " + Myriad.inventory().shownInHotbar(borrowed));
+			assertEquals(borrowed, Myriad.inventory().shownInHotbar(borrowed).getCount(), "slot " + borrowed + " shows another slot's sticks");
+			job.cancel();
+			h.ticks(10);
+			var inv = h.player.getInventory();
+			for (int i = 1; i < 9; i++) assertTrue(inv.getItem(i).is(Items.STICK) && inv.getItem(i).getCount() == i, "slot " + i + " holds " + inv.getItem(i));
+			assertTrue(inv.getItem(20).is(Items.GLASS), "slot 20 holds " + inv.getItem(20));
+			assertTrue(inv.getItem(0).is(Items.DIAMOND_SWORD));
+		}
+	}
+
+	@Test
 	void aSlotAClickJustChangedIsntPlacedFromUntilTheServerCouldAnswer() {
 		try (Harness h = standing()) {
 			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);

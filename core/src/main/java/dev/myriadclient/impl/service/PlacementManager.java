@@ -13,7 +13,6 @@ import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.util.BlockInfo;
 import dev.myriadclient.api.util.MathUtil;
 import dev.myriadclient.api.util.Reach;
-import dev.myriadclient.api.util.Slots;
 import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.network.ActionTiming;
@@ -65,8 +64,6 @@ public final class PlacementManager implements Placement {
 
 	/** How long a rotated placement may wait for its rotation before it's given up. */
 	private static final int QUEUE_TICKS = 6;
-	/** How long an air placement's swap keeps both slots showing what they held, at most (it ends at the swap back). */
-	private static final long MASK_MS = 500;
 	/** How long after a module places a sign the editor the server opens for it is kept closed. */
 	private static final long SIGN_EDITOR_MS = 2000;
 	/**
@@ -321,18 +318,16 @@ public final class PlacementManager implements Placement {
 				// Swap the block to the off hand, place it from there, swing that hand, and swap back: how 2b2t clients
 				// place against air there, past its Grim. Back first thing next tick: Grim (PacketOrderG) cancels an off
 				// hand swap after a placement in the same tick, which would leave the block in your off hand. Meanwhile
-				// what was in the off hand (a totem) is in the hand the server holds, where it still saves you; both
-				// slots show what they held, so nothing flickers.
-				Myriad.inventory().mask(this, MASK_MS, slot, Slots.OFF_HAND);
+				// what was in the off hand (a totem) is in the hand the server holds, where it still saves you. Both
+				// slots show what they held until the server has answered, and then the off hand is checked
+				// (OffHandWatch).
+				inventory.airSwapping(slot);
 				inventory.swapHands();
 				sneaking(o, target, () -> {
 					mc.gameMode.useItemOn(mc.player, InteractionHand.OFF_HAND, target);
 					swing(InteractionHand.OFF_HAND, o.swing());
 				});
-				inventory.afterSwap(() -> {
-					inventory.swapHands();
-					Myriad.inventory().unmask(this);
-				});
+				inventory.afterSwap(inventory::swapHands);
 			} else {
 				sneaking(o, target, () -> {
 					mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, target);
@@ -418,7 +413,7 @@ public final class PlacementManager implements Placement {
 	private static boolean handsFree(int slot) {
 		if (!(MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory)) return true;
 		// A click changed the slot less than a round trip ago: the server may yet show the client its old contents.
-		if (slot >= 0 && !inventory.placeable(slot)) return false;
+		if (slot >= 0 && !inventory.settled(slot)) return false;
 		return !inventory.undoPending() || inventory.undoSlotThisTick() == slot;
 	}
 

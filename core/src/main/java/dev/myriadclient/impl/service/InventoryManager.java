@@ -99,13 +99,14 @@ public final class InventoryManager implements Inventory {
 	private final AttackCharge charge = new AttackCharge(this);
 	private final InventoryClicks clicks = new InventoryClicks(this, gate);
 	private final Borrows borrows = new Borrows(this, clicks, gate);
-	private final Masks masks = new Masks(borrows);
 	private final SlotsInFlight inFlight = new SlotsInFlight();
-	private final HotbarRestore restore = new HotbarRestore(clicks, gate, inFlight);
+	private final HotbarRestore restore = new HotbarRestore(this, clicks, gate, inFlight);
+	private final Masks masks = new Masks(borrows, restore);
+	private final OffHandWatch offHand = new OffHandWatch(this, clicks, masks);
 
 	/** What has handlers of its own besides this: subscribed with it. */
 	public List<Object> parts() {
-		return List.of(gate, screenClicks, charge, borrows, masks, restore);
+		return List.of(gate, screenClicks, charge, borrows, masks, restore, offHand);
 	}
 
 	/** Lowest priority: what actually goes out, after other handlers have changed it. */
@@ -120,6 +121,7 @@ public final class InventoryManager implements Inventory {
 			case ServerboundAttackPacket p -> actedThisTick = true;
 			case ServerboundPlayerActionPacket p -> {
 				var a = p.getAction();
+				if (a == ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND && !clicks.swapping()) offHand.yours();
 				if (a != ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND && a != ServerboundPlayerActionPacket.Action.DROP_ITEM
 					&& a != ServerboundPlayerActionPacket.Action.DROP_ALL_ITEMS) actedThisTick = true;
 			}
@@ -575,14 +577,12 @@ public final class InventoryManager implements Inventory {
 	 */
 	public void clickMade(int containerId, int slotNum, int button, ContainerInput input) {
 		if (mc.player == null) return;
-		if (input == ContainerInput.SWAP) inFlight.changed(button == Slots.OFF_HAND ? SlotsInFlight.OFF_HAND : button);
+		// A swap's other end: the hotbar slot (or the off hand, 40) its button names.
+		if (input == ContainerInput.SWAP) inFlight.changed(button);
 		var menu = mc.player.containerMenu;
 		if (menu.containerId != containerId || slotNum < 0 || slotNum >= menu.slots.size()) return;
 		var slot = menu.slots.get(slotNum);
-		if (slot.container != mc.player.getInventory()) return;
-		int index = slot.getContainerSlot();
-		if (index < Slots.HOTBAR_END) inFlight.changed(index);
-		else if (index == Slots.OFF_HAND) inFlight.changed(SlotsInFlight.OFF_HAND);
+		if (slot.container == mc.player.getInventory()) inFlight.changed(slot.getContainerSlot());
 	}
 
 	/** Something was placed or used from hotbar {@code slot}: see {@link SlotsInFlight#used}. */
@@ -590,9 +590,9 @@ public final class InventoryManager implements Inventory {
 		inFlight.used(slot);
 	}
 
-	/** See {@link SlotsInFlight#placeable}. */
-	public boolean placeable(int slot) {
-		return inFlight.placeable(slot);
+	/** See {@link SlotsInFlight#settled}. */
+	public boolean settled(int index) {
+		return inFlight.settled(index);
 	}
 
 	/** See {@link SlotsInFlight#swappable}. */
@@ -603,6 +603,21 @@ public final class InventoryManager implements Inventory {
 	/** A build moves a material into {@code hotbarSlot}: see {@link HotbarRestore#begin}. */
 	void buildMoves(int hotbarSlot) {
 		restore.begin(hotbarSlot);
+	}
+
+	/** An air placement is about to swap hotbar slot {@code hotbarSlot}'s block into the off hand: see {@link OffHandWatch}. */
+	void airSwapping(int hotbarSlot) {
+		offHand.swapping(hotbarSlot);
+	}
+
+	/** Whether a module borrowed something into hotbar slot {@code slot} that hasn't gone back yet. */
+	boolean lent(int slot) {
+		return borrows.at(slot) != null;
+	}
+
+	/** Whether a build moved something into hotbar slot {@code slot} that hasn't gone back yet. */
+	boolean buildUses(int slot) {
+		return restore.uses(slot);
 	}
 
 	/** No build is running: what they moved into the hotbar goes back (see {@link HotbarRestore}). */

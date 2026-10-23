@@ -26,6 +26,7 @@ import java.util.function.ToDoubleFunction;
  */
 final class InventoryClicks {
 	private final Minecraft mc = Minecraft.getInstance();
+	private boolean swapping;
 	private final InventoryManager inventory;
 	private final ClickGate gate;
 
@@ -203,7 +204,17 @@ final class InventoryClicks {
 		ItemStack off = p.getOffhandItem();
 		p.setItemInHand(InteractionHand.OFF_HAND, p.getMainHandItem());
 		p.setItemInHand(InteractionHand.MAIN_HAND, off);
-		mc.getConnection().send(new ServerboundPlayerActionPacket(ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ZERO, Direction.DOWN));
+		swapping = true;
+		try {
+			mc.getConnection().send(new ServerboundPlayerActionPacket(ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND, BlockPos.ZERO, Direction.DOWN));
+		} finally {
+			swapping = false;
+		}
+	}
+
+	/** Whether the hand swap going out now is one of these (not your own key). */
+	boolean swapping() {
+		return swapping;
 	}
 
 	boolean quickMove(int inventoryIndex) {

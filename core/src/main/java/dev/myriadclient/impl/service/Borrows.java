@@ -73,7 +73,8 @@ final class Borrows {
 			}
 			return inventoryIndex;
 		}
-		if (!gate.prepareClick()) return -1;
+		// Where it is now as the server has it: a click that just moved things there may not be answered yet.
+		if (!inventory.settled(inventoryIndex) || !gate.prepareClick()) return -1;
 		int to = roomFor(replaceable == null ? s -> false : replaceable);
 		if (to < 0) return -1;
 		var inv = mc.player.getInventory();
@@ -91,13 +92,14 @@ final class Borrows {
 
 	/**
 	 * The hotbar slot to bring an item into: an empty one, else one {@code replaceable} accepts, else building blocks.
-	 * Never the selected slot, the one the server holds, or one with something borrowed in it. -1 if none.
+	 * Never the selected slot, the one the server holds, one with something borrowed or a build's material in it, or one
+	 * a click or a use the server hasn't answered yet went to. -1 if none.
 	 */
 	int roomFor(Predicate<ItemStack> replaceable) {
 		var inv = mc.player.getInventory();
 		int selected = inv.getSelectedSlot(), to = -1, blocks = -1;
 		for (int i = 0; i < 9; i++) {
-			if (i == selected || i == inventory.serverSlot() || at(i) != null) continue;
+			if (i == selected || i == inventory.serverSlot() || at(i) != null || inventory.buildUses(i) || !inventory.swappable(i)) continue;
 			ItemStack s = inv.getItem(i);
 			if (s.isEmpty()) return i;
 			if (to < 0 && replaceable.test(s)) to = i;
@@ -139,6 +141,8 @@ final class Borrows {
 			boolean held = serverSlot == b.slot && (inventory.isHolding() || serverSlot != selected);
 			if (held || selected == b.slot && mc.player.isUsingItem()) b.lastWanted = ticks;
 			if (held || !b.giveBack && ticks - b.lastWanted < KEEP_TICKS) continue;
+			// Both slots as the server has them: nothing done with them still unanswered.
+			if (!inventory.swappable(b.slot) || !inventory.settled(b.home)) continue;
 			// A moment you aren't moving if one comes soon; otherwise your keys are released for a tick.
 			if (!gate.safeToClick() && !(++b.waited > WAIT_FOR_STILL && gate.prepareClick())) continue;
 			// With a container you opened yourself, through its menu (it shows your inventory too), rather than waiting for
