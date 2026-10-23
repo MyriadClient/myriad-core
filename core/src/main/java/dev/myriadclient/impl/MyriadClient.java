@@ -16,11 +16,13 @@ import dev.myriadclient.impl.render.HighlightRenderer;
 import dev.myriadclient.impl.render.MeshRenderer;
 import dev.myriadclient.impl.render.MyriadPipelines;
 import dev.myriadclient.impl.render.WorldRenderQueue;
+import dev.myriadclient.impl.render.preview.PreviewRenderer;
 import dev.myriadclient.impl.ui.MyriadTitleScreen;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.PictureInPictureRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
@@ -40,6 +42,8 @@ public class MyriadClient implements ClientModInitializer {
 		MyriadImpl myriad = MyriadImpl.bootstrap();
 		VanillaKeys.register();
 		MyriadPipelines.init();
+		// Previews (the Preview widget) draw through a picture-in-picture renderer of their own.
+		PictureInPictureRendererRegistry.register(ctx -> new PreviewRenderer());
 		var bus = myriad.events();
 
 		ClientTickEvents.START_CLIENT_TICK.register(mc -> {

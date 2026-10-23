@@ -8,6 +8,7 @@ import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.SettingsView;
 import dev.myriadclient.api.ui.widget.Toggle;
 import dev.myriadclient.api.ui.widget.VBox;
+import dev.myriadclient.api.ui.widget.Widget;
 
 public final class ModuleSettingsPanel extends WidgetPanel {
 	private final Module module;
@@ -38,6 +39,8 @@ public final class ModuleSettingsPanel extends WidgetPanel {
 		content.add(header);
 		if (!module.description().isEmpty()) content.add(new Label(module.description()).dim());
 		content.add(new Label(module.group().name() + " · " + AddonNames.of(module)).dim());
+		Widget preview = module.preview();
+		if (preview != null) content.add(preview);
 		content.add(SettingsView.build(module.settings));
 	}
 }

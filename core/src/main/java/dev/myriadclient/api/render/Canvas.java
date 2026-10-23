@@ -1,6 +1,7 @@
 package dev.myriadclient.api.render;
 
 import com.mojang.blaze3d.textures.GpuTextureView;
+import dev.myriadclient.api.ui.widget.Preview;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
@@ -58,6 +59,9 @@ public interface Canvas {
 
 	/** Draws an item icon; {@code overlay} adds the vanilla count and durability bar. */
 	void item(ItemStack stack, float x, float y, float size, boolean overlay);
+
+	/** Draws {@code preview}'s subject in 3D in the given box (what {@link Preview#render} does; for drawing one yourself). */
+	void preview(Preview preview, float x, float y, float w, float h);
 
 	// ---- text -----------------------------------------------------------------------------------------------------
 

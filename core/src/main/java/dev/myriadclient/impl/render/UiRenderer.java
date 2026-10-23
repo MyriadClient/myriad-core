@@ -8,9 +8,11 @@ import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.ui.widget.Preview;
 import dev.myriadclient.impl.render.font.FontManager;
 import dev.myriadclient.impl.render.font.Glyph;
 import dev.myriadclient.impl.render.font.SizedFont;
+import dev.myriadclient.impl.render.preview.PreviewRenderer;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -246,6 +248,23 @@ public final class UiRenderer implements Canvas {
 	public void texture(GpuTextureView view, float x, float y, float w, float h, float u0, float v0, float u1, float v1, int tint) {
 		float s = state.scale;
 		box(px(x), py(y), w * s, h * s, 0, 0, 0, 0, tint, tint, IMAGE, 0, 0, u0, v0, u1, v1, view);
+	}
+
+	@Override
+	public void preview(Preview preview, float x, float y, float w, float h) {
+		flush();
+		int x0 = Math.round(px(x) / guiScale), y0 = Math.round(py(y) / guiScale);
+		int x1 = Math.round(px(x + w) / guiScale), y1 = Math.round(py(y + h) / guiScale);
+		if (x1 <= x0 || y1 <= y0) return;
+		// Inside this renderer's clip and the screen's own.
+		ScreenRectangle scissor = context.scissorStack.peek();
+		if (clipping()) {
+			int cx0 = Math.floorDiv(state.clipX0, guiScale), cy0 = Math.floorDiv(state.clipY0, guiScale);
+			ScreenRectangle clip = new ScreenRectangle(cx0, cy0, -Math.floorDiv(-state.clipX1, guiScale) - cx0, -Math.floorDiv(-state.clipY1, guiScale) - cy0);
+			scissor = scissor == null ? clip : scissor.intersection(clip);
+			if (scissor == null) return;
+		}
+		context.guiRenderState.addPicturesInPictureState(PreviewRenderer.state(preview, x0, y0, x1, y1, state.scale / guiScale, scissor));
 	}
 
 	@Override

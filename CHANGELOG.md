@@ -14,6 +14,19 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.11.0 (unreleased)
+
+- **Previews.** `Preview` (in `api.ui.widget`) shows something in 3D so changing a render setting shows what it does:
+  `Preview.entity(type)`, `player()` (you, with your armour and what you hold), `block(block)` (chests and shulker
+  boxes as they stand), `item(stack)` and `viewModel()` (your first-person hands and held items, as the camera sees
+  them, View Model's changes included). Drag to turn it, right-drag or Shift-drag to move it, scroll to zoom,
+  double-click to put it back. `decorate((shapes, box, entity) -> ...)` draws on it with the same `ShapeBuilder` calls
+  as in the world, in the subject's coordinates, so a `BoxStyle` draws itself. A module shows one at the top of its
+  settings window through `Module.preview()` (null by default); any window can hold one. Drawn through a
+  picture-in-picture renderer of its own (registered with Fabric's), entities made once per world and never added to
+  it; a subject the game can't draw out of the world shows nothing rather than failing the frame. `Canvas.preview`
+  draws one by hand. Shader effects (highlight outlines, glow) don't run in a preview.
+
 ## 0.10.1
 
 - **A sort never stops on a click you didn't make.** Letting go of a mouse button in a container screen made vanilla

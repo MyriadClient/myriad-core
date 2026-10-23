@@ -9,6 +9,7 @@ import dev.myriadclient.api.setting.KeybindSetting;
 import dev.myriadclient.api.setting.SavedSettings;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.Settings;
+import dev.myriadclient.api.ui.widget.Widget;
 import dev.myriadclient.api.util.Client;
 import dev.myriadclient.api.util.MyriadId;
 import net.minecraft.ChatFormatting;
@@ -358,6 +359,15 @@ public abstract class Module implements Identified {
 	public void upgradeSavedSettings(JsonObject saved, int savedVersion) {
 		SavedSettings view = new SavedSettings(saved);
 		for (int v = Math.max(1, savedVersion); v < settingsVersion(); v++) migrateSettings(v, view);
+	}
+
+	/**
+	 * A view shown at the top of this module's settings window, made each time the window opens: for a module that draws
+	 * things, a {@link dev.myriadclient.api.ui.widget.Preview} of what it draws on, so changing a setting shows what it
+	 * does. Null (the default) for none.
+	 */
+	public @Nullable Widget preview() {
+		return null;
 	}
 
 	/** Extra text shown next to the module in the module list, e.g. the current mode. */
