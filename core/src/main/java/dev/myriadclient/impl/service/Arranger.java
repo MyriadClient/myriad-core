@@ -15,7 +15,9 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * {@link Containers.View#arrange}: works out, one click at a time, how to make some of a menu's slots hold a layout:
@@ -96,6 +98,43 @@ final class Arranger implements Containers.Planner {
 		for (int i = 0; i < baseline.length; i++) baseline[i] = menu.getSlot(i).getItem().copy();
 		this.isSource = new boolean[menu.slots.size()];
 		for (int s : sources) isSource[s] = true;
+	}
+
+	/**
+	 * What the menu will hold once this is done, by menu slot, when that's known: the layout only rearranges what the
+	 * area holds (it takes from nowhere else, and keeps as many of each item), so every other slot ends as it began and
+	 * the area as the layout says. Null otherwise. Shown while it runs ({@link PlannerJob#shown}).
+	 */
+	@Nullable ItemStack[] finishedView() {
+		if (allowance != null || reserved != null || !menu.getCarried().isEmpty()) return null;
+		for (int s : sources) if (!inArea[s]) return null;
+		ItemStack[] view = baseline.clone();
+		for (int i = 0; i < area.length; i++) {
+			Want w = wants[i];
+			if (w != null) view[area[i]] = w.count() == 0 ? ItemStack.EMPTY : w.like().copyWithCount(w.count());
+		}
+		// The same items in the end as at the start, compared exactly (a want's item stands for what the match takes).
+		List<ItemStack> kinds = new ArrayList<>();
+		List<int[]> counts = new ArrayList<>();
+		for (int s : area) {
+			count(kinds, counts, baseline[s], 1);
+			count(kinds, counts, view[s], -1);
+		}
+		for (int[] c : counts) if (c[0] != 0) return null;
+		return view;
+	}
+
+	/** Adds {@code sign} times {@code stack}'s count to its item's entry in {@code kinds}/{@code counts}. */
+	private static void count(List<ItemStack> kinds, List<int[]> counts, ItemStack stack, int sign) {
+		if (stack.isEmpty()) return;
+		for (int i = 0; i < kinds.size(); i++) {
+			if (ItemStack.isSameItemSameComponents(kinds.get(i), stack)) {
+				counts.get(i)[0] += sign * stack.getCount();
+				return;
+			}
+		}
+		kinds.add(stack);
+		counts.add(new int[]{sign * stack.getCount()});
 	}
 
 	/** How many more of {@code like} may come from outside sources under {@link Containers.Arrangement#limit}. */

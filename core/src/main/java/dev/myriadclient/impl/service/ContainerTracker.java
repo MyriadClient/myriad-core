@@ -41,8 +41,7 @@ public final class ContainerTracker implements Containers {
 
 	private final Minecraft mc = Minecraft.getInstance();
 	private final MenuSync sync;
-	/** Takes and puts on the open container, in the order asked; the first is under way. */
-	/** Moves and arrangements on the open container, run one after another. */
+	/** Moves and arrangements on the open container, run one after another; the first is under way. */
 	private final ArrayDeque<MenuJob> transfers = new ArrayDeque<>();
 	private ViewImpl current;
 	private BlockPos lastClicked;
@@ -111,6 +110,30 @@ public final class ContainerTracker implements Containers {
 		}
 		MenuJob t = transfers.peek();
 		if (t != null && t.tick(sync)) transfers.poll();
+	}
+
+	/**
+	 * What {@code menu}'s slot {@code slot} shows while a sort runs in it: the sorted result, or null for what it holds
+	 * (see {@link PlannerJob#shown}). From AbstractContainerScreenMixin.
+	 */
+	public @Nullable ItemStack shown(AbstractContainerMenu menu, int slot) {
+		return transfers.peek() instanceof PlannerJob job ? job.shown(menu, slot) : null;
+	}
+
+	/** Whether {@code menu} shows a sort's result while it runs: the cursor shows nothing then. */
+	public boolean showsFinished(AbstractContainerMenu menu) {
+		return transfers.peek() instanceof PlannerJob job && job.showsFinished(menu);
+	}
+
+	/**
+	 * You clicked in {@code menu}. While it shows a sort's result, the click was aimed at slots that don't hold that yet:
+	 * the sort stops, the menu shows what it holds, and the click is dropped (true) for you to make again on that.
+	 */
+	public boolean yourClick(AbstractContainerMenu menu) {
+		if (!(transfers.peek() instanceof PlannerJob job) || !job.showsFinished(menu)) return false;
+		transfers.poll();
+		job.abort("You clicked in the container");
+		return true;
 	}
 
 	@Subscribe

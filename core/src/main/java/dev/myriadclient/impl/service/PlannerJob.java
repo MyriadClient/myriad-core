@@ -6,6 +6,7 @@ import dev.myriadclient.api.service.PacketLimits;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -29,10 +30,27 @@ final class PlannerJob implements MenuJob {
 	/** What the cursor held after the last click made here: anything else means a click came from elsewhere. */
 	private ItemStack leftOnCursor;
 	private int rounds, clicks;
+	/**
+	 * What the menu shows while this runs, by slot: the end result where it's known ({@link Arranger#finishedView}, a
+	 * sort), so the clicks behind it don't show. With a server that answers every click, a burst of them comes back as
+	 * a run of whole menus each a few clicks behind, which would replay the sort back and forth. Null: what it holds.
+	 */
+	private final @Nullable ItemStack[] finished;
 
 	PlannerJob(AbstractContainerMenu menu, Containers.Planner planner) {
 		this.menu = menu;
 		this.planner = planner;
+		this.finished = planner instanceof Arranger a ? a.finishedView() : null;
+	}
+
+	/** What {@code menu}'s slot {@code slot} shows while this runs, or null for what it holds. */
+	@Nullable ItemStack shown(AbstractContainerMenu menu, int slot) {
+		return finished != null && menu == this.menu && slot >= 0 && slot < finished.length && !result.isDone() ? finished[slot] : null;
+	}
+
+	/** Whether {@code menu} shows this job's end result instead of what it holds (see {@link #shown}). */
+	boolean showsFinished(AbstractContainerMenu menu) {
+		return finished != null && menu == this.menu && !result.isDone();
 	}
 
 	@Override

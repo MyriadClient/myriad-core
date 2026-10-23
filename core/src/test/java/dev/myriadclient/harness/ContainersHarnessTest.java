@@ -146,4 +146,39 @@ class ContainersHarnessTest {
 			assertTrue(h.player.getInventory().getItem(20).is(Items.DIAMOND_PICKAXE), "not back in its slot");
 		}
 	}
+
+	@Test
+	void aSortShowsItsResultWhileItRunsAndYourClickStopsIt() {
+		try (Harness h = besideAChest()) {
+			Myriad.antiCheat().choose(AntiCheat.Profile.GRIM);
+			var menu = h.serverOpensChest(7, List.of(new ItemStack(Items.DIRT, 3), ItemStack.EMPTY, new ItemStack(Items.STONE, 5), new ItemStack(Items.DIRT, 2)));
+			Containers.View view = Myriad.containers().current().orElseThrow();
+			ItemStack[] sorted = {new ItemStack(Items.DIRT, 5), new ItemStack(Items.STONE, 5), ItemStack.EMPTY, ItemStack.EMPTY};
+			CompletableFuture<Boolean> done = view.arrange(Containers.Arrangement.of(new int[]{0, 1, 2, 3}, List.of(sorted)).dumpTo(new int[]{27, 28, 29}));
+			var tracker = dev.myriadclient.impl.MyriadImpl.get().containerTracker();
+			assertTrue(tracker.showsFinished(menu));
+			assertTrue(ItemStack.matches(sorted[0], tracker.shown(menu, 0)), "slot 0 shows " + tracker.shown(menu, 0));
+			assertTrue(tracker.shown(menu, 2).isEmpty(), "slot 2 shows " + tracker.shown(menu, 2));
+			assertTrue(tracker.shown(menu, 30).isEmpty(), "a slot the sort only parks things in shows what it held at the start");
+			// Your click, aimed at the sorted look: the sort stops and the click is dropped.
+			assertTrue(tracker.yourClick(menu));
+			assertTrue(done.isCompletedExceptionally());
+			assertFalse(tracker.showsFinished(menu));
+			assertEquals(null, tracker.shown(menu, 0));
+			assertFalse(tracker.yourClick(menu), "with no sort shown, clicks go through");
+		}
+	}
+
+	@Test
+	void aSortThatBringsInItemsFromElsewhereShowsWhatTheMenuHolds() {
+		try (Harness h = besideAChest()) {
+			Myriad.antiCheat().choose(AntiCheat.Profile.GRIM);
+			h.give(9, new ItemStack(Items.STONE, 5));
+			var menu = h.serverOpensChest(7, List.of(ItemStack.EMPTY));
+			Containers.View view = Myriad.containers().current().orElseThrow();
+			// Five stone from your inventory (menu slot 27 is inventory slot 9): the end of your inventory isn't known.
+			view.arrange(Containers.Arrangement.of(new int[]{0}, List.of(new ItemStack(Items.STONE, 5))).from(0, 27));
+			assertFalse(dev.myriadclient.impl.MyriadImpl.get().containerTracker().showsFinished(menu));
+		}
+	}
 }

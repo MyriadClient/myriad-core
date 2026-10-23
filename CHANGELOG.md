@@ -51,6 +51,14 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
   a tick.
 - **The ask for the whole inventory no longer goes out mid-sprint.** It checked that a click could go (with a sprint
   stop first) but didn't send the stop, so Grim's MultiActionsC flagged it while sprinting.
+- **Sorting shows its result at once, with nothing jumping about.** While an arrangement that only rearranges a
+  container (Auto Sort) runs, the container shows the finished layout and the cursor shows nothing, and the clicks go
+  out behind it. 2b2t answers every click, so the later clicks of a burst carry an old state id and the server sends
+  the whole container after each; those arrived a few clicks behind and replayed the sort back and forth with items
+  on the cursor. A click of yours stops the sort and shows what's really there (the click is dropped: it was aimed at
+  the sorted look). Grim and Paper have no click-rate check, but the click budget stays at 16 a second until there's
+  word on 2b2t's: a scrambled double chest is sorted on the server 5.2 s after opening, and looks sorted from the first
+  frames.
 - **`.packets log` shows inventory clicks** when you join through ViaFabricPlus as 1.21.4 or older: it sends those
   clicks itself, past the connection, so they were missing. They're logged as the game makes them.
 - **The colour picker's hue bar works on white and black.** With the square's marker in its top-left corner (white)

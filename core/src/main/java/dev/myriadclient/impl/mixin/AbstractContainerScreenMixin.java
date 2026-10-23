@@ -41,10 +41,20 @@ public abstract class AbstractContainerScreenMixin {
 		return hoveredSlot == null ? stack : shownIn(hoveredSlot, stack);
 	}
 
-	private static ItemStack shownIn(Slot slot, ItemStack stack) {
+	/** What a slot shows: a running sort's result (see ContainerTracker.shown), else what masks keep your inventory's showing. */
+	private ItemStack shownIn(Slot slot, ItemStack stack) {
 		var player = Minecraft.getInstance().player;
-		if (!Myriad.isReady() || player == null || slot.container != player.getInventory()) return stack;
+		if (!Myriad.isReady() || player == null) return stack;
+		ItemStack sorted = MyriadImpl.get().containerTracker().shown(((AbstractContainerScreen<?>) (Object) this).getMenu(), slot.index);
+		if (sorted != null) return sorted;
+		if (slot.container != player.getInventory()) return stack;
 		return Myriad.inventory().shown(slot.getContainerSlot());
+	}
+
+	/** Nothing on the cursor while a sort shows its result: what its clicks carry would flicker across the screen. */
+	@ModifyExpressionValue(method = "extractCarriedItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/inventory/AbstractContainerMenu;getCarried()Lnet/minecraft/world/item/ItemStack;"))
+	private ItemStack myriad$shownCarried(ItemStack stack) {
+		return Myriad.isReady() && MyriadImpl.get().containerTracker().showsFinished(((AbstractContainerScreen<?>) (Object) this).getMenu()) ? ItemStack.EMPTY : stack;
 	}
 
 	@Inject(method = "extractSlot", at = @At("TAIL"))
@@ -57,6 +67,11 @@ public abstract class AbstractContainerScreenMixin {
 	@Inject(method = "slotClicked", at = @At("HEAD"), cancellable = true)
 	private void myriad$click(Slot slot, int slotId, int button, ContainerInput input, CallbackInfo ci) {
 		if (!Myriad.isReady()) return;
+		// Aimed at a sort's result before it's real: the sort stops and the click is dropped.
+		if (MyriadImpl.get().containerTracker().yourClick(((AbstractContainerScreen<?>) (Object) this).getMenu())) {
+			ci.cancel();
+			return;
+		}
 		if (Myriad.events().hasListeners(ContainerScreenEvent.Click.class)
 			&& Myriad.events().post(new ContainerScreenEvent.Click((AbstractContainerScreen<?>) (Object) this, slot, slotId, button, input)).isCancelled()) {
 			ci.cancel();
