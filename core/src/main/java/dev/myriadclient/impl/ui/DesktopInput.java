@@ -1,6 +1,8 @@
 package dev.myriadclient.impl.ui;
 
 import com.google.gson.JsonObject;
+import com.mojang.blaze3d.platform.cursor.CursorType;
+import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.Panel;
@@ -15,6 +17,7 @@ import dev.myriadclient.impl.ui.panels.CorePanels;
 import dev.myriadclient.impl.ui.panels.MenuGroups;
 import dev.myriadclient.impl.ui.panels.ModulesPanel;
 import net.minecraft.client.Minecraft;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -26,6 +29,7 @@ final class DesktopInput {
 	private final WindowManager wm;
 	private final Minecraft mc = Minecraft.getInstance();
 	private final ThemeSettings theme;
+	private static CursorType resizeNwse, resizeNesw;
 
 	DesktopInput(WindowManager wm) {
 		this.wm = wm;
@@ -57,6 +61,41 @@ final class DesktopInput {
 		if (wm.drag != null || wm.launcher.isOpen()) return;
 		WindowImpl w = wm.topWindowAt(mx, my);
 		if (w != null && !w.closing) wm.workspaces[wm.active].focused = w;
+	}
+
+	/**
+	 * The cursor for what's being resized, or for what a press would resize: a divider between windows, a floating
+	 * window's corner. Null for the usual arrow.
+	 */
+	@Nullable CursorType cursor(float mx, float my) {
+		Drag d = wm.drag;
+		if (d != null) return switch (d.kind) {
+			case SPLITTER -> d.splitter.vertical() ? CursorTypes.RESIZE_EW : CursorTypes.RESIZE_NS;
+			case RESIZE -> diagonal(d.cornerX, d.cornerY);
+			case TILE_RESIZE -> d.edgeX != null && d.edgeY != null ? diagonal(d.cornerX, d.cornerY)
+				: d.edgeX != null ? CursorTypes.RESIZE_EW : d.edgeY != null ? CursorTypes.RESIZE_NS : null;
+			default -> null;
+		};
+		if (wm.launcher.isOpen()) return null;
+		WindowImpl w = wm.topWindowAt(mx, my);
+		if (w == null) {
+			for (LayoutState.Splitter s : wm.workspaces[wm.active].tiling.splitters()) {
+				if (s.bounds().contains(mx, my)) return s.vertical() ? CursorTypes.RESIZE_EW : CursorTypes.RESIZE_NS;
+			}
+			return null;
+		}
+		Rect r = w.current();
+		return w.floating && !w.isHudElement() && mx > r.right() - 8 && my > r.bottom() - 8 ? diagonal(1, 1) : null;
+	}
+
+	/** Corner to corner: top-left and bottom-right share one arrow, the other two corners the other. */
+	private static CursorType diagonal(int cornerX, int cornerY) {
+		if (resizeNwse == null) {
+			// Minecraft has no diagonal resize cursors of its own; GLFW's, falling back to the four-way arrow.
+			resizeNwse = CursorType.createStandardCursor(GLFW.GLFW_RESIZE_NWSE_CURSOR, "myriad_resize_nwse", CursorTypes.RESIZE_ALL);
+			resizeNesw = CursorType.createStandardCursor(GLFW.GLFW_RESIZE_NESW_CURSOR, "myriad_resize_nesw", CursorTypes.RESIZE_ALL);
+		}
+		return cornerX == cornerY ? resizeNwse : resizeNesw;
 	}
 
 	boolean mouseClicked(double gx, double gy, int button) {
@@ -217,6 +256,8 @@ final class DesktopInput {
 	 */
 	private void beginTileResize(Drag d, WindowImpl w, float mx, float my) {
 		d.kind = DragKind.TILE_RESIZE;
+		d.cornerX = mx < w.target.centerX() ? -1 : 1;
+		d.cornerY = my < w.target.centerY() ? -1 : 1;
 		Rect r = w.target;
 		float reach = theme.gapsIn.get() + 8;
 		float edgeX = mx < r.centerX() ? r.x() : r.right();

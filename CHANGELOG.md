@@ -16,6 +16,15 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 
 ## 0.11.0 (unreleased)
 
+- **The Keybinds window sets every bind, Minecraft's included, and has a search.** Global holds Minecraft's own controls
+  (other mods' too) by its categories, changed and saved as in its Controls screen (one key each, so a bind's modifiers
+  are dropped there); Myriad holds its actions, the menu's keys, core's modules (macros) and the wheels; each addon has
+  a section of its own with its actions and modules. The search filters by name, a section's name (from three letters)
+  shows all of it, and a key's name shows what's bound to it. Which sections are open is kept with the window.
+- **The cursor shows a resize.** Over a gap between tiled windows, or a floating window's corner, and while dragging
+  one (with the mod key and the right button too), the cursor is the resize arrow for that direction, through the
+  game's own cursors (diagonals from GLFW's, the four-way arrow where the system has none).
+
 - **Previews.** `Preview` (in `api.ui.widget`) shows something in 3D so changing a render setting shows what it does:
   `Preview.entity(type)`, `player()` (you, with your armour and what you hold), `block(block)` (chests and shulker
   boxes as they stand), `item(stack)` and `viewModel()` (your first-person hands and held items, as the camera sees
@@ -34,10 +43,11 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
   highlight; `highlighted()` says whether a handler before yours took it. Preview entities stand where you are, so
   distance checks count them as near. A preview shows what the modules that are on draw, the module's own settings
   window included (it says to turn the module on when it's off).
+- **Previews sit on the window's background** instead of a layer of their own.
 - **Preview windows.** Add a Preview from the launcher to any workspace to watch a mob, you, a container, a block or
   your hands while tuning how things are drawn, without closing the menu to look at the world. The picker at the top
   chooses what it shows (and which mob, container or block), saved with the window; the preview fills the rest, and the
-  picker's lists open over it rather than shrinking it.
+  picker's lists open in its place rather than shrinking it.
 - A block is shown as it stands in the world, from its block model (a hopper's item is a flat icon), chests and shulker
   boxes through their own renderers; other items still show as their item model. The view model is a peek at what
   you'd see without the menu in the way: your items, or your arm when your hand is empty, with your field of view and

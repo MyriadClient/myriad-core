@@ -1,6 +1,5 @@
 package dev.myriadclient.impl.ui.panels;
 
-import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.setting.EnumSetting;
 import dev.myriadclient.api.setting.RegistrySetting;
@@ -15,7 +14,6 @@ import dev.myriadclient.api.ui.widget.Preview;
 import dev.myriadclient.api.ui.widget.RegistryPicker;
 import dev.myriadclient.api.ui.widget.Widget;
 import dev.myriadclient.api.ui.widget.WidgetRoot;
-import dev.myriadclient.api.util.ColorUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
@@ -28,8 +26,8 @@ import java.util.List;
 /**
  * A preview on its own, for a workspace: something to watch while tuning how things are drawn, without closing the
  * menu to look at the world. It shows what the modules on would draw on it (their highlights and shapes, through
- * {@code PreviewEvent}); pick what it shows at the top. The picker's lists open over the preview rather than pushing
- * it down, so it keeps its size while you choose.
+ * {@code PreviewEvent}); pick what it shows at the top. The picker's lists open in the preview's place, on the window's
+ * own background, rather than pushing it down; the preview is back at its size once you've chosen.
  */
 final class PreviewPanel extends Panel {
 	enum Subject {
@@ -110,19 +108,22 @@ final class PreviewPanel extends Panel {
 		if (top == null) build();
 		float w = width - 2 * PAD, below = rowHeight + 2 * PAD;
 		preview.height(height - below - PAD);
-		c.push();
-		c.translate(PAD, below);
-		view.render(c, w, height - below - PAD, mouseX - PAD, mouseY - below);
-		c.pop();
+		// While a list is open it's shown on the window alone, readable; the preview is back once it shuts.
+		if (!listOpen()) {
+			c.push();
+			c.translate(PAD, below);
+			view.render(c, w, height - below - PAD, mouseX - PAD, mouseY - below);
+			c.pop();
+		}
 		c.push();
 		c.translate(PAD, PAD);
-		// An open list gets a backdrop of its own: it's drawn over the preview.
-		int bg = ColorUtil.withAlpha(Myriad.ui().theme().windowBackground.argb(), 0xF0);
-		for (Widget picker : ((Container) top.content()).children()) {
-			if (picker.height() > rowHeight + 0.5f) c.roundRect(picker.x() - 2, rowHeight, picker.width() + 4, picker.height() - rowHeight + 2, 4, bg);
-		}
 		top.render(c, w, height - 2 * PAD, mouseX - PAD, mouseY - PAD);
 		c.pop();
+	}
+
+	private boolean listOpen() {
+		for (Widget picker : ((Container) top.content()).children()) if (picker.height() > rowHeight + 0.5f) return true;
+		return false;
 	}
 
 	@Override

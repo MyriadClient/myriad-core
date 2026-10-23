@@ -178,7 +178,7 @@ public final class Preview extends Widget {
 
 	@Override
 	public void render(Canvas c, float mouseX, float mouseY) {
-		c.roundRect(x, y, width, height, 6, theme().surface.argb());
+		// On the window's own background, with no layer of its own.
 		c.preview(this, x, y, width, height);
 	}
 

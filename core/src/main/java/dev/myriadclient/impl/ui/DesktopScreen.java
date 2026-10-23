@@ -1,5 +1,6 @@
 package dev.myriadclient.impl.ui;
 
+import com.mojang.blaze3d.platform.cursor.CursorType;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
@@ -19,6 +20,8 @@ public final class DesktopScreen extends Screen {
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
 		wm.painter().renderDesktop(context, mouseX, mouseY);
+		CursorType cursor = wm.input().cursor(wm.mouseX, wm.mouseY);
+		if (cursor != null) context.requestCursor(cursor);
 	}
 
 	@Override
