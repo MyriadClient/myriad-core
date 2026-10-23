@@ -6,6 +6,15 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 0.10.0 (unreleased)
+
+- **The API is checked against the last release on every build.** `checkApi` (part of `check`) compares
+  `dev.myriadclient.api` with the last published core (`api_baseline` in `gradle.properties`) using japicmp, fails on
+  a binary-incompatible change (a removed or changed method, a class made final...) unless the version is a new major,
+  and writes the full report of what was added and changed to `core/build/reports/api` (CI keeps it as an artifact).
+  Checked: removing a method fails the build and names the type; 0.9.0 against 0.8.0 reports 8 types added, 7 changed,
+  nothing removed.
+
 ## 0.9.0
 
 - **Highlights for your first-person hand and held items.** `HighlightEvent.Hand` asks about each part of the view

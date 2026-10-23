@@ -99,7 +99,9 @@ server and suite that check them against 2b2t's anti-cheat. The dev client takes
 
 Releases are tagged: `git tag v0.1.0 && git push origin v0.1.0` builds, tests, attaches the core jar to a GitHub
 release and publishes it to the maven at `https://maven.myriadclient.dev/releases`. Essentials and the other addons
-release from their own repositories, to the same maven.
+release from their own repositories, to the same maven. Every build checks `dev.myriadclient.api` against the last
+release (`api_baseline` in `gradle.properties`, moved once a release is published) and fails on a change that would
+break addons built against it; the report is in `core/build/reports/api`.
 
 ## The menu
 
@@ -385,7 +387,8 @@ An addon built against one version of Myriad keeps working on the next. What tha
 - **`@ApiStatus.Internal`** marks what's public for Myriad's own use: event constructors, lifecycle hooks. Events gain
   accessors over time; only Myriad creates them.
 - **Removals are announced.** Something going away is `@Deprecated` for at least one minor release first, with its
-  replacement in the javadoc. [`CHANGELOG.md`](CHANGELOG.md) lists what each release adds and changes, and the
+  replacement in the javadoc. Core's build compares the API with the last release's and fails on anything that would
+  break an addon built against it. [`CHANGELOG.md`](CHANGELOG.md) lists what each release adds and changes, and the
   versioning rule (while the major version is 0, minor releases may change the API, patch releases never do).
 - **Versions.** Declare the oldest core you support in `fabric.mod.json` (`"depends": {"myriad": ">=0.1.0"}`). To use
   something newer while supporting older cores, check `Myriad.isAtLeast("0.2.0")` (`Myriad.version()` is the running one).

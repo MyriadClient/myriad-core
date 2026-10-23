@@ -89,3 +89,71 @@ tasks.register("checkSizes") {
 	}
 }
 check.dependsOn checkSizes
+
+// The API contract: dev.myriadclient.api against the last release's (api_baseline), with japicmp. A binary-incompatible
+// change fails the build, except in a new major version; the full report (every change, additions included) is in
+// build/reports/api. Addons built against the baseline keep working as long as this passes.
+repositories {
+	exclusiveContent {
+		forRepositories(maven {
+			name = "Myriad"
+			url = "https://maven.myriadclient.dev/releases"
+		})
+		filter { includeGroup "dev.myriadclient" }
+	}
+}
+
+configurations {
+	japicmp
+	apiBaseline { transitive = false }
+}
+
+dependencies {
+	japicmp "com.github.siom79.japicmp:japicmp:0.26.5"
+	apiBaseline "dev.myriadclient:myriad:${rootProject.api_baseline}"
+}
+
+def checkApi = tasks.register("checkApi", JavaExec) {
+	group = "verification"
+	description = "Compares dev.myriadclient.api with the last release (api_baseline) and fails on a binary-incompatible change."
+	def newJar = tasks.named("jar").flatMap { it.archiveFile }
+	def reports = layout.buildDirectory.dir("reports/api")
+	def baseline = rootProject.api_baseline.toString()
+	def current = project.version.toString()
+	def apiClasspath = sourceSets.main.compileClasspath
+	inputs.files(configurations.apiBaseline, newJar)
+	outputs.dir(reports)
+	classpath = configurations.japicmp
+	mainClass = "japicmp.JApiCmp"
+	// The exit value is read in doLast, to say what broke rather than only that something did.
+	ignoreExitValue = true
+	doFirst {
+		def dir = reports.get().asFile
+		dir.mkdirs()
+		def cp = apiClasspath.asPath
+		def a = ["--old", configurations.apiBaseline.singleFile.path, "--new", newJar.get().asFile.path,
+			"--old-classpath", cp, "--new-classpath", cp, "--include", "dev.myriadclient.api", "--only-modified",
+			"--html-file", new File(dir, "api.html").path, "--markdown"]
+		// A new major may break; anything else must not.
+		if (current.tokenize('.')[0].toInteger() <= baseline.tokenize('.')[0].toInteger()) a << "--error-on-binary-incompatibility"
+		args = a
+		standardOutput = new FileOutputStream(new File(dir, "api.md"))
+	}
+	doLast {
+		def dir = reports.get().asFile
+		// The report's table of types: one row each, "| Status | [type] | ... | compatibility changes |".
+		def rows = new File(dir, "api.md").readLines().findAll { it ==~ /^\| (Added|Modified|Removed) +\| \[dev\.myriadclient.*/ }
+		def count = { String status -> rows.count { it.startsWith("| ${status} ") } }
+		def summary = "dev.myriadclient.api ${current} against ${baseline}: ${count('Added')} types added, ${count('Modified')} changed, " +
+			"${count('Removed')} removed (${new File(dir, 'api.html')})"
+		if (executionResult.get().exitValue == 0) {
+			logger.lifecycle("checkApi: ${summary}")
+			return
+		}
+		def broken = rows.findAll { it.startsWith("| Removed ") || it =~ /removed|changed|now final|now abstract|less accessible/ }
+			.collect { (it =~ /\[([\w.$]+)\]/)[0][1] }
+		throw new GradleException("checkApi: binary-incompatible changes to the API, which addons built against ${baseline} would break on: " +
+			"${broken.unique().join(', ')}. Deprecate instead, and remove in a major release. ${summary}")
+	}
+}
+check.dependsOn checkApi

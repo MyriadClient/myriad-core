@@ -28,3 +28,9 @@ jobs:
         with:
           name: Artifacts
           path: "*/build/libs/"
+      - name: capture the API report (what changed since the last release)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: API report
+          path: core/build/reports/api/
