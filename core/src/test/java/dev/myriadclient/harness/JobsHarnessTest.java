@@ -112,6 +112,23 @@ class JobsHarnessTest {
 	}
 
 	@Test
+	void nearestFirstPlacesTheCloseBlockAboveBeforeTheFarOneBelow() {
+		for (Building.Order order : Building.Order.values()) {
+			try (Harness h = standing()) {
+				Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
+				h.level.set(new BlockPos(1, 1, 1), Blocks.STONE.defaultBlockState());
+				BlockPos above = new BlockPos(1, 2, 1), below = new BlockPos(3, 1, -2);
+				Map<BlockPos, Target> blocks = Map.of(above, Target.state(Blocks.OBSIDIAN.defaultBlockState()), below, Target.state(Blocks.OBSIDIAN.defaultBlockState()));
+				Myriad.jobs().start("builder", Steps.build(Blueprint.of(blocks), Building.Options.forServer().withPlacesPerTick(1).withOrder(order)));
+				h.ticks(2);
+				var first = h.sent(ServerboundUseItemOnPacket.class).getFirst().getHitResult().getBlockPos();
+				BlockPos placed = first.equals(new BlockPos(1, 1, 1)) || first.equals(above) ? above : below;
+				assertEquals(order == Building.Order.NEAREST ? above : below, placed, order + " placed " + placed + " first (clicked " + first + ")");
+			}
+		}
+	}
+
+	@Test
 	void aBuildWithNothingToBuildWithIsStuckOnNoItemWithTheCount() {
 		try (Harness h = standing()) {
 			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);

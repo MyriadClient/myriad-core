@@ -16,8 +16,8 @@ import java.util.Objects;
  * <ul>
  *   <li>Wrong blocks are broken first, top down so falling blocks drop into space that's already been cleared,
  *   never the one you stand on, and (by default) not if it lets a fluid in.</li>
- *   <li>Placements go bottom up and nearest first, so each one has something to be placed against; a position
- *   with nothing to click waits until a neighbour is placed.</li>
+ *   <li>Placements go bottom up and nearest first (or nearest first alone: {@link Options#withOrder}), so each one has
+ *   something to be placed against; a position with nothing to click waits until a neighbour is placed.</li>
  *   <li>Materials come from the hotbar, moved there from the inventory when needed.</li>
  *   <li>Oriented targets ({@code Target.state}) are placed facing the right way: the planner tries the clicks it
  *   could make and the rotation each needs, as the game would place them, and uses one that comes out right.</li>
@@ -38,16 +38,17 @@ public interface Building {
 	 * what you need with the {@code with} methods, so options added in later versions keep their defaults in your code.
 	 */
 	final class Options {
-		public static final Options DEFAULT = new Options(Placement.Options.DEFAULT, Breaking.Options.DEFAULT, true, true, 4, 0, false, true);
-		public static final Options STRICT = new Options(Placement.Options.STRICT, Breaking.Options.STRICT, true, true, 1, 0, false, true);
+		public static final Options DEFAULT = new Options(Placement.Options.DEFAULT, Breaking.Options.DEFAULT, true, true, 4, 0, false, true, Order.BOTTOM_UP);
+		public static final Options STRICT = new Options(Placement.Options.STRICT, Breaking.Options.STRICT, true, true, 1, 0, false, true, Order.BOTTOM_UP);
 
 		private final Placement.Options placing;
 		private final Breaking.Options breaking;
 		private final boolean breakWrong, avoidFluids, keepUp, clickSettings;
 		private final int placesPerTick, priority;
+		private final Order order;
 
 		private Options(Placement.Options placing, Breaking.Options breaking, boolean breakWrong, boolean avoidFluids, int placesPerTick,
-		                int priority, boolean keepUp, boolean clickSettings) {
+		                int priority, boolean keepUp, boolean clickSettings, Order order) {
 			this.placing = Objects.requireNonNull(placing);
 			this.breaking = Objects.requireNonNull(breaking);
 			this.breakWrong = breakWrong;
@@ -56,6 +57,7 @@ public interface Building {
 			this.priority = priority;
 			this.keepUp = keepUp;
 			this.clickSettings = clickSettings;
+			this.order = Objects.requireNonNull(order);
 		}
 
 		/**
@@ -113,31 +115,31 @@ public interface Building {
 		}
 
 		public Options withPlacing(Placement.Options placing) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
 		public Options withBreaking(Breaking.Options breaking) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
 		public Options withBreakWrong(boolean breakWrong) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
 		public Options withAvoidFluids(boolean avoidFluids) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
 		public Options withPlacesPerTick(int placesPerTick) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
 		public Options withPriority(int priority) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
 		public Options withKeepUp(boolean keepUp) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
 		/**
@@ -146,7 +148,7 @@ public interface Building {
 		 * default; off, a block placed the right way counts as done whatever its setting.
 		 */
 		public Options withClickSettings(boolean clickSettings) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
 		/** Whether settings are clicked; see {@link #withClickSettings}. */
@@ -154,23 +156,44 @@ public interface Building {
 			return clickSettings;
 		}
 
+		/** Which placements in reach go first ({@link Order#BOTTOM_UP} by default). */
+		public Options withOrder(Order order) {
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
+		}
+
+		/** Which placements go first; see {@link #withOrder}. */
+		public Order order() {
+			return order;
+		}
+
 		@Override
 		public boolean equals(Object o) {
 			return o instanceof Options x && x.placing.equals(placing) && x.breaking.equals(breaking) && x.breakWrong == breakWrong
 				&& x.avoidFluids == avoidFluids && x.placesPerTick == placesPerTick && x.priority == priority && x.keepUp == keepUp
-				&& x.clickSettings == clickSettings;
+				&& x.clickSettings == clickSettings && x.order == order;
 		}
 
 		@Override
 		public int hashCode() {
-			return Objects.hash(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings);
+			return Objects.hash(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
 		@Override
 		public String toString() {
 			return "Building.Options[placing=" + placing + ", breaking=" + breaking + ", breakWrong=" + breakWrong + ", avoidFluids="
-				+ avoidFluids + ", placesPerTick=" + placesPerTick + ", priority=" + priority + ", keepUp=" + keepUp + ", clickSettings=" + clickSettings + "]";
+				+ avoidFluids + ", placesPerTick=" + placesPerTick + ", priority=" + priority + ", keepUp=" + keepUp + ", clickSettings=" + clickSettings + ", order=" + order + "]";
 		}
+	}
+
+	/**
+	 * Which of the placements in reach go first. Either way, blocks the click doesn't shape go before the ones it does
+	 * (a stair's facing, a log's axis), so those have neighbours to be clicked against.
+	 */
+	enum Order {
+		/** Lowest first, then nearest: each block has the one under it to go against. Fills a layer before the next. */
+		BOTTOM_UP,
+		/** Nearest first, whatever the height: what's beside you as you walk past, before it's out of reach. */
+		NEAREST
 	}
 
 	/** Starts building {@code blueprint} for {@code owner}. */

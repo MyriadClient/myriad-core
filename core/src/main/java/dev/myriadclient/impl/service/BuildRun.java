@@ -235,10 +235,11 @@ final class BuildRun implements Build {
 			switch (kind) {
 				// Top down, so falling blocks land in space that's already clear; then nearest first.
 				case BREAK -> breaks.add(key((long) (4095 - height) << 24 | distance, i));
-				// Blocks the click doesn't shape first, then the others; bottom up; nearest first.
+				// Blocks the click doesn't shape first, then the others; bottom up (unless the order is nearest); nearest first.
 				case PLACE, GROW -> {
 					BlockState shaped = target.orientedState();
-					places.add(key((shaped != null && BlockRules.oriented(shaped) ? 1L << 36 : 0) | (long) height << 24 | distance, i));
+					long layer = options.order() == Building.Order.BOTTOM_UP ? (long) height << 24 : 0;
+					places.add(key((shaped != null && BlockRules.oriented(shaped) ? 1L << 36 : 0) | layer | distance, i));
 				}
 				case CLICK -> clicks.add(key(distance, i));
 				default -> {

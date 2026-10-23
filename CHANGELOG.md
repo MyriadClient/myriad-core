@@ -63,6 +63,9 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
   styles in one Render group: the outline uses the box's Fill Opacity and Through Walls instead of a second pair (two
   settings of one name can't share a group), each shown while either style needs it. The site's Rendering page says
   how modules lay out their Render group.
+- **`Building.Options.withOrder(Building.Order)`**: `BOTTOM_UP` (as before: lowest first, then nearest) or `NEAREST`
+  (nearest first whatever the height, for building what's beside you as you walk past). Either way, blocks the click
+  doesn't shape go before the ones it does, so those have neighbours to go against.
 - **`.packets log` shows inventory clicks** when you join through ViaFabricPlus as 1.21.4 or older: it sends those
   clicks itself, past the connection, so they were missing. They're logged as the game makes them.
 - **The colour picker's hue bar works on white and black.** With the square's marker in its top-left corner (white)
