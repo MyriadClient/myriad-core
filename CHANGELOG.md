@@ -36,7 +36,12 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
   window included (it says to turn the module on when it's off).
 - **Preview windows.** Add a Preview from the launcher to any workspace to watch a mob, you, a container, a block or
   your hands while tuning how things are drawn, without closing the menu to look at the world. The picker at the top
-  chooses what it shows (and which mob, container or block), saved with the window; the preview fills the rest.
+  chooses what it shows (and which mob, container or block), saved with the window; the preview fills the rest, and the
+  picker's lists open over it rather than shrinking it.
+- A block is shown as it stands in the world, from its block model (a hopper's item is a flat icon), chests and shulker
+  boxes through their own renderers; other items still show as their item model. The view model is a peek at what
+  you'd see without the menu in the way: your items, or your arm when your hand is empty, with your field of view and
+  lit as in the world.
 - Several previews on screen at once each keep their own picture: the GUI gives a kind of picture one renderer and a
   renderer one texture, so the preview renderer hands each preview a picture of its own (closed two seconds after its
   preview stops being drawn). Turning and moving a preview by dragging works in every window (the window passes no

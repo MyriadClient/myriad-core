@@ -15,6 +15,9 @@ import net.minecraft.client.gui.render.pip.PictureInPictureRenderer;
 import net.minecraft.client.renderer.Projection;
 import net.minecraft.client.renderer.ProjectionMatrixBuffer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.block.BlockModelRenderState;
+import net.minecraft.client.renderer.block.BlockModelResolver;
+import net.minecraft.client.renderer.block.model.BlockDisplayContext;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
@@ -23,6 +26,7 @@ import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemDisplayContext;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Quaternionf;
@@ -32,18 +36,18 @@ import org.slf4j.LoggerFactory;
 /**
  * One preview's texture, drawn as the game draws the player in the inventory: the subject turned by the preview's view,
  * then its decorations, then its shader highlights (outlines, glows, fills asked for as in the world). The view model is
- * drawn as the camera sees it, with a perspective of its own, since hands and held items are placed for one.
+ * drawn as you see it, with your field of view, since hands and held items are placed for the camera.
  */
 final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> {
-	/** The camera's field of view for the view model, degrees. */
-	private static final float HAND_FOV = 70;
-	/** How far the view model is raised, in blocks at arm's length, to sit in the middle of the preview. */
-	private static final float HAND_RAISE = 0.35F;
 	private static final Logger LOG = LoggerFactory.getLogger("Myriad/Preview");
 
 	private final Projection perspective = new Projection();
 	private final ProjectionMatrixBuffer perspectiveBuffer = new ProjectionMatrixBuffer("PIP - Myriad preview hands");
+	private static final BlockDisplayContext BLOCK_CONTEXT = BlockDisplayContext.create();
+
 	private final ItemStackRenderState item = new ItemStackRenderState();
+	private final BlockModelRenderState block = new BlockModelRenderState();
+	private @Nullable BlockModelResolver blockResolver;
 	private final PreviewHighlights highlights = new PreviewHighlights();
 	/** The texture drawn into this frame, for the highlights to go onto once the subject is in it. */
 	private @Nullable GpuTextureView target;
@@ -105,7 +109,7 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 		poseStack.translate(state.panX() / state.scale(), state.panY() / state.scale(), 0);
 		Quaternionf view = new Quaternionf().rotateZ((float) Math.PI).rotateX((float) Math.toRadians(-state.pitch())).rotateY((float) Math.toRadians(state.yaw()));
 		poseStack.mulPose(view);
-		// The subject's middle on the pivot (an item model is drawn about its middle already; its box is the cube from 0).
+		// The subject's middle on the pivot (a block's box is the cube from 0).
 		Entity entity = PreviewSubjects.entity(state.subject());
 		if (entity != null) {
 			poseStack.translate(-state.box().getCenter().x, -state.box().getCenter().y, -state.box().getCenter().z);
@@ -126,33 +130,53 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 			camera.orientation = view.conjugate(new Quaternionf()).rotateY((float) Math.PI);
 			mc.getEntityRenderDispatcher().submit(render, camera, 0, 0, 0, poseStack, collector);
 		} else if (state.subject() instanceof Preview.ItemSubject s) {
-			mc.gameRenderer.lighting().setupFor(Lighting.Entry.ITEMS_3D);
-			mc.getItemModelResolver().updateForTopItem(item, s.stack(), ItemDisplayContext.NONE, mc.level, null, 0);
-			item.submit(poseStack, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, highlights.add(state.style(), state.color()));
+			int outline = highlights.add(state.style(), state.color());
+			if (s.stack().getItem() instanceof BlockItem b) {
+				// A block as it stands in the world (a hopper's item is a flat icon), chests and shulker boxes included.
+				blocks().update(block, b.getBlock().defaultBlockState(), BLOCK_CONTEXT);
+			} else block.clear();
 			poseStack.translate(-0.5, -0.5, -0.5);
+			if (!block.isEmpty()) {
+				mc.gameRenderer.lighting().setupFor(Lighting.Entry.ITEMS_3D);
+				block.submit(poseStack, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, outline);
+			} else {
+				// An item model is drawn about its middle.
+				mc.gameRenderer.lighting().setupFor(Lighting.Entry.ITEMS_3D);
+				mc.getItemModelResolver().updateForTopItem(item, s.stack(), ItemDisplayContext.NONE, mc.level, null, 0);
+				poseStack.pushPose();
+				poseStack.translate(0.5, 0.5, 0.5);
+				item.submit(poseStack, collector, LightCoordsUtil.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, outline);
+				poseStack.popPose();
+			}
 		}
 		state.shapes().depth.submit(collector, poseStack, MyriadPipelines.QUADS, MyriadPipelines.LINES);
 		state.shapes().xray.submit(collector, poseStack, MyriadPipelines.QUADS_XRAY, MyriadPipelines.LINES_XRAY);
 	}
 
-	/** Your hands and held items as the camera sees them: in front of it, with a perspective, turned a little by the view. */
+	/** Your hands and held items as you see them: in front of the camera, with your field of view, turned a little by the view. */
 	private void viewModel(PreviewRenderState state, SubmitNodeCollector collector) {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc.player == null) return;
 		int guiScale = Math.max(1, mc.getWindow().getGuiScale());
 		float width = (state.x1() - state.x0()) * guiScale, height = (state.y1() - state.y0()) * guiScale;
-		perspective.setupPerspective(0.05F, 100F, HAND_FOV, width, height);
+		// Your field of view, so they're framed as on your screen.
+		perspective.setupPerspective(0.05F, 100F, mc.options.fov().get(), width, height);
 		RenderSystem.setProjectionMatrix(perspectiveBuffer.getBuffer(perspective), ProjectionType.PERSPECTIVE);
-		mc.gameRenderer.lighting().setupFor(Lighting.Entry.ENTITY_IN_UI);
+		// Lit as in the world, where the game draws them.
+		mc.gameRenderer.lighting().setupFor(Lighting.Entry.LEVEL);
 		PoseStack pose = new PoseStack();
 		// Moved and zoomed as the other subjects: a drag across the preview is about its width at arm's length.
 		float reach = 1.0F / Math.min(width, height) * guiScale;
-		// Hands sit low in the camera's view; raised to the middle of a preview, which is wider than tall.
-		pose.translate(state.panX() * reach, HAND_RAISE - state.panY() * reach, (state.zoom() - 1) * 0.6F);
+		pose.translate(state.panX() * reach, -state.panY() * reach, (state.zoom() - 1) * 0.6F);
 		pose.mulPose(new Quaternionf().rotateX((float) Math.toRadians(state.pitch() * 0.5F)).rotateY((float) Math.toRadians(state.yaw() * 0.5F)));
 		// Each part is asked about as in the world, its highlight going into this preview's.
 		HighlightRenderer.INSTANCE.previewHands(highlights);
 		mc.gameRenderer.itemInHandRenderer.submitHandsWithItems(1.0F, pose, collector, mc.player, LightCoordsUtil.FULL_BRIGHT);
+	}
+
+	private BlockModelResolver blocks() {
+		if (blockResolver == null) blockResolver = new BlockModelResolver(Minecraft.getInstance().getModelManager());
+		return blockResolver;
 	}
 
 	@Override

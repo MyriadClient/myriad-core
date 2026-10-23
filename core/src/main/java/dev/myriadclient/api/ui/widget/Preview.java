@@ -57,7 +57,10 @@ public final class Preview extends Widget {
 		}
 	}
 
-	/** Your first-person hands and held items, as the camera sees them (View Model's changes included). */
+	/**
+	 * Your first-person hands as you see them right now, as if the menu weren't in the way: what you hold, or your arm
+	 * when your hand is empty (View Model's changes included).
+	 */
 	public record ViewModelSubject() implements Subject {
 	}
 
@@ -112,7 +115,7 @@ public final class Preview extends Widget {
 		return new Preview(new ItemSubject(stack), START_YAW, START_PITCH);
 	}
 
-	/** Your first-person hands and held items, from the camera. */
+	/** Your first-person hands as you see them, from the camera. */
 	public static Preview viewModel() {
 		return new Preview(new ViewModelSubject(), 0, 0);
 	}

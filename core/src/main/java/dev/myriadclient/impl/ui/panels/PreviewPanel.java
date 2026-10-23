@@ -1,17 +1,21 @@
 package dev.myriadclient.impl.ui.panels;
 
+import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.setting.EnumSetting;
 import dev.myriadclient.api.setting.RegistrySetting;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.Icons;
+import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.ui.Rect;
-import dev.myriadclient.api.ui.WidgetPanel;
+import dev.myriadclient.api.ui.widget.Container;
 import dev.myriadclient.api.ui.widget.Dropdown;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Preview;
 import dev.myriadclient.api.ui.widget.RegistryPicker;
-import dev.myriadclient.api.ui.widget.VBox;
+import dev.myriadclient.api.ui.widget.Widget;
+import dev.myriadclient.api.ui.widget.WidgetRoot;
+import dev.myriadclient.api.util.ColorUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
@@ -24,9 +28,10 @@ import java.util.List;
 /**
  * A preview on its own, for a workspace: something to watch while tuning how things are drawn, without closing the
  * menu to look at the world. It shows what the modules on would draw on it (their highlights and shapes, through
- * {@code PreviewEvent}); pick what it shows at the top.
+ * {@code PreviewEvent}); pick what it shows at the top. The picker's lists open over the preview rather than pushing
+ * it down, so it keeps its size while you choose.
  */
-final class PreviewPanel extends WidgetPanel {
+final class PreviewPanel extends Panel {
 	enum Subject {
 		MOB, PLAYER, STORAGE, BLOCK, VIEW_MODEL
 	}
@@ -43,6 +48,8 @@ final class PreviewPanel extends WidgetPanel {
 		}
 	}
 
+	private static final float PAD = 4;
+
 	private final SettingGroup sg = settings.group("Preview");
 	private final EnumSetting<Subject> subject = sg.oneOf("Show", Subject.MOB).description("What it shows.").build();
 	private final RegistrySetting<EntityType<?>> mob = sg.registry("Mob", BuiltInRegistries.ENTITY_TYPE, (EntityType<?>) EntityTypes.ZOMBIE)
@@ -51,11 +58,14 @@ final class PreviewPanel extends WidgetPanel {
 	private final RegistrySetting<Block> block = sg.block("Block", Blocks.DIAMOND_ORE).filter(b -> b.asItem() != Items.AIR)
 		.visible(() -> subject.get() == Subject.BLOCK).build();
 
+	/** The picker, drawn over the preview; the preview under it. */
+	private WidgetRoot top, view;
 	private Preview preview;
+	/** The picker's height with its lists shut: where the preview starts. */
+	private float rowHeight = Widget.ROW;
 
 	PreviewPanel() {
-		super(4);
-		settings.onAnyChanged(s -> rebuild());
+		settings.onAnyChanged(s -> top = null);
 	}
 
 	@Override
@@ -73,18 +83,17 @@ final class PreviewPanel extends WidgetPanel {
 		return new Rect(0, 0, 220, 240);
 	}
 
-	@Override
-	protected void build(VBox content) {
-		HBox top = new HBox(4);
-		top.addWeighted(new Dropdown<>(() -> List.of(Subject.values()), subject::get, subject::edit, EnumSetting::displayName), 1);
+	private void build() {
+		HBox row = new HBox(4);
+		row.addWeighted(new Dropdown<>(() -> List.of(Subject.values()), subject::get, subject::edit, EnumSetting::displayName), 1);
 		switch (subject.get()) {
-			case MOB -> top.addWeighted(RegistryPicker.single(mob), 1);
-			case STORAGE -> top.addWeighted(new Dropdown<>(() -> List.of(Storage.values()), storage::get, storage::edit, EnumSetting::displayName), 1);
-			case BLOCK -> top.addWeighted(RegistryPicker.single(block), 1);
+			case MOB -> row.addWeighted(RegistryPicker.single(mob), 1);
+			case STORAGE -> row.addWeighted(new Dropdown<>(() -> List.of(Storage.values()), storage::get, storage::edit, EnumSetting::displayName), 1);
+			case BLOCK -> row.addWeighted(RegistryPicker.single(block), 1);
 			default -> {
 			}
 		}
-		content.add(top);
+		top = new WidgetRoot(row);
 		preview = switch (subject.get()) {
 			case MOB -> Preview.entity(mob.get());
 			case PLAYER -> Preview.player();
@@ -92,13 +101,74 @@ final class PreviewPanel extends WidgetPanel {
 			case BLOCK -> Preview.block(block.get());
 			case VIEW_MODEL -> Preview.viewModel();
 		};
-		content.add(preview);
+		view = new WidgetRoot(preview);
+		rowHeight = Widget.ROW;
 	}
 
 	@Override
-	public void render(Canvas canvas, float width, float height, float mouseX, float mouseY) {
-		// The preview takes what the window has left under the picker (laid out last frame); an open list pushes it down.
-		if (preview != null) preview.height(height - preview.y() - 4);
-		super.render(canvas, width, height, mouseX, mouseY);
+	public void render(Canvas c, float width, float height, float mouseX, float mouseY) {
+		if (top == null) build();
+		float w = width - 2 * PAD, below = rowHeight + 2 * PAD;
+		preview.height(height - below - PAD);
+		c.push();
+		c.translate(PAD, below);
+		view.render(c, w, height - below - PAD, mouseX - PAD, mouseY - below);
+		c.pop();
+		c.push();
+		c.translate(PAD, PAD);
+		// An open list gets a backdrop of its own: it's drawn over the preview.
+		int bg = ColorUtil.withAlpha(Myriad.ui().theme().windowBackground.argb(), 0xF0);
+		for (Widget picker : ((Container) top.content()).children()) {
+			if (picker.height() > rowHeight + 0.5f) c.roundRect(picker.x() - 2, rowHeight, picker.width() + 4, picker.height() - rowHeight + 2, 4, bg);
+		}
+		top.render(c, w, height - 2 * PAD, mouseX - PAD, mouseY - PAD);
+		c.pop();
+	}
+
+	@Override
+	public boolean mouseClicked(float mx, float my, int button) {
+		if (top == null) return false;
+		if (top.mouseClicked(mx - PAD, my - PAD, button)) return true;
+		return view.mouseClicked(mx - PAD, my - rowHeight - 2 * PAD, button);
+	}
+
+	@Override
+	public boolean mouseReleased(float mx, float my, int button) {
+		if (top == null) return false;
+		boolean a = top.mouseReleased(mx - PAD, my - PAD, button);
+		return view.mouseReleased(mx - PAD, my - rowHeight - 2 * PAD, button) || a;
+	}
+
+	@Override
+	public boolean mouseDragged(float mx, float my, int button, float dx, float dy) {
+		if (top == null) return false;
+		boolean a = top.mouseDragged(mx - PAD, my - PAD, button, dx, dy);
+		return view.mouseDragged(mx - PAD, my - rowHeight - 2 * PAD, button, dx, dy) || a;
+	}
+
+	@Override
+	public boolean mouseScrolled(float mx, float my, float amount) {
+		if (top == null) return false;
+		return top.mouseScrolled(mx - PAD, my - PAD, amount) || view.mouseScrolled(mx - PAD, my - rowHeight - 2 * PAD, amount);
+	}
+
+	@Override
+	public boolean keyPressed(int key, int scancode, int modifiers) {
+		return top != null && top.focused() != null && top.keyPressed(key, scancode, modifiers);
+	}
+
+	@Override
+	public boolean charTyped(char chr, int modifiers) {
+		return top != null && top.focused() != null && top.charTyped(chr, modifiers);
+	}
+
+	@Override
+	public boolean capturesKeyboard() {
+		return top != null && top.focused() != null;
+	}
+
+	@Override
+	public String tooltip() {
+		return top == null ? null : top.tooltip();
 	}
 }
