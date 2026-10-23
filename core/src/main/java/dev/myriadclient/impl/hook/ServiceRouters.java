@@ -2,6 +2,7 @@ package dev.myriadclient.impl.hook;
 
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.service.Breaking;
+import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
@@ -271,6 +272,11 @@ final class ServiceRouters {
 		@Override
 		public CompletableFuture<Void> refresh() {
 			return all().refresh();
+		}
+
+		@Override
+		public CompletableFuture<Boolean> arrange(Containers.Arrangement arrangement) {
+			return all().arrange(arrangement);
 		}
 	}
 

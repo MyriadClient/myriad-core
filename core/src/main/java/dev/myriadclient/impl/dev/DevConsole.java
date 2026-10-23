@@ -14,6 +14,7 @@ import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.ui.panels.CorePanels;
 import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.screens.ConnectScreen;
@@ -227,9 +228,12 @@ public final class DevConsole {
 							mc.getWindow().handle(), new CharacterEvent(cp));
 					}
 				}
-				// Moves the cursor to x y in window pixels, as screenshots show them: "cursor 400 220".
-				case "cursor" -> invokeMouse("onMove", new Class<?>[]{long.class, double.class, double.class},
-					mc.getWindow().handle(), Double.parseDouble(a[1]), Double.parseDouble(a[2]));
+				// Moves the cursor to x y in window pixels, as screenshots show them: "cursor 400 220"; or over slot n of the
+				// open container screen, wherever it is: "cursor slot 10".
+				case "cursor" -> {
+					double[] at = a[1].equals("slot") ? slotPixels(Integer.parseInt(a[2])) : new double[]{Double.parseDouble(a[1]), Double.parseDouble(a[2])};
+					invokeMouse("onMove", new Class<?>[]{long.class, double.class, double.class}, mc.getWindow().handle(), at[0], at[1]);
+				}
 				case "scroll" -> invokeMouse("onScroll", new Class<?>[]{long.class, double.class, double.class},
 					mc.getWindow().handle(), 0.0, Double.parseDouble(a[1]));
 				case "connect" -> {
@@ -380,10 +384,28 @@ public final class DevConsole {
 			case EntityHitResult en -> "entity " + en.getEntity().getName().getString();
 			case null, default -> "none";
 		};
-		LOG.info("[dev] status: pos {} {} {} motion {} {} {} ({} b/s) rot {} {} ground={} gliding={} sprinting={} sneaking={} health={} slot={} serverSlot={} item={} mode={} target={} fps={} ping={}",
+		LOG.info("[dev] status: pos {} {} {} motion {} {} {} ({} b/s) rot {} {} ground={} gliding={} sprinting={} sneaking={} health={} slot={} serverSlot={} item={} mode={} target={} fps={} ping={} carried={} screen={}",
 			fmt(p.getX()), fmt(p.getY()), fmt(p.getZ()), fmt(v.x), fmt(v.y), fmt(v.z), fmt(v.length() * 20), fmt(p.getYRot()), fmt(p.getXRot()),
 			p.onGround(), p.isFallFlying(), p.isSprinting(), p.isShiftKeyDown(), fmt(p.getHealth()), p.getInventory().getSelectedSlot() + 1, Myriad.inventory().serverSlot() + 1, p.getMainHandItem().getItem(),
-			mc.gameMode == null ? "?" : mc.gameMode.getPlayerMode().getName(), target, mc.getFps(), Myriad.server().ping());
+			mc.gameMode == null ? "?" : mc.gameMode.getPlayerMode().getName(), target, mc.getFps(), Myriad.server().ping(),
+			p.containerMenu.getCarried().isEmpty() ? "none" : p.containerMenu.getCarried().getCount() + " " + p.containerMenu.getCarried().getItem(),
+			mc.gui.screen() == null ? "none" : mc.gui.screen().getClass().getSimpleName());
+	}
+
+	/** The window pixel at the middle of slot {@code index} of the open container screen. */
+	private double[] slotPixels(int index) {
+		if (!(mc.gui.screen() instanceof AbstractContainerScreen<?> screen)) throw new IllegalStateException("no container screen open");
+		var slot = screen.getMenu().getSlot(index);
+		try {
+			var left = AbstractContainerScreen.class.getDeclaredField("leftPos");
+			var top = AbstractContainerScreen.class.getDeclaredField("topPos");
+			left.setAccessible(true);
+			top.setAccessible(true);
+			double scale = mc.getWindow().getGuiScale();
+			return new double[]{(left.getInt(screen) + slot.x + 8) * scale, (top.getInt(screen) + slot.y + 8) * scale};
+		} catch (ReflectiveOperationException e) {
+			throw new IllegalStateException(e);
+		}
 	}
 
 	private static String fmt(double d) {

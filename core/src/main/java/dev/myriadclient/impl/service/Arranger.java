@@ -137,6 +137,11 @@ final class Arranger implements Containers.Planner {
 		counts.add(new int[]{sign * stack.getCount()});
 	}
 
+	/** The slot the last pick-up emptied, if it's still empty: where what's on the cursor goes back to on a stop. -1 if none. */
+	int vacatedSlot() {
+		return vacated >= 0 && stack(vacated).isEmpty() ? vacated : -1;
+	}
+
 	/** How many more of {@code like} may come from outside sources under {@link Containers.Arrangement#limit}. */
 	private int allowed(ItemStack like) {
 		if (allowance == null) return Integer.MAX_VALUE;

@@ -112,4 +112,25 @@ class InventoryHarnessTest {
 			assertTrue(h.sent(ServerboundPlayerInputPacket.class).getLast().input().forward());
 		}
 	}
+
+	@Test
+	void arrangeSortsYourOwnInventoryAndLeavesTheHotbar() {
+		try (Harness h = Harness.start()) {
+			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
+			h.standAt(0.5, 1, 0.5, 0, 0);
+			h.give(0, new ItemStack(Items.DIAMOND_SWORD));
+			h.give(12, new ItemStack(Items.DIRT, 3)).give(20, new ItemStack(Items.STONE, 7)).give(30, new ItemStack(Items.DIRT, 5));
+			int[] main = java.util.stream.IntStream.range(9, 36).toArray();
+			List<ItemStack> layout = new java.util.ArrayList<>();
+			for (int i = 0; i < 27; i++) layout.add(i == 0 ? new ItemStack(Items.DIRT, 8) : i == 1 ? new ItemStack(Items.STONE, 7) : ItemStack.EMPTY);
+			var done = Myriad.inventory().arrange(dev.myriadclient.api.service.Containers.Arrangement.of(main, layout));
+			for (int t = 0; t < 200 && !done.isDone(); t++) h.tick();
+			assertTrue(done.isDone() && done.join(), "not arranged: " + done);
+			var inv = h.player.getInventory();
+			assertTrue(inv.getItem(9).is(Items.DIRT) && inv.getItem(9).getCount() == 8, "slot 9 holds " + inv.getItem(9));
+			assertTrue(inv.getItem(10).is(Items.STONE) && inv.getItem(10).getCount() == 7, "slot 10 holds " + inv.getItem(10));
+			assertTrue(inv.getItem(0).is(Items.DIAMOND_SWORD));
+			assertTrue(h.player.inventoryMenu.getCarried().isEmpty());
+		}
+	}
 }

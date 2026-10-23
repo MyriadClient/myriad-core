@@ -253,6 +253,19 @@ public interface Inventory {
 	CompletableFuture<Void> refresh();
 
 	/**
+	 * Arranges your own inventory as {@link Containers.View#arrange} does a container's: sorting it, say, with your
+	 * inventory screen open or no screen at all. Slot ids are your inventory menu's: 9-35 the main inventory, 36-44 the
+	 * hotbar, 45 the off hand. Fails if another menu opens meanwhile, or once you click in it yourself (what the
+	 * arrangement holds on the cursor is put down first).
+	 *
+	 * <pre>{@code
+	 * int[] main = IntStream.range(9, 36).toArray();
+	 * Myriad.inventory().arrange(Containers.Arrangement.of(main, sortedLayout));
+	 * }</pre>
+	 */
+	CompletableFuture<Boolean> arrange(Containers.Arrangement arrangement);
+
+	/**
 	 * The last movement the server saw, for {@link #CLICK_READY}: whether it had sprint on, a movement key or jump
 	 * down, and sneak.
 	 */
@@ -457,6 +470,11 @@ public interface Inventory {
 		@Override
 		public CompletableFuture<Void> refresh() {
 			return core.refresh();
+		}
+
+		@Override
+		public CompletableFuture<Boolean> arrange(Containers.Arrangement arrangement) {
+			return core.arrange(arrangement);
 		}
 	}
 }

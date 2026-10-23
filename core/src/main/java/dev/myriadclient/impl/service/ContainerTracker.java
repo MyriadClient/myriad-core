@@ -112,6 +112,13 @@ public final class ContainerTracker implements Containers {
 		if (t != null && t.tick(sync)) transfers.poll();
 	}
 
+	/** Arranges {@code menu} (your own inventory's, for {@code Inventory.arrange}) as a container's view does. */
+	public CompletableFuture<Boolean> arrange(AbstractContainerMenu menu, Arrangement arrangement) {
+		PlannerJob job = new PlannerJob(menu, new Arranger(menu, arrangement));
+		transfers.add(job);
+		return job.result;
+	}
+
 	/**
 	 * What {@code menu}'s slot {@code slot} shows while a sort runs in it: the sorted result, or null for what it holds
 	 * (see {@link PlannerJob#shown}). From AbstractContainerScreenMixin.
@@ -126,13 +133,13 @@ public final class ContainerTracker implements Containers {
 	}
 
 	/**
-	 * You clicked in {@code menu}. While it shows a sort's result, the click was aimed at slots that don't hold that yet:
-	 * the sort stops, the menu shows what it holds, and the click is dropped (true) for you to make again on that.
+	 * You clicked in {@code menu} while an arrangement (a sort) runs in it: it stops, putting down what it holds on the
+	 * cursor first, and the click is dropped (true), for you to make again on what the menu really holds: it may have been
+	 * aimed at a sort's result shown before it's real, and it would pick up or drop what the sort was carrying.
 	 */
 	public boolean yourClick(AbstractContainerMenu menu) {
-		if (!(transfers.peek() instanceof PlannerJob job) || !job.showsFinished(menu)) return false;
-		transfers.poll();
-		job.abort("You clicked in the container");
+		if (!(transfers.peek() instanceof PlannerJob job) || !job.runsIn(menu)) return false;
+		job.stop("You clicked in the container");
 		return true;
 	}
 

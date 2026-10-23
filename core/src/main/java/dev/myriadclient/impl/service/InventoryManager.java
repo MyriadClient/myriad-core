@@ -5,6 +5,7 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.util.Slots;
 import dev.myriadclient.api.util.Threads;
@@ -695,6 +696,12 @@ public final class InventoryManager implements Inventory {
 	@Override
 	public boolean drop(int inventoryIndex, boolean wholeStack) {
 		return clicks.drop(inventoryIndex, wholeStack);
+	}
+
+	@Override
+	public CompletableFuture<Boolean> arrange(Containers.Arrangement arrangement) {
+		if (mc.player == null) return CompletableFuture.failedFuture(new IllegalStateException("Not in a world"));
+		return MyriadImpl.get().containerTracker().arrange(mc.player.inventoryMenu, arrangement);
 	}
 
 	@Override

@@ -66,6 +66,18 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 - **`Building.Options.withOrder(Building.Order)`**: `BOTTOM_UP` (as before: lowest first, then nearest) or `NEAREST`
   (nearest first whatever the height, for building what's beside you as you walk past). Either way, blocks the click
   doesn't shape go before the ones it does, so those have neighbours to go against.
+- **Sorting never leaves an item on your cursor, with lag or a click of yours.** Through a 120 ms (each way) proxy a
+  sort lost 3 ender pearls in one of 6 runs: the server answers every click of a burst with the whole container a few
+  clicks behind, and a click planned on that view acted on slots that weren't what it showed, leaving a stack on the
+  cursor. An arrangement now waits a round trip after each burst before planning the next (the click budget spaces
+  bursts about that far apart anyway, so a double chest still takes 5.5 s). A click of yours in the container stops it
+  after it puts down what it holds on the cursor (where it picked it up, else the first empty slot), and is dropped;
+  a sort that ends with something on the cursor puts it down too. Through the proxy: 21 of 21 sorts with nothing lost
+  and the cursor empty, a click mid-sort included.
+- **`Inventory.arrange(Containers.Arrangement)`** arranges your own inventory as a container's view does (sorting it,
+  say), with its screen open or none: the finished layout shown while it runs, stopped by your click, paced for lag.
+- Dev console: `cursor slot <n>` moves the mouse over a slot of the open container screen, whatever the window size;
+  `status` says what's on the cursor and which screen is open.
 - **`.packets log` shows inventory clicks** when you join through ViaFabricPlus as 1.21.4 or older: it sends those
   clicks itself, past the connection, so they were missing. They're logged as the game makes them.
 - **The colour picker's hue bar works on white and black.** With the square's marker in its top-left corner (white)

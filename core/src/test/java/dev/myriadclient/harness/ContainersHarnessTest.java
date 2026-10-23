@@ -162,10 +162,11 @@ class ContainersHarnessTest {
 			assertTrue(tracker.shown(menu, 30).isEmpty(), "a slot the sort only parks things in shows what it held at the start");
 			// Your click, aimed at the sorted look: the sort stops and the click is dropped.
 			assertTrue(tracker.yourClick(menu));
-			assertTrue(done.isCompletedExceptionally());
-			assertFalse(tracker.showsFinished(menu));
+			assertFalse(tracker.showsFinished(menu), "still showing the sort after your click");
 			assertEquals(null, tracker.shown(menu, 0));
-			assertFalse(tracker.yourClick(menu), "with no sort shown, clicks go through");
+			h.tick();
+			assertTrue(done.isCompletedExceptionally());
+			assertFalse(tracker.yourClick(menu), "with no sort running, clicks go through");
 		}
 	}
 
@@ -180,5 +181,43 @@ class ContainersHarnessTest {
 			view.arrange(Containers.Arrangement.of(new int[]{0}, List.of(new ItemStack(Items.STONE, 5))).from(0, 27));
 			assertFalse(dev.myriadclient.impl.MyriadImpl.get().containerTracker().showsFinished(menu));
 		}
+	}
+
+	@Test
+	void aSortStoppedWithSomethingOnTheCursorPutsItDownFirst() {
+		try (Harness h = besideAChest()) {
+			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
+			// Stone and dirt in turn: more clicks than the budget takes in a tick, so a tick can end with a stack on the cursor.
+			List<ItemStack> contents = new java.util.ArrayList<>();
+			for (int i = 0; i < 24; i++) contents.add(new ItemStack(i % 2 == 0 ? Items.STONE : Items.DIRT, 1 + i % 5));
+			var menu = h.serverOpensChest(7, contents);
+			int stone = 0, dirt = 0;
+			for (ItemStack c : contents) if (c.is(Items.STONE)) stone += c.getCount(); else dirt += c.getCount();
+			Containers.View view = Myriad.containers().current().orElseThrow();
+			int[] area = new int[27];
+			List<ItemStack> sorted = new java.util.ArrayList<>();
+			for (int i = 0; i < 27; i++) {
+				area[i] = i;
+				sorted.add(i == 0 ? new ItemStack(Items.DIRT, dirt) : i == 1 ? new ItemStack(Items.STONE, stone) : ItemStack.EMPTY);
+			}
+			CompletableFuture<Boolean> done = view.arrange(Containers.Arrangement.of(area, sorted).dumpTo(new int[]{27, 28, 29}));
+			// Ticks until a click of the sort leaves something on the cursor (it swaps stacks through it).
+			for (int t = 0; t < 40 && menu.getCarried().isEmpty() && !done.isDone(); t++) h.tick();
+			assertFalse(menu.getCarried().isEmpty(), "the sort never carried anything");
+			int total = count(menu);
+			assertTrue(dev.myriadclient.impl.MyriadImpl.get().containerTracker().yourClick(menu));
+			// A round trip after its last click (at most a second), then a click to put it down.
+			h.ticks(30);
+			assertTrue(menu.getCarried().isEmpty(), "left on the cursor: " + menu.getCarried());
+			assertTrue(done.isCompletedExceptionally(), "the sort didn't end failed: " + done);
+			assertEquals(total, count(menu), "items lost or made");
+		}
+	}
+
+	/** Everything in the menu's slots and on its cursor. */
+	private static int count(net.minecraft.world.inventory.AbstractContainerMenu menu) {
+		int n = menu.getCarried().getCount();
+		for (var slot : menu.slots) n += slot.getItem().getCount();
+		return n;
 	}
 }
