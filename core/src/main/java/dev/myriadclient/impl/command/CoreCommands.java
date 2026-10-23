@@ -23,11 +23,13 @@ import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.dev.Bench;
 import dev.myriadclient.impl.dev.PacketLog;
 import dev.myriadclient.impl.event.MyriadEventBus;
+import dev.myriadclient.impl.render.GpuTimings;
 import dev.myriadclient.impl.event.Profiler;
 import dev.myriadclient.impl.hook.HookManager;
 import dev.myriadclient.impl.network.JoinedVersion;
 import dev.myriadclient.impl.update.UpdateManager;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.InactivityFpsLimit;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -37,6 +39,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.Locale;
 
 import static dev.myriadclient.api.command.arguments.ModuleArgumentType.module;
@@ -286,6 +289,32 @@ public final class CoreCommands {
 		};
 	}
 
+	/**
+	 * .bench render: uncapped while it measures (no frame limit, no vsync, no slowing down when you don't touch the
+	 * keys), so what a frame costs shows in its time, all put back after.
+	 */
+	private static void benchRender(boolean compare, Consumer<String> chat) {
+		Logger log = LoggerFactory.getLogger("Myriad/Bench");
+		var options = Minecraft.getInstance().options;
+		int limit = options.framerateLimit().get();
+		boolean vsync = options.enableVsync().get();
+		InactivityFpsLimit inactivity = options.inactivityFpsLimit().get();
+		options.framerateLimit().set(260);
+		options.enableVsync().set(false);
+		options.inactivityFpsLimit().set(InactivityFpsLimit.MINIMIZED);
+		int[] reports = {compare ? 2 : 1};
+		Consumer<String> report = r -> {
+			chat.accept(r);
+			log.info("{}", r);
+			if (--reports[0] > 0) return;
+			options.framerateLimit().set(limit);
+			options.enableVsync().set(vsync);
+			options.inactivityFpsLimit().set(inactivity);
+		};
+		if (compare) GpuTimings.compare(600, report);
+		else GpuTimings.measure(600, report);
+	}
+
 	/** Dev runs only: what core's hot paths cost here, for the CHANGELOG's numbers. */
 	private static Command bench() {
 		return new Command("bench", "Measures core's hot paths on this machine (the game stands still for a few seconds).") {
@@ -303,6 +332,20 @@ public final class CoreCommands {
 					});
 					return SINGLE_SUCCESS;
 				});
+				// What highlights cost the GPU here, for the scene as it is: run it once per look to compare.
+				b.then(literal("render").then(literal("old").executes(c -> {
+					// Draws highlights the way they were before, to compare screenshots: again to put it back.
+					info(GpuTimings.toggleLegacy() ? "Highlights drawn the old way" : "Highlights drawn as they are now");
+					return SINGLE_SUCCESS;
+				})).then(literal("compare").executes(c -> {
+					info("Measuring 600 frames the way highlights were drawn before, then 600 as they are now...");
+					benchRender(true, r -> info(r));
+					return SINGLE_SUCCESS;
+				})).executes(c -> {
+					info("Measuring 600 frames...");
+					benchRender(false, r -> info(r));
+					return SINGLE_SUCCESS;
+				}));
 			}
 		};
 	}

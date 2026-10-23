@@ -156,6 +156,7 @@ public final class HighlightRenderer {
 	/** Start of a frame's extraction, before any entity is. */
 	public void beginFrame() {
 		frame++;
+		GpuTimings.frame();
 		highlights.clear();
 		for (int l : SHAPE_LAYERS) {
 			shapeIds[l].clear();
@@ -463,8 +464,9 @@ public final class HighlightRenderer {
 		GpuBuffer gpuData = HighlightPasses.write(buffer, radius, boundary, highlights.data, 0, highlights.count);
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
 		if (shapes && !meshes.isEmpty()) HighlightPasses.drawMeshes(encoder, gpuData, meshes, masks, masked, highlights);
-		for (int l : SHAPE_LAYERS) if (masked[l] && layers[l].count > 0) HighlightPasses.prepare(encoder, layers[l], masks[l], main, gpuData, radius, w, h);
-		if (entities) HighlightPasses.prepare(encoder, layers[ENTITIES], Minecraft.getInstance().levelRenderer.entityOutlineTarget, main, gpuData, radius, w, h);
+		GpuTimings.end(GpuTimings.Pass.MASKS);
+		for (int l : SHAPE_LAYERS) if (masked[l] && layers[l].count > 0) HighlightPasses.prepare(encoder, layers[l], masks[l], main, gpuData, radius, boundary, w, h);
+		if (entities) HighlightPasses.prepare(encoder, layers[ENTITIES], Minecraft.getInstance().levelRenderer.entityOutlineTarget, main, gpuData, radius, boundary, w, h);
 	}
 
 	/** After the level is drawn, before the hand: below-shapes, shapes over them, then entities, onto the main target. */
@@ -475,9 +477,13 @@ public final class HighlightRenderer {
 			Layer layer = layers[i];
 			if (!layer.prepared) continue;
 			layer.prepared = false;
-			if (encoder == null) encoder = RenderSystem.getDevice().createCommandEncoder();
+			if (encoder == null) {
+				encoder = RenderSystem.getDevice().createCommandEncoder();
+				GpuTimings.begin(GpuTimings.Pass.COMPOSITE);
+			}
 			HighlightPasses.composite(encoder, layer, main, buffer.currentBuffer());
 		}
+		if (encoder != null) GpuTimings.end(GpuTimings.Pass.COMPOSITE);
 	}
 
 	/**
@@ -591,9 +597,12 @@ public final class HighlightRenderer {
 		handBuffer = HighlightPasses.ring(handBuffer, "Myriad hand highlights", highlights.count - handBase);
 		GpuBuffer gpuData = HighlightPasses.write(handBuffer, radius, boundary, highlights.data, handBase, highlights.count);
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
-		HighlightPasses.prepare(encoder, layer, masks[HAND], main, gpuData, radius, w, h);
-		if (!layer.prepared) return;
-		layer.prepared = false;
-		HighlightPasses.composite(encoder, layer, main, gpuData);
+		GpuTimings.begin(GpuTimings.Pass.HAND);
+		HighlightPasses.prepare(encoder, layer, masks[HAND], main, gpuData, radius, boundary, w, h);
+		if (layer.prepared) {
+			layer.prepared = false;
+			HighlightPasses.composite(encoder, layer, main, gpuData);
+		}
+		GpuTimings.end(GpuTimings.Pass.HAND);
 	}
 }

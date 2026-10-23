@@ -132,8 +132,12 @@ public final class MyriadPipelines {
 		BindGroupLayout.builder().withSampler("Mask").withSampler("MaskDepth").withSampler("SceneDepth").build(), ColorTargetState.DEFAULT));
 	public static final RenderPipeline HIGHLIGHT_SPREAD = RenderPipelines.register(highlight("highlight_spread",
 		BindGroupLayout.builder().withSampler("InSampler").build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA16_UNORM, ColorTargetState.WRITE_ALL)));
+	public static final RenderPipeline HIGHLIGHT_GLOW_ROW = RenderPipelines.register(highlight("highlight_glow_row",
+		BindGroupLayout.builder().withSampler("InSampler").build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA16_UNORM, ColorTargetState.WRITE_ALL)));
+	public static final RenderPipeline HIGHLIGHT_GLOW_COLUMN = RenderPipelines.register(highlight("highlight_glow_column",
+		BindGroupLayout.builder().withSampler("InSampler").build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA16_UNORM, ColorTargetState.WRITE_ALL)));
 	public static final RenderPipeline HIGHLIGHT_COMPOSITE = RenderPipelines.register(highlight("highlight_composite",
-		BindGroupLayout.builder().withSampler("SpreadSampler").build(), new ColorTargetState(BlendFunction.TRANSLUCENT)));
+		BindGroupLayout.builder().withSampler("SpreadSampler").withSampler("GlowSampler").build(), new ColorTargetState(BlendFunction.TRANSLUCENT)));
 
 	public static final RenderType QUADS = RenderType.create("myriad_quads", RenderSetup.builder(WORLD_QUADS).sortOnUpload().createRenderSetup());
 	public static final RenderType QUADS_XRAY = RenderType.create("myriad_quads_xray", RenderSetup.builder(WORLD_QUADS_XRAY).sortOnUpload().createRenderSetup());
@@ -172,7 +176,7 @@ public final class MyriadPipelines {
 			.withVertexShader(id("core/blur"))
 			.withFragmentShader(shader)
 			.withShaderDefine("MYRIAD_FILL_ID", shaderId)
-			.withBindGroupLayout(BindGroupLayout.builder().withSampler("SpreadSampler").build())
+			.withBindGroupLayout(BindGroupLayout.builder().withSampler("SpreadSampler").withSampler("GlowSampler").build())
 			.withBindGroupLayout(HIGHLIGHT_DATA)
 			.withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
 			.withPrimitiveTopology(PrimitiveTopology.TRIANGLES)

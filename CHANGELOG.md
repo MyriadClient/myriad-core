@@ -16,6 +16,21 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 
 ## 0.11.0 (unreleased)
 
+- **Highlights cost the GPU less, most with a wide glow.** The outline and glow searched every pixel around the
+  highlights out to the glow's reach, twice (along rows, then columns), at full size. Now the full-size search only
+  reaches as far as the outline, and the glow comes from a distance field of its own at half size, or a quarter for a
+  wide glow (radius past 16 pixels), whose soft falloff hides the difference: screenshots side by side, zoomed four
+  times, show none. A frame with no glow skips the glow's passes. Measured with `.bench render compare` (old way, then
+  new, alternated) on an RTX 3080 Ti at about 2 megapixels, 30 zombies and 40 chests in Outline mode: GPU time a frame
+  from 0.84 to 0.33 ms with glow 24, 0.36 to 0.27 ms with glow 6, 0.22 to 0.18 ms without; a sparse scene (seven
+  highlights) 0.62 to 0.26 ms with glow 24. With glow 24 the full-size searching (spread and composite) went from 0.80
+  to 0.16 ms, and the glow's own passes take 0.14 ms, much of it the fixed cost every pass has on a fast GPU; a weaker
+  GPU pays more for pixels than for passes, so it gains more. A tile map that skipped empty space was tried and left
+  out: on this GPU its own passes cost more than it saved.
+- `.bench render` (dev runs): GPU time a frame in each highlight pass, from timestamps (masks, spread, glow,
+  composite, hand), with the frame rate uncapped while it measures; `.bench render compare` measures the old way and
+  the new one back to back, and `.bench render old` switches to the old way for screenshots.
+
 - **No Simulation flag when sprinting starts again just after a placement** (strict Grim, rotating placements while
   sprinting or sprint-jumping). Grim predicts the movement of a sprint start sent right after a block placement at
   walking speed; on a diagonal, which the movement fix presses while the look is turned to place, sprinting goes 0.03

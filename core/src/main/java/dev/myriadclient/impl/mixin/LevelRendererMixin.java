@@ -6,6 +6,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
+import dev.myriadclient.impl.render.GpuTimings;
 import dev.myriadclient.impl.render.HighlightRenderer;
 import dev.myriadclient.impl.render.PreviewHighlights;
 import net.minecraft.client.DeltaTracker;
@@ -39,6 +40,12 @@ public abstract class LevelRendererMixin {
 	@WrapOperation(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;hasAnyOutline()Z"))
 	private boolean myriad$vanillaGlow(FeatureRenderDispatcher.PreparedFrame frame, Operation<Boolean> original) {
 		return original.call(frame) && !HighlightRenderer.INSTANCE.ownsOutlines();
+	}
+
+	/** For .bench render: the outline pass, which draws highlighted silhouettes into the masks. */
+	@Inject(method = "lambda$addMainPass$0", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;executeOutline()V"))
+	private void myriad$beforeOutlines(CallbackInfo ci) {
+		GpuTimings.begin(GpuTimings.Pass.MASKS);
 	}
 
 	/** Once the silhouettes are drawn, before translucent terrain (so water doesn't count as hiding what's under it). */

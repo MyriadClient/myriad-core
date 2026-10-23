@@ -39,6 +39,19 @@ import java.util.OptionalDouble;
 final class HighlightPasses {
 	/** vec4s before the first highlight: (radius, GUI scale, count, boundary radius), (seconds, 0, 0, 0). */
 	private static final int HEADER = 2;
+	/**
+	 * Only for .bench render compare: the way it was before the glow had its own field, searching the whole radius
+	 * everywhere at full size.
+	 */
+	static boolean legacy;
+
+	/**
+	 * Framebuffer pixels per texel of the glow's distance field for this radius: 2, or 4 once the glow is wide enough
+	 * that its falloff hides a coarser field (a sixteenth of the pixels, searching a quarter as far).
+	 */
+	static int glowScale(int radius) {
+		return radius > 16 ? 4 : 2;
+	}
 	private static final Matrix4f IDENTITY = new Matrix4f();
 
 	/** Addons' fills: shader id number to its composite pass. */
@@ -61,6 +74,8 @@ final class HighlightPasses {
 	static final class Layer {
 		final String name;
 		TextureTarget resolved, spread;
+		/** The glow at half size: the row search, then the distance field. */
+		TextureTarget glowRow, glow;
 		/** Addons' fills used by this layer's highlights this frame. */
 		final IntRBTreeSet customFills = new IntRBTreeSet();
 		int count;
@@ -136,14 +151,17 @@ final class HighlightPasses {
 	 * Resolves {@code layer}'s hidden pixels (if any of its highlights isn't through walls; {@code main} gives the scene's
 	 * depth, and may be null otherwise) and runs the row pass.
 	 */
-	static void prepare(CommandEncoder encoder, Layer layer, RenderTarget mask, @Nullable RenderTarget main, GpuBuffer gpuData, int radius, int w, int h) {
+	static void prepare(CommandEncoder encoder, Layer layer, RenderTarget mask, @Nullable RenderTarget main, GpuBuffer gpuData, int radius, int boundary,
+						int w, int h) {
 		if (mask == null || mask.getColorTextureView() == null || layer.area == null) return;
 		resize(layer, w, h);
 		GpuSampler nearestSampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
 		GpuTextureView source = mask.getColorTextureView();
 		int[] area = layer.area;
 		if (layer.anyDepthTested && main != null) {
-			try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_RESOLVE, layer.resolved.getColorTextureView(), gpuData, grow(area, 2 * radius, 2 * radius, w, h))) {
+			// Far enough out for the spread's search and the glow's.
+			int out = 2 * radius + 4;
+			try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_RESOLVE, layer.resolved.getColorTextureView(), gpuData, grow(area, out, out, w, h))) {
 				pass.bindTexture("Mask", source, nearestSampler);
 				pass.bindTexture("MaskDepth", mask.getDepthTextureView(), nearestSampler);
 				pass.bindTexture("SceneDepth", main.getDepthTextureView(), nearestSampler);
@@ -151,12 +169,44 @@ final class HighlightPasses {
 			}
 			source = layer.resolved.getColorTextureView();
 		}
+		GpuTimings.begin(GpuTimings.Pass.SPREAD);
 		try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_SPREAD, layer.spread.getColorTextureView(), gpuData, grow(area, radius, 2 * radius, w, h))) {
 			pass.bindTexture("InSampler", source, nearestSampler);
 			pass.draw(3, 1, 0, 0);
 		}
+		GpuTimings.end(GpuTimings.Pass.SPREAD);
+		if (!legacy && radius > boundary) {
+			GpuTimings.begin(GpuTimings.Pass.GLOW);
+			glow(encoder, layer, source, gpuData, radius, w, h);
+			GpuTimings.end(GpuTimings.Pass.GLOW);
+		}
 		System.arraycopy(grow(area, radius, radius, w, h), 0, layer.compositeRect, 0, 4);
 		layer.prepared = true;
+	}
+
+	/**
+	 * The glow's distance field, at half size or smaller ({@link #glowScale}): a glow is soft, so where it's within a pixel
+	 * or two of exact doesn't show, and a quarter of the pixels searching half as far is a small part of what the
+	 * full-size search to the glow's reach cost.
+	 * The outline stays exact (the spread pass, to the outline's reach). Two passes: each one has a cost of its own
+	 * however little it draws, which on a fast GPU outweighs the pixels it saves. Each step's area covers what the next
+	 * reads.
+	 */
+	private static void glow(CommandEncoder encoder, Layer layer, GpuTextureView source, GpuBuffer gpuData, int radius, int w, int h) {
+		int scale = glowScale(radius);
+		int hw = (w + scale - 1) / scale, hh = (h + scale - 1) / scale;
+		int[] area = layer.area;
+		int[] half = {area[0] / scale, area[1] / scale, (area[2] + scale - 1) / scale, (area[3] + scale - 1) / scale};
+		int reach = radius / scale + 1;
+		try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_GLOW_ROW, layer.glowRow.getColorTextureView(), gpuData, grow(half, reach + 1, 2 * reach + 2, hw, hh))) {
+			// Linear: one read between four pixels sees them all.
+			pass.bindTexture("InSampler", source, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+			pass.draw(3, 1, 0, 0);
+		}
+		try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_GLOW_COLUMN, layer.glow.getColorTextureView(), gpuData, grow(half, reach + 1, reach + 1, hw, hh))) {
+			pass.bindTexture("InSampler", layer.glowRow.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+			pass.draw(3, 1, 0, 0);
+		}
 	}
 
 	/** One layer onto the main target: outlines, glows and built-in fills, then addons' fills over their highlights' insides. */
@@ -175,7 +225,9 @@ final class HighlightPasses {
 
 	private static void composite(CommandEncoder encoder, RenderPipeline pipeline, Layer layer, GpuTextureView target, GpuBuffer gpuData) {
 		try (RenderPass pass = begin(encoder, pipeline, target, gpuData, layer.compositeRect)) {
-			pass.bindTexture("SpreadSampler", layer.spread.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+			GpuSampler nearest = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
+			pass.bindTexture("SpreadSampler", layer.spread.getColorTextureView(), nearest);
+			pass.bindTexture("GlowSampler", layer.glow.getColorTextureView(), nearest);
 			pass.draw(3, 1, 0, 0);
 		}
 	}
@@ -214,19 +266,24 @@ final class HighlightPasses {
 		try (GpuBufferSlice.MappedView view = gpu.map(false, true)) {
 			FloatBuffer out = view.data().order(ByteOrder.nativeOrder()).asFloatBuffer();
 			out.put(radius).put((float) Minecraft.getInstance().getWindow().getGuiScale()).put(to - from).put(boundary);
-			out.put((float) ((System.nanoTime() - START) / 1e9 % 3600)).put(0).put(0).put(0);
+			out.put((float) ((System.nanoTime() - START) / 1e9 % 3600)).put(legacy ? 1 : 0).put(!legacy && radius > boundary ? 1 : 0).put(glowScale(radius));
 			out.put(data, from * HighlightTable.FLOATS, (to - from) * HighlightTable.FLOATS);
 		}
 		return gpu;
 	}
 
 	private static void resize(Layer layer, int w, int h) {
+		int hw = (w + 1) / 2, hh = (h + 1) / 2;
 		if (layer.spread == null) {
 			layer.resolved = new TextureTarget("Myriad highlights resolved (" + layer.name + ")", w, h, false, GpuFormat.RGBA8_UNORM);
 			layer.spread = new TextureTarget("Myriad highlights spread (" + layer.name + ")", w, h, false, GpuFormat.RGBA16_UNORM);
+			layer.glowRow = new TextureTarget("Myriad highlights glow rows (" + layer.name + ")", hw, hh, false, GpuFormat.RGBA16_UNORM);
+			layer.glow = new TextureTarget("Myriad highlights glow (" + layer.name + ")", hw, hh, false, GpuFormat.RGBA16_UNORM);
 		} else if (layer.spread.width != w || layer.spread.height != h) {
 			layer.resolved.resize(w, h);
 			layer.spread.resize(w, h);
+			layer.glowRow.resize(hw, hh);
+			layer.glow.resize(hw, hh);
 		}
 	}
 }

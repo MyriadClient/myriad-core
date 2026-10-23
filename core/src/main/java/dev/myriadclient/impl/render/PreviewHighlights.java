@@ -93,7 +93,7 @@ public final class PreviewHighlights {
 		layer.area = new int[]{0, 0, width, height};
 		layer.anyDepthTested = false;
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
-		HighlightPasses.prepare(encoder, layer, mask, null, gpuData, radius, width, height);
+		HighlightPasses.prepare(encoder, layer, mask, null, gpuData, radius, boundary, width, height);
 		if (!layer.prepared) return;
 		layer.prepared = false;
 		HighlightPasses.composite(encoder, layer, target, gpuData);

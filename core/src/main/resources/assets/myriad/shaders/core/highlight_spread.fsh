@@ -3,7 +3,7 @@
 #moj_import <myriad:highlight.glsl>
 
 // First half of the distance search, searched outwards along the row so it stops at the first hit:
-//  - the nearest mask pixel within the reach (outline and glow);
+//  - the nearest mask pixel within the outline's reach;
 //  - for a mask pixel, the nearest pixel of another group within the outline width (where highlights that look
 //    different meet).
 uniform sampler2D InSampler;
@@ -22,7 +22,8 @@ void main() {
         nearId = highlightId(here.rgb);
         nearG = group;
     }
-    int reach = inside ? highlightBoundaryRadius() : highlightRadius();
+    // Outside, only the outline's reach: the glow beyond it comes from its own half-size distance field.
+    int reach = inside || !highlightLegacy() ? highlightBoundaryRadius() : highlightRadius();
     int width = textureSize(InSampler, 0).x;
     for (int d = 1; d <= reach; d++) {
         if (inside ? otherD != NONE : nearD != NONE) break;

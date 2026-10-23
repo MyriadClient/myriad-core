@@ -37,6 +37,7 @@ vec4 customFill(HighlightFill f);
 // silhouette: the nearest highlight's outline and glow. Inside one: its fill, under the outline of a later highlight of
 // another group that touches it.
 uniform sampler2D SpreadSampler;
+uniform sampler2D GlowSampler;
 
 out vec4 fragColor;
 
@@ -62,6 +63,48 @@ float edgeAlpha(int id, float d2, bool glow) {
         alpha = max(alpha, shape.z * (1.0 - g) * (1.0 - g));
     }
     return alpha;
+}
+
+// The glow field at this pixel: its distance blended between the four nearest field texels that have one, and the id
+// of the nearest of them. False if none of them is near a silhouette.
+bool glowAt(ivec2 p, out int id, out float dist) {
+    int scale = highlightGlowScale();
+    vec2 pos = (vec2(p) + 0.5) / float(scale) - 0.5;
+    ivec2 base = ivec2(floor(pos));
+    vec2 f = pos - vec2(base);
+    // The part of the field in use: it's sized for the finest scale.
+    ivec2 size = (textureSize(SpreadSampler, 0) + scale - 1) / scale;
+    float sum = 0.0, weight = 0.0, nearest = 1e9;
+    id = -1;
+    for (int j = 0; j < 2; j++) {
+        for (int i = 0; i < 2; i++) {
+            ivec2 q = clamp(base + ivec2(i, j), ivec2(0), size - 1);
+            vec4 t = texelFetch(GlowSampler, q, 0);
+            int d = unpack16(t.r);
+            if (d == GLOW_NONE) continue;
+            float w = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
+            float dd = float(d) / GLOW_SCALE;
+            sum += dd * w;
+            weight += w;
+            if (dd < nearest) {
+                nearest = dd;
+                id = unpack16(t.g);
+            }
+        }
+    }
+    if (id < 0 || weight <= 0.0) return false;
+    // Measured between texel middles, the field reads about half a texel long next to a silhouette (whose nearest
+    // pixel can be anywhere in its texel's block): taken off, so the glow starts as strong as an exact one.
+    dist = max(0.0, sum / weight - float(scale - 1) * 0.5);
+    return true;
+}
+
+// Glow coverage of highlight id at dist framebuffer pixels from its silhouette (0 past its reach, or if it has none).
+float glowAlpha(int id, float dist) {
+    vec4 shape = highlightData(id, 3);
+    if (shape.y <= 0.0) return 0.0;
+    float g = clamp((dist - 0.5 - shape.x) / shape.y, 0.0, 1.0);
+    return shape.z * (1.0 - g) * (1.0 - g);
 }
 
 void main() {
@@ -157,6 +200,7 @@ void main() {
 
     // Outlines and glow outside silhouettes belong to the main pass.
     if (MYRIAD_FILL_ID != 0) discard;
+    bool legacy = highlightLegacy();
     float best = 1e9;
     int nearest = -1;
     if (hereNear % 256 != NONE) {
@@ -164,7 +208,8 @@ void main() {
         best = dx * dx;
         nearest = unpack16(here.g);
     }
-    int radius = highlightRadius();
+    // The outline's reach only: the glow comes from its distance field below.
+    int radius = legacy ? highlightRadius() : highlightBoundaryRadius();
     for (int d = 1; d <= radius; d++) {
         float dy2 = float(d * d);
         if (dy2 >= best) break;
@@ -182,9 +227,30 @@ void main() {
             }
         }
     }
-    if (nearest < 0) discard;
-    vec4 color = colorAt(nearest);
-    float alpha = edgeAlpha(nearest, best, true) * color.a;
+    vec4 color = vec4(0.0);
+    float alpha = 0.0;
+    if (nearest >= 0) {
+        color = colorAt(nearest);
+        alpha = edgeAlpha(nearest, best, legacy) * color.a;
+    }
+    int glowId;
+    float glowDist;
+    if (!legacy && highlightGlows() && glowAt(p, glowId, glowDist)) {
+        vec4 glowColor = colorAt(glowId);
+        float glow = glowAlpha(glowId, glowDist) * glowColor.a;
+        if (glowId == nearest || alpha <= 0.0) {
+            // The same highlight's outline and glow: the stronger of the two, as one edge.
+            if (glow > alpha) {
+                color = glowColor;
+                alpha = glow;
+            }
+        } else if (glow > 0.0) {
+            // Another highlight's glow: under this outline.
+            float a = alpha + glow * (1.0 - alpha);
+            color.rgb = (color.rgb * alpha + glowColor.rgb * glow * (1.0 - alpha)) / a;
+            alpha = a;
+        }
+    }
     if (alpha <= 0.0) discard;
     fragColor = vec4(color.rgb, alpha);
 }
