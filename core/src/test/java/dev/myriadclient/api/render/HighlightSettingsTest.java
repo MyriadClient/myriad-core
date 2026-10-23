@@ -47,6 +47,24 @@ class HighlightSettingsTest {
 	}
 
 	@Test
+	void sharingABoxStylePutsBothInOneGroupWithEachSharedOptionShownForEither() {
+		Settings settings = new Settings();
+		boolean[] outline = {false};
+		BoxStyle box = new BoxStyle(settings.group("Render"), () -> !outline[0]);
+		HighlightSettings h = HighlightSettings.builder(settings.group("Render")).visible(() -> outline[0])
+			.defaults(HighlightStyle.OUTLINE.withFill(HighlightStyle.Fill.SOLID)).sharing(box).build();
+		assertSame(box.fillOpacity, h.fillOpacity);
+		assertSame(box.throughWalls, h.throughWalls);
+		assertEquals(1, settings.group("Render").settings().stream().filter(s -> s.name().equals("Fill Opacity")).count());
+		assertTrue(h.fillOpacity.isVisible() && h.throughWalls.isVisible(), "box mode");
+		outline[0] = true;
+		assertTrue(h.fillOpacity.isVisible() && h.throughWalls.isVisible(), "outline mode with a fill");
+		assertFalse(box.lineWidth.isVisible());
+		h.fill.set(HighlightSettings.FillMode.NONE);
+		assertFalse(h.fillOpacity.isVisible(), "outline mode with no fill");
+	}
+
+	@Test
 	void throughWallsCanBeLeftOut() {
 		Settings settings = new Settings();
 		HighlightSettings h = HighlightSettings.builder(settings.group("Hand")).noThroughWalls().build();

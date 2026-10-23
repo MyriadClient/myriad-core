@@ -9,6 +9,8 @@ import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.util.ColorUtil;
 import net.minecraft.world.phys.AABB;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Supplier;
 
 /**
@@ -27,6 +29,8 @@ public final class BoxStyle {
 	public final DoubleSetting fillOpacity;
 	public final DoubleSetting lineWidth;
 	public final BoolSetting throughWalls;
+	/** When options sharing Fill Opacity and Through Walls need them shown too ({@link HighlightSettings.Builder#sharing}). */
+	private final List<Supplier<Boolean>> fillOpacityShown = new ArrayList<>(), throughWallsShown = new ArrayList<>();
 
 	/** Adds the options to {@code group}. */
 	public BoxStyle(SettingGroup group) {
@@ -42,10 +46,21 @@ public final class BoxStyle {
 	public BoxStyle(SettingGroup group, Supplier<Boolean> visible, boolean throughWallsByDefault) {
 		shape = group.oneOf("Shape", Renderer3D.ShapeMode.BOTH).description("Outline, fill, or both.").visible(visible).build();
 		fillOpacity = group.decimal("Fill Opacity").defaultValue(0.2).range(0, 1).decimals(2)
-			.visible(() -> visible.get() && shape.get() != Renderer3D.ShapeMode.LINES).build();
+			.visible(() -> visible.get() && shape.get() != Renderer3D.ShapeMode.LINES || any(fillOpacityShown)).build();
 		lineWidth = group.decimal("Line Width").defaultValue(1.5).range(0.5, 5).decimals(1)
 			.visible(() -> visible.get() && shape.get() != Renderer3D.ShapeMode.FILL).build();
-		throughWalls = group.bool("Through Walls").defaultValue(throughWallsByDefault).visible(visible).build();
+		throughWalls = group.bool("Through Walls").defaultValue(throughWallsByDefault).visible(() -> visible.get() || any(throughWallsShown)).build();
+	}
+
+	/** Fill Opacity and Through Walls are also used by other options: shown while those need them too. */
+	void sharedWhile(Supplier<Boolean> fillOpacity, Supplier<Boolean> throughWalls) {
+		fillOpacityShown.add(fillOpacity);
+		throughWallsShown.add(throughWalls);
+	}
+
+	private static boolean any(List<Supplier<Boolean>> shown) {
+		for (Supplier<Boolean> s : shown) if (s.get()) return true;
+		return false;
 	}
 
 	/** {@code color} as a fill, at the fill opacity times {@code fade}. */

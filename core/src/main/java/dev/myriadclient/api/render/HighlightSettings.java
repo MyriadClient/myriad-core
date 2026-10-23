@@ -95,7 +95,9 @@ public final class HighlightSettings {
 		glow = group.decimal("Glow").description("A soft glow beyond the outline, in pixels; 0 for none.")
 			.defaultValue(snap(Math.min(d.glow(), 24), 0)).range(0, 24).decimals(0).visible(visible).build();
 		fill = group.oneOf("Fill", fillMode(d.fill())).description("What's drawn inside the outline.").visible(visible).build();
-		fillOpacity = group.decimal("Fill Opacity").defaultValue(snap(d.fillOpacity(), 2)).range(0, 1).decimals(2)
+		BoxStyle box = b.sharing;
+		if (box != null) box.sharedWhile(() -> visible.get() && fill.get() != FillMode.NONE, visible);
+		fillOpacity = box != null ? box.fillOpacity : group.decimal("Fill Opacity").defaultValue(snap(d.fillOpacity(), 2)).range(0, 1).decimals(2)
 			.visible(() -> visible.get() && fill.get() != FillMode.NONE).build();
 		dotSpacing = group.decimal("Dot Spacing").description("Distance between dots, in pixels.")
 			.defaultValue(snap(Math.min(d.dotSpacing(), 24), 1)).range(2, 24).decimals(1).visible(() -> visible.get() && fill.get() == FillMode.DOTS).build();
@@ -106,7 +108,8 @@ public final class HighlightSettings {
 			.defaultValue(d.hasGradient() ? SettingColor.of(d.gradient()) : SettingColor.role(SettingColor.Mode.SECONDARY))
 			.visible(() -> visible.get() && gradient.get()).build();
 		defaultThroughWalls = d.throughWalls();
-		throughWalls = b.throughWallsOption ? group.bool("Through Walls").defaultValue(d.throughWalls()).visible(visible).build() : null;
+		throughWalls = !b.throughWallsOption ? null : box != null ? box.throughWalls
+			: group.bool("Through Walls").defaultValue(d.throughWalls()).visible(visible).build();
 	}
 
 	/** {@code v} rounded to the setting's decimals, so a float default saves and compares as the number it reads as. */
@@ -144,6 +147,7 @@ public final class HighlightSettings {
 		private Supplier<Boolean> visible = () -> true;
 		private HighlightStyle defaults = STANDARD;
 		private boolean throughWallsOption = true;
+		private @Nullable BoxStyle sharing;
 
 		private Builder(SettingGroup group) {
 			this.group = group;
@@ -170,6 +174,23 @@ public final class HighlightSettings {
 		 */
 		public Builder noThroughWalls() {
 			throughWallsOption = false;
+			return this;
+		}
+
+		/**
+		 * Uses {@code box}'s Fill Opacity and Through Walls instead of options of its own, so both styles fit in one group
+		 * (a module's Render group) when only one is used at a time, by mode: each shows while either style needs it.
+		 * The defaults' fill opacity and through walls give way to the box's.
+		 *
+		 * <pre>{@code
+		 * private final SettingGroup sgRender = settings.group("Render");
+		 * private final BoxStyle box = new BoxStyle(sgRender, () -> mode.get() == Mode.BOXES);
+		 * private final HighlightSettings outline = HighlightSettings.builder(sgRender).visible(() -> mode.get() == Mode.OUTLINE)
+		 *     .sharing(box).build();
+		 * }</pre>
+		 */
+		public Builder sharing(BoxStyle box) {
+			this.sharing = box;
 			return this;
 		}
 

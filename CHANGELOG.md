@@ -59,6 +59,10 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
   the sorted look). Grim and Paper have no click-rate check, but the click budget stays at 16 a second until there's
   word on 2b2t's: a scrambled double chest is sorted on the server 5.2 s after opening, and looks sorted from the first
   frames.
+- **`HighlightSettings.Builder.sharing(BoxStyle)`**, so a module that draws boxes or outlines by mode keeps both
+  styles in one Render group: the outline uses the box's Fill Opacity and Through Walls instead of a second pair (two
+  settings of one name can't share a group), each shown while either style needs it. The site's Rendering page says
+  how modules lay out their Render group.
 - **`.packets log` shows inventory clicks** when you join through ViaFabricPlus as 1.21.4 or older: it sends those
   clicks itself, past the connection, so they were missing. They're logged as the game makes them.
 - **The colour picker's hue bar works on white and black.** With the square's marker in its top-left corner (white)
