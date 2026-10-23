@@ -45,7 +45,8 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
   window included (it says to turn the module on when it's off).
 - **Previews sit on the window's background** instead of a layer of their own.
 - An open dropdown's list keeps the dropdown's own colour, with only its header lighting up on hover (the whole list
-  changed colour with the header), and a searchable list (a mob, a block) is drawn in that colour too rather than fainter.
+  changed colour with the header), and a searchable list (a mob, a block) opens on one panel in that colour behind its
+  search and its entries, rather than a fainter box behind the entries alone.
 - **Preview windows.** Add a Preview from the launcher to any workspace to watch a mob, you, a container, a block or
   your hands while tuning how things are drawn, without closing the menu to look at the world. The picker at the top
   chooses what it shows (and which mob, container or block), saved with the window; the preview fills the rest, and the

@@ -197,7 +197,14 @@ public class RegistryPicker<T> extends Widget {
 	@Override
 	public void render(Canvas c, float mx, float my) {
 		boolean hover = mx >= x && my >= y && mx < x + width && my < y + ROW;
-		c.roundRect(x, y, width, ROW, 4, hover ? theme().surfaceHover.argb() : theme().surface.argb());
+		int header = hover ? theme().surfaceHover.argb() : theme().surface.argb();
+		// Open, the search and the list sit on one panel in the header's own colour, as a dropdown's list does.
+		if (expanded) {
+			c.roundRect(x, y, width, ROW, 4, 4, 0, 0, header);
+			c.roundRect(x, y + ROW, width, height - ROW, 0, 0, 4, 4, theme().surface.argb());
+		} else {
+			c.roundRect(x, y, width, ROW, 4, header);
+		}
 		String label = setting.label();
 		c.text(label, x + 4, y + (ROW - c.textHeight()) / 2, theme().textDim.argb());
 		c.text(expanded ? "" : "", x + width - 10, y + (ROW - c.textHeight()) / 2, theme().textDim.argb());
@@ -205,7 +212,6 @@ public class RegistryPicker<T> extends Widget {
 		if (lastSize < 0) refilter();
 		search.render(c, mx, my);
 		float ly = y + ROW * 2 + 6;
-		c.roundRect(x, ly, width, LIST_HEIGHT, 4, theme().surface.argb());
 		c.push();
 		c.clip(x, ly, width, LIST_HEIGHT);
 		int first = (int) (scroll / ENTRY);
