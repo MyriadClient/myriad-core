@@ -23,7 +23,7 @@ class PreviewTest {
 		assertTrue(p.mouseClicked(100, 60, 0));
 		p.mouseDragged(110, 60, 0, 10, 0);
 		assertEquals(-22, p.yaw(), 1e-4);
-		p.mouseDragged(110, 400, 0, 0, 500);
+		p.mouseDragged(110, 400, 0, 0, 0);
 		assertEquals(90, p.pitch(), 1e-4);
 		assertTrue(p.mouseReleased(110, 400, 0));
 		assertFalse(p.mouseDragged(120, 400, 0, 10, 0), "dragged after the release");
@@ -37,6 +37,21 @@ class PreviewTest {
 		assertEquals(5, p.panX(), 1e-4);
 		assertEquals(3, p.panY(), 1e-4);
 		assertEquals(-30, p.yaw(), 1e-4, "turned by a right-drag");
+	}
+
+	@Test
+	void aWindowPassingNoMovementStillTurnsAndMovesIt() {
+		// The window passes no movement with a drag: it's measured from where the mouse was.
+		Preview p = laidOut();
+		p.mouseClicked(100, 60, 0);
+		p.mouseDragged(110, 60, 0, 0, 0);
+		p.mouseDragged(120, 60, 0, 0, 0);
+		assertEquals(-14, p.yaw(), 1e-4);
+		p.mouseReleased(120, 60, 0);
+		p.mouseClicked(120, 60, 1);
+		p.mouseDragged(126, 64, 1, 0, 0);
+		assertEquals(6, p.panX(), 1e-4);
+		assertEquals(4, p.panY(), 1e-4);
 	}
 
 	@Test

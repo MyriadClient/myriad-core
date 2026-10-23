@@ -18,16 +18,19 @@ import java.util.Objects;
 /**
  * A 3D view of something, for seeing what render settings do to it: an entity, you, a block (a chest, a shulker box),
  * or your first-person hands and held items (as View Model shapes them). Drag to turn it, right-drag or Shift-drag to
- * move it, scroll to zoom, double-click to put it back. {@link #decorate} draws on it with the same shapes a module
- * draws in the world ({@link ShapeBuilder}, so a {@code BoxStyle} draws itself), in the subject's own coordinates: the
- * subject's box is passed in. Put one in a module's settings window with {@code Module.preview}, or in any window.
+ * move it, scroll to zoom, double-click to put it back. The modules that are on draw on it as in the world: their
+ * shader highlights ({@code HighlightEvent}) as they are, their boxes and lines through
+ * {@link dev.myriadclient.api.event.events.PreviewEvent}. {@link #decorate} draws on this one preview with the same
+ * shapes ({@link ShapeBuilder}, so a {@code BoxStyle} draws itself), in the subject's own coordinates: the subject's box
+ * is passed in. Put one in a module's settings window with {@code Module.preview}, or in any window; players add
+ * Preview windows of their own to a workspace.
  * <p>
  * Entities and you need a world: outside one, the preview shows only its background.
  *
  * <pre>{@code
  * @Override
  * public Widget preview() {
- *     return Preview.entity(EntityTypes.ZOMBIE).decorate((shapes, box, entity) -> style.draw(shapes, box, color.argb(), 1));
+ *     return Preview.entity(EntityTypes.ZOMBIE);
  * }
  * }</pre>
  */
@@ -79,6 +82,8 @@ public final class Preview extends Widget {
 	private float startYaw, startPitch;
 	private float yaw, pitch, zoom = 1, panX, panY;
 	private int dragButton = -1;
+	/** Where the mouse was at the last click or drag: the movement is measured from it (not every window passes one). */
+	private float lastX, lastY;
 	private long lastClick;
 
 	private Preview(Subject subject, float yaw, float pitch) {
@@ -187,12 +192,18 @@ public final class Preview extends Widget {
 		}
 		lastClick = now;
 		dragButton = button;
+		lastX = mouseX;
+		lastY = mouseY;
 		return true;
 	}
 
 	@Override
 	public boolean mouseDragged(float mouseX, float mouseY, int button, float dx, float dy) {
 		if (dragButton < 0) return false;
+		dx = mouseX - lastX;
+		dy = mouseY - lastY;
+		lastX = mouseX;
+		lastY = mouseY;
 		if (dragButton == 1 || shiftDown()) {
 			panX += dx;
 			panY += dy;

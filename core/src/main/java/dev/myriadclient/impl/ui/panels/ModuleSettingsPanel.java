@@ -40,7 +40,11 @@ public final class ModuleSettingsPanel extends WidgetPanel {
 		if (!module.description().isEmpty()) content.add(new Label(module.description()).dim());
 		content.add(new Label(module.group().name() + " · " + AddonNames.of(module)).dim());
 		Widget preview = module.preview();
-		if (preview != null) content.add(preview);
+		if (preview != null) {
+			content.add(preview);
+			// A preview shows what the modules that are on draw, this one included.
+			content.add(new Label("Turn it on to see it on the preview.").dim().visible(() -> !module.isEnabled()));
+		}
 		content.add(SettingsView.build(module.settings));
 	}
 }

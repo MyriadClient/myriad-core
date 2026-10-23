@@ -36,6 +36,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3fc;
@@ -130,6 +131,8 @@ public final class HighlightRenderer {
 
 	// The first-person hand, drawn after the world: its highlights are numbered from handBase (-1 while it has none).
 	private boolean drawingHand;
+	/** A preview drawing your hands now (see {@link #previewHands}). */
+	private @Nullable PreviewHighlights previewHands;
 	private int handBase = -1;
 	private final Matrix4f handProjection = new Matrix4f();
 	private final Matrix4f handTransform = new Matrix4f();
@@ -223,6 +226,20 @@ public final class HighlightRenderer {
 		if (!HighlightEvent.ENTITY_HIGHLIGHT.hooked()) return asked;
 		HighlightEvent.EntityHighlight h = HighlightEvent.ENTITY_HIGHLIGHT.call(null, asked, x -> x);
 		return h == null || h.style() == null || (h.color() >>> 24) == 0 ? new HighlightEvent.EntityHighlight(entity, null, 0) : h;
+	}
+
+	/** Who highlights {@code entity} in a preview, as in the world (the listeners, then the hook): a null style for nobody. */
+	public HighlightEvent.EntityHighlight askPreview(Entity entity) {
+		if (!entityListeners.isSet() && !HighlightEvent.ENTITY_HIGHLIGHT.hooked()) return new HighlightEvent.EntityHighlight(entity, null, 0);
+		return ask(entity, 1);
+	}
+
+	/**
+	 * A preview is drawing your hands ({@code preview}), or has done (null): their parts are asked about as in the world,
+	 * and highlighted into the preview's texture.
+	 */
+	public void previewHands(@Nullable PreviewHighlights preview) {
+		previewHands = preview;
 	}
 
 	/** An entity's render state was just built: ask who highlights it, and point its outline colour at the highlight. */
@@ -480,9 +497,9 @@ public final class HighlightRenderer {
 		drawingHand = false;
 	}
 
-	/** Whether the hand is being submitted with highlights asked about. */
+	/** Whether the hand is being submitted with highlights asked about (in the world, or a preview's). */
 	public boolean drawingHand() {
-		return drawingHand;
+		return drawingHand || previewHands != null && handListeners.isSet();
 	}
 
 	/**
@@ -492,8 +509,13 @@ public final class HighlightRenderer {
 	 */
 	public int hand(HighlightEvent.Hand.Part part, InteractionHand hand, HumanoidArm side, ItemStack item, Matrix4fc pose,
 					Consumer<Consumer<Vector3fc>> extents) {
-		if (!drawingHand) return 0;
 		float tickDelta = Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false);
+		if (previewHands != null) {
+			if (!handListeners.isSet()) return 0;
+			HighlightEvent.Hand e = Myriad.events().post(handEvent.reset(part, hand, side, item, tickDelta));
+			return previewHands.add(e.style(), e.color());
+		}
+		if (!drawingHand) return 0;
 		HighlightEvent.Hand e = Myriad.events().post(handEvent.reset(part, hand, side, item, tickDelta));
 		if (e.style() == null || highlights.count >= MAX_HIGHLIGHTS) return 0;
 		RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();

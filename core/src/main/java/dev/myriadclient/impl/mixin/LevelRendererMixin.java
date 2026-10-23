@@ -7,6 +7,7 @@ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
 import dev.myriadclient.impl.render.HighlightRenderer;
+import dev.myriadclient.impl.render.PreviewHighlights;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
@@ -46,9 +47,14 @@ public abstract class LevelRendererMixin {
 		HighlightRenderer.INSTANCE.afterMask();
 	}
 
-	/** While the hand is drawn with highlights, the outline target is the hand's mask (see FeatureRenderDispatcherMixin). */
+	/**
+	 * While the hand is drawn with highlights, the outline target is the hand's mask; while a preview is drawn, the
+	 * preview's (see FeatureRenderDispatcherMixin).
+	 */
 	@ModifyReturnValue(method = "entityOutlineTarget", at = @At("RETURN"))
 	private RenderTarget myriad$handMask(RenderTarget target) {
+		PreviewHighlights preview = PreviewHighlights.drawing();
+		if (preview != null && preview.mask() != null) return preview.mask();
 		return HighlightRenderer.INSTANCE.handHighlighted() ? HighlightRenderer.INSTANCE.handMask() : target;
 	}
 

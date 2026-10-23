@@ -7,6 +7,7 @@ import dev.myriadclient.api.control.ControlPanel;
 import dev.myriadclient.api.job.Job;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
+import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Window;
 import dev.myriadclient.api.util.MyriadId;
@@ -40,6 +41,7 @@ public final class CorePanels {
 	public static final MyriadId CONTROL = MyriadId.of("myriad", "control");
 	public static final MyriadId WHEELS = MyriadId.of("myriad", "wheels");
 	public static final MyriadId WHEEL = MyriadId.of("myriad", "wheel");
+	public static final MyriadId PREVIEW = MyriadId.of("myriad", "preview");
 
 	private CorePanels() {
 	}
@@ -77,6 +79,7 @@ public final class CorePanels {
 			return MyriadImpl.get().controlManager().impls().stream().filter(c -> c.id().toString().equals(args.get("id").getAsString()))
 				.findFirst().map(ControlPanelView::new).orElse(null);
 		}).build());
+		ctx.registerPanel(PanelType.builder(PREVIEW, "Preview").icon(Icons.EYE).factory(PreviewPanel::new).build());
 		ctx.registerPanel(PanelType.builder(WHEELS, "Wheels").icon(WheelsPanel.ICON).factory(WheelsPanel::new).build());
 		// One wheel's window; not listed on its own (the launcher lists each wheel).
 		ctx.registerPanel(PanelType.builder(WHEEL, "Wheel").icon(WheelsPanel.ICON).listed(false).factory(args -> {

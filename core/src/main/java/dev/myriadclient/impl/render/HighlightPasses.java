@@ -21,6 +21,7 @@ import it.unimi.dsi.fastutil.ints.IntRBTreeSet;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MappableRingBuffer;
 import net.minecraft.resources.Identifier;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
@@ -131,14 +132,17 @@ final class HighlightPasses {
 		}
 	}
 
-	/** Resolves {@code layer}'s hidden pixels (if any of its highlights isn't through walls) and runs the row pass. */
-	static void prepare(CommandEncoder encoder, Layer layer, RenderTarget mask, RenderTarget main, GpuBuffer gpuData, int radius, int w, int h) {
+	/**
+	 * Resolves {@code layer}'s hidden pixels (if any of its highlights isn't through walls; {@code main} gives the scene's
+	 * depth, and may be null otherwise) and runs the row pass.
+	 */
+	static void prepare(CommandEncoder encoder, Layer layer, RenderTarget mask, @Nullable RenderTarget main, GpuBuffer gpuData, int radius, int w, int h) {
 		if (mask == null || mask.getColorTextureView() == null || layer.area == null) return;
 		resize(layer, w, h);
 		GpuSampler nearestSampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
 		GpuTextureView source = mask.getColorTextureView();
 		int[] area = layer.area;
-		if (layer.anyDepthTested) {
+		if (layer.anyDepthTested && main != null) {
 			try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_RESOLVE, layer.resolved.getColorTextureView(), gpuData, grow(area, 2 * radius, 2 * radius, w, h))) {
 				pass.bindTexture("Mask", source, nearestSampler);
 				pass.bindTexture("MaskDepth", mask.getDepthTextureView(), nearestSampler);
@@ -157,15 +161,20 @@ final class HighlightPasses {
 
 	/** One layer onto the main target: outlines, glows and built-in fills, then addons' fills over their highlights' insides. */
 	static void composite(CommandEncoder encoder, Layer layer, RenderTarget main, GpuBuffer gpuData) {
-		composite(encoder, MyriadPipelines.HIGHLIGHT_COMPOSITE, layer, main, gpuData);
+		composite(encoder, layer, main.getColorTextureView(), gpuData);
+	}
+
+	/** One layer onto {@code target} (a preview's texture, say), as {@link #composite(CommandEncoder, Layer, RenderTarget, GpuBuffer)}. */
+	static void composite(CommandEncoder encoder, Layer layer, GpuTextureView target, GpuBuffer gpuData) {
+		composite(encoder, MyriadPipelines.HIGHLIGHT_COMPOSITE, layer, target, gpuData);
 		for (int fill : layer.customFills) {
 			RenderPipeline pipeline = FILLS.get(fill);
-			if (pipeline != null) composite(encoder, pipeline, layer, main, gpuData);
+			if (pipeline != null) composite(encoder, pipeline, layer, target, gpuData);
 		}
 	}
 
-	private static void composite(CommandEncoder encoder, RenderPipeline pipeline, Layer layer, RenderTarget main, GpuBuffer gpuData) {
-		try (RenderPass pass = begin(encoder, pipeline, main.getColorTextureView(), gpuData, layer.compositeRect)) {
+	private static void composite(CommandEncoder encoder, RenderPipeline pipeline, Layer layer, GpuTextureView target, GpuBuffer gpuData) {
+		try (RenderPass pass = begin(encoder, pipeline, target, gpuData, layer.compositeRect)) {
 			pass.bindTexture("SpreadSampler", layer.spread.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
 			pass.draw(3, 1, 0, 0);
 		}

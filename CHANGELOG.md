@@ -25,7 +25,22 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
   settings window through `Module.preview()` (null by default); any window can hold one. Drawn through a
   picture-in-picture renderer of its own (registered with Fabric's), entities made once per world and never added to
   it; a subject the game can't draw out of the world shows nothing rather than failing the frame. `Canvas.preview`
-  draws one by hand. Shader effects (highlight outlines, glow) don't run in a preview.
+  draws one by hand.
+- **Modules draw on previews as in the world, shader highlights included.** What a module highlights through
+  `HighlightEvent` (outlines, glow, fills, gradients) is highlighted on a preview's entity and your hands with nothing
+  more to do: the preview's outline pass draws into a mask of its own and the highlight passes composite onto its
+  texture. `PreviewEvent` (posted each frame for each preview drawn) gives the subject (`entity()`, `block()`,
+  `viewModel()`), its `box()` and `shapes()` for boxes and lines, and `highlight(style, color)` for a block's shader
+  highlight; `highlighted()` says whether a handler before yours took it. Preview entities stand where you are, so
+  distance checks count them as near. A preview shows what the modules that are on draw, the module's own settings
+  window included (it says to turn the module on when it's off).
+- **Preview windows.** Add a Preview from the launcher to any workspace to watch a mob, you, a container, a block or
+  your hands while tuning how things are drawn, without closing the menu to look at the world. The picker at the top
+  chooses what it shows (and which mob, container or block), saved with the window; the preview fills the rest.
+- Several previews on screen at once each keep their own picture: the GUI gives a kind of picture one renderer and a
+  renderer one texture, so the preview renderer hands each preview a picture of its own (closed two seconds after its
+  preview stops being drawn). Turning and moving a preview by dragging works in every window (the window passes no
+  movement with a drag; the preview measures it from where the mouse was).
 
 ## 0.10.1
 
