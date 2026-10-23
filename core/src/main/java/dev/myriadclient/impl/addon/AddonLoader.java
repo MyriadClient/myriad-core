@@ -9,6 +9,7 @@ import dev.myriadclient.api.registry.Registry;
 import dev.myriadclient.impl.MyriadImpl;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.entrypoint.EntrypointContainer;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,6 +19,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
@@ -34,6 +36,8 @@ public final class AddonLoader {
 	private final Map<Addon, AddonContext> contexts = new HashMap<>();
 	/** Package prefix -> addon id, to attribute event handler exceptions. */
 	private final Map<String, String> packages = new LinkedHashMap<>();
+	/** How long each addon's phases took, by addon id: [registering tags and initialize, postInitialize], in nanoseconds. */
+	private final Map<String, long[]> startup = new HashMap<>();
 
 	public AddonLoader(MyriadImpl myriad) {
 		this.myriad = myriad;
@@ -62,6 +66,36 @@ public final class AddonLoader {
 		}
 	}
 
+	/**
+	 * How long an addon took to start, for the Addons window: {@code initialize} (with registering its tags, just before)
+	 * and {@code postInitialize}, up to the phase it failed in if it did. Null for an addon that never ran.
+	 */
+	public @Nullable Startup startup(String id) {
+		long[] n = startup.get(id);
+		return n == null ? null : new Startup(n[0], n[1]);
+	}
+
+	/** An addon's startup time in nanoseconds. */
+	public record Startup(long initializeNanos, long postInitializeNanos) {
+		public long totalNanos() {
+			return initializeNanos + postInitializeNanos;
+		}
+
+		/**
+		 * "Started in 38 ms (initialize 36 ms, postInitialize 2.1 ms)": what the addon added to the game's start, so a slow
+		 * one can be found. A failed addon's time is up to the failure.
+		 */
+		public String describe(boolean failed) {
+			String split = " (initialize " + ms(initializeNanos) + (failed ? "" : ", postInitialize " + ms(postInitializeNanos)) + ")";
+			return (failed ? "Ran " + ms(totalNanos()) + " before failing" : "Started in " + ms(totalNanos())) + split;
+		}
+
+		private static String ms(long nanos) {
+			double ms = nanos / 1e6;
+			return (ms < 10 ? String.format(Locale.ROOT, "%.1f", ms) : String.valueOf(Math.round(ms))) + " ms";
+		}
+	}
+
 	/** Best-effort owner of a class: the addon whose entrypoint package is the longest prefix of its name. */
 	public String ownerOf(Class<?> klass) {
 		String name = klass.getName();
@@ -78,34 +112,38 @@ public final class AddonLoader {
 
 	@SuppressWarnings("deprecation")
 	public void registerTags() {
-		runPhase("registerTags", (a, ctx) -> {
+		runPhase("registerTags", 0, (a, ctx) -> {
 			a.registerTags(ctx);
 			a.registerCategories(ctx);
 		});
 	}
 
 	public void initialize() {
-		runPhase("initialize", MyriadAddon::initialize);
+		runPhase("initialize", 0, MyriadAddon::initialize);
 	}
 
 	public void postInitialize() {
-		runPhase("postInitialize", MyriadAddon::postInitialize);
+		runPhase("postInitialize", 1, MyriadAddon::postInitialize);
 		for (Addon a : addons) a.markLoaded();
 	}
 
-	private void runPhase(String phase, BiConsumer<MyriadAddon, AddonContext> action) {
+	/** Runs {@code phase} for each addon still loading, adding its time to {@code slot} of the addon's {@link Startup}. */
+	private void runPhase(String phase, int slot, BiConsumer<MyriadAddon, AddonContext> action) {
 		for (Addon addon : addons) {
 			if (addon.state() == AddonState.FAILED) continue;
 			long start = System.nanoTime();
 			try {
 				action.accept(addon.entrypoint(), contexts.get(addon));
 			} catch (Throwable t) {
+				startup.computeIfAbsent(addon.id(), k -> new long[2])[slot] += System.nanoTime() - start;
 				LOG.error("Addon {} failed during {}; disabling it", addon.id(), phase, t);
 				addon.markFailed(t);
 				rollback(addon);
 				continue;
 			}
-			long ms = (System.nanoTime() - start) / 1_000_000;
+			long took = System.nanoTime() - start;
+			startup.computeIfAbsent(addon.id(), k -> new long[2])[slot] += took;
+			long ms = took / 1_000_000;
 			if (ms > 250) LOG.warn("Addon {} took {} ms in {}", addon.id(), ms, phase);
 		}
 	}

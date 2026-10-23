@@ -16,6 +16,10 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 
 ## 0.10.0 (unreleased)
 
+- **How long each addon took to start, in the Addons window.** Each card says "Started in 55 ms (initialize 55 ms,
+  postInitialize 0.0 ms)", registering its tags counted with `initialize`; a failed addon shows how long it ran before
+  failing. In the example addon's dev client: core 21 ms, Essentials 55 ms. The log's warning for a phase over 250 ms
+  stays.
 - **A Gradle plugin for addons: `id 'dev.myriadclient.addon' version '0.10.0'`.** Released with core, under its
   version, from Myriad's maven. It applies Loom and sets up what every addon's build repeated: Myriad's maven (for
   `dev.myriadclient` only); Minecraft, Fabric and Myriad at the versions that release was built with (each overridable

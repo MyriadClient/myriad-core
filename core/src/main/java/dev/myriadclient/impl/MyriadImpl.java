@@ -312,6 +312,10 @@ public final class MyriadImpl implements MyriadApi {
 		return addonLoader.addons();
 	}
 
+	public AddonLoader addonLoader() {
+		return addonLoader;
+	}
+
 	@Override
 	public Registry<Category> categories() {
 		return categories;

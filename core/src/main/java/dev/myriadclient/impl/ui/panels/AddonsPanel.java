@@ -13,6 +13,7 @@ import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.SettingsView;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.addon.AddonLoader;
 import dev.myriadclient.impl.update.UpdateManager;
 import net.minecraft.util.Util;
 
@@ -145,6 +146,8 @@ public final class AddonsPanel extends WidgetPanel {
 			if (!addon.authors().isEmpty()) body.add(new Label("By " + String.join(", ", addon.authors())).dim());
 			String id = addon.id();
 			body.add(new Label(() -> counts(id)));
+			AddonLoader.Startup started = MyriadImpl.get().addonLoader().startup(id);
+			if (started != null) body.add(new Label(started.describe(failed())).dim());
 			// Links from the addon's fabric.mod.json "contact" block.
 			HBox links = new HBox(4);
 			addon.homepage().ifPresent(url -> links.add(new Button(" Website", () -> Util.getPlatform().openUri(url))).tooltip(url));
