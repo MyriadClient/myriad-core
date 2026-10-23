@@ -14,7 +14,7 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
-## 0.10.1 (unreleased)
+## 0.10.1
 
 - **A sort never stops on a click you didn't make.** Letting go of a mouse button in a container screen made vanilla
   click the slot under the mouse whenever the cursor held something, to put it down, and while a sort runs the cursor
