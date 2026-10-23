@@ -16,6 +16,9 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 
 ## 0.10.0 (unreleased)
 
+- **The colour picker's hue bar works on white and black.** With the square's marker in its top-left corner (white)
+  or along its bottom (black), a hue you dragged snapped back to red as soon as you let go, since those colours have
+  no hue to read back; the picker now keeps its own hue and saturation while they still make the colour.
 - **How long each addon took to start, in the Addons window.** Each card says "Started in 55 ms (initialize 55 ms,
   postInitialize 0.0 ms)", registering its tags counted with `initialize`; a failed addon shows how long it ran before
   failing. In the example addon's dev client: core 21 ms, Essentials 55 ms. The log's warning for a phase over 250 ms

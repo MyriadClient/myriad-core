@@ -42,8 +42,17 @@ public class ColorPicker extends Widget {
 
 	private void sync() {
 		int c = getter.get().color();
-		hsb = ColorUtil.toHsb(c);
+		hsb = resync(hsb, alpha, c);
 		alpha = ColorUtil.alpha(c);
+	}
+
+	/**
+	 * The picker's hue, saturation and brightness for colour {@code c}: the ones it has while they still make {@code c},
+	 * else read from it. White, grey and black have no hue (and black no saturation), so reading them back would reset
+	 * the hue bar to red as soon as it was let go, and the square with it.
+	 */
+	static float[] resync(float[] hsb, int alpha, int c) {
+		return hsb != null && ColorUtil.hsb(hsb[0], hsb[1], hsb[2], alpha) == c ? hsb : ColorUtil.toHsb(c);
 	}
 
 	@Override
