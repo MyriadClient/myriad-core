@@ -1,13 +1,25 @@
 # Changelog
 
-Myriad follows [semantic versioning](https://semver.org) for the public API (`dev.myriadclient.api`): while the major
-version is 0, a **minor** release may change the API, and anything removed is deprecated for at least one minor
-release first with its replacement in the javadoc; a **patch** release never changes it. `dev.myriadclient.impl` is internal
-and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
+Myriad follows [semantic versioning](https://semver.org) for the public API (`dev.myriadclient.api`). The API names
+Minecraft's own types, so addons are rebuilt for each Minecraft version whatever Myriad does; within one:
+
+- From 1.0, every 1.x release is **source- and binary-compatible** with the 1.x releases before it for the same
+  Minecraft version: an addon built against 1.2 runs on 1.5. Core's build checks this against the last release.
+- A move to a **new Minecraft version is a minor release**. It may deprecate what the new version made wrong, with the
+  replacement in the javadoc, but removes nothing.
+- **Removals need a major release**, and only of what a minor release deprecated first.
+- A **patch** release never changes the API.
+- Until 1.0, the same, except that a minor release may remove what an earlier minor release deprecated.
+
+`dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
 ## 0.10.0 (unreleased)
 
+- **The versioning policy for 1.0, written down** (above, in the README and on the Compatibility page): 1.x releases
+  are source- and binary-compatible for the same Minecraft version, a new Minecraft version is a minor release that may
+  deprecate but removes nothing, removals need a major, patches never change the API; until 1.0 a minor may also remove
+  what an earlier minor deprecated.
 - **The API is checked against the last release on every build.** `checkApi` (part of `check`) compares
   `dev.myriadclient.api` with the last published core (`api_baseline` in `gradle.properties`) using japicmp, fails on
   a binary-incompatible change (a removed or changed method, a class made final...) unless the version is a new major,

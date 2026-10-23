@@ -388,8 +388,11 @@ An addon built against one version of Myriad keeps working on the next. What tha
   accessors over time; only Myriad creates them.
 - **Removals are announced.** Something going away is `@Deprecated` for at least one minor release first, with its
   replacement in the javadoc. Core's build compares the API with the last release's and fails on anything that would
-  break an addon built against it. [`CHANGELOG.md`](CHANGELOG.md) lists what each release adds and changes, and the
-  versioning rule (while the major version is 0, minor releases may change the API, patch releases never do).
+  break an addon built against it. [`CHANGELOG.md`](CHANGELOG.md) lists what each release adds and changes.
+- **Versioning.** From 1.0, 1.x releases are source- and binary-compatible for the same Minecraft version (an addon
+  built against 1.2 runs on 1.5); a new Minecraft version is a minor release that may deprecate but removes nothing;
+  removals need a major; patches never change the API. Until 1.0, a minor may also remove what an earlier minor
+  deprecated. The API names Minecraft's types, so addons are rebuilt for each Minecraft version regardless.
 - **Versions.** Declare the oldest core you support in `fabric.mod.json` (`"depends": {"myriad": ">=0.1.0"}`). To use
   something newer while supporting older cores, check `Myriad.isAtLeast("0.2.0")` (`Myriad.version()` is the running one).
 - **Updates.** Myriad updates your addon from its GitHub releases when `contact.sources` in `fabric.mod.json` is
