@@ -2,6 +2,7 @@ package dev.myriadclient.impl.service;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.build.Target;
+import dev.myriadclient.impl.MyriadImpl;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.item.Item;
 
@@ -10,11 +11,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** A build's materials: the hotbar slot with the item a block needs, or one moved in from the inventory for it. */
+/**
+ * A build's materials: the hotbar slot with the item a block needs, or one moved in from the inventory for it. Once no
+ * build is running the hotbar is put back as it was ({@link HotbarRestore}).
+ */
 final class BuildMaterials {
 	private final Minecraft mc = Minecraft.getInstance();
 	private final BuildManager manager;
-	/** The items exact targets have needed: the only ones moved into the hotbar for them, and the only ones moved out. */
+	/** The items this build has needed: the only ones it moves into the hotbar, and the only ones it moves aside there. */
 	private final Set<Item> materials = new HashSet<>();
 	/** Hotbar slots this build moved materials into, the longest ago first. */
 	private final List<Integer> filledSlots = new ArrayList<>();
@@ -37,33 +41,56 @@ final class BuildMaterials {
 	private int findSlot(Item item) {
 		int slot = Myriad.inventory().findInHotbar(s -> s.is(item));
 		if (slot >= 0) return slot;
-		if (Myriad.inventory().findInInventory(s -> s.is(item)) < 0) {
+		int from = Myriad.inventory().findInInventory(s -> s.is(item));
+		if (from < 0) {
 			// In the off hand for a tick after an air placement, until it's swapped back first thing next tick.
 			return Myriad.placement().offHandSlot() >= 0 && mc.player.getOffhandItem().is(item) ? -1 : -2;
 		}
+		return borrow(from) ? -1 : -3;
+	}
+
+	/**
+	 * Moves inventory slot {@code from} into the hotbar slot {@link #hotbarSlotToFill()} picks, if a move can go this
+	 * tick. False if no hotbar slot may take it.
+	 */
+	private boolean borrow(int from) {
 		// Not while a block is in the off hand: a click now would put the server back on your slot before the swap back.
-		if (Myriad.placement().offHandSlot() >= 0) return -1;
+		if (Myriad.placement().offHandSlot() >= 0) return true;
 		int into = hotbarSlotToFill();
-		if (into < 0) return -3;
-		if (manager.moveMaterial(() -> Myriad.inventory().ensureInHotbar(s -> s.is(item), into) == into)) {
+		if (into < 0) return false;
+		if (!(MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory)) return false;
+		if (manager.moveMaterial(() -> {
+			inventory.buildMoves(into);
+			return inventory.moveToHotbar(from, into);
+		})) {
+			materials.add(mc.player.getInventory().getItem(into).getItem());
 			filledSlots.remove((Integer) into);
 			filledSlots.add(into);
 		}
-		return -1;
+		return true;
 	}
 
 	/**
 	 * The hotbar slot a material is moved into: an empty one; else the one this build filled longest ago; else one
-	 * holding another of the blocks it builds with. Never a slot with anything else: your own things stay where you keep
-	 * them. -1 if there's none.
+	 * holding another of the blocks it builds with. Never a slot with anything else (your own things stay where you keep
+	 * them), nor the one you have selected or the server holds, so what you see in your hand doesn't change. -1 if
+	 * there's none.
 	 */
 	private int hotbarSlotToFill() {
 		var inv = mc.player.getInventory();
-		for (int i = 0; i < 9; i++) if (inv.getItem(i).isEmpty()) return i;
+		int selected = inv.getSelectedSlot();
+		InventoryManager inventory = MyriadImpl.get().inventoryManager();
+		int server = inventory.serverSlot();
+		for (int i = 0; i < 9; i++) if (free(i, selected, server, inventory) && inv.getItem(i).isEmpty()) return i;
 		// Checked again: you may have put something of your own there since.
-		for (int i : filledSlots) if (materials.contains(inv.getItem(i).getItem())) return i;
-		for (int i = 8; i >= 0; i--) if (materials.contains(inv.getItem(i).getItem())) return i;
+		for (int i : filledSlots) if (free(i, selected, server, inventory) && materials.contains(inv.getItem(i).getItem())) return i;
+		for (int i = 8; i >= 0; i--) if (free(i, selected, server, inventory) && materials.contains(inv.getItem(i).getItem())) return i;
 		return -1;
+	}
+
+	/** Not your selected slot or the one the server holds, and nothing done with it still on its way to the server. */
+	private static boolean free(int slot, int selected, int server, InventoryManager inventory) {
+		return slot != selected && slot != server && inventory.swappable(slot);
 	}
 
 	/** The hotbar slot with the best item for {@code target} (by its preference); otherwise moves one in, as {@link #slotFor(Item)}. */
@@ -78,8 +105,8 @@ final class BuildMaterials {
 			}
 		}
 		if (best >= 0) return best;
-		if (Myriad.inventory().findInInventory(s -> target.preference(s) >= 0) < 0) return -2;
-		manager.moveMaterial(() -> Myriad.inventory().ensureInHotbar(s -> target.preference(s) >= 0, -1) >= 0);
-		return -1;
+		int from = Myriad.inventory().findInInventory(s -> target.preference(s) >= 0);
+		if (from < 0) return -2;
+		return borrow(from) ? -1 : -3;
 	}
 }

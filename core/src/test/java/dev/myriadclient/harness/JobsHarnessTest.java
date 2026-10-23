@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Jobs driving the real services: what their steps report, and that they let go of what they started. */
@@ -121,6 +122,54 @@ class JobsHarnessTest {
 			assertEquals(Job.State.STUCK, job.state());
 			assertEquals(Why.NO_ITEM, job.why().code());
 			assertTrue(job.why().detail().contains("3"), "no count in: " + job.why().detail());
+		}
+	}
+
+	@Test
+	void aBuildPutsBackWhatItBroughtIntoTheHotbarAndNeverUsesTheSelectedSlot() {
+		try (Harness h = standing()) {
+			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
+			// The selected slot (0) and slot 5 empty, the rest sticks; glass and cobblestone in the inventory.
+			h.give(0, ItemStack.EMPTY);
+			for (int i = 1; i < 9; i++) if (i != 5) h.give(i, new ItemStack(Items.STICK));
+			h.give(20, new ItemStack(Items.GLASS, 16)).give(21, new ItemStack(Items.COBBLESTONE, 16));
+			Map<BlockPos, Target> blocks = new HashMap<>();
+			blocks.put(new BlockPos(1, 1, 0), Target.exact(Blocks.GLASS.defaultBlockState()));
+			blocks.put(new BlockPos(1, 1, 1), Target.exact(Blocks.COBBLESTONE.defaultBlockState()));
+			Job<Void> job = Myriad.jobs().start("builder", Steps.build(Blueprint.of(blocks), Building.Options.forServer()));
+			boolean sawGlass = false, sawCobble = false;
+			for (int t = 0; t < 10; t++) {
+				h.tick();
+				sawGlass |= h.player.getInventory().getItem(5).is(Items.GLASS);
+				sawCobble |= h.player.getInventory().getItem(5).is(Items.COBBLESTONE);
+				assertTrue(h.player.getInventory().getItem(0).isEmpty(), "the selected slot took a block at tick " + t);
+			}
+			assertTrue(sawGlass && sawCobble, "glass then cobblestone into slot 5: " + sawGlass + ", " + sawCobble);
+			job.cancel();
+			h.ticks(10);
+			var inv = h.player.getInventory();
+			assertTrue(inv.getItem(5).isEmpty(), "slot 5 holds " + inv.getItem(5));
+			assertTrue(inv.getItem(20).is(Items.GLASS), "slot 20 holds " + inv.getItem(20));
+			assertTrue(inv.getItem(21).is(Items.COBBLESTONE), "slot 21 holds " + inv.getItem(21));
+			assertEquals(0, inv.getSelectedSlot());
+		}
+	}
+
+	@Test
+	void aSlotAClickJustChangedIsntPlacedFromUntilTheServerCouldAnswer() {
+		try (Harness h = standing()) {
+			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
+			h.give(20, new ItemStack(Items.GLASS, 16));
+			boolean[] right = new boolean[2];
+			h.onTick(() -> {
+				assertTrue(Myriad.inventory().moveToHotbar(20, 5), "the click didn't go");
+				right[0] = Myriad.placement().canPlaceWith(5);
+				right[1] = Myriad.placement().canPlaceWith(0);
+			}).tick();
+			assertFalse(right[0], "placed from slot 5 in the tick its click went");
+			assertTrue(right[1], "a slot the click didn't touch waited too");
+			h.tick();
+			assertTrue(Myriad.placement().canPlaceWith(5), "still waiting a tick later, with no lag");
 		}
 	}
 }

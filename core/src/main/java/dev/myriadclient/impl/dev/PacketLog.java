@@ -14,7 +14,9 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.BundlePacket;
 import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
@@ -123,7 +125,19 @@ public final class PacketLog {
 
 	@Subscribe(priority = Priority.LOWEST)
 	private void onSend(PacketEvent.Send e) {
+		// Logged as made (see clicked): ViaFabricPlus sends clicks to older servers itself, past this event.
+		if (e.packet() instanceof ServerboundContainerClickPacket) return;
 		write('>', e.packet());
+	}
+
+	/**
+	 * A click as the game makes it, from the mixin on its click handler: logged there because ViaFabricPlus sends clicks
+	 * to servers of 1.21.4 and older itself, past the connection where other packets are seen.
+	 */
+	public static void clicked(int containerId, int slot, int button, ContainerInput input) {
+		PacketLog log = current;
+		if (log == null) return;
+		log.line('>', "ContainerClickPacket", "{containerId=" + containerId + ", slotNum=" + slot + ", buttonNum=" + button + ", containerInput=" + input + "}");
 	}
 
 	@Subscribe(priority = Priority.HIGHEST + 1000)
@@ -152,9 +166,15 @@ public final class PacketLog {
 		Class<?> type = packet.getClass();
 		String name = (type.getEnclosingClass() != null ? type.getEnclosingClass().getSimpleName() + "$" : "") + type.getSimpleName();
 		name = name.replace("Serverbound", "").replace("Clientbound", "");
+		if (only.isEmpty() && way == '<' && !all && NOISY.contains(name)) return;
+		line(way, name, fields(packet));
+	}
+
+	/** Writes one line, unless a filter leaves {@code name} out. */
+	private void line(char way, String name, String fields) {
 		String lower = name.toLowerCase(Locale.ROOT);
-		if (!only.isEmpty() ? only.stream().noneMatch(lower::contains) : way == '<' && !all && NOISY.contains(name)) return;
-		String line = "t" + tick + " +" + (System.currentTimeMillis() - startMs) + " " + way + " " + name + " " + fields(packet);
+		if (!only.isEmpty() && only.stream().noneMatch(lower::contains)) return;
+		String line = "t" + tick + " +" + (System.currentTimeMillis() - startMs) + " " + way + " " + name + " " + fields;
 		synchronized (this) {
 			if (current != this) return;
 			try {

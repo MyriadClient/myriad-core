@@ -62,6 +62,7 @@ public final class BuildManager implements Building {
 	@Subscribe(priority = Priority.HIGH)
 	private void onTick(TickEvent.Pre e) {
 		builds.removeIf(b -> !b.isRunning());
+		if (builds.isEmpty() && MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory) inventory.buildsDone();
 		if (builds.isEmpty() || mc.player == null || mc.level == null) return;
 		movedMaterialThisTick = false;
 		slots.clear();

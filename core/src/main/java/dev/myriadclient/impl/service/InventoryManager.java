@@ -6,6 +6,7 @@ import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.service.Inventory;
+import dev.myriadclient.api.util.Slots;
 import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.api.util.Ticks;
 import dev.myriadclient.impl.MyriadImpl;
@@ -99,10 +100,12 @@ public final class InventoryManager implements Inventory {
 	private final InventoryClicks clicks = new InventoryClicks(this, gate);
 	private final Borrows borrows = new Borrows(this, clicks, gate);
 	private final Masks masks = new Masks(borrows);
+	private final SlotsInFlight inFlight = new SlotsInFlight();
+	private final HotbarRestore restore = new HotbarRestore(clicks, gate, inFlight);
 
 	/** What has handlers of its own besides this: subscribed with it. */
 	public List<Object> parts() {
-		return List.of(gate, screenClicks, charge, borrows, masks);
+		return List.of(gate, screenClicks, charge, borrows, masks, restore);
 	}
 
 	/** Lowest priority: what actually goes out, after other handlers have changed it. */
@@ -564,6 +567,47 @@ public final class InventoryManager implements Inventory {
 	@Override
 	public void giveBack(Object owner) {
 		borrows.giveBack(owner);
+	}
+
+	/**
+	 * Every click made, from the mixin on the game's click handler (ViaFabricPlus sends some itself, past the
+	 * connection): the hotbar slots it changes are in flight for a round trip (see {@link SlotsInFlight}).
+	 */
+	public void clickMade(int containerId, int slotNum, int button, ContainerInput input) {
+		if (mc.player == null) return;
+		if (input == ContainerInput.SWAP) inFlight.changed(button == Slots.OFF_HAND ? SlotsInFlight.OFF_HAND : button);
+		var menu = mc.player.containerMenu;
+		if (menu.containerId != containerId || slotNum < 0 || slotNum >= menu.slots.size()) return;
+		var slot = menu.slots.get(slotNum);
+		if (slot.container != mc.player.getInventory()) return;
+		int index = slot.getContainerSlot();
+		if (index < Slots.HOTBAR_END) inFlight.changed(index);
+		else if (index == Slots.OFF_HAND) inFlight.changed(SlotsInFlight.OFF_HAND);
+	}
+
+	/** Something was placed or used from hotbar {@code slot}: see {@link SlotsInFlight#used}. */
+	public void slotUsed(int slot) {
+		inFlight.used(slot);
+	}
+
+	/** See {@link SlotsInFlight#placeable}. */
+	public boolean placeable(int slot) {
+		return inFlight.placeable(slot);
+	}
+
+	/** See {@link SlotsInFlight#swappable}. */
+	boolean swappable(int slot) {
+		return inFlight.swappable(slot);
+	}
+
+	/** A build moves a material into {@code hotbarSlot}: see {@link HotbarRestore#begin}. */
+	void buildMoves(int hotbarSlot) {
+		restore.begin(hotbarSlot);
+	}
+
+	/** No build is running: what they moved into the hotbar goes back (see {@link HotbarRestore}). */
+	void buildsDone() {
+		restore.finish();
 	}
 
 	@Override

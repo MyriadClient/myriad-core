@@ -6,6 +6,7 @@ import dev.myriadclient.api.event.events.BlockBrokenEvent;
 import dev.myriadclient.api.event.events.InteractEvent;
 import dev.myriadclient.api.event.events.ItemUseEvent;
 import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.dev.PacketLog;
 import dev.myriadclient.impl.service.RotationManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
@@ -73,7 +74,10 @@ public abstract class ClientPlayerInteractionManagerMixin {
 	/** Counts every click made, whichever way it then reaches the server (see PacketLimiter.recordClick). */
 	@Inject(method = "handleContainerInput", at = @At("HEAD"))
 	private void myriad$countClick(int containerId, int slotNum, int buttonNum, ContainerInput input, Player player, CallbackInfo ci) {
-		if (MyriadImpl.get() != null) MyriadImpl.get().packetLimiter().recordClick();
+		if (MyriadImpl.get() == null) return;
+		MyriadImpl.get().packetLimiter().recordClick();
+		MyriadImpl.get().inventoryManager().clickMade(containerId, slotNum, buttonNum, input);
+		PacketLog.clicked(containerId, slotNum, buttonNum, input);
 	}
 
 	@Unique

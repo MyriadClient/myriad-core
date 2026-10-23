@@ -16,6 +16,24 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 
 ## 0.10.0 (unreleased)
 
+- **Building leaves your hotbar as it was.** A build (the Printer, Portal Builder, any `Steps.build`) moved blocks into
+  the hotbar for good, so a print ended with the hotbar full of building blocks. It now remembers the inventory when it
+  first moves something, and once no build is running puts every hotbar slot it used back, one click a tick, each
+  block to the inventory slot it came from where that's free. It also never puts a block in the slot you have
+  selected or the one the server holds, so what's in your hand doesn't change, and with a full hotbar it no longer
+  falls back to your selected slot. In the suite's Printer runs, the hotbar and off hand come out as they went in
+  every time.
+- **No misplaced blocks with lag.** With a round trip of a few hundred milliseconds, a placement could put the wrong
+  block down (stone where glass belonged, a log for a slab): the server's answer to an earlier placement arrived after
+  a block had been swapped into that hotbar slot and showed the slot's old contents again, the placement went out on
+  that view, and the server, finding the client's inventory wrong, sent the whole inventory back, which arrived late in
+  turn. Now nothing is placed from a hotbar slot a click changed less than a round trip ago (the time the server takes
+  to answer your actions, `Server.ping`), and nothing is moved into a slot clicked or placed from less than a round trip
+  ago. Without lag that's a tick, as before. Printing a row of 24 mixed blocks with 2b2t's settings through a 120 ms
+  (each way) proxy: walking 15 right and 7 wrong before, 23 right and none wrong now; sprinting 14/6 before, 20/0 now;
+  sprint-jumping 14/8 before, 15/0 now (the rest weren't placed in one pass, as a slot now waits for the server).
+- **`.packets log` shows inventory clicks** when you join through ViaFabricPlus as 1.21.4 or older: it sends those
+  clicks itself, past the connection, so they were missing. They're logged as the game makes them.
 - **The colour picker's hue bar works on white and black.** With the square's marker in its top-left corner (white)
   or along its bottom (black), a hue you dragged snapped back to red as soon as you let go, since those colours have
   no hue to read back; the picker now keeps its own hue and saturation while they still make the colour.

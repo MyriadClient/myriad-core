@@ -308,6 +308,7 @@ public final class PlacementManager implements Placement {
 		boolean air = airClick(target, pos);
 		if (placing(slot).getItem() instanceof SignItem) signPlacedAt = Clock.millis();
 		InventoryManager inventory = MyriadImpl.get().inventoryManager() instanceof InventoryManager i ? i : null;
+		if (inventory != null) inventory.slotUsed(slot);
 		if (inventory != null && inventory.undoSlotThisTick() == slot) {
 			// This slot's block is in the off hand for this tick's air placements: this one goes from there too (against
 			// air or a block), with no swap of its own, so a whole burst rides on one swap.
@@ -415,8 +416,10 @@ public final class PlacementManager implements Placement {
 	 * which leaves items in the wrong hands.
 	 */
 	private static boolean handsFree(int slot) {
-		if (!(MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory) || !inventory.undoPending()) return true;
-		return inventory.undoSlotThisTick() == slot;
+		if (!(MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory)) return true;
+		// A click changed the slot less than a round trip ago: the server may yet show the client its old contents.
+		if (slot >= 0 && !inventory.placeable(slot)) return false;
+		return !inventory.undoPending() || inventory.undoSlotThisTick() == slot;
 	}
 
 	/**
