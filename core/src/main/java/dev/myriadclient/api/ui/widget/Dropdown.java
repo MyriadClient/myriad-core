@@ -35,7 +35,14 @@ public class Dropdown<T> extends Widget {
 	@Override
 	public void render(Canvas c, float mx, float my) {
 		boolean hover = mx >= x && my >= y && mx < x + width && my < y + ROW;
-		c.roundRect(x, y, width, height, 4, hover ? theme().surfaceHover.argb() : theme().surface.argb());
+		// The header lights up on hover; an open list under it keeps the header's own colour.
+		int header = hover ? theme().surfaceHover.argb() : theme().surface.argb();
+		if (height > ROW + 0.5f) {
+			c.roundRect(x, y, width, ROW, 4, 4, 0, 0, header);
+			c.roundRect(x, y + ROW, width, height - ROW, 0, 0, 4, 4, theme().surface.argb());
+		} else {
+			c.roundRect(x, y, width, height, 4, header);
+		}
 		String value = names.apply(getter.get());
 		c.text(c.ellipsize(c.defaultFont(), c.defaultFontSize(), value, width - 16), x + 4, y + (ROW - c.textHeight()) / 2, theme().text.argb());
 		c.text(expanded ? "" : "", x + width - 10, y + (ROW - c.textHeight()) / 2, theme().textDim.argb());

@@ -205,7 +205,7 @@ public class RegistryPicker<T> extends Widget {
 		if (lastSize < 0) refilter();
 		search.render(c, mx, my);
 		float ly = y + ROW * 2 + 6;
-		c.roundRect(x, ly, width, LIST_HEIGHT, 4, ColorUtil.withAlpha(theme().surface.argb(), 60));
+		c.roundRect(x, ly, width, LIST_HEIGHT, 4, theme().surface.argb());
 		c.push();
 		c.clip(x, ly, width, LIST_HEIGHT);
 		int first = (int) (scroll / ENTRY);
