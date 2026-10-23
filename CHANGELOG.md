@@ -50,7 +50,10 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 - **Preview windows.** Add a Preview from the launcher to any workspace to watch a mob, you, a container, a block or
   your hands while tuning how things are drawn, without closing the menu to look at the world. The picker at the top
   chooses what it shows (and which mob, container or block), saved with the window; the preview fills the rest, and the
-  picker's lists open in its place rather than shrinking it.
+  picker's lists open over it, on the window's own background, so it neither shrinks nor disappears while you choose.
+- The Player preview shows a stand-in with your look (your skin and its layers, armour, what you hold, main arm) rather
+  than you: modules leave you yourself out (ESP colours you only as Self, in third person), so they now draw on it as
+  on any player.
 - A block is shown as it stands in the world, from its block model (a hopper's item is a flat icon), chests and shulker
   boxes through their own renderers; other items still show as their item model. The view model is a peek at what
   you'd see without the menu in the way: your items, or your arm when your hand is empty, with your field of view and

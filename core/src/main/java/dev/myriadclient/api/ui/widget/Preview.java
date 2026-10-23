@@ -46,7 +46,10 @@ public final class Preview extends Widget {
 		}
 	}
 
-	/** You: your skin, armour and what you hold. */
+	/**
+	 * A player looking as you do: your skin and its layers, armour and what you hold. A stand-in rather than you, so
+	 * modules draw on it as on any player (most leave you yourself out).
+	 */
 	public record PlayerSubject() implements Subject {
 	}
 
@@ -100,7 +103,7 @@ public final class Preview extends Widget {
 		return new Preview(new EntitySubject(type), START_YAW, START_PITCH);
 	}
 
-	/** You, as others see you. */
+	/** A player looking as you do, as others see you. */
 	public static Preview player() {
 		return new Preview(new PlayerSubject(), START_YAW, START_PITCH);
 	}

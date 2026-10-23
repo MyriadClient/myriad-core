@@ -54,7 +54,10 @@ public final class PreviewEvent {
 		return subject;
 	}
 
-	/** The entity shown (a mob, or you), or null. Placed where you are, so distance checks treat it as near. */
+	/**
+	 * The entity shown (a mob, or a player looking as you do), or null. Never you yourself; placed where you are, so
+	 * distance checks treat it as near.
+	 */
 	public @Nullable Entity entity() {
 		return entity;
 	}

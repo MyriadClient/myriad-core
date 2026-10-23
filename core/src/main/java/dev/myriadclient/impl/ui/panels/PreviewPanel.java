@@ -1,5 +1,6 @@
 package dev.myriadclient.impl.ui.panels;
 
+import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.setting.EnumSetting;
 import dev.myriadclient.api.setting.RegistrySetting;
@@ -27,8 +28,8 @@ import java.util.List;
 /**
  * A preview on its own, for a workspace: something to watch while tuning how things are drawn, without closing the
  * menu to look at the world. It shows what the modules on would draw on it (their highlights and shapes, through
- * {@code PreviewEvent}); pick what it shows at the top. The picker's lists open in the preview's place, on the window's
- * own background, rather than pushing it down; the preview is back at its size once you've chosen.
+ * {@code PreviewEvent}); pick what it shows at the top. The picker's lists open over the preview, on the window's own
+ * background, rather than pushing it down, so the preview keeps its place and size while you choose.
  */
 final class PreviewPanel extends Panel {
 	enum Subject {
@@ -112,22 +113,21 @@ final class PreviewPanel extends Panel {
 		if (top == null) build();
 		float w = width - 2 * PAD, below = rowHeight + 2 * PAD;
 		preview.height(height - below - PAD);
-		// While a list is open it's shown on the window alone, readable; the preview is back once it shuts.
-		if (!listOpen()) {
-			c.push();
-			c.translate(PAD, below);
-			view.render(c, w, height - below - PAD, mouseX - PAD, mouseY - below);
-			c.pop();
-		}
+		c.push();
+		c.translate(PAD, below);
+		view.render(c, w, height - below - PAD, mouseX - PAD, mouseY - below);
+		c.pop();
 		c.push();
 		c.translate(PAD, PAD);
+		// An open list covers the preview with the window's own background (its frosted backdrop and colour, as the
+		// window is drawn), so it reads as on a bare window while the rest of the preview stays as it was.
+		for (Widget picker : ((Container) top.content()).children()) {
+			if (picker.height() <= rowHeight + 0.5f) continue;
+			c.backdrop(picker.x(), rowHeight, picker.width(), picker.height() - rowHeight, 4, 1);
+			c.roundRect(picker.x(), rowHeight, picker.width(), picker.height() - rowHeight, 4, Myriad.ui().theme().windowBackground.argb());
+		}
 		top.render(c, w, height - 2 * PAD, mouseX - PAD, mouseY - PAD);
 		c.pop();
-	}
-
-	private boolean listOpen() {
-		for (Widget picker : ((Container) top.content()).children()) if (picker.height() > rowHeight + 0.5f) return true;
-		return false;
 	}
 
 	@Override
