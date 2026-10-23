@@ -224,7 +224,9 @@ Prefix `.` (change with `.prefix`). Commands autocomplete in chat and in the con
 addons, mods and enabled modules' changed settings for a bug report), `.panic`, `.help`, `.menu`,
 `.modules` (click one to toggle it), `.binds`, `.say <message>` (sends text starting with the prefix as chat),
 `.reload` (re-read the profile from disk), `.anticheat [auto|grim|vanilla]` and `.anticheat known add|remove <host>` (what the
-server checks; see below), `.profiler [on|off]` (where the time goes, by module), `.cape [on|off]` (Myriad's cape, below), `.disconnect`, and
+server checks; see below), `.profiler [on|off]` (where the time goes, by module, with hints), `.jobs` and `.job pause|resume|cancel <id|module|all>`
+(what modules are doing at length; the Jobs window and HUD element show it too), `.packets log on|off` (every packet both ways to a file),
+`.cape [on|off]` (Myriad's cape, below), `.disconnect`, and
 `.fakeplayer add|remove|clear|list` (client-side dummies for testing).
 
 Setting ids are scoped to their group. When two groups share a name, use `group.setting`, for example
@@ -472,7 +474,7 @@ Shared services keep addons from fighting over the same state:
 | `Myriad.building()` | the planner: describe a shape as a `Blueprint` (`box`, `of(map)`, `dynamic(...)`) of `Target`s (`air()`, `solid()`, `anyOf(...)`, `state(...)` for orientation, `exact(...)` for a schematic's every detail: facing, count, and settings clicked by hand), and it breaks and places what's in reach each tick in a working order (top-down breaks, bottom-up placements, materials into the hotbar, oriented blocks clicked so they face the right way). `Build.steps()` says what's happening at each position or why it's stuck (`NO_ITEM`, `FLUID`, `WRONG_ANGLE`, ...); `keepUp` maintains the shape (surround) |
 | `Myriad.containers()` | `open(pos, timeout)` a chest/barrel/shulker and get a `View` once its contents arrive: `find`, `count`, `quickMove`, `swapWithHotbar`, `drop`, `close`; `openItem(index)` puts a shulker box or ender chest from your inventory down beside you, opens it, and puts it back when you're done |
 | `Myriad.elytra()` | elytra flight shared by every flight module: `altitude(owner)` and `control(owner)`, flights that fly themselves along a heading (Altitude's height-holding cycle without fireworks; Control's straight flight where the glide isn't simulated), keeping the elytra, swapping worn ones and landing when they must; `noDurability(owner)` (glide without wearing the elytra: chestplate swaps where Grim simulates the glide, glide breaks elsewhere, and a catch for a glide dropped in mid-air), `chestSwap()`, `glideHold()` (ride out a moment the server stops the glide), and `addPilot` for a module flying by its own rotation (`steers`) or holding the glide open (`holdsGlide`); `GlideEvent` replaces the glide's movement |
-| `Myriad.jobs()` | long-running work as jobs: a `Step` (the services as steps in `Steps`: place, break, open, take, build; your own `Step.Run`), composed with `then`/`sequence`/`all`/`race`/`forEach` and policies (`timeout`, `retry`, `whenStuck`, `recover`, `suspending`), run for your module with a state, a reason when it's stuck, and progress. A module's jobs are cancelled when it's disabled; `later`/`every` for delays and repeats (`Myriad.tasks()` is deprecated) |
+| `Myriad.jobs()` | long-running work as jobs: a `Step` (the services as steps in `Steps`: place, break, open, take, build; your own `Step.Run`), composed with `then`/`sequence`/`all`/`race`/`forEach` and policies (`timeout`, `retry`, `whenStuck`, `recover`, `suspending`), run for your module with a state, a reason when it's stuck, and progress, shown to the player in the Jobs window and HUD element. `Steps.walkTo`/`walkNear` (Baritone), `fly(flight, steer)` and `acquire(what, count, sources)` get you and your items where they're needed. A module's jobs are cancelled when it's disabled; `later`/`every` for delays and repeats (`Myriad.tasks()` is deprecated) |
 | `Myriad.limits()` | the shared packet budget for block actions, interactions and inventory clicks; `placement()` and `inventory()` respect it, `urgent(...)` skips it for must-happen actions (totems) |
 | `Myriad.antiCheat()` | what the server checks, as a profile (Vanilla, Grim, NoCheatPlus, or an addon's own), the player's choice or what Auto detected; the services' `forServer()` presets and `inventory().safeToClick()` follow its answers |
 | `Myriad.tickSpeed()` | client tick speed ("timer") per owner, multiplied together so features don't overwrite each other; cleared when a module is disabled |
@@ -510,7 +512,7 @@ Helpers, so addons don't each re-derive them (`dev.myriadclient.api.*`):
 | `util.Ticks`, `util.TickCached` | the client tick counter; a value computed at most once per tick however often a render handler reads it |
 | `util.Async`, `util.Http` | a shared worker pool (and a hop back to the render thread); GET/POST with JSON |
 | `util.FakePlayers` | client-side dummy players for testing combat and render features |
-| `util.Baritone` | drive Baritone when it's installed, without depending on it: `pathTo`, `isPathing`, `stop`, `command`, and `pause(owner)`/`resume(owner)` counted per module; its settings by name (`getSetting`/`setSetting`, any of them as text with `settingText`/`setSettingText`) and all of them with their types (`settings()`); where it walks and where it's going (`path()`, `goalSpots()`). Every call is a no-op without Baritone; `.b <command>` runs Baritone commands with Myriad's prefix |
+| `util.Baritone` | drive Baritone when it's installed, without depending on it: `pathTo`, `pathNear`, `isPathing`, `stop`, `command`, and `pause(owner)`/`resume(owner)` counted per module; its settings by name (`getSetting`/`setSetting`, any of them as text with `settingText`/`setSettingText`) and all of them with their types (`settings()`); where it walks and where it's going (`path()`, `goalSpots()`). Every call is a no-op without Baritone; `.b <command>` runs Baritone commands with Myriad's prefix |
 | `render.Ghosts` | a living entity's render state drawn again anywhere as a see-through copy: skin, armour, cape and elytra faded, posed as you set it |
 | `map.Maps` (`Myriad.maps()`) | waypoints from Xaero's Minimap when it's installed: `waypoints()` for the server you're on, every dimension (this one's first), `waypoint(name)`, `positionHere(w)` scaled across dimensions. Empty without it |
 | `setting.KeybindSetting` | a key or mouse bind; `wasPressed(event)` for a bind inside a module ("sub bind"), on `KeyEvent` and `MouseButtonEvent` |
@@ -648,7 +650,8 @@ costs. To keep an addon cheap:
 - **Cache what the game recomputes.** `Threats.worst()`, `Inventory.attackCharge()` and friend lookups are already
   cached per tick; `Targets.query().list()` isn't, so hold its result in a `TickCached`.
 - **Measure.** Open the Profiler (or `.profiler on`) with your module running: anything above a millisecond per second
-  in a tick handler, or a few in a render handler, is worth a look.
+  in a tick handler, or a few in a render handler, is worth a look; it hints at a `ChunkCache` or `TickCached` where the
+  numbers point there. In a dev run, `.bench` says what core's hot paths cost on your machine.
 
 ### Drawing in the world
 

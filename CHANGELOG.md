@@ -6,7 +6,7 @@ release first with its replacement in the javadoc; a **patch** release never cha
 and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
-## 0.9.0 (unreleased)
+## 0.9.0
 
 - **Highlights for your first-person hand and held items.** `HighlightEvent.Hand` asks about each part of the view
   model as it's drawn: `part()` (`ARM` or `ITEM`), `hand()`, `side()`, `item()`; `highlight(style, color)` as for
