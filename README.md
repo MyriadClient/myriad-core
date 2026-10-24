@@ -320,10 +320,9 @@ The guide is on the site, [myriadclient.dev/docs/develop](https://myriadclient.d
 [API reference map](https://myriadclient.dev/docs/develop/reference) lists every package.
 
 In short, the contract: addons use only `dev.myriadclient.api` (`dev.myriadclient.impl` is internal; Myriad's own
-addons fail their build if they touch it). From 1.0, 1.x releases are source- and binary-compatible for the same
-Minecraft version, a new Minecraft version is a minor release that may deprecate but removes nothing, and removals
-need a major; until 1.0 a minor may also remove what an earlier minor deprecated. Core's build checks the API against
-the last release on every change.
+addons fail their build if they touch it). 1.x releases are source- and binary-compatible for the same Minecraft
+version, a new Minecraft version is a minor release that may deprecate but removes nothing, and removals need a major.
+Core's build checks the API against the last release on every change.
 
 ## Credits
 

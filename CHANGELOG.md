@@ -3,18 +3,28 @@
 Myriad follows [semantic versioning](https://semver.org) for the public API (`dev.myriadclient.api`). The API names
 Minecraft's own types, so addons are rebuilt for each Minecraft version whatever Myriad does; within one:
 
-- From 1.0, every 1.x release is **source- and binary-compatible** with the 1.x releases before it for the same
+- Every 1.x release is **source- and binary-compatible** with the 1.x releases before it for the same
   Minecraft version: an addon built against 1.2 runs on 1.5. Core's build checks this against the last release.
 - A move to a **new Minecraft version is a minor release**. It may deprecate what the new version made wrong, with the
   replacement in the javadoc, but removes nothing.
 - **Removals need a major release**, and only of what a minor release deprecated first.
 - A **patch** release never changes the API.
-- Until 1.0, the same, except that a minor release may remove what an earlier minor release deprecated.
+- What a 1.x release adds carries `@ApiStatus.AvailableSince` with that release.
+
+Before 1.0 a minor release could also remove what an earlier one had deprecated.
 
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
-(`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
+(`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
 ## 1.0.0 (unreleased)
+
+**The API addons can build on and keep.** From here every 1.x release is source- and binary-compatible with the ones
+before it for the same Minecraft version: an addon built against 1.0 runs on every 1.x, and core's build fails on any
+change that would break it. A new Minecraft version is a minor release that may deprecate but removes nothing; removals
+wait for 2.0. What 1.0 is: modules, settings, events, hooks and jobs as the kernel; services that share one player
+fairly between addons (rotations, inventory, placement, breaking, building, containers, flight), each Grim-safe from
+`forServer()`; one render mode for every module; the window manager and its widgets; and the libraries addons would
+otherwise each write. The docs site has the guide, the API map, the javadoc and the jobs pages.
 
 - **Removed what earlier releases deprecated**, each after at least one minor release with its replacement:
   - `Category`, `Categories`, `Module(Category, …)`, `Module.category()`, `AddonContext.registerCategory`,
