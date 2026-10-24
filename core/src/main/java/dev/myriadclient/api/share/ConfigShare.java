@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * A shared config: the modules, control panels and theme someone shared, with their settings (never protected ones),
+ * A shared config: the modules, control panels, wheels and theme someone shared, with their settings (never protected ones),
  * plus how each looked in their menu, so the website can show it. Immutable; made by {@link ConfigShares#builder()},
  * fetched by {@link ConfigShares#fetch}, taken in by {@link ConfigShares#apply}.
  * <p>
@@ -20,6 +20,7 @@ import java.util.Objects;
  * { "format": 1, "title": "...", "made": {"core": "0.3.4"}, "addons": [{"id", "name", "version"}],
  *   "modules": [{"id", "enabled", "settings": {group: {setting: value}}, "view": {...}}],
  *   "controlPanels": [{"name", "description", "members": [ids], "settings": {module: {setting: value}}}],
+ *   "wheels": [{"name", "icon", "keybind", "slots": [{"kind", "target", "label", "icon", "name"}]}],
  *   "theme": {"name", "settings": {...}} }
  * }</pre>
  */
@@ -82,7 +83,7 @@ public final class ConfigShare {
 
 	/** Whether it has nothing in it. */
 	public boolean isEmpty() {
-		return modules().isEmpty() && controlPanels().isEmpty() && !hasTheme();
+		return modules().isEmpty() && controlPanels().isEmpty() && ids("wheels", "name").isEmpty() && !hasTheme();
 	}
 
 	@Override

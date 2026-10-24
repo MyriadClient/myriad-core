@@ -163,7 +163,7 @@ public record WheelSlot(Kind kind, String target, String customIcon, String cust
 		}
 	}
 
-	JsonObject toJson() {
+	public JsonObject toJson() {
 		JsonObject o = new JsonObject();
 		o.addProperty("kind", kind.name().toLowerCase(Locale.ROOT));
 		o.addProperty("target", target);
@@ -172,7 +172,7 @@ public record WheelSlot(Kind kind, String target, String customIcon, String cust
 		return o;
 	}
 
-	static @Nullable WheelSlot fromJson(JsonObject o) {
+	public static @Nullable WheelSlot fromJson(JsonObject o) {
 		if (!o.has("kind") || !o.has("target")) return null;
 		try {
 			return new WheelSlot(Kind.valueOf(o.get("kind").getAsString().toUpperCase(Locale.ROOT)), o.get("target").getAsString(),

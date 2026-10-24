@@ -16,6 +16,18 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.0.2
+
+- **Shares carry wheels.** Pick them in the Share window or use `.share wheel <name>`: a wheel goes in with its name, icon
+  and slots (its keybind only with keybinds). Taken in, it's added as a new wheel (its name made unique). A control
+  panel's slot points at the panel the share brought, or one of yours with that name. A command's slot shows its
+  command rather than a name the sharer gave it, since a share comes from anyone and a slot must say what it runs. The
+  website's share page lists each wheel's slots.
+- **The Share window reads as a few lines until opened.** Modules, Control panels, Wheels and Also (theme, keybinds)
+  fold, each showing how much of it is picked; a code you look up shows its title and what it holds in one line
+  ("12 modules · 2 wheels · a theme"), in yellow the addons it needs that you don't have, and for a share with no
+  modules a single **Add it** button (there's nothing to try as a control panel, and none is made for one).
+
 ## 1.0.1
 
 - **The Player preview stands as a player does.** Its cape hangs straight down and a worn elytra's wings sit slightly

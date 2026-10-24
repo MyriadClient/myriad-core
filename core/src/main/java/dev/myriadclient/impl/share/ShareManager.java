@@ -21,12 +21,16 @@ import dev.myriadclient.api.util.Http;
 import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.control.ControlPanelImpl;
+import dev.myriadclient.impl.wheel.WheelImpl;
+import dev.myriadclient.impl.wheel.WheelManager;
+import dev.myriadclient.impl.wheel.WheelSlot;
 import net.minecraft.SharedConstants;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -109,10 +113,12 @@ public final class ShareManager implements ConfigShares {
 		return out;
 	}
 
-	private static final class ShareBuilder implements Builder {
+	/** The builder {@link #builder()} hands out; core's Share window also puts wheels in, which aren't part of the API. */
+	public static final class ShareBuilder implements Builder {
 		private String title = "Shared config", description = "";
 		private final Set<Module> modules = new LinkedHashSet<>();
 		private final List<ControlPanel> panels = new ArrayList<>();
+		private final List<WheelImpl> wheels = new ArrayList<>();
 		private boolean theme, binds;
 
 		@Override
@@ -167,6 +173,12 @@ public final class ShareManager implements ConfigShares {
 			return this;
 		}
 
+		/** A wheel: its name, icon and slots (its keybind only with {@link #binds}). */
+		public ShareBuilder wheel(WheelImpl wheel) {
+			if (!wheels.contains(wheel)) wheels.add(wheel);
+			return this;
+		}
+
 		@Override
 		public Builder binds(boolean include) {
 			binds = include;
@@ -201,6 +213,10 @@ public final class ShareManager implements ConfigShares {
 			for (ControlPanel p : panels) if (p instanceof ControlPanelImpl impl) cps.add(impl.share());
 			if (!cps.isEmpty()) doc.add("controlPanels", cps);
 
+			JsonArray ws = new JsonArray();
+			for (WheelImpl w : wheels) ws.add(shareWheel(w, binds));
+			if (!ws.isEmpty()) doc.add("wheels", ws);
+
 			if (theme) {
 				ThemeSettings t = Myriad.ui().theme();
 				JsonObject o = new JsonObject();
@@ -224,6 +240,25 @@ public final class ShareManager implements ConfigShares {
 			doc.add("addons", a);
 			return ConfigShare.of(doc);
 		}
+	}
+
+	/**
+	 * A wheel in a share: name, icon, keybind (with binds) and slots, each slot with the name it shows (the website shows
+	 * it, and a control panel's slot finds the panel again by it, as a shared panel gets a new id where it's taken in).
+	 */
+	private static JsonObject shareWheel(WheelImpl w, boolean binds) {
+		JsonObject o = new JsonObject();
+		o.addProperty("name", w.name());
+		if (!w.icon.get().isEmpty()) o.addProperty("icon", w.icon.get());
+		if (binds && w.keybind.get().isSet()) o.add("keybind", w.keybind.toJson());
+		JsonArray slots = new JsonArray();
+		for (WheelSlot slot : w.slots()) {
+			JsonObject so = slot.toJson();
+			so.addProperty("label", slot.defaultLabel());
+			slots.add(so);
+		}
+		o.add("slots", slots);
+		return o;
 	}
 
 	// ---- the API ------------------------------------------------------------------------------------------------------
@@ -284,7 +319,8 @@ public final class ShareManager implements ConfigShares {
 	public Applied apply(ConfigShare share, Apply how) {
 		JsonObject doc = share.json();
 		List<String> applied = new ArrayList<>(), missing = new ArrayList<>();
-		ControlPanelImpl trial = how == Apply.AS_CONTROL_PANEL ? newPanel(shortened(share.title())) : null;
+		// A control panel to try needs modules in it; a share of wheels or a theme alone is just added.
+		ControlPanelImpl trial = how == Apply.AS_CONTROL_PANEL && !share.modules().isEmpty() ? newPanel(shortened(share.title())) : null;
 
 		for (JsonElement e : array(doc, "modules")) {
 			try {
@@ -294,15 +330,25 @@ public final class ShareManager implements ConfigShares {
 			}
 		}
 
+		Map<String, ControlPanelImpl> sharedPanels = new HashMap<>();
 		for (JsonElement e : array(doc, "controlPanels")) {
 			JsonObject cp = e.getAsJsonObject();
 			ControlPanelImpl panel = newPanel(shortened(cp.get("name").getAsString()));
+			sharedPanels.put(cp.get("name").getAsString(), panel);
 			try {
 				panel.takeShared(cp);
 			} catch (RuntimeException ex) {
 				LOG.warn("Couldn't read shared control panel {}", panel.name(), ex);
 			}
 			applied.add("control panel " + panel.name());
+		}
+
+		for (JsonElement e : array(doc, "wheels")) {
+			try {
+				applied.add("wheel " + takeWheel(e.getAsJsonObject(), sharedPanels).name());
+			} catch (RuntimeException ex) {
+				LOG.warn("Skipped a shared wheel it couldn't read: {}", e, ex);
+			}
 		}
 
 		if (doc.has("theme") && doc.get("theme").isJsonObject()) {
@@ -322,6 +368,39 @@ public final class ShareManager implements ConfigShares {
 		}
 		Myriad.config().markDirty();
 		return new Applied(applied, missing);
+	}
+
+	/**
+	 * A shared wheel added as a new one (its name made unique). A control panel's slot points at the panel the share
+	 * brought, or one of yours with its name. A command's slot shows its command, not a name the sharer gave it: a share
+	 * comes from anyone, and a slot must say what it runs.
+	 */
+	private static WheelImpl takeWheel(JsonObject o, Map<String, ControlPanelImpl> sharedPanels) {
+		WheelManager manager = MyriadImpl.get().wheelManager();
+		String name = shortened(o.has("name") ? o.get("name").getAsString() : "Wheel");
+		String unique = name;
+		for (int i = 2; taken(manager, unique); i++) unique = name + " " + i;
+		WheelImpl wheel = manager.create(unique);
+		if (o.has("icon")) readSafely(wheel.icon, o.get("icon"));
+		if (o.has("keybind")) readSafely(wheel.keybind, o.get("keybind"));
+		for (JsonElement e : array(o, "slots")) {
+			if (!e.isJsonObject()) continue;
+			JsonObject so = e.getAsJsonObject();
+			WheelSlot slot = WheelSlot.fromJson(so);
+			if (slot == null) continue;
+			String label = so.has("label") ? so.get("label").getAsString() : "";
+			if (slot.kind() == WheelSlot.Kind.CONTROL && !label.isEmpty()) {
+				ControlPanel panel = sharedPanels.containsKey(label) ? sharedPanels.get(label) : Myriad.controls().byName(label).orElse(null);
+				if (panel != null) slot = new WheelSlot(slot.kind(), panel.id().toString(), slot.customIcon(), slot.customName());
+			}
+			if (slot.kind() == WheelSlot.Kind.COMMAND) slot = new WheelSlot(slot.kind(), slot.target());
+			wheel.add(slot);
+		}
+		return wheel;
+	}
+
+	private static boolean taken(WheelManager manager, String name) {
+		return manager.all().stream().anyMatch(w -> w.name().equalsIgnoreCase(name));
 	}
 
 	/** One module of a share taken in: as the player's settings, or into {@code trial} (a control panel to try). */

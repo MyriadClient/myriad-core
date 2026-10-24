@@ -9,6 +9,8 @@ import dev.myriadclient.api.share.ConfigShare;
 import dev.myriadclient.api.share.ConfigShares;
 import dev.myriadclient.api.util.Async;
 import dev.myriadclient.api.util.Texts;
+import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.wheel.WheelImpl;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
@@ -16,19 +18,19 @@ import net.minecraft.network.chat.Component;
 import static dev.myriadclient.api.command.arguments.ModuleArgumentType.module;
 
 /**
- * {@code .share}: share a module, an addon's modules, a control panel or the theme as a code, take a code in (or try
+ * {@code .share}: share a module, an addon's modules, a control panel, a wheel or the theme as a code, take a code in (or try
  * it as a control panel), list and delete your shares. The Share window does the same with checkboxes.
  */
 public final class ShareCommand extends Command {
 	public ShareCommand() {
-		super("share", "Shares modules, an addon, a control panel or the theme as a code; takes a code in.");
+		super("share", "Shares modules, an addon, a control panel, a wheel or the theme as a code; takes a code in.");
 	}
 
 	@Override
 	public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 		b.executes(c -> {
 			var mine = Myriad.shares().published();
-			if (mine.isEmpty()) info("Nothing shared from here yet: .share module <module>, .share addon <id>, .share panel <name>, .share theme.");
+			if (mine.isEmpty()) info("Nothing shared from here yet: .share module <module>, .share addon <id>, .share panel <name>, .share wheel <name>, .share theme.");
 			for (var p : mine) info(Component.literal(p.title() + "  ").append(code(p.code())));
 			return SINGLE_SUCCESS;
 		});
@@ -56,6 +58,17 @@ public final class ShareCommand extends Command {
 				return 0;
 			}
 			publish(Myriad.shares().builder().title(panel.name()).controlPanel(panel).modules(panel.modules()).build());
+			return SINGLE_SUCCESS;
+		})));
+		b.then(literal("wheel").then(argument("name", StringArgumentType.greedyString()).suggests((c, s) -> SharedSuggestionProvider.suggest(
+			MyriadImpl.get().wheelManager().all().stream().map(WheelImpl::name), s)).executes(c -> {
+			String name = StringArgumentType.getString(c, "name");
+			WheelImpl wheel = MyriadImpl.get().wheelManager().all().stream().filter(w -> w.name().equalsIgnoreCase(name)).findFirst().orElse(null);
+			if (wheel == null) {
+				error("No wheel called " + name);
+				return 0;
+			}
+			publish(((ShareManager.ShareBuilder) Myriad.shares().builder().title(wheel.name())).wheel(wheel).build());
 			return SINGLE_SUCCESS;
 		})));
 		b.then(literal("theme").executes(c -> {
