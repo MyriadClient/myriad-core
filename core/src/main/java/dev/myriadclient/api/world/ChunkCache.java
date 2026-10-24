@@ -250,7 +250,7 @@ public final class ChunkCache<T> {
 	private Mesher<T> boxMesher(Boxes<T> boxes) {
 		return (value, mesh) -> {
 			if (RenderMode.current() == RenderMode.BOX) {
-				boxes.boxes(value, (box, color) -> look.box(mesh, box, color, 1));
+				boxes.boxes(value, (box, color) -> look.box(mesh, box, color));
 				return;
 			}
 			boxes.boxes(value, (box, color) -> mesh.boxFill(box, HighlightEvent.Shapes.paletteColor(paletteIndex(color)), false));

@@ -48,7 +48,7 @@ class RenderSettingsTest {
 		assertEquals(0.15, r.fillOpacity.get());
 		assertEquals(5, r.glow.get());
 		assertFalse(r.throughWalls());
-		assertEquals(0, r.boxLine(0xFFFFFFFF, 1), "no edges at line width 0");
+		assertEquals(0, r.boxLine(0xFFFFFFFF), "no edges at line width 0");
 	}
 
 	@Test
@@ -66,11 +66,10 @@ class RenderSettingsTest {
 	void boxColoursFollowTheFill() {
 		RenderSettings r = RenderSettings.builder(new Settings().group("Render")).build();
 		r.fillOpacity.set(0.5);
-		assertEquals(0x40FF0000, r.boxFill(0x80FF0000, 1));
-		assertEquals(0x20FF0000, r.boxFill(0x80FF0000, 0.5f));
-		assertEquals(0x80FF0000, r.boxLine(0x80FF0000, 1));
+		assertEquals(0x40FF0000, r.boxFill(0x80FF0000));
+		assertEquals(0x80FF0000, r.boxLine(0x80FF0000));
 		r.fill.set("None");
-		assertEquals(0, r.boxFill(0xFFFF0000, 1));
+		assertEquals(0, r.boxFill(0xFFFF0000));
 	}
 
 	@Test

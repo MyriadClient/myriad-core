@@ -152,6 +152,6 @@ public final class RenderRouter implements RenderEvent.Sink {
 	@Subscribe(priority = Priority.HIGH)
 	private void onRender3D(Render3DEvent e) {
 		if (boxes.isEmpty()) return;
-		for (Box b : boxes) b.look().box(e.shapes(), b.box(), b.color(), 1);
+		for (Box b : boxes) b.look().box(e.shapes(), b.box(), b.color());
 	}
 }

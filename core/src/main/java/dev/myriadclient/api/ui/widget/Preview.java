@@ -12,17 +12,16 @@ import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
 /**
  * A 3D view of something, for seeing what render settings do to it: an entity, you, a block (a chest, a shulker box),
  * or your first-person hands and held items (as View Model shapes them). Drag to turn it, right-drag or Shift-drag to
- * move it, scroll to zoom, double-click to put it back. The modules that are on draw on it as in the world: their
- * shader highlights ({@code HighlightEvent}) as they are, their boxes and lines through
- * {@link dev.myriadclient.api.event.events.PreviewEvent}. {@link #decorate} draws on this one preview with the same
- * shapes ({@link ShapeBuilder}, so a {@code BoxStyle} draws itself), in the subject's own coordinates: the subject's box
- * is passed in. Put one in a module's settings window with {@code Module.preview}, or in any window; players add
+ * move it, scroll to zoom, double-click to put it back. The modules that are on draw on it as in the world, in the
+ * render mode that's on, through {@link dev.myriadclient.api.event.events.PreviewEvent}. {@link #decorate} draws on
+ * this one preview with a {@link ShapeBuilder}, in the subject's own coordinates: the subject's box is passed in. Put one in a module's settings window with {@code Module.preview}, or in any window; players add
  * Preview windows of their own to a workspace.
  * <p>
  * Entities and you need a world: outside one, the preview shows only its background.
@@ -84,6 +83,7 @@ public final class Preview extends Widget {
 
 	private final Subject subject;
 	private final List<Decoration> decorations = new ArrayList<>();
+	private final List<Decoration> decorationsView = Collections.unmodifiableList(decorations);
 	private float previewHeight = 120;
 	private float startYaw, startPitch;
 	private float yaw, pitch, zoom = 1, panX, panY;
@@ -146,8 +146,9 @@ public final class Preview extends Widget {
 		return subject;
 	}
 
+	/** What {@link #decorate} added, in order. */
 	public List<Decoration> decorations() {
-		return List.copyOf(decorations);
+		return decorationsView;
 	}
 
 	/** Degrees the subject is turned about the vertical. */

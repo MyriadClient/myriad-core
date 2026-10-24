@@ -39,7 +39,7 @@ test {
 	systemProperty "myriad.dev", "true"
 	testLogging {
 		events "passed", "skipped", "failed"
-		exceptionFormat "full"
+		exceptionFormat = "full"
 	}
 }
 

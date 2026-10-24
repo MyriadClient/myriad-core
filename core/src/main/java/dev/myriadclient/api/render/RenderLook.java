@@ -14,11 +14,11 @@ public interface RenderLook {
 	/** The look in {@link RenderMode#SHADER}. */
 	HighlightStyle style();
 
-	/** {@code color} for a box's faces in {@link RenderMode#BOX}, faded by {@code fade}; 0 for no faces. */
-	int boxFill(int color, float fade);
+	/** {@code color} for a box's faces in {@link RenderMode#BOX} (fade a thing by its colour's alpha); 0 for no faces. */
+	int boxFill(int color);
 
-	/** {@code color} for a box's edges in {@link RenderMode#BOX}, faded by {@code fade}; 0 for no edges. */
-	int boxLine(int color, float fade);
+	/** {@code color} for a box's edges in {@link RenderMode#BOX}; 0 for no edges. */
+	int boxLine(int color);
 
 	/** A box's edge width in {@link RenderMode#BOX}. */
 	float lineWidth();
@@ -26,8 +26,8 @@ public interface RenderLook {
 	boolean throughWalls();
 
 	/** Draws {@code box} as a {@link RenderMode#BOX} box in this look onto {@code shapes} (sets its line width). */
-	default void box(ShapeBuilder shapes, AABB box, int color, float fade) {
-		int fillColor = boxFill(color, fade), lineColor = boxLine(color, fade);
+	default void box(ShapeBuilder shapes, AABB box, int color) {
+		int fillColor = boxFill(color), lineColor = boxLine(color);
 		if (fillColor != 0) shapes.boxFill(box, fillColor, throughWalls());
 		if (lineColor != 0) {
 			shapes.lineWidth(lineWidth());
@@ -40,7 +40,7 @@ public interface RenderLook {
 	 * and through walls ({@code ChunkCache} remeshes on it).
 	 */
 	default int meshStamp() {
-		return Objects.hash(RenderMode.current(), boxFill(0xFFFFFFFF, 1), boxLine(0xFFFFFFFF, 1), lineWidth(), throughWalls());
+		return Objects.hash(RenderMode.current(), boxFill(0xFFFFFFFF), boxLine(0xFFFFFFFF), lineWidth(), throughWalls());
 	}
 
 	/** A fixed look: {@code style} in Shader mode; in Box mode, its fill (flat, at its opacity) and edges 1.5 wide. */
@@ -57,14 +57,14 @@ public interface RenderLook {
 			}
 
 			@Override
-			public int boxFill(int color, float fade) {
+			public int boxFill(int color) {
 				if (style.fill() == HighlightStyle.Fill.NONE) return 0;
-				return ColorUtil.withAlpha(color, (int) (ColorUtil.alpha(color) * style.fillOpacity() * fade));
+				return ColorUtil.withAlpha(color, (int) (ColorUtil.alpha(color) * style.fillOpacity()));
 			}
 
 			@Override
-			public int boxLine(int color, float fade) {
-				return lineWidth <= 0 ? 0 : ColorUtil.withAlpha(color, (int) (ColorUtil.alpha(color) * fade));
+			public int boxLine(int color) {
+				return lineWidth <= 0 ? 0 : color;
 			}
 
 			@Override

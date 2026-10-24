@@ -364,8 +364,8 @@ public abstract class Module implements Identified {
 	/**
 	 * A view shown at the top of this module's settings window, made each time the window opens: for a module that draws
 	 * things, a {@link dev.myriadclient.api.ui.widget.Preview} of what it draws on, so changing a setting shows what it
-	 * does. The module draws on it while it's on, through {@link dev.myriadclient.api.event.events.PreviewEvent} and its
-	 * highlights, as on every other preview (the Preview windows a player adds to a workspace). Null (the default) for none.
+	 * does. The module draws on it while it's on, through {@link dev.myriadclient.api.event.events.PreviewEvent}, as on
+	 * every other preview (the Preview windows a player adds to a workspace). Null (the default) for none.
 	 */
 	public @Nullable Widget preview() {
 		return null;

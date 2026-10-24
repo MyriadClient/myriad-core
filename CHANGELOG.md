@@ -14,7 +14,7 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
-## 0.11.0 (unreleased)
+## 0.11.0
 
 - **One render mode for every module: Shader or Box.** The new **Render** window (and `.render shader|box`, and a
   *Switch Render Mode* key) picks how all modules draw what they show: Shader traces each thing's exact shape with an
@@ -78,19 +78,18 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
   boxes as they stand), `item(stack)` and `viewModel()` (your first-person hands and held items, as the camera sees
   them, View Model's changes included). Drag to turn it, right-drag or Shift-drag to move it, scroll to zoom,
   double-click to put it back. `decorate((shapes, box, entity) -> ...)` draws on it with the same `ShapeBuilder` calls
-  as in the world, in the subject's coordinates, so a `BoxStyle` draws itself. A module shows one at the top of its
+  as in the world, in the subject's coordinates. A module shows one at the top of its
   settings window through `Module.preview()` (null by default); any window can hold one. Drawn through a
   picture-in-picture renderer of its own (registered with Fabric's), entities made once per world and never added to
   it; a subject the game can't draw out of the world shows nothing rather than failing the frame. `Canvas.preview`
   draws one by hand.
-- **Modules draw on previews as in the world, shader highlights included.** What a module highlights through
-  `HighlightEvent` (outlines, glow, fills, gradients) is highlighted on a preview's entity and your hands with nothing
-  more to do: the preview's outline pass draws into a mask of its own and the highlight passes composite onto its
-  texture. `PreviewEvent` (posted each frame for each preview drawn) gives the subject (`entity()`, `block()`,
-  `viewModel()`), its `box()` and `shapes()` for boxes and lines, and `highlight(style, color)` for a block's shader
-  highlight; `highlighted()` says whether a handler before yours took it. Preview entities stand where you are, so
-  distance checks count them as near. A preview shows what the modules that are on draw, the module's own settings
-  window included (it says to turn the module on when it's off).
+- **Modules draw on previews as in the world, shader highlights included.** `PreviewEvent` (posted each frame for
+  each preview drawn) gives the subject (`entity()`, `block()`, `viewModel()`), its `box()` and `shapes()` for boxes
+  and lines; `render(look, color)` shows it in the render mode that's on, as `RenderEvent` does in the world (the
+  preview's outline pass draws into a mask of its own and the highlight passes composite onto its texture), and
+  `shown()` says whether a handler before yours took it. Your hands are highlighted through `HighlightEvent.Hand` as
+  in the world. Preview entities stand where you are, so distance checks count them as near. A preview shows what the
+  modules that are on draw, the module's own settings window included (it says to turn the module on when it's off).
 - **Previews sit on the window's background** instead of a layer of their own.
 - An open dropdown's list keeps the dropdown's own colour, with only its header lighting up on hover (the whole list
   changed colour with the header), and a searchable list (a mob, a block) opens on one panel in that colour behind its

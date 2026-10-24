@@ -132,18 +132,17 @@ public final class RenderSettings implements RenderLook {
 		return style;
 	}
 
-	/** {@code color} for a box's faces in {@link RenderMode#BOX}: at the fill opacity times {@code fade}, or clear with no fill. */
+	/** {@code color} for a box's faces in {@link RenderMode#BOX}: at the fill opacity, or clear with no fill. */
 	@Override
-	public int boxFill(int color, float fade) {
+	public int boxFill(int color) {
 		if (fill() == HighlightStyle.Fill.NONE) return 0;
-		return ColorUtil.withAlpha(color, (int) (ColorUtil.alpha(color) * fillOpacity.get() * fade));
+		return ColorUtil.withAlpha(color, (int) (ColorUtil.alpha(color) * fillOpacity.get()));
 	}
 
-	/** {@code color} for a box's edges in {@link RenderMode#BOX}, faded by {@code fade}; clear with no line width. */
+	/** {@code color} for a box's edges in {@link RenderMode#BOX}; clear with no line width. */
 	@Override
-	public int boxLine(int color, float fade) {
-		if (lineWidth.get() <= 0) return 0;
-		return ColorUtil.withAlpha(color, (int) (ColorUtil.alpha(color) * fade));
+	public int boxLine(int color) {
+		return lineWidth.get() <= 0 ? 0 : color;
 	}
 
 	/**

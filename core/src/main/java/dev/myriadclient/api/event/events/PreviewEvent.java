@@ -91,28 +91,18 @@ public final class PreviewEvent {
 	 * shape, or a box around {@link #box()}. The first call wins.
 	 */
 	public void render(RenderLook look, int color) {
-		if (highlighted() || (color >>> 24) == 0) return;
-		if (RenderMode.current() == RenderMode.SHADER) highlight(look.style(), color);
-		else {
-			look.box(shapes, box, color, 1);
+		if (shown() || (color >>> 24) == 0) return;
+		style = look.style();
+		this.color = color;
+		if (RenderMode.current() == RenderMode.BOX) {
+			look.box(shapes, box, color);
 			// Taken (a fallback look stays off it), but already drawn.
-			style = look.style();
 			boxed = true;
 		}
 	}
 
-	/**
-	 * Highlights the subject with the shader (outline, glow, fill) in {@code style}, whatever the mode; {@link #render}
-	 * follows the mode. The first call wins.
-	 */
-	public void highlight(HighlightStyle style, int color) {
-		if (this.style != null || style == null) return;
-		this.style = style;
-		this.color = color;
-	}
-
-	/** Whether a handler before this one showed it ({@link #render}, {@link #highlight}), so a fallback look can stay off it. */
-	public boolean highlighted() {
+	/** Whether a handler before this one showed it ({@link #render}), so a fallback look can stay off it. */
+	public boolean shown() {
 		return style != null;
 	}
 
