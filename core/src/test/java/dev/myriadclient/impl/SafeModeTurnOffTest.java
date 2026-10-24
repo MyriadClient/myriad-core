@@ -1,7 +1,7 @@
 package dev.myriadclient.impl;
 
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.harness.Harness;
 import org.junit.jupiter.api.Test;
@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class SafeModeTurnOffTest {
 	static class Plain extends Module {
 		Plain(String name) {
-			super(Categories.MISC, name, "A module.");
+			super(Tags.MISC, name, "A module.");
 			// Its on/off line in chat needs the HUD, which the harness doesn't have.
 			chatFeedback.set(false);
 		}

@@ -224,19 +224,6 @@ public interface AntiCheat {
 		}
 	}
 
-	/**
-	 * The player's choice.
-	 *
-	 * @deprecated the profiles are an open set now: use {@link #choice()} and {@link #choose(Profile)}. Removed in 1.0.
-	 */
-	@Deprecated
-	enum Mode {
-		/** {@link #detected()} for the server you're on. */
-		AUTO,
-		VANILLA,
-		GRIM
-	}
-
 	/** The profile in effect: the player's choice, or what this server looks like ({@link #detected()}). */
 	Profile profile();
 
@@ -256,24 +243,6 @@ public interface AntiCheat {
 
 	/** Every profile there is: Myriad's and the ones addons registered. */
 	Registry<Profile> profiles();
-
-	/** @deprecated use {@link #choice()}; a chosen profile other than Vanilla or Grim reads as the one it's closest to. */
-	@Deprecated
-	default Mode mode() {
-		Profile p = choice();
-		return p == null ? Mode.AUTO : p.simulatesMovement() ? Mode.GRIM : Mode.VANILLA;
-	}
-
-	/** @deprecated use {@link #choose(Profile)}. */
-	@Deprecated
-	default void setMode(Mode mode) {
-		if (mode == null) return;
-		choose(switch (mode) {
-			case AUTO -> null;
-			case VANILLA -> Profile.VANILLA;
-			case GRIM -> Profile.GRIM;
-		});
-	}
 
 	/** Hosts known to run Grim, for detection to take as {@link Profile#GRIM} from the moment you join (subdomains included). */
 	Set<String> knownServers();

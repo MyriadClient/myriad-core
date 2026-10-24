@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Profiles are values: presets, a copy under a new id, one answer changed at a time, the same profile by id. */
@@ -41,12 +40,8 @@ class AntiCheatProfileTest {
 	}
 
 	@Test
-	void theOldModeReadsAsTheNearestProfile() {
-		AntiCheat ac = new FixedChoice(LOOSE_GRIM);
-		assertSame(AntiCheat.Mode.GRIM, ac.mode());
-		assertSame(AntiCheat.Mode.VANILLA, new FixedChoice(Profile.NCP).mode());
-		assertSame(AntiCheat.Mode.AUTO, new FixedChoice(null).mode());
-		assertTrue(ac.isStrict());
+	void aProfileThatSimulatesIsStrict() {
+		assertTrue(new FixedChoice(LOOSE_GRIM).isStrict());
 	}
 
 	/** Just enough of the service for the default methods. */

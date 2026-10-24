@@ -4,10 +4,8 @@ import dev.myriadclient.api.event.events.Render3DEvent;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.client.renderer.rendertype.RenderType;
-import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
@@ -29,12 +27,6 @@ public interface Rendering {
 
 	/** A line from the centre of the screen to {@code to}, this frame. */
 	void tracer(Vec3 to, int color);
-
-	void highlightBox(AABB box, HighlightStyle style, int color, boolean below);
-
-	void highlightBlock(BlockPos pos, HighlightStyle style, int color, double inflate, boolean below);
-
-	void highlightMesh(WorldMesh mesh, HighlightStyle style, int[] palette, boolean below);
 
 	/** The render mode every module draws in: the player's choice. */
 	RenderMode mode();

@@ -117,9 +117,8 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 			var renderer = mc.getEntityRenderDispatcher().getRenderer(entity);
 			EntityRenderState render = renderer.createRenderState(entity, 1.0F);
 			render.shadowPieces.clear();
-			// A module's PreviewEvent look, else its HighlightEvent listener's.
-			HighlightEvent.EntityHighlight asked = state.style() != null ? new HighlightEvent.EntityHighlight(entity, state.style(), state.color())
-				: HighlightRenderer.INSTANCE.askPreview(entity);
+			// A module's PreviewEvent look, then the entity hook, as in the world.
+			HighlightEvent.EntityHighlight asked = HighlightRenderer.hooked(new HighlightEvent.EntityHighlight(entity, state.style(), state.color()));
 			render.outlineColor = highlights.add(asked.style(), asked.color());
 			render.lightCoords = LightCoordsUtil.FULL_BRIGHT;
 			if (render instanceof LivingEntityRenderState living) {

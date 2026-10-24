@@ -10,7 +10,6 @@ import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.hook.Hooks;
 import dev.myriadclient.api.job.Jobs;
 import dev.myriadclient.api.map.Maps;
-import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.module.Tag;
@@ -28,7 +27,6 @@ import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.service.ServerStats;
-import dev.myriadclient.api.service.Tasks;
 import dev.myriadclient.api.service.TickSpeed;
 import dev.myriadclient.api.share.ConfigShares;
 import dev.myriadclient.api.ui.BarWidget;
@@ -48,10 +46,6 @@ public interface MyriadApi {
 	EventBus events();
 
 	List<Addon> addons();
-
-	/** @deprecated categories are tags now: use {@link #tags()} */
-	@Deprecated(since = "0.7.0")
-	Registry<Category> categories();
 
 	Registry<Tag> tags();
 
@@ -108,10 +102,6 @@ public interface MyriadApi {
 	Hooks hooks();
 
 	ConfigShares shares();
-
-	/** @deprecated {@link #jobs()}; removed in 1.0. */
-	@Deprecated
-	Tasks tasks();
 
 	Jobs jobs();
 

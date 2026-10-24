@@ -19,7 +19,7 @@ import java.util.Map;
  * {@link #distanceScaling()}).
  * <p>
  * Styles are immutable: start from a preset and change what you need with the {@code with...} methods. Build one when
- * your settings change (or use {@link HighlightSettings}) rather than per entity.
+ * your settings change (a {@link RenderSettings} does) rather than per entity.
  *
  * <pre>{@code
  * HighlightStyle style = HighlightStyle.OUTLINE.withGlow(6).withFill(HighlightStyle.Fill.DOTS);

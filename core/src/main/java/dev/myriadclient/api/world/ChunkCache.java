@@ -4,11 +4,9 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Subscription;
 import dev.myriadclient.api.event.events.BlockUpdateEvent;
 import dev.myriadclient.api.event.events.ChunkEvent;
-import dev.myriadclient.api.event.events.HighlightEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.render.HighlightStyle;
 import dev.myriadclient.api.render.MeshBuilder;
 import dev.myriadclient.api.render.RenderMode;
 import dev.myriadclient.api.render.RenderLook;
@@ -217,28 +215,10 @@ public final class ChunkCache<T> {
 		}
 	}
 
-	/**
-	 * Whether the chunks' meshes are drawn (they are by default). Turn it off when the meshes only serve as highlight
-	 * silhouettes ({@link #highlight}), e.g. in a module's outline mode, and back on for its box mode.
-	 */
-	public void setMeshesVisible(boolean visible) {
+	/** Whether the chunks' meshes are drawn: a {@link Builder#boxes} cache's only in Box mode (in Shader mode they're silhouettes). */
+	private void setMeshesVisible(boolean visible) {
 		meshesVisible = visible;
 		for (Entry<T> e : entries.values()) if (e.mesh != null) e.mesh.setVisible(visible);
-	}
-
-	/**
-	 * Highlights every chunk mesh's filled faces in this frame's {@link HighlightEvent.Shapes}: the meshes stay on the GPU,
-	 * so this costs nothing per block, however many there are. Each vertex picks its colour from {@code palette} by
-	 * index ({@link HighlightEvent.Shapes#paletteColor}); build the meshes with those colours. Meshes off screen are
-	 * skipped.
-	 *
-	 * @deprecated Build the cache with {@link Builder#boxes} and hand it to {@code RenderEvent#chunks}: core meshes and
-	 * shows it in the render mode the player picked. Removed in 1.0.
-	 */
-	@Deprecated(since = "0.11.0", forRemoval = true)
-	@SuppressWarnings("removal")
-	public void highlight(HighlightEvent.Shapes event, HighlightStyle style, int... palette) {
-		for (Entry<T> e : entries.values()) if (e.mesh != null && !e.mesh.isEmpty()) event.mesh(e.mesh, style, palette);
 	}
 
 	/**
@@ -246,18 +226,17 @@ public final class ChunkCache<T> {
 	 * {@link RenderMode#SHADER}, their faces as silhouettes, each vertex's colour an index into {@link #palette} (the
 	 * colours as they come), for {@code RenderEvent#chunks} to highlight.
 	 */
-	@SuppressWarnings("removal")
 	private Mesher<T> boxMesher(Boxes<T> boxes) {
 		return (value, mesh) -> {
 			if (RenderMode.current() == RenderMode.BOX) {
 				boxes.boxes(value, (box, color) -> look.box(mesh, box, color));
 				return;
 			}
-			boxes.boxes(value, (box, color) -> mesh.boxFill(box, HighlightEvent.Shapes.paletteColor(paletteIndex(color)), false));
+			boxes.boxes(value, (box, color) -> mesh.boxFill(box, 0xFF000000 | paletteIndex(color) << 16, false));
 		};
 	}
 
-	/** {@code color}'s place in the palette: added if it's new and there's room, else the first colour's. */
+	/** {@code color}'s place in the palette (the shader reads it from a vertex colour's red): added if it's new and there's room, else the first colour's. */
 	private int paletteIndex(int color) {
 		int i = palette.indexOf(color);
 		if (i >= 0) return i;

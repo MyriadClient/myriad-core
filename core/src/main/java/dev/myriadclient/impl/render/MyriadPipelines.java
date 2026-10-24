@@ -115,7 +115,7 @@ public final class MyriadPipelines {
 	public static final RenderType HIGHLIGHT_SHAPES = RenderType.create("myriad_highlight_shapes", RenderSetup.builder(HIGHLIGHT_SHAPES_PIPELINE)
 		.setOutputTarget(new OutputTarget("myriad_highlight_shapes", () -> HighlightRenderer.INSTANCE.shapeMask()))
 		.setOutline(RenderSetup.OutlineProperty.IS_OUTLINE).createRenderSetup());
-	/** The same, into the mask of shapes drawn below the others ({@code HighlightEvent.Shapes#below()}). */
+	/** The same, into the mask of shapes drawn below the others ({@code RenderEvent#below()}). */
 	public static final RenderType HIGHLIGHT_SHAPES_BELOW = RenderType.create("myriad_highlight_shapes_below", RenderSetup.builder(HIGHLIGHT_SHAPES_PIPELINE)
 		.setOutputTarget(new OutputTarget("myriad_highlight_shapes_below", () -> HighlightRenderer.INSTANCE.belowMask()))
 		.setOutline(RenderSetup.OutlineProperty.IS_OUTLINE).createRenderSetup());

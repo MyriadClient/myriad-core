@@ -9,10 +9,8 @@ import dev.myriadclient.api.render.WorldMesh;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.client.renderer.rendertype.RenderType;
-import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
@@ -31,21 +29,6 @@ public final class CoreRendering implements Rendering {
 	@Override
 	public void tracer(Vec3 to, int color) {
 		WorldRenderQueue.INSTANCE.tracer(to, color);
-	}
-
-	@Override
-	public void highlightBox(AABB box, HighlightStyle style, int color, boolean below) {
-		HighlightRenderer.INSTANCE.box(box, style, color, below);
-	}
-
-	@Override
-	public void highlightBlock(BlockPos pos, HighlightStyle style, int color, double inflate, boolean below) {
-		HighlightRenderer.INSTANCE.block(pos, style, color, inflate, below);
-	}
-
-	@Override
-	public void highlightMesh(WorldMesh mesh, HighlightStyle style, int[] palette, boolean below) {
-		HighlightRenderer.INSTANCE.mesh(mesh, style, palette, below);
 	}
 
 	@Override

@@ -47,10 +47,11 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Draws {@link HighlightEvent} highlights: outlines, glows and fills around exact silhouettes.
+ * Draws shader highlights: outlines, glows and fills around exact silhouettes, for what {@link RenderRouter} hands it in
+ * Shader mode ({@code RenderEvent}), {@link HighlightEvent.Hand}, ghosts and vanilla's glowing entities.
  * <p>
- * Three layers, each with its own silhouette mask, drawn in this order: shapes added {@link HighlightEvent.Shapes#below()
- * below} the others (so a highlight of the block you're looking at can't hide highlighted chests behind it), shapes,
+ * Three layers, each with its own silhouette mask, drawn in this order: shapes shown {@code RenderEvent#below() below}
+ * the others (so a highlight of the block you're looking at can't hide highlighted chests behind it), shapes,
  * and entities over them all (so a wall of highlighted chests can't hide the highlighted players behind it).
  * <ul>
  * <li>Entities: vanilla's entity outline target, the one the glowing effect uses. Every entity layer (armour, held
@@ -59,7 +60,7 @@ import java.util.function.Consumer;
  * merge group ({@link #encode}) and vanilla draws the mask. While Myriad owns the target in a frame, vanilla's own
  * outline post effect is skipped and glowing entities become highlights in a vanilla-like style.</li>
  * <li>Shapes (both layers): a mask of Myriad's own each. Boxes and block shapes are drawn into it per frame; retained meshes
- * ({@link HighlightEvent.Shapes#mesh}) stay on the GPU and are drawn with their highlight id applied at draw time,
+ * (a {@code ChunkCache}'s) stay on the GPU and are drawn with their highlight id applied at draw time,
  * so a module highlighting thousands of blocks uploads nothing per frame.</li>
  * </ul>
  * Highlights that look alike (same style and colour) share a merge group and connect: touching ones get one outline
@@ -78,8 +79,6 @@ import java.util.function.Consumer;
  * Work scales with the reach in pixels, not its square. Per-highlight data (colours, gradient rectangle, style) lives
  * in a texel buffer.
  */
-// Keeps HighlightEvent's deprecated Entity and Shapes listeners working until they're removed.
-@SuppressWarnings("removal")
 public final class HighlightRenderer {
 	public static final HighlightRenderer INSTANCE = new HighlightRenderer();
 
@@ -92,10 +91,8 @@ public final class HighlightRenderer {
 	/** Glowing entities while Myriad owns the outline target: close to vanilla's soft outline. */
 	private static final HighlightStyle VANILLA_GLOW = HighlightStyle.OUTLINE.withOutlineWidth(1).withGlow(3).withGlowStrength(0.7f);
 
-	private final HighlightEvent.Entity entityEvent = new HighlightEvent.Entity();
-	private final HighlightEvent.Shapes shapesEvent = new HighlightEvent.Shapes();
 	private final HighlightEvent.Hand handEvent = new HighlightEvent.Hand();
-	private ListenerFlag entityListeners, shapeListeners, handListeners;
+	private ListenerFlag handListeners;
 
 	private long frame;
 	private boolean armed;
@@ -178,13 +175,9 @@ public final class HighlightRenderer {
 			return;
 		}
 		RenderRouter.INSTANCE.beginFrame(Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false));
-		if (entityListeners == null) {
-			entityListeners = Myriad.events().flag(HighlightEvent.Entity.class);
-			shapeListeners = Myriad.events().flag(HighlightEvent.Shapes.class);
-			handListeners = Myriad.events().flag(HighlightEvent.Hand.class);
-		}
-		// A ghost highlighted last frame keeps the pipeline on, as listeners do.
-		armed = entityListeners.isSet() || shapeListeners.isSet() || handListeners.isSet() || RenderRouter.INSTANCE.anyShader() || frame - ghostFrame <= 2;
+		if (handListeners == null) handListeners = Myriad.events().flag(HighlightEvent.Hand.class);
+		// A ghost highlighted last frame keeps the pipeline on, as requests do.
+		armed = handListeners.isSet() || RenderRouter.INSTANCE.anyShader() || frame - ghostFrame <= 2;
 	}
 
 	/** The frame a ghost last asked for a highlight in. */
@@ -209,13 +202,13 @@ public final class HighlightRenderer {
 	 * is asked about here; the answer is kept for {@link #entity}.
 	 */
 	public boolean shouldRender(Entity entity, boolean shown, Frustum frustum, double camX, double camY, double camZ) {
-		if (!entityListeners.isSet() && !RenderRouter.INSTANCE.anyEntities()) return shown;
+		if (!RenderRouter.INSTANCE.anyEntities()) return shown;
 		if (!shown) {
 			if (!entity.shouldRender(camX, camY, camZ) || !frustum.isVisible(entity.getBoundingBox().inflate(0.5))) return false;
 		} else if (!EntityCullingCompat.ACTIVE) {
 			return true;
 		}
-		HighlightEvent.EntityHighlight e = ask(entity, Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false));
+		HighlightEvent.EntityHighlight e = ask(entity);
 		asked.put(entity, e.style());
 		askedColor.put(entity, e.color());
 		if (e.style() == null || !e.style().throughWalls()) return shown;
@@ -223,30 +216,18 @@ public final class HighlightRenderer {
 		return true;
 	}
 
-	/**
-	 * Who highlights {@code entity}: a {@code RenderEvent} request, else the listeners, then the
-	 * {@link HighlightEvent#ENTITY_HIGHLIGHT} hook if it's hooked.
-	 */
-	private HighlightEvent.EntityHighlight ask(Entity entity, float tickDelta) {
+	/** How {@code entity} is highlighted: its {@code RenderEvent} request, then the {@link HighlightEvent#ENTITY_HIGHLIGHT} hook. */
+	private HighlightEvent.EntityHighlight ask(Entity entity) {
 		HighlightStyle requested = RenderRouter.INSTANCE.entityStyle(entity);
-		HighlightEvent.EntityHighlight asked;
-		if (requested != null) {
-			asked = new HighlightEvent.EntityHighlight(entity, requested, RenderRouter.INSTANCE.entityColor(entity));
-		} else if (entityListeners.isSet()) {
-			HighlightEvent.Entity e = Myriad.events().post(entityEvent.reset(entity, tickDelta));
-			asked = new HighlightEvent.EntityHighlight(entity, e.style(), e.color());
-		} else {
-			asked = new HighlightEvent.EntityHighlight(entity, null, 0);
-		}
-		if (!HighlightEvent.ENTITY_HIGHLIGHT.hooked()) return asked;
-		HighlightEvent.EntityHighlight h = HighlightEvent.ENTITY_HIGHLIGHT.call(null, asked, x -> x);
-		return h == null || h.style() == null || (h.color() >>> 24) == 0 ? new HighlightEvent.EntityHighlight(entity, null, 0) : h;
+		return hooked(requested == null ? new HighlightEvent.EntityHighlight(entity, null, 0)
+			: new HighlightEvent.EntityHighlight(entity, requested, RenderRouter.INSTANCE.entityColor(entity)));
 	}
 
-	/** Who highlights {@code entity} in a preview, as in the world (the listeners, then the hook): a null style for nobody. */
-	public HighlightEvent.EntityHighlight askPreview(Entity entity) {
-		if (!entityListeners.isSet() && !HighlightEvent.ENTITY_HIGHLIGHT.hooked()) return new HighlightEvent.EntityHighlight(entity, null, 0);
-		return ask(entity, 1);
+	/** {@code asked} after the {@link HighlightEvent#ENTITY_HIGHLIGHT} hook, if it's hooked: a null style for not at all. */
+	public static HighlightEvent.EntityHighlight hooked(HighlightEvent.EntityHighlight asked) {
+		if (!HighlightEvent.ENTITY_HIGHLIGHT.hooked()) return asked;
+		HighlightEvent.EntityHighlight h = HighlightEvent.ENTITY_HIGHLIGHT.call(null, asked, x -> x);
+		return h == null || h.style() == null || (h.color() >>> 24) == 0 ? new HighlightEvent.EntityHighlight(asked.entity(), null, 0) : h;
 	}
 
 	/**
@@ -265,8 +246,8 @@ public final class HighlightRenderer {
 		if (asked.containsKey(entity)) {
 			style = asked.get(entity);
 			color = askedColor.getInt(entity);
-		} else if (entityListeners.isSet() || RenderRouter.INSTANCE.anyEntities()) {
-			HighlightEvent.EntityHighlight e = ask(entity, tickDelta);
+		} else if (RenderRouter.INSTANCE.anyEntities()) {
+			HighlightEvent.EntityHighlight e = ask(entity);
 			style = e.style();
 			color = e.color();
 		}
@@ -284,10 +265,9 @@ public final class HighlightRenderer {
 		if (id >= 0) state.outlineColor = encode(id, highlights.groupOf[id]);
 	}
 
-	/** Posts {@link HighlightEvent.Shapes} and submits the frame's boxes to the shapes masks. */
-	public void collectShapes(SubmitNodeCollector collector, PoseStack poseStack, float tickDelta) {
-		if (!armed || !shapeListeners.isSet() && !RenderRouter.INSTANCE.anyShapes()) return;
-		if (shapeListeners.isSet()) Myriad.events().post(shapesEvent.reset(tickDelta));
+	/** Takes the frame's shapes from {@link RenderRouter} and submits their boxes to the shapes masks. */
+	public void collectShapes(SubmitNodeCollector collector, PoseStack poseStack) {
+		if (!armed || !RenderRouter.INSTANCE.anyShapes()) return;
 		RenderRouter.INSTANCE.shapesTo(this);
 		for (int l : SHAPE_LAYERS) collectShapes(l, collector, poseStack);
 	}
@@ -340,7 +320,7 @@ public final class HighlightRenderer {
 		buf.addVertex(pose, dx, dy, dz).setColor(c);
 	}
 
-	/** {@link HighlightEvent.Shapes#box}. Off-screen shapes are skipped, so callers can pass everything in range. */
+	/** A box (world coordinates). Off-screen shapes are skipped, so callers can pass everything in range. */
 	public void box(AABB box, HighlightStyle style, int color, boolean below) {
 		if (!armed || style == null || (color >>> 24) == 0 || (frustum != null && !frustum.isVisible(box))) return;
 		int layer = below ? BELOW : SHAPES;
@@ -348,23 +328,25 @@ public final class HighlightRenderer {
 		if (id >= 0) shapeBox(layer, box, 0, 0, 0, encode(id, highlights.groupOf[id]));
 	}
 
-	/** {@link HighlightEvent.Shapes#block}. */
-	public void block(BlockPos pos, HighlightStyle style, int color, double inflate, boolean below) {
+	/** The block at {@code pos} by its shape (a full cube for one without). */
+	public void block(BlockPos pos, HighlightStyle style, int color, boolean below) {
 		if (!armed || style == null || (color >>> 24) == 0) return;
 		var level = Minecraft.getInstance().level;
 		if (level == null) return;
 		VoxelShape shape = level.getBlockState(pos).getShape(level, pos);
-		AABB bounds = (shape.isEmpty() ? new AABB(pos) : shape.bounds().move(pos)).inflate(inflate);
+		AABB bounds = shape.isEmpty() ? new AABB(pos) : shape.bounds().move(pos);
 		if (frustum != null && !frustum.isVisible(bounds)) return;
 		int layer = below ? BELOW : SHAPES;
 		int id = shape(layer, style, color, bounds);
 		if (id < 0) return;
 		int c = encode(id, highlights.groupOf[id]);
-		if (shape.isEmpty()) shapeBox(layer, new AABB(0, 0, 0, 1, 1, 1).inflate(inflate), pos.getX(), pos.getY(), pos.getZ(), c);
-		else shape.forAllBoxes((x0, y0, z0, x1, y1, z1) -> shapeBox(layer, new AABB(x0, y0, z0, x1, y1, z1).inflate(inflate), pos.getX(), pos.getY(), pos.getZ(), c));
+		if (shape.isEmpty()) shapeBox(layer, new AABB(0, 0, 0, 1, 1, 1), pos.getX(), pos.getY(), pos.getZ(), c);
+		else shape.forAllBoxes((x0, y0, z0, x1, y1, z1) -> shapeBox(layer, new AABB(x0, y0, z0, x1, y1, z1), pos.getX(), pos.getY(), pos.getZ(), c));
 	}
 
-	/** {@link HighlightEvent.Shapes#mesh}. */
+	/**
+	 * A mesh's filled faces, which stay on the GPU; each vertex's red picks its colour from {@code palette} (up to 256).
+	 */
 	public void mesh(WorldMesh mesh, HighlightStyle style, int[] palette, boolean below) {
 		if (!armed || style == null || palette.length == 0 || mesh == null || mesh.isEmpty()) return;
 		if (frustum != null && !frustum.isVisible(mesh.bounds())) return;

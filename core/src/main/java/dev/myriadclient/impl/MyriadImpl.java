@@ -8,14 +8,12 @@ import dev.myriadclient.api.command.Command;
 import dev.myriadclient.api.config.ConfigManager;
 import dev.myriadclient.api.control.Controls;
 import dev.myriadclient.api.elytra.Elytra;
-import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.event.events.ScreenOpenEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.hook.Hooks;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.job.Jobs;
 import dev.myriadclient.api.map.Maps;
-import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.ModuleRegistry;
@@ -34,7 +32,6 @@ import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.service.ServerStats;
-import dev.myriadclient.api.service.Tasks;
 import dev.myriadclient.api.service.TickSpeed;
 import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.setting.SettingColor;
@@ -75,7 +72,6 @@ import dev.myriadclient.impl.service.PacketLimiter;
 import dev.myriadclient.impl.service.PlacementManager;
 import dev.myriadclient.impl.service.RotationManager;
 import dev.myriadclient.impl.service.ServerStatsTracker;
-import dev.myriadclient.impl.service.TaskScheduler;
 import dev.myriadclient.impl.service.TickSpeedManager;
 import dev.myriadclient.impl.share.ShareManager;
 import dev.myriadclient.impl.ui.MyriadTitleScreen;
@@ -102,7 +98,6 @@ public final class MyriadImpl implements MyriadApi {
 	private final MyriadEventBus events = new MyriadEventBus();
 	private final Registry<Tag> tags = new Registry<>("tag");
 	/** The tags under their old name, for addons built before 0.7.0; kept in step with {@link #tags}. */
-	private final Registry<Category> categories = new Registry<>("category");
 	private final Registry<ModuleGroup> groups = new Registry<>("group");
 	private final ModuleRegistry modules = new ModuleRegistry();
 	private final Registry<Command> commands = new Registry<>("command");
@@ -135,7 +130,6 @@ public final class MyriadImpl implements MyriadApi {
 	private final ServerStatsTracker serverStats = new ServerStatsTracker();
 	private final MenuSync menuSync = new MenuSync();
 	private final ContainerTracker containers = new ContainerTracker(menuSync);
-	private final TaskScheduler tasks = new TaskScheduler();
 	private final JobRunner jobs = new JobRunner();
 	private final WindowManager windowManager = new WindowManager();
 	private final CommandManager commandManager = new CommandManager(commands);
@@ -146,8 +140,6 @@ public final class MyriadImpl implements MyriadApi {
 	private final UpdateManager updates = new UpdateManager(config.root());
 
 	private MyriadImpl() {
-		tags.onAdd(t -> categories.register(Category.of(t), tags.ownerOf(t)));
-		tags.onRemove(t -> categories.unregister(t.id()));
 	}
 
 	public static MyriadImpl get() {
@@ -278,7 +270,6 @@ public final class MyriadImpl implements MyriadApi {
 		events.subscribe(antiCheat);
 		events.subscribe(menuSync);
 		events.subscribe(containers);
-		events.subscribe(tasks);
 		events.subscribe(jobs);
 		events.subscribe(keybindManager);
 		events.subscribe(commandManager);
@@ -318,10 +309,6 @@ public final class MyriadImpl implements MyriadApi {
 		return addonLoader;
 	}
 
-	@Override
-	public Registry<Category> categories() {
-		return categories;
-	}
 
 	@Override
 	public Registry<Tag> tags() {
@@ -444,12 +431,6 @@ public final class MyriadImpl implements MyriadApi {
 
 	public WheelManager wheelManager() {
 		return wheels;
-	}
-
-	@Override
-	@SuppressWarnings("deprecation")
-	public Tasks tasks() {
-		return tasks;
 	}
 
 	@Override

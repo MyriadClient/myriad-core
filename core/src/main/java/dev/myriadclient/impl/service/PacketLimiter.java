@@ -87,12 +87,6 @@ public final class PacketLimiter implements PacketLimits {
 	}
 
 	@Override
-	@Deprecated
-	public int windowMs() {
-		return WINDOW_MS;
-	}
-
-	@Override
 	public void urgent(Runnable action) {
 		urgentDepth.incrementAndGet();
 		try {

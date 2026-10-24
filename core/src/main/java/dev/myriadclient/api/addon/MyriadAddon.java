@@ -18,11 +18,6 @@ public interface MyriadAddon {
 	default void registerTags(AddonContext ctx) {
 	}
 
-	/** @deprecated categories are tags now: use {@link #registerTags}. Still called, right after it. */
-	@Deprecated(since = "0.7.0")
-	default void registerCategories(AddonContext ctx) {
-	}
-
 	/** Register modules, commands, panels, setting types, layouts, themes, keybinds and listeners. */
 	void initialize(AddonContext ctx);
 

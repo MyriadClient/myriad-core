@@ -92,12 +92,12 @@ public final class RenderRouter implements RenderEvent.Sink {
 		return entityColors.getInt(entity);
 	}
 
-	/** Hands the frame's shapes to the highlight renderer, as {@code HighlightEvent.Shapes} listeners do. */
+	/** Hands the frame's shapes to the highlight renderer. */
 	void shapesTo(HighlightRenderer renderer) {
 		for (Shape s : shapes) {
 			HighlightStyle style = s.look().style();
 			if (s.box() != null) renderer.box(s.box(), style, s.color(), s.below());
-			else renderer.block(s.pos(), style, s.color(), 0, s.below());
+			else renderer.block(s.pos(), style, s.color(), s.below());
 		}
 		for (ChunkCache<?> cache : caches) {
 			RenderLook look = cache.look();

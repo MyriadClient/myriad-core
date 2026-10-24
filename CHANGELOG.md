@@ -14,6 +14,20 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=0.1.0"}`) and can check `Myriad.isAtLeast("0.2.0")` for newer features.
 
+## 1.0.0 (unreleased)
+
+- **Removed what earlier releases deprecated**, each after at least one minor release with its replacement:
+  - `Category`, `Categories`, `Module(Category, …)`, `Module.category()`, `AddonContext.registerCategory`,
+    `MyriadAddon.registerCategories`, `Myriad.categories()`, `ModuleRegistry.inCategory` and
+    `ConfigShares.Builder.category`/`addonCategory`: modules have tags and addons declare groups (since 0.7).
+  - `SettingGroup.intSetting`, `doubleSetting` and `enumSetting`: `integer`, `decimal` and `oneOf` (since 0.8).
+  - `Tasks` and `Myriad.tasks()`: `Myriad.jobs().later` and `every`, and steps (since 0.8).
+  - `AntiCheat.Mode`, `mode()` and `setMode()`: `AntiCheat.Profile` (since 0.8). `PacketLimits.windowMs()` (since 0.5).
+  - `BoxStyle`, `HighlightSettings`, `HighlightEvent.Entity`, `HighlightEvent.Shapes` and `ChunkCache.highlight`:
+    `RenderEvent`, `RenderSettings` and `ChunkCache.Builder.boxes` (since 0.11). `ChunkCache.setMeshesVisible`, which
+    only served the old outline mode, is private: a cache built with `boxes` shows its meshes by the render mode.
+    `HighlightEvent` keeps `Hand` and the `ENTITY_HIGHLIGHT` hook.
+
 ## 0.11.0
 
 - **One render mode for every module: Shader or Box.** The new **Render** window (and `.render shader|box`, and a

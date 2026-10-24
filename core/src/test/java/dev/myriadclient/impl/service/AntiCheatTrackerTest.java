@@ -57,14 +57,4 @@ class AntiCheatTrackerTest {
 		t.choose(null);
 		assertNull(t.choiceId());
 	}
-
-	@Test
-	@SuppressWarnings("deprecation")
-	void theOldModeStillSets() {
-		AntiCheatTracker t = new AntiCheatTracker();
-		t.setMode(dev.myriadclient.api.service.AntiCheat.Mode.GRIM);
-		assertSame(Profile.GRIM, t.profile());
-		t.setMode(dev.myriadclient.api.service.AntiCheat.Mode.AUTO);
-		assertNull(t.choice());
-	}
 }

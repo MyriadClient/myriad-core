@@ -91,24 +91,6 @@ public class SettingGroup {
 		return bind(new EnumSetting.Builder<>(name, defaultValue));
 	}
 
-	/** @deprecated named like the other builders now: use {@link #integer(String)}. Removed in 1.0. */
-	@Deprecated
-	public IntSetting.Builder intSetting(String name) {
-		return integer(name);
-	}
-
-	/** @deprecated named like the other builders now: use {@link #decimal(String)}. Removed in 1.0. */
-	@Deprecated
-	public DoubleSetting.Builder doubleSetting(String name) {
-		return decimal(name);
-	}
-
-	/** @deprecated named like the other builders now: use {@link #oneOf(String, Enum)}. Removed in 1.0. */
-	@Deprecated
-	public <E extends Enum<E>> EnumSetting.Builder<E> enumSetting(String name, E defaultValue) {
-		return oneOf(name, defaultValue);
-	}
-
 	public StringSetting.Builder string(String name) {
 		return bind(new StringSetting.Builder(name));
 	}

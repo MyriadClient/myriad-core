@@ -22,7 +22,7 @@ public abstract class EntityRendererMixin<T extends Entity, S extends EntityRend
 
 	/**
 	 * Every render state is built here: remember the entity it was built from (see RenderStates), and point its outline
-	 * colour at its highlight, if any (HighlightEvent.Entity).
+	 * colour at its highlight, if any (a RenderEvent request in Shader mode).
 	 */
 	@Inject(method = "createRenderState(Lnet/minecraft/world/entity/Entity;F)Lnet/minecraft/client/renderer/entity/state/EntityRenderState;", at = @At("RETURN"))
 	private void myriad$rememberEntity(T entity, float tickDelta, CallbackInfoReturnable<S> cir) {

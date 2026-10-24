@@ -96,7 +96,7 @@ public class MyriadClient implements ClientModInitializer {
 				bus.post(new Render3DEvent(ctx.poseStack(), camera, tickDelta, ctx.submitNodeCollector()));
 			}
 			WorldRenderQueue.INSTANCE.submit(ctx.submitNodeCollector(), ctx.poseStack(), camera);
-			HighlightRenderer.INSTANCE.collectShapes(ctx.submitNodeCollector(), ctx.poseStack(), tickDelta);
+			HighlightRenderer.INSTANCE.collectShapes(ctx.submitNodeCollector(), ctx.poseStack());
 		});
 
 		// Retained meshes (WorldMesh, ChunkCache) draw straight after the per-frame shapes, in the same place in the frame.

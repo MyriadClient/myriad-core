@@ -107,12 +107,6 @@ public class ModuleRegistry extends Registry<Module> {
 		return list;
 	}
 
-	/** @deprecated categories are tags now: use {@link #withTag(Tag)} */
-	@Deprecated(since = "0.7.0")
-	public List<Module> inCategory(Category category) {
-		return withTag(category.tag());
-	}
-
 	public List<Module> enabled() {
 		List<Module> list = new ArrayList<>();
 		for (Module m : values()) if (m.isEnabled()) list.add(m);

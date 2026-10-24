@@ -11,7 +11,6 @@ import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.hook.Hooks;
 import dev.myriadclient.api.job.Jobs;
 import dev.myriadclient.api.map.Maps;
-import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.module.Tag;
@@ -29,7 +28,6 @@ import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.service.ServerStats;
-import dev.myriadclient.api.service.Tasks;
 import dev.myriadclient.api.service.TickSpeed;
 import dev.myriadclient.api.share.ConfigShares;
 import dev.myriadclient.api.ui.BarWidget;
@@ -100,12 +98,6 @@ public final class Myriad {
 	/** Every addon Myriad found, including failed ones and Myriad core itself. */
 	public static List<Addon> addons() {
 		return api().addons();
-	}
-
-	/** @deprecated categories are tags now: use {@link #tags()} */
-	@Deprecated(since = "0.7.0")
-	public static Registry<Category> categories() {
-		return api().categories();
 	}
 
 	/** Every module tag: Myriad's shared ones ({@link dev.myriadclient.api.module.Tags}) and addons' own. */
@@ -197,17 +189,6 @@ public final class Myriad {
 	/** Opening containers, reading them and moving items. */
 	public static Containers containers() {
 		return api().containers();
-	}
-
-	/**
-	 * Work spread over ticks: delays, repeats and step-by-step sequences.
-	 *
-	 * @deprecated use {@link #jobs()}: {@code Jobs.later/every} for delays and repeats, a {@code Step} for sequences.
-	 * Removed in 1.0.
-	 */
-	@Deprecated
-	public static Tasks tasks() {
-		return api().tasks();
 	}
 
 	/**

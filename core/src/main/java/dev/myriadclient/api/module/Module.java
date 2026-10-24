@@ -85,12 +85,6 @@ public abstract class Module implements Identified {
 		this.description = description;
 	}
 
-	/** @deprecated categories are {@link Tag}s now: use {@link #Module(Tag, String, String)} */
-	@Deprecated(since = "0.7.0")
-	protected Module(Category category, String name, String description) {
-		this(category.tag(), name, description);
-	}
-
 	@Override
 	public MyriadId id() {
 		if (id == null) throw new IllegalStateException("Module '" + name + "' is not registered yet");
@@ -129,12 +123,6 @@ public abstract class Module implements Identified {
 	/** Adds tags besides the main one, for a module about more than one thing (Reach: combat and world). Call it in the constructor. */
 	protected final void alsoTagged(Tag... more) {
 		for (Tag t : more) if (!tags.contains(t)) tags.add(t);
-	}
-
-	/** @deprecated categories are {@link Tag}s now: use {@link #tag()} */
-	@Deprecated(since = "0.7.0")
-	public Category category() {
-		return Category.of(tag());
 	}
 
 	/**
@@ -184,7 +172,6 @@ public abstract class Module implements Identified {
 		switchTo(enable, feedback);
 	}
 
-	@SuppressWarnings("deprecation")
 	private void switchTo(boolean enable, boolean feedback) {
 		if (enable == enabled) return;
 		enabled = enable;
@@ -208,7 +195,6 @@ public abstract class Module implements Identified {
 			}
 		} else {
 			Myriad.events().unsubscribe(this);
-			Myriad.tasks().cancel(this);
 			Myriad.jobs().cancel(this);
 			Myriad.tickSpeed().clear(this);
 			Myriad.breaking().cancel(this);

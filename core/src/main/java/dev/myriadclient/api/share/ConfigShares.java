@@ -1,7 +1,6 @@
 package dev.myriadclient.api.share;
 
 import dev.myriadclient.api.control.ControlPanel;
-import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.Tag;
@@ -69,19 +68,6 @@ public interface ConfigShares {
 
 		/** Every module of the addon with this mod id. */
 		Builder addon(String modId);
-
-		/** @deprecated categories are tags now: use {@link #tag(Tag)} */
-		@Deprecated(since = "0.7.0")
-		default Builder category(Category category) {
-			return tag(category.tag());
-		}
-
-		/** @deprecated windows are groups now: use {@link #group(ModuleGroup)}, or {@link #tag(Tag)} and {@link #addon(String)} */
-		@Deprecated(since = "0.7.0")
-		default Builder addonCategory(String modId, Category category) {
-			for (Module m : dev.myriadclient.api.Myriad.modules().withTag(category.tag())) if (m.id().namespace().equals(modId)) module(m);
-			return this;
-		}
 
 		/** A control panel, with the settings it saves (its member modules aren't added; add them too to share theirs). */
 		Builder controlPanel(ControlPanel panel);

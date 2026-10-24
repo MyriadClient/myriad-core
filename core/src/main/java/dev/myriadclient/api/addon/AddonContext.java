@@ -7,7 +7,6 @@ import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.HookBuilder;
 import dev.myriadclient.api.hook.ReplacementBuilder;
 import dev.myriadclient.api.hook.Service;
-import dev.myriadclient.api.module.Category;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.Tag;
@@ -58,25 +57,6 @@ public interface AddonContext {
 
 	/** Registers a tag you constructed yourself (e.g. kept in a constants class). */
 	Tag registerTag(Tag tag);
-
-	/** @deprecated categories are tags now: use {@link #registerTag(String, String, SettingColor)} */
-	@Deprecated(since = "0.7.0")
-	default Category registerCategory(String name, String icon, int color) {
-		return registerCategory(name, icon, SettingColor.of(color));
-	}
-
-	/** @deprecated categories are tags now: use {@link #registerTag(String, String, SettingColor)} */
-	@Deprecated(since = "0.7.0")
-	default Category registerCategory(String name, String icon, SettingColor color) {
-		return Category.of(registerTag(name, icon, color));
-	}
-
-	/** @deprecated categories are tags now: use {@link #registerTag(Tag)} */
-	@Deprecated(since = "0.7.0")
-	default Category registerCategory(Category category) {
-		registerTag(category.tag());
-		return category;
-	}
 
 	/**
 	 * Declares a group of your modules, with id {@code <your mod id>:<name in snake_case>}: one window in the menu,

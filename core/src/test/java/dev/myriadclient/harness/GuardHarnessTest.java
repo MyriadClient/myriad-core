@@ -1,7 +1,7 @@
 package dev.myriadclient.harness;
 
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.module.Categories;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.Modules;
 import org.junit.jupiter.api.Test;
@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class GuardHarnessTest {
 	static final class Broken extends Module {
 		Broken() {
-			super(Categories.MISC, "Broken", "Throws from its mixin code.");
+			super(Tags.MISC, "Broken", "Throws from its mixin code.");
 		}
 	}
 
