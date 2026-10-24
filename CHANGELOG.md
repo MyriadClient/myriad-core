@@ -16,7 +16,7 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
-## 1.0.0 (unreleased)
+## 1.0.0
 
 **The API addons can build on and keep.** From here every 1.x release is source- and binary-compatible with the ones
 before it for the same Minecraft version: an addon built against 1.0 runs on every 1.x, and core's build fails on any
