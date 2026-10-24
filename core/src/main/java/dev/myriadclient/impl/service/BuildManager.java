@@ -31,7 +31,13 @@ public final class BuildManager implements Building {
 	private final List<BuildRun> builds = new ArrayList<>();
 	/** Each item's hotbar slot this tick (or why there's none), asked once however many positions want it. */
 	private final Reference2IntOpenHashMap<Item> slots = new Reference2IntOpenHashMap<>();
-	private boolean movedMaterialThisTick;
+	/**
+	 * Inventory moves for builds this tick, and the most: each block moved in is placed in the same tick, so a few a tick
+	 * keep a build of more kinds than the hotbar holds going at about the pace of one whose blocks are all there, well
+	 * inside the inventory click budget.
+	 */
+	private int materialMoves;
+	private static final int MATERIAL_MOVES = 3;
 
 	public BuildManager(PlacementManager placement) {
 		this.placement = placement;
@@ -64,7 +70,7 @@ public final class BuildManager implements Building {
 		builds.removeIf(b -> !b.isRunning());
 		if (builds.isEmpty() && MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory) inventory.buildsDone();
 		if (builds.isEmpty() || mc.player == null || mc.level == null) return;
-		movedMaterialThisTick = false;
+		materialMoves = 0;
 		slots.clear();
 		for (BuildRun b : new ArrayList<>(builds)) {
 			try {
@@ -105,12 +111,13 @@ public final class BuildManager implements Building {
 	}
 
 	/**
-	 * Makes one inventory move for a build if none has been made this tick and a click can go (Grim cancels inventory
-	 * clicks while you move: keys are released for a tick first if needed). Returns what {@code move} did.
+	 * Makes an inventory move for a build if fewer than {@link #MATERIAL_MOVES} have been made this tick and a click can
+	 * go (Grim cancels inventory clicks while you move: keys are released for a tick first if needed). Returns what
+	 * {@code move} did.
 	 */
 	boolean moveMaterial(BooleanSupplier move) {
-		if (movedMaterialThisTick || !Myriad.inventory().prepareClick()) return false;
-		movedMaterialThisTick = true;
+		if (materialMoves >= MATERIAL_MOVES || !Myriad.inventory().prepareClick()) return false;
+		materialMoves++;
 		return move.getAsBoolean();
 	}
 }

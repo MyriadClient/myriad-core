@@ -16,8 +16,29 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
-## 1.1.2 (unreleased)
+## 1.2.0 (unreleased)
 
+- **A 2b2t profile** (`AntiCheat.Profile.GRIM_2B2T`, picked for 2b2t.org): Grim's answers, but placements and item
+  uses go without a swing, and a slot swapped in for one goes back in the same tick, the off hand's for an air placement
+  too, so the item never shows in your hand and a tick can air place blocks of several kinds. Every module that places
+  or uses through core follows it. Two new answers on every profile say so, `checksSwings()` and
+  `checksPacketOrder()` (both true for the other presets: an unrecognised server gets the vanilla profile, and might
+  check either). Measured on 2b2t with the Printer: no swings, the slot back within the tick, nothing refused. Swings
+  stay with breaks and attacks. A hook matching `on(Profile.GRIM)` no longer matches on 2b2t; add `GRIM_2B2T`.
+- **Builds place blocks from the inventory as fast as from the hotbar**: a block moved into the hotbar is placed in the
+  tick of the click (the server takes the click first, and nothing it says about the slot can reach the client before
+  the tick is over), where it waited a round trip, and up to three are moved a tick, where it was one. On 2b2t, a build
+  whose blocks were all in the inventory went from 7 to 10 blocks a second to 20 (15 in 15 ticks), about what one
+  with its blocks in the hotbar managed before.
+- **Clicks against a block before air placement**: the click into the empty space itself is always nearer than its
+  neighbours, so with Air Place on every block that could be air placed was, through the off hand, one kind of block
+  a tick (and Grim refuses it). Now a click against a block comes first; with every block in reach in the hotbar, a
+  burst of 9 goes out in one tick (it took 5).
+- **A placement the server drops is placed again**: the server answers every action it handled from a tick's packets
+  at once, so one sent in the same tick as an answered one and still unanswered was dropped (Paper's limit of 9 in
+  300 ms, live on 2b2t). After a short grace the client's guess there (a block shown where the server has none) is put
+  back to what the server last had, as its answer would have, and the placement counts as failed; the same when an
+  action times out. A dropped placement at the end of a burst used to stay a ghost, and builds took it as placed.
 - **Trying a shared config turns on only what was on for the sharer**: its control panel took every module in the
   share, and a whole config lists every module, most of them off, so turning it on turned on everything you have. A
   share with none on (settings for modules you turn on yourself) still brings them all.

@@ -16,8 +16,9 @@ import java.util.Set;
  * module asking the player "is this server strict?".
  * <p>
  * A {@link Profile} is a set of answers: does the server simulate movement, check the look of every click, accept
- * only faces you can see, refuse inventory clicks while you move, simulate the elytra glide, time breaks. Grim (2b2t)
- * is the best-known bundle; {@link Profile#VANILLA}, {@link Profile#GRIM} and {@link Profile#NCP} come with Myriad, and
+ * only faces you can see, refuse inventory clicks while you move, simulate the elytra glide, time breaks, want a swing
+ * with each click, check the order of packets in a tick. Grim is the best-known bundle; {@link Profile#VANILLA},
+ * {@link Profile#GRIM}, {@link Profile#GRIM_2B2T} and {@link Profile#NCP} come with Myriad, and
  * an addon for a server of its own registers its profile ({@code ctx.registerAntiCheatProfile}) and can recognise the
  * server ({@link #DETECT}).
  * <p>
@@ -36,9 +37,9 @@ import java.util.Set;
 public interface AntiCheat {
 	/**
 	 * Works out what the server checks, when you join and as it shows itself. Core's answer comes first as the
-	 * fallback: {@link Profile#GRIM} on a host known to run it or once the server sends the steady pings anti-cheats
-	 * that simulate the player use, {@link Profile#NCP} on 6b6t, {@link Profile#VANILLA} otherwise. Answer with your
-	 * own profile for your server; return null to leave core's.
+	 * fallback: {@link Profile#GRIM_2B2T} on 2b2t, {@link Profile#GRIM} on a host known to run it or once the server
+	 * sends the steady pings anti-cheats that simulate the player use, {@link Profile#NCP} on 6b6t,
+	 * {@link Profile#VANILLA} otherwise. Answer with your own profile for your server; return null to leave core's.
 	 */
 	Hook<ServerSeen, Profile> DETECT = Hook.of("myriad:detect_anticheat", "Detect anti-cheat",
 		"What the server checks, worked out from the server you joined and how it behaves.");
@@ -79,28 +80,40 @@ public interface AntiCheat {
 		 * Only the vanilla server's own limits: instant rotations, any face, breaking as soon as the server accepts it,
 		 * inventory clicks at any time.
 		 */
-		public static final Profile VANILLA = new Profile(MyriadId.of("myriad", "vanilla"), "Vanilla", false, false, false, false, false, BreakTiming.SERVER, 9);
+		public static final Profile VANILLA = new Profile(MyriadId.of("myriad", "vanilla"), "Vanilla", false, false, false, false, false, BreakTiming.SERVER, 9,
+			true, true);
 		/**
 		 * Grim, or another anti-cheat that simulates movement and checks every action against the rotation the server
 		 * last saw (they work alike): rotate before acting, click visible faces, move along the sent rotation, break at
 		 * the times it allows, click in the inventory only while standing still, and glide as vanilla does.
 		 */
-		public static final Profile GRIM = new Profile(MyriadId.of("myriad", "grim"), "Grim", true, true, true, true, true, BreakTiming.CHECKED, 9);
+		public static final Profile GRIM = new Profile(MyriadId.of("myriad", "grim"), "Grim", true, true, true, true, true, BreakTiming.CHECKED, 9,
+			true, true);
+		/**
+		 * 2b2t's Grim: Grim's answers, but it lets placements and item uses go without a swing, and a slot swapped in for
+		 * one go back in the same tick, so your hand never shows the item (live captures, 2026-10-24: no setback, nothing
+		 * refused). Picked for 2b2t.org.
+		 */
+		@ApiStatus.AvailableSince("1.2")
+		public static final Profile GRIM_2B2T = GRIM.named("myriad:2b2t", "2b2t").withChecksSwings(false).withChecksPacketOrder(false);
 		/**
 		 * NoCheatPlus (6b6t runs a fork of it). It checks the glide only against loose limits rather than simulating it,
 		 * which is what lets Elytra Fly's Control work there; everything else is treated as on a vanilla server, as it
 		 * was before this profile existed.
 		 */
-		public static final Profile NCP = new Profile(MyriadId.of("myriad", "ncp"), "NoCheatPlus", false, false, false, false, false, BreakTiming.SERVER, 9);
+		public static final Profile NCP = new Profile(MyriadId.of("myriad", "ncp"), "NoCheatPlus", false, false, false, false, false, BreakTiming.SERVER, 9,
+			true, true);
 
 		private final MyriadId id;
 		private final String name;
 		private final boolean simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide;
 		private final BreakTiming breakTiming;
 		private final int interactionBudget;
+		private final boolean checksSwings, checksPacketOrder;
 
 		private Profile(MyriadId id, String name, boolean simulatesMovement, boolean checksLookOnActions, boolean visibleFacesOnly,
-		                boolean clicksOnlyWhileStill, boolean simulatesGlide, BreakTiming breakTiming, int interactionBudget) {
+		                boolean clicksOnlyWhileStill, boolean simulatesGlide, BreakTiming breakTiming, int interactionBudget,
+		                boolean checksSwings, boolean checksPacketOrder) {
 			this.id = Objects.requireNonNull(id);
 			this.name = Objects.requireNonNull(name);
 			this.simulatesMovement = simulatesMovement;
@@ -110,12 +123,14 @@ public interface AntiCheat {
 			this.simulatesGlide = simulatesGlide;
 			this.breakTiming = Objects.requireNonNull(breakTiming);
 			this.interactionBudget = Math.max(1, interactionBudget);
+			this.checksSwings = checksSwings;
+			this.checksPacketOrder = checksPacketOrder;
 		}
 
 		/** This profile's answers under another id ({@code "my-addon:my_server"}) and name, to register as a profile of its own. */
 		public Profile named(String id, String name) {
 			return new Profile(MyriadId.parse(id), name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill,
-				simulatesGlide, breakTiming, interactionBudget);
+				simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
 		@Override
@@ -180,32 +195,65 @@ public interface AntiCheat {
 			return interactionBudget;
 		}
 
+		/**
+		 * The server wants a swing with each placement and item use (Grim, NoCheatPlus: a click without one is flagged).
+		 * Where it doesn't, the placement and inventory services leave the swing out: your arm doesn't move. Kept with
+		 * breaks and attacks whatever this says. The vanilla server doesn't check, but its profile is also what a server
+		 * nothing was recognised on gets, so it keeps them; so does this answer's other profile, NoCheatPlus.
+		 */
+		@ApiStatus.AvailableSince("1.2")
+		public boolean checksSwings() {
+			return checksSwings;
+		}
+
+		/**
+		 * The server checks the order of packets within a tick (Grim's PacketOrder checks): a held slot swapped in for
+		 * an action goes back at the start of the next tick, an off-hand swap for an air placement too. Where it doesn't,
+		 * they go back in the same tick, so the item never shows in your hand to others and a tick can place blocks of
+		 * several kinds from the off hand. True for every preset but {@link #GRIM_2B2T}: a server nothing was
+		 * recognised on gets the vanilla profile, and might run a check of it.
+		 */
+		@ApiStatus.AvailableSince("1.2")
+		public boolean checksPacketOrder() {
+			return checksPacketOrder;
+		}
+
+		@ApiStatus.AvailableSince("1.2")
+		public Profile withChecksSwings(boolean checksSwings) {
+			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
+		}
+
+		@ApiStatus.AvailableSince("1.2")
+		public Profile withChecksPacketOrder(boolean checksPacketOrder) {
+			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
+		}
+
 		public Profile withSimulatesMovement(boolean simulatesMovement) {
-			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget);
+			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
 		public Profile withChecksLookOnActions(boolean checksLookOnActions) {
-			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget);
+			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
 		public Profile withVisibleFacesOnly(boolean visibleFacesOnly) {
-			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget);
+			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
 		public Profile withClicksOnlyWhileStill(boolean clicksOnlyWhileStill) {
-			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget);
+			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
 		public Profile withSimulatesGlide(boolean simulatesGlide) {
-			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget);
+			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
 		public Profile withBreakTiming(BreakTiming breakTiming) {
-			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget);
+			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
 		public Profile withInteractionBudget(int interactionBudget) {
-			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget);
+			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
 		@Override

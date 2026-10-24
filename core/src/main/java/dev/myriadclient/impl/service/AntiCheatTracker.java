@@ -36,6 +36,8 @@ public final class AntiCheatTracker implements AntiCheat {
 	private static final int MAX_PINGS = 100;
 	/** Servers known to run Grim, by host (and their subdomains); the defaults plus the player's. */
 	public static final Set<String> DEFAULT_KNOWN = Set.of("2b2t.org");
+	/** 2b2t, whose Grim lets placements go without a swing and swaps back in the same tick ({@link Profile#GRIM_2B2T}). */
+	static final Set<String> TWO_B2T_HOSTS = Set.of("2b2t.org");
 	/** Servers known to run NoCheatPlus: 6b6t's fork has been live there since 2026-10-10. */
 	static final Set<String> NCP_HOSTS = Set.of("6b6t.org");
 	private volatile Set<String> known = DEFAULT_KNOWN;
@@ -52,7 +54,7 @@ public final class AntiCheatTracker implements AntiCheat {
 	private volatile boolean singleplayer;
 
 	public AntiCheatTracker() {
-		for (Profile p : new Profile[]{Profile.VANILLA, Profile.GRIM, Profile.NCP}) profiles.register(p, "myriad");
+		for (Profile p : new Profile[]{Profile.VANILLA, Profile.GRIM, Profile.GRIM_2B2T, Profile.NCP}) profiles.register(p, "myriad");
 		profiles.onAdd(p -> resolve());
 		profiles.onRemove(p -> resolve());
 	}
@@ -141,9 +143,10 @@ public final class AntiCheatTracker implements AntiCheat {
 		detected = p != null ? p : guess(seen);
 	}
 
-	/** Core's own guess: a known Grim host or the pings, then a known NoCheatPlus host, else the vanilla server. */
+	/** Core's own guess: a known Grim host (2b2t's own profile there) or the pings, then a known NoCheatPlus host, else the vanilla server. */
 	Profile guess(ServerSeen seen) {
-		if (seen.host() != null && matches(seen.host(), known) || seen.pings() >= PINGS) return Profile.GRIM;
+		if (seen.host() != null && matches(seen.host(), known)) return matches(seen.host(), TWO_B2T_HOSTS) ? Profile.GRIM_2B2T : Profile.GRIM;
+		if (seen.pings() >= PINGS) return Profile.GRIM;
 		if (seen.host() != null && matches(seen.host(), NCP_HOSTS)) return Profile.NCP;
 		return Profile.VANILLA;
 	}

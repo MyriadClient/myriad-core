@@ -28,9 +28,9 @@ final class BuildMaterials {
 	}
 
 	/**
-	 * The hotbar slot holding {@code item}; otherwise moves one in from the inventory (one move a tick for all builds,
-	 * keys released first so the server takes the click) and returns -1 to wait for it; -2 if there's none at all, -3
-	 * if no hotbar slot may take it.
+	 * The hotbar slot holding {@code item}; otherwise moves one in from the inventory (a few moves a tick for all
+	 * builds, keys released first so the server takes the click) and returns the slot it went to, to place from in
+	 * the same tick; -1 to wait for a move, -2 if there's none at all, -3 if no hotbar slot may take it.
 	 */
 	int slotFor(Item item) {
 		materials.add(item);
@@ -46,30 +46,29 @@ final class BuildMaterials {
 			// In the off hand for a tick after an air placement, until it's swapped back first thing next tick.
 			return Myriad.placement().offHandSlot() >= 0 && mc.player.getOffhandItem().is(item) ? -1 : -2;
 		}
-		return borrow(from) ? -1 : -3;
+		return borrow(from);
 	}
 
 	/**
 	 * Moves inventory slot {@code from} into the hotbar slot {@link #hotbarSlotToFill()} picks, if a move can go this
-	 * tick. False if no hotbar slot may take it.
+	 * tick: that slot, -1 to wait for one, -3 if no hotbar slot may take it.
 	 */
-	private boolean borrow(int from) {
+	private int borrow(int from) {
 		// Not while a block is in the off hand: a click now would put the server back on your slot before the swap back.
 		// Nor from a slot a click just changed, which may not hold what it shows yet.
-		if (Myriad.placement().offHandSlot() >= 0) return true;
-		if (MyriadImpl.get().inventoryManager() instanceof InventoryManager i && !i.settled(from)) return true;
+		if (Myriad.placement().offHandSlot() >= 0) return -1;
+		if (MyriadImpl.get().inventoryManager() instanceof InventoryManager i && !i.settled(from)) return -1;
 		int into = hotbarSlotToFill();
-		if (into < 0) return false;
-		if (!(MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory)) return false;
-		if (manager.moveMaterial(() -> {
+		if (into < 0) return -3;
+		if (!(MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory)) return -3;
+		if (!manager.moveMaterial(() -> {
 			inventory.buildMoves(into);
 			return inventory.moveToHotbar(from, into);
-		})) {
-			materials.add(mc.player.getInventory().getItem(into).getItem());
-			filledSlots.remove((Integer) into);
-			filledSlots.add(into);
-		}
-		return true;
+		})) return -1;
+		materials.add(mc.player.getInventory().getItem(into).getItem());
+		filledSlots.remove((Integer) into);
+		filledSlots.add(into);
+		return into;
 	}
 
 	/**
@@ -113,6 +112,6 @@ final class BuildMaterials {
 		if (best >= 0) return best;
 		int from = Myriad.inventory().findInInventory(s -> target.preference(s) >= 0);
 		if (from < 0) return -2;
-		return borrow(from) ? -1 : -3;
+		return borrow(from);
 	}
 }

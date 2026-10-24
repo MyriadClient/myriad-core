@@ -54,7 +54,8 @@ final class ClickSolver {
 	/** How far off the look may be, in degrees each way, and a click aimed at its point still come out right. */
 	private static final float TOLERANCE = 1.5f;
 
-	private record Candidate(BlockHitResult hit, boolean visible, double distance, boolean sneak) {
+	/** {@code air}: into the empty space itself (air placement), not against a block. */
+	private record Candidate(BlockHitResult hit, boolean visible, double distance, boolean sneak, boolean air) {
 	}
 
 	/** A face that could be clicked: of the block at {@code clicked}, facing {@code face}, sneaking or not. */
@@ -148,7 +149,9 @@ final class ClickSolver {
 		boolean spread = strict || positional(wanted);
 		List<Candidate> candidates = new ArrayList<>();
 		boolean anyInRange = false;
+		boolean empty = mc.level.getBlockState(pos).isAir();
 		for (Face face : faces) {
+			boolean air = empty && face.clicked.equals(pos);
 			// On the block's real outline (a slab's top is half way up), not the cube around it.
 			for (Vec3 point : Reach.clickPoints(face.clicked, face.face, spread)) {
 				double d = eyes.distanceToSqr(point);
@@ -157,12 +160,15 @@ final class ClickSolver {
 				BlockHitResult hit = new BlockHitResult(point, face.face, face.clicked, false);
 				boolean visible = Reach.canSee(hit);
 				if (mustSee && !visible) continue;
-				candidates.add(new Candidate(hit, visible, d, face.sneak));
+				candidates.add(new Candidate(hit, visible, d, face.sneak, air));
 			}
 		}
 		if (candidates.isEmpty()) return Solution.none(anyInRange ? Check.NOT_VISIBLE : Check.OUT_OF_RANGE);
-		// Without sneaking first, then faces you can see, then nearest.
-		candidates.sort(Comparator.<Candidate, Boolean>comparing(c -> c.sneak).thenComparing(c -> !c.visible).thenComparingDouble(Candidate::distance));
+		// Against a block first: an air placement goes through the off hand (one kind of block a tick, the swap back the
+		// next), and Grim refuses it. The space itself is always nearer than its neighbours, so by distance alone every
+		// block that could be air placed was. Then without sneaking, then faces you can see, then nearest.
+		candidates.sort(Comparator.<Candidate, Boolean>comparing(c -> c.air).thenComparing(c -> c.sneak).thenComparing(c -> !c.visible)
+			.thenComparingDouble(Candidate::distance));
 
 		float yaw = mc.player.getYRot(), pitch = mc.player.getXRot(), yawO = mc.player.yRotO, pitchO = mc.player.xRotO;
 		boolean anyResult = false;

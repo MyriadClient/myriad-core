@@ -20,8 +20,8 @@ class AntiCheatTrackerTest {
 	@Test
 	void knownHostsAndThePingsDecide() {
 		AntiCheatTracker t = new AntiCheatTracker();
-		assertSame(Profile.GRIM, t.guess(at("2b2t.org", 0)));
-		assertSame(Profile.GRIM, t.guess(at("connect.2b2t.org", 0)));
+		assertSame(Profile.GRIM_2B2T, t.guess(at("2b2t.org", 0)));
+		assertSame(Profile.GRIM_2B2T, t.guess(at("connect.2b2t.org", 0)));
 		assertSame(Profile.NCP, t.guess(at("6b6t.org", 0)));
 		assertSame(Profile.NCP, t.guess(at("play.6b6t.org", 0)));
 		// If 6b6t ever runs Grim again, its pings say so.

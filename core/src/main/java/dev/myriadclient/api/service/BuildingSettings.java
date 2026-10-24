@@ -30,7 +30,7 @@ public final class BuildingSettings {
 	public BuildingSettings(SettingGroup group, boolean breakWrongByDefault) {
 		placing = new PlacementSettings(group);
 		actionsPerTick = group.integer("Actions Per Tick").description("Most blocks placed or clicked each tick. Servers drop placements past 9 "
-			+ "in a third of a second (about 27 a second), so more than 2 only helps in bursts.").defaultValue(2).range(1, 6).build();
+			+ "in 300 ms (30 a second), so more than 2 only helps in bursts.").defaultValue(2).range(1, 6).build();
 		breakWrong = group.bool("Break Wrong Blocks").description("Break blocks in the way of what's to be built. Off, they're left and shown "
 			+ "as blocked.").defaultValue(breakWrongByDefault).build();
 		breaking = new BreakingSettings(group, breakWrong::get);

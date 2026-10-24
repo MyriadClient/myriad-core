@@ -28,6 +28,11 @@ public abstract class ClientWorldMixin implements PredictionAccess {
 		return blockStatePredictionHandler.currentSequence();
 	}
 
+	@Override
+	public void myriad$endPredictionsUpTo(int sequence) {
+		blockStatePredictionHandler.endPredictionsUpTo(sequence, (ClientLevel) (Object) this);
+	}
+
 	@Inject(method = "addEntity", at = @At("TAIL"))
 	private void myriad$entityAdded(Entity entity, CallbackInfo ci) {
 		if (Myriad.isReady() && Myriad.events().hasListeners(EntityEvent.Added.class)) Myriad.events().post(new EntityEvent.Added(entity));

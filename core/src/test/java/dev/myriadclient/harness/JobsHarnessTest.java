@@ -159,15 +159,19 @@ class JobsHarnessTest {
 			// put a placement off a tick or two (one run in eleven missed the cobblestone with 10 ticks).
 			for (int t = 0; t < 20; t++) {
 				h.tick();
-				sawGlass |= h.player.getInventory().getItem(5).is(Items.GLASS);
-				sawCobble |= h.player.getInventory().getItem(5).is(Items.COBBLESTONE);
+				for (int i = 1; i < 9; i++) {
+					sawGlass |= h.player.getInventory().getItem(i).is(Items.GLASS);
+					sawCobble |= h.player.getInventory().getItem(i).is(Items.COBBLESTONE);
+				}
 				assertTrue(h.player.getInventory().getItem(0).isEmpty(), "the selected slot took a block at tick " + t);
 			}
-			assertTrue(sawGlass && sawCobble, "glass then cobblestone into slot 5: " + sawGlass + ", " + sawCobble);
+			// Both in one tick: the empty slot 5 takes one, a stick's slot the other (the stick goes back after).
+			assertTrue(sawGlass && sawCobble, "glass and cobblestone into the hotbar: " + sawGlass + ", " + sawCobble);
 			job.cancel();
 			h.ticks(10);
 			var inv = h.player.getInventory();
 			assertTrue(inv.getItem(5).isEmpty(), "slot 5 holds " + inv.getItem(5));
+			for (int i = 1; i < 9; i++) if (i != 5) assertTrue(inv.getItem(i).is(Items.STICK), "slot " + i + " holds " + inv.getItem(i));
 			assertTrue(inv.getItem(20).is(Items.GLASS), "slot 20 holds " + inv.getItem(20));
 			assertTrue(inv.getItem(21).is(Items.COBBLESTONE), "slot 21 holds " + inv.getItem(21));
 			assertEquals(0, inv.getSelectedSlot());
@@ -202,18 +206,20 @@ class JobsHarnessTest {
 	}
 
 	@Test
-	void aSlotAClickJustChangedIsntPlacedFromUntilTheServerCouldAnswer() {
+	void aSlotAClickJustChangedIsPlacedFromInThatTick() {
 		try (Harness h = standing()) {
 			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
 			h.give(20, new ItemStack(Items.GLASS, 16));
 			boolean[] right = new boolean[2];
 			h.onTick(() -> {
 				assertTrue(Myriad.inventory().moveToHotbar(20, 5), "the click didn't go");
+				// Nothing the server says about the slot can arrive before this tick is over: the client shows what the
+				// click made, and the server, taking the click first, places that.
 				right[0] = Myriad.placement().canPlaceWith(5);
 				right[1] = Myriad.placement().canPlaceWith(0);
 			}).tick();
-			assertFalse(right[0], "placed from slot 5 in the tick its click went");
-			assertTrue(right[1], "a slot the click didn't touch waited too");
+			assertTrue(right[0], "slot 5 waited in the tick its click went");
+			assertTrue(right[1], "a slot the click didn't touch waited");
 			h.tick();
 			assertTrue(Myriad.placement().canPlaceWith(5), "still waiting a tick later, with no lag");
 		}

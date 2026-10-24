@@ -5,6 +5,7 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.util.Slots;
@@ -271,6 +272,10 @@ public final class InventoryManager implements Inventory {
 	 */
 	public void afterSwap(Runnable undo) {
 		if (actionSlot < 0) throw new IllegalStateException("afterSwap outside a silent swap's action");
+		if (!AntiCheat.inEffect().checksPacketOrder()) {
+			undo.run();
+			return;
+		}
 		long now = Ticks.current();
 		undos.add(new Undo(actionSlot, now, now + (ActionTiming.get().isLate() ? 2 : 1), undo));
 	}
@@ -462,7 +467,9 @@ public final class InventoryManager implements Inventory {
 			actionSlot = outer;
 			inv.setSelectedSlot(visible);
 			mc.gameMode.carriedIndex = visible;
-			if (serverSlot != wanted()) {
+			// Where the server doesn't check the order of packets in a tick (2b2t), straight back: the item never shows.
+			if (!AntiCheat.inEffect().checksPacketOrder() && undos.isEmpty()) restore();
+			else if (serverSlot != wanted()) {
 				restorePending = true;
 				swapSlot = hotbarSlot;
 				// Sent after this tick's movement, it goes out with what ActionTiming holds next tick: back the tick after.
@@ -594,6 +601,11 @@ public final class InventoryManager implements Inventory {
 	/** See {@link SlotsInFlight#settled}. */
 	public boolean settled(int index) {
 		return inFlight.settled(index);
+	}
+
+	/** See {@link SlotsInFlight#placeable}. */
+	boolean placeable(int index) {
+		return inFlight.placeable(index);
 	}
 
 	/** See {@link SlotsInFlight#swappable}. */

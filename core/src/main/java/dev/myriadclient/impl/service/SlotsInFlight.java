@@ -40,6 +40,16 @@ final class SlotsInFlight {
 		return index < 0 || index >= changed.length || Ticks.current() - changed[index] >= roundTrip();
 	}
 
+	/**
+	 * Whether something may be placed from slot {@code index} now: it's settled, or a click changed it this very tick.
+	 * The server's late view of a slot can only reach the client from the next tick on (packets are handled before
+	 * the tick), so in the tick of the click the client shows exactly what the click made, and the server, taking
+	 * the click first, places that.
+	 */
+	boolean placeable(int index) {
+		return settled(index) || index >= 0 && index < changed.length && changed[index] == Ticks.current();
+	}
+
 	/** Whether a click may change slot {@code index} now: nothing done with it is still on its way to the server. */
 	boolean swappable(int index) {
 		return settled(index) && (index < 0 || index >= used.length || Ticks.current() - used[index] >= roundTrip());

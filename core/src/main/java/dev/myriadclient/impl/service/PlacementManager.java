@@ -7,6 +7,7 @@ import dev.myriadclient.api.event.events.MovementPacketsEvent;
 import dev.myriadclient.api.event.events.ScreenOpenEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
@@ -331,7 +332,7 @@ public final class PlacementManager implements Placement {
 			} else {
 				sneaking(o, target, () -> {
 					mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, target);
-					if (o.swing()) mc.player.swing(InteractionHand.MAIN_HAND);
+					if (o.swing() && AntiCheat.inEffect().checksSwings()) mc.player.swing(InteractionHand.MAIN_HAND);
 				});
 			}
 		});
@@ -412,8 +413,9 @@ public final class PlacementManager implements Placement {
 	 */
 	private static boolean handsFree(int slot) {
 		if (!(MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory)) return true;
-		// A click changed the slot less than a round trip ago: the server may yet show the client its old contents.
-		if (slot >= 0 && !inventory.settled(slot)) return false;
+		// A click changed the slot less than a round trip ago (and not this tick): the server may yet show the client its
+		// old contents.
+		if (slot >= 0 && !inventory.placeable(slot)) return false;
 		return !inventory.undoPending() || inventory.undoSlotThisTick() == slot;
 	}
 
@@ -424,11 +426,15 @@ public final class PlacementManager implements Placement {
 	 */
 	private static boolean airReady(int slot) {
 		if (!(MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory)) return true;
-		return inventory.undoSlotThisTick() == slot || !inventory.actedThisTick();
+		return inventory.undoSlotThisTick() == slot || !inventory.actedThisTick() || !AntiCheat.inEffect().checksPacketOrder();
 	}
 
-	/** Swings {@code hand}: shown if {@code visible}, otherwise only sent (a placement without a swing is noticed). */
+	/**
+	 * Swings {@code hand}: shown if {@code visible}, otherwise only sent (a placement without a swing is noticed), or
+	 * not at all where the server doesn't want one ({@link AntiCheat.Profile#checksSwings()}).
+	 */
 	private void swing(InteractionHand hand, boolean visible) {
+		if (!AntiCheat.inEffect().checksSwings()) return;
 		if (visible) mc.player.swing(hand);
 		else mc.getConnection().send(new ServerboundSwingPacket(hand));
 	}
