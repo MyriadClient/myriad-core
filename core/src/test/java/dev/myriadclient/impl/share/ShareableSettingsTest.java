@@ -1,12 +1,16 @@
 package dev.myriadclient.impl.share;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import dev.myriadclient.api.setting.BoolSetting;
 import dev.myriadclient.api.setting.IntSetting;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.Settings;
 import dev.myriadclient.api.setting.StringSetting;
 import org.junit.jupiter.api.Test;
+
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -41,5 +45,16 @@ class ShareableSettingsTest {
 		JsonObject row = ShareView.setting(webhook);
 		assertTrue(row.get("protected").getAsBoolean());
 		assertFalse(row.has("value") || row.has("shown"));
+	}
+
+	@Test
+	void aTrialTurnsOnWhatWasOnForTheSharer() {
+		JsonArray whole = JsonParser.parseString("""
+			[{"id": "a:kill_aura", "enabled": true}, {"id": "a:scaffold", "enabled": false}, {"id": "a:freecam", "enabled": false},
+			 {"id": "b:not_installed", "enabled": true}]""").getAsJsonArray();
+		assertEquals(Set.of("a:kill_aura"), ShareManager.trialMembers(whole, id -> id.startsWith("a:")));
+		JsonArray settingsOnly = JsonParser.parseString("""
+			[{"id": "a:kill_aura", "enabled": false}, {"id": "a:scaffold"}]""").getAsJsonArray();
+		assertEquals(Set.of("a:kill_aura", "a:scaffold"), ShareManager.trialMembers(settingsOnly, id -> true), "none on: all of them");
 	}
 }

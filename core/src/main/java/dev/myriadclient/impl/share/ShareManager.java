@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -321,10 +322,11 @@ public final class ShareManager implements ConfigShares {
 		List<String> applied = new ArrayList<>(), missing = new ArrayList<>();
 		// A control panel to try needs modules in it; a share of wheels or a theme alone is just added.
 		ControlPanelImpl trial = how == Apply.AS_CONTROL_PANEL && !share.modules().isEmpty() ? newPanel(shortened(share.title())) : null;
+		Set<String> trying = trial == null ? Set.of() : trialMembers(array(doc, "modules"), id -> Myriad.modules().get(MyriadId.parse(id)).isPresent());
 
 		for (JsonElement e : array(doc, "modules")) {
 			try {
-				applyModule(e.getAsJsonObject(), trial, applied, missing);
+				applyModule(e.getAsJsonObject(), trial, trying, applied, missing);
 			} catch (RuntimeException ex) {
 				LOG.warn("Skipped a shared module it couldn't read: {}", e, ex);
 			}
@@ -403,8 +405,26 @@ public final class ShareManager implements ConfigShares {
 		return manager.all().stream().anyMatch(w -> w.name().equalsIgnoreCase(name));
 	}
 
-	/** One module of a share taken in: as the player's settings, or into {@code trial} (a control panel to try). */
-	private static void applyModule(JsonObject entry, @Nullable ControlPanelImpl trial, List<String> applied, List<String> missing) {
+	/**
+	 * The modules of a share that a control panel to try turns on: those that were on for the sharer, since a whole
+	 * config lists every module, most of them off (trying one turned on everything you have). A share with none of
+	 * yours on brings them all: settings for modules you'd turn on to try them.
+	 */
+	static Set<String> trialMembers(JsonArray modules, Predicate<String> installed) {
+		Set<String> on = new LinkedHashSet<>(), all = new LinkedHashSet<>();
+		for (JsonElement e : modules) {
+			if (!e.isJsonObject() || !e.getAsJsonObject().has("id")) continue;
+			JsonObject entry = e.getAsJsonObject();
+			String id = entry.get("id").getAsString();
+			if (!installed.test(id)) continue;
+			all.add(id);
+			if (entry.has("enabled") && entry.get("enabled").getAsBoolean()) on.add(id);
+		}
+		return on.isEmpty() ? all : on;
+	}
+
+	/** One module of a share taken in: as the player's settings, or into {@code trial} (a control panel to try) if it's one {@code trying}. */
+	private static void applyModule(JsonObject entry, @Nullable ControlPanelImpl trial, Set<String> trying, List<String> applied, List<String> missing) {
 		String id = entry.get("id").getAsString();
 		Module m = Myriad.modules().get(MyriadId.parse(id)).orElse(null);
 		if (m == null) {
@@ -413,6 +433,7 @@ public final class ShareManager implements ConfigShares {
 		}
 		JsonObject settings = entry.has("settings") ? entry.getAsJsonObject("settings") : new JsonObject();
 		if (trial != null) {
+			if (!trying.contains(id)) return;
 			trial.members.set(withMember(trial.members.get(), m.id()));
 			forEachShared(m, settings, (s, value) -> trial.remember(id, m.settings.keyOf(s), value));
 		} else {

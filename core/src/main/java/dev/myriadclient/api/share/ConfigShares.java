@@ -35,9 +35,9 @@ public interface ConfigShares {
 		/** Its settings become yours (protected ones excepted), its modules on or off as shared, its control panels, wheels and theme added. */
 		REPLACE,
 		/**
-		 * As a new control panel of its modules and their settings, so you can try it and turn it off to have your own
-		 * back (layered over yours, nothing overwritten); none for a share without modules. Its own control panels, wheels
-		 * and theme are added as with REPLACE.
+		 * As a new control panel of its modules that were on for the sharer (all of them if none was) and their
+		 * settings, so you can try it and turn it off to have your own back (layered over yours, nothing overwritten);
+		 * none for a share without modules. Its own control panels, wheels and theme are added as with REPLACE.
 		 */
 		AS_CONTROL_PANEL
 	}
