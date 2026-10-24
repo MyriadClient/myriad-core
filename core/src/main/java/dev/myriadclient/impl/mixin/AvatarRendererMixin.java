@@ -5,7 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.myriadclient.api.event.events.HighlightEvent;
-import dev.myriadclient.impl.render.HighlightRenderer;
+import dev.myriadclient.impl.render.HandHighlights;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.renderer.SubmitNodeCollector;
@@ -28,14 +28,14 @@ public abstract class AvatarRendererMixin {
 	private void myriad$highlightArm(SubmitNodeCollector collector, ModelPart part, PoseStack poseStack, RenderType renderType, int light, int overlay,
 									 TextureAtlasSprite sprite, Operation<Void> original, @Local(argsOnly = true) ModelPart arm) {
 		var player = Minecraft.getInstance().player;
-		if (!HighlightRenderer.INSTANCE.drawingHand() || player == null) {
+		if (!HandHighlights.INSTANCE.drawingHand() || player == null) {
 			original.call(collector, part, poseStack, renderType, light, overlay, sprite);
 			return;
 		}
 		HumanoidArm side = arm == ((AvatarRenderer<?>) (Object) this).getModel().leftArm ? HumanoidArm.LEFT : HumanoidArm.RIGHT;
 		InteractionHand hand = side == player.getMainArm() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
 		// The arm's extents come out already in the pose stack's space.
-		int outline = HighlightRenderer.INSTANCE.hand(HighlightEvent.Hand.Part.ARM, hand, side, ItemStack.EMPTY, IDENTITY,
+		int outline = HandHighlights.INSTANCE.hand(HighlightEvent.Hand.Part.ARM, hand, side, ItemStack.EMPTY, IDENTITY,
 			out -> part.getExtentsForGui(poseStack, out));
 		if (outline == 0) original.call(collector, part, poseStack, renderType, light, overlay, sprite);
 		else collector.submitModelPart(part, poseStack, renderType, light, overlay, sprite, -1, null, outline);

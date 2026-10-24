@@ -1,5 +1,6 @@
 package dev.myriadclient.impl.mixin.compat.iris;
 
+import dev.myriadclient.impl.render.HandHighlights;
 import dev.myriadclient.impl.render.HighlightRenderer;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
@@ -17,12 +18,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class IrisHandRendererMixin {
 	@ModifyArg(method = "setupGlState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ProjectionMatrixBuffer;getBuffer(Lorg/joml/Matrix4f;)Lcom/mojang/blaze3d/buffers/GpuBufferSlice;"))
 	private Matrix4f myriad$handProjection(Matrix4f projection) {
-		if (HighlightRenderer.INSTANCE.isArmed()) HighlightRenderer.INSTANCE.beginHand(projection);
+		if (HighlightRenderer.INSTANCE.isArmed()) HandHighlights.INSTANCE.beginHand(projection);
 		return projection;
 	}
 
 	@Inject(method = {"renderSolid", "renderTranslucent"}, at = @At("RETURN"))
 	private void myriad$handPassDone(CallbackInfo ci) {
-		HighlightRenderer.INSTANCE.pauseHand();
+		HandHighlights.INSTANCE.pauseHand();
 	}
 }

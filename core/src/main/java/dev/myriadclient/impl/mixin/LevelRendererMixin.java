@@ -7,6 +7,7 @@ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.resource.GraphicsResourceAllocator;
 import dev.myriadclient.impl.render.GpuTimings;
+import dev.myriadclient.impl.render.HandHighlights;
 import dev.myriadclient.impl.render.HighlightRenderer;
 import dev.myriadclient.impl.render.PreviewHighlights;
 import net.minecraft.client.DeltaTracker;
@@ -62,7 +63,7 @@ public abstract class LevelRendererMixin {
 	private RenderTarget myriad$handMask(RenderTarget target) {
 		PreviewHighlights preview = PreviewHighlights.drawing();
 		if (preview != null && preview.mask() != null) return preview.mask();
-		return HighlightRenderer.INSTANCE.handHighlighted() ? HighlightRenderer.INSTANCE.handMask() : target;
+		return HandHighlights.INSTANCE.handHighlighted() ? HandHighlights.INSTANCE.handMask() : target;
 	}
 
 	/** Vanilla blits its processed glow onto the screen here; highlights draw themselves instead. */

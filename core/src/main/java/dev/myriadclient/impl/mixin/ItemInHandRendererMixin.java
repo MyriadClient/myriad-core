@@ -8,7 +8,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.HighlightEvent;
 import dev.myriadclient.impl.MyriadImpl;
-import dev.myriadclient.impl.render.HighlightRenderer;
+import dev.myriadclient.impl.render.HandHighlights;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
@@ -50,10 +50,10 @@ public abstract class ItemInHandRendererMixin {
 									  Operation<Void> original, @Local(argsOnly = true) LivingEntity mob, @Local(argsOnly = true) ItemStack stack,
 									  @Local(argsOnly = true) ItemDisplayContext context) {
 		var player = Minecraft.getInstance().player;
-		if (HighlightRenderer.INSTANCE.drawingHand() && mob == player && context.firstPerson()) {
+		if (HandHighlights.INSTANCE.drawingHand() && mob == player && context.firstPerson()) {
 			HumanoidArm side = context == ItemDisplayContext.FIRST_PERSON_LEFT_HAND ? HumanoidArm.LEFT : HumanoidArm.RIGHT;
 			InteractionHand hand = side == player.getMainArm() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND;
-			int highlight = HighlightRenderer.INSTANCE.hand(HighlightEvent.Hand.Part.ITEM, hand, side, stack, poseStack.last().pose(), state::visitExtents);
+			int highlight = HandHighlights.INSTANCE.hand(HighlightEvent.Hand.Part.ITEM, hand, side, stack, poseStack.last().pose(), state::visitExtents);
 			if (highlight != 0) outline = highlight;
 		}
 		original.call(state, poseStack, collector, light, overlay, outline);

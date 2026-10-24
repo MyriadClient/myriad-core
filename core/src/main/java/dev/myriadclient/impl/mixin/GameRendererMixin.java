@@ -2,6 +2,7 @@ package dev.myriadclient.impl.mixin;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.CameraEvent;
+import dev.myriadclient.impl.render.HandHighlights;
 import dev.myriadclient.impl.render.HighlightRenderer;
 import dev.myriadclient.impl.render.WorldRenderQueue;
 import net.minecraft.client.DeltaTracker;
@@ -32,13 +33,13 @@ public abstract class GameRendererMixin {
 			return;
 		}
 		// Hand highlights are asked about as the hand is submitted, with the hand's own projection.
-		if (HighlightRenderer.INSTANCE.isArmed()) HighlightRenderer.INSTANCE.beginHand(hudProjection.getMatrix(new Matrix4f()));
+		if (HighlightRenderer.INSTANCE.isArmed()) HandHighlights.INSTANCE.beginHand(hudProjection.getMatrix(new Matrix4f()));
 	}
 
 	/** The hand is drawn: its highlights go over it, before screen effects and the GUI. */
 	@Inject(method = "renderItemInHand", at = @At("RETURN"))
 	private void myriad$handHighlights(CameraRenderState cameraState, float deltaPartialTick, Matrix4fc modelViewMatrix, CallbackInfo ci) {
-		HighlightRenderer.INSTANCE.endHand();
+		HandHighlights.INSTANCE.endHand();
 	}
 
 	/** Vanilla multiplies the projection by the view bob; tracers undo it to start at the crosshair. */

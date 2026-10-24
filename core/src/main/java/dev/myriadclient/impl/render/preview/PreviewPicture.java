@@ -7,6 +7,7 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.myriadclient.api.event.events.HighlightEvent;
 import dev.myriadclient.api.ui.widget.Preview;
+import dev.myriadclient.impl.render.HandHighlights;
 import dev.myriadclient.impl.render.HighlightRenderer;
 import dev.myriadclient.impl.render.MyriadPipelines;
 import dev.myriadclient.impl.render.PreviewHighlights;
@@ -83,7 +84,7 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 			if (!failed) LOG.warn("A preview couldn't draw {}", state.subject(), e);
 			failed = true;
 		} finally {
-			HighlightRenderer.INSTANCE.previewHands(null);
+			HandHighlights.INSTANCE.previewHands(null);
 		}
 		// The outline pass that follows draws the highlighted silhouettes into the highlights' mask.
 		highlights.drawing(true);
@@ -171,7 +172,7 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 		pose.translate(state.panX() * reach, -state.panY() * reach, (state.zoom() - 1) * 0.6F);
 		pose.mulPose(new Quaternionf().rotateX((float) Math.toRadians(state.pitch() * 0.5F)).rotateY((float) Math.toRadians(state.yaw() * 0.5F)));
 		// Each part is asked about as in the world, its highlight going into this preview's.
-		HighlightRenderer.INSTANCE.previewHands(highlights);
+		HandHighlights.INSTANCE.previewHands(highlights);
 		mc.gameRenderer.itemInHandRenderer.submitHandsWithItems(1.0F, pose, collector, mc.player, LightCoordsUtil.FULL_BRIGHT);
 	}
 

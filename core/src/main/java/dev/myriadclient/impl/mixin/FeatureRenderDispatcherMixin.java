@@ -4,7 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTextureView;
-import dev.myriadclient.impl.render.HighlightRenderer;
+import dev.myriadclient.impl.render.HandHighlights;
 import dev.myriadclient.impl.render.PreviewHighlights;
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
 import org.spongepowered.asm.mixin.Mixin;
@@ -20,7 +20,7 @@ public abstract class FeatureRenderDispatcherMixin {
 	@WrapOperation(method = "renderAllFeatures", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;executeAlwaysOnTop()V"))
 	private void myriad$handOutlines(FeatureRenderDispatcher.PreparedFrame frame, Operation<Void> original) {
 		original.call(frame);
-		if (HighlightRenderer.INSTANCE.handHighlighted()) frame.executeOutline();
+		if (HandHighlights.INSTANCE.handHighlighted()) frame.executeOutline();
 		else if (PreviewHighlights.drawing() != null) {
 			// A preview draws into its own texture (the output override): its outline pass goes to its mask instead.
 			GpuTextureView color = RenderSystem.outputColorTextureOverride, depth = RenderSystem.outputDepthTextureOverride;
