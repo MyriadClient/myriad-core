@@ -2,7 +2,9 @@ package dev.myriadclient.impl.ui.panels;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.ui.WidgetPanel;
+import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.SettingsView;
@@ -46,5 +48,17 @@ public final class ModuleSettingsPanel extends WidgetPanel {
 			content.add(new Label("Turn it on to see it on the preview.").dim().visible(() -> !module.isEnabled()));
 		}
 		content.add(SettingsView.build(module.settings));
+		content.add(resetButton(module));
+	}
+
+	/**
+	 * Puts every setting of {@code module} back to its default, after asking (it's one click from the settings, and
+	 * can't be undone). The keybind and hold mode stay: they're how the player reaches the module, not how it behaves.
+	 */
+	static Widget resetButton(Module module) {
+		return new Button("Reset to Default", () -> Myriad.ui().confirm("Reset " + module.name(),
+			"Put every setting of " + module.name() + " back to its default? Its keybind stays.", "Reset", () -> {
+				for (Setting<?> s : module.settings.all()) if (s != module.keybind && s != module.holdMode) s.reset();
+			}, null));
 	}
 }

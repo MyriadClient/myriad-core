@@ -62,6 +62,7 @@ class ModuleEntry extends CardEntry {
 	protected void buildBody(VBox body) {
 		body.add(new Info());
 		body.add(FoldedSettings.build(module.settings, groupsOpen));
+		body.add(ModuleSettingsPanel.resetButton(module));
 	}
 
 	@Override

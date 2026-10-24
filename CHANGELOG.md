@@ -16,6 +16,19 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.0.1
+
+- **The Player preview stands as a player does.** Its cape hangs straight down and a worn elytra's wings sit slightly
+  apart, as vanilla shows a player standing still: preview entities are never ticked, so the cape and wings kept their
+  animation's starting values (the cape flung up, the wings shut). No preview shows a name tag any more (the stand-in
+  had yours, drawn back to front).
+- **Tooltips take the theme's look**: its frosted window background, rounding and border, instead of a fixed dark blue.
+- **Scrolling over a closed dropdown no longer changes its value**, so scrolling down a module's open settings leaves
+  them as they were.
+- **Clicking a switch's name flips the switch**, as clicking the switch does.
+- **Reset to Default** at the bottom of a module's settings (unfolded in a list, or in its own window) puts every
+  setting back to its default after asking; the keybind and hold mode stay.
+
 ## 1.0.0
 
 **The API addons can build on and keep.** From here every 1.x release is source- and binary-compatible with the ones

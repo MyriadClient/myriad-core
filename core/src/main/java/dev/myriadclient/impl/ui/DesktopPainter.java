@@ -449,8 +449,11 @@ final class DesktopPainter {
 			}
 		}
 		float x = Math.min(wm.mouseX + 8, wm.screenW - tw - 10), y = Math.min(wm.mouseY + 10, wm.screenH - th - 4);
-		c.roundRect(x, y, tw + 8, th, 4, 0xF0181825);
-		c.outline(x, y, tw + 8, th, 4, 1, ColorUtil.withAlpha(theme.accent.argb(), 120));
+		// The theme's window look, as the launcher has it: its backdrop, background, rounding (smaller, as it's small) and border.
+		float r = Math.min(theme.rounding.get(), 6);
+		c.backdrop(x, y, tw + 8, th, r, 1);
+		c.roundRect(x, y, tw + 8, th, r, ColorUtil.withAlpha(theme.windowBackground.argb(), Math.max(0xE0, ColorUtil.alpha(theme.windowBackground.argb()))));
+		c.gradientOutline(x, y, tw + 8, th, r, Math.max(1, theme.borderSize.get()), theme.activeBorderFrom.argb(), theme.activeBorderTo.argb(), theme.borderAngle.get().floatValue());
 		float ly = y + 3;
 		for (Object row : rows) {
 			if (row instanceof String l) {

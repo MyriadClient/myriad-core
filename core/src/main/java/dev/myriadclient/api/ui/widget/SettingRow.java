@@ -7,7 +7,7 @@ import dev.myriadclient.api.util.ColorUtil;
 
 /**
  * A setting's name (left) and editor (right). Wide editors (pickers, lists) go below the name instead. Right-click
- * the name to reset to default.
+ * the name to reset to default; clicking a switch's name flips the switch.
  */
 public class SettingRow extends Widget {
 	private final Setting<?> setting;
@@ -70,8 +70,13 @@ public class SettingRow extends Widget {
 			return true;
 		}
 		float labelW = stacked ? width : width - split(width);
-		if (button == 1 && mx >= x && mx < x + labelW && my >= y && my < y + ROW) {
+		if (mx < x || mx >= x + labelW || my < y || my >= y + ROW) return false;
+		if (button == 1) {
 			setting.reset();
+			return true;
+		}
+		if (button == 0 && editor instanceof Toggle) {
+			editor.activate();
 			return true;
 		}
 		return false;

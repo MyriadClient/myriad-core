@@ -10,7 +10,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-/** Pick one of several values: click to expand the options inline; scroll to cycle. */
+/** Pick one of several values: click to expand the options inline. */
 public class Dropdown<T> extends Widget {
 	private final Supplier<List<T>> options;
 	private final Supplier<T> getter;
@@ -107,10 +107,9 @@ public class Dropdown<T> extends Widget {
 		return true;
 	}
 
+	/** The wheel scrolls the window, never the value: scrolling down a list of settings mustn't change the ones it passes. */
 	@Override
 	public boolean mouseScrolled(float mx, float my, float amount) {
-		if (expanded || my >= y + ROW) return false;
-		cycle(amount > 0 ? -1 : 1);
-		return true;
+		return false;
 	}
 }
