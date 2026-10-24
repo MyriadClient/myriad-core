@@ -101,8 +101,18 @@ public abstract class ShapeBuilder {
 			(float) (x2 - originX), (float) (y2 - originY), (float) (z2 - originZ), fromColor, toColor, lineWidth);
 	}
 
-	/** A filled quad through four corners, in order around its edge. */
+	/** A filled quad through four corners, in order around its edge; seen from both sides. */
 	public final void quad(Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color, boolean throughWalls) {
+		float ax = (float) (a.x - originX), ay = (float) (a.y - originY), az = (float) (a.z - originZ);
+		float bx = (float) (b.x - originX), by = (float) (b.y - originY), bz = (float) (b.z - originZ);
+		float cx = (float) (c.x - originX), cy = (float) (c.y - originY), cz = (float) (c.z - originZ);
+		float dx = (float) (d.x - originX), dy = (float) (d.y - originY), dz = (float) (d.z - originZ);
+		emitQuad(throughWalls, ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, color);
+		emitQuad(throughWalls, dx, dy, dz, cx, cy, cz, bx, by, bz, ax, ay, az, color);
+	}
+
+	/** One face through four corners, seen only from the side they run anticlockwise around ({@link #emitQuad}). */
+	final void face(Vec3 a, Vec3 b, Vec3 c, Vec3 d, int color, boolean throughWalls) {
 		emitQuad(throughWalls,
 			(float) (a.x - originX), (float) (a.y - originY), (float) (a.z - originZ),
 			(float) (b.x - originX), (float) (b.y - originY), (float) (b.z - originZ),
@@ -171,7 +181,10 @@ public abstract class ShapeBuilder {
 
 	// ---- output ----------------------------------------------------------------------------------------------------
 
-	/** A quad with corners relative to the origin. */
+	/**
+	 * A face with corners relative to the origin, seen only from the side its corners run anticlockwise around: a box's
+	 * faces point out, so a see-through box shows its front faces and not its back ones through them.
+	 */
 	protected abstract void emitQuad(boolean throughWalls, float ax, float ay, float az, float bx, float by, float bz,
 									 float cx, float cy, float cz, float dx, float dy, float dz, int color);
 

@@ -59,25 +59,33 @@ public final class MyriadPipelines {
 	public static final RenderPipeline BLUR_UP = RenderPipelines.register(blur("blur_up"));
 
 	// World shapes. Depth is reversed in 26.x (1 is near), so "in front" is GREATER_THAN_OR_EQUAL and a positive bias
-	// pulls shapes towards the camera, keeping fills that lie on a block face from z-fighting with it.
-	private static final DepthStencilState WORLD_DEPTH = new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, false, 1f, 1f);
+	// pulls shapes towards the camera, keeping faces and edges that lie on a block face from z-fighting with it: what a
+	// module or addon draws needs no nudging of its own. As much as vanilla gives its decals (block cracks).
+	private static final DepthStencilState WORLD_DEPTH = new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, false, 1f, 10f);
 	private static final DepthStencilState THROUGH_WALLS = new DepthStencilState(CompareOp.ALWAYS_PASS, false);
 
 	public static final RenderPipeline WORLD_QUADS = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
 		.withLocation(id("pipeline/world_quads")).withDepthStencilState(WORLD_DEPTH).build());
 	public static final RenderPipeline WORLD_QUADS_XRAY = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
 		.withLocation(id("pipeline/world_quads_xray")).withDepthStencilState(THROUGH_WALLS).build());
+	// Shape builders' faces (boxes): wound anticlockwise seen from outside, so the back ones are culled and a see-through
+	// box shows one layer of fill, not its front and back faces stacked.
+	public static final RenderPipeline WORLD_FACES = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
+		.withLocation(id("pipeline/world_faces")).withDepthStencilState(WORLD_DEPTH).withCull(true).build());
+	public static final RenderPipeline WORLD_FACES_XRAY = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
+		.withLocation(id("pipeline/world_faces_xray")).withDepthStencilState(THROUGH_WALLS).withCull(true).build());
 	public static final RenderPipeline WORLD_LINES = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
 		.withLocation(id("pipeline/world_lines")).withDepthStencilState(WORLD_DEPTH).build());
 	public static final RenderPipeline WORLD_LINES_XRAY = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
 		.withLocation(id("pipeline/world_lines_xray")).withDepthStencilState(THROUGH_WALLS).build());
 
 	// Retained meshes (WorldMesh, ChunkCache): the same shapes, but the vertex shaders add ModelOffset (the mesh origin
-	// relative to the camera), so one GPU buffer is drawn frame after frame without being rebuilt.
+	// relative to the camera), so one GPU buffer is drawn frame after frame without being rebuilt. Their quads come from
+	// a MeshBuilder, so they're faces too.
 	public static final RenderPipeline MESH_QUADS = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
-		.withLocation(id("pipeline/mesh_quads")).withVertexShader(id("core/mesh_color")).withDepthStencilState(WORLD_DEPTH).build());
+		.withLocation(id("pipeline/mesh_quads")).withVertexShader(id("core/mesh_color")).withDepthStencilState(WORLD_DEPTH).withCull(true).build());
 	public static final RenderPipeline MESH_QUADS_XRAY = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
-		.withLocation(id("pipeline/mesh_quads_xray")).withVertexShader(id("core/mesh_color")).withDepthStencilState(THROUGH_WALLS).build());
+		.withLocation(id("pipeline/mesh_quads_xray")).withVertexShader(id("core/mesh_color")).withDepthStencilState(THROUGH_WALLS).withCull(true).build());
 	public static final RenderPipeline MESH_LINES = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
 		.withLocation(id("pipeline/mesh_lines")).withVertexShader(id("core/mesh_lines")).withDepthStencilState(WORLD_DEPTH).build());
 	public static final RenderPipeline MESH_LINES_XRAY = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
@@ -141,6 +149,8 @@ public final class MyriadPipelines {
 
 	public static final RenderType QUADS = RenderType.create("myriad_quads", RenderSetup.builder(WORLD_QUADS).sortOnUpload().createRenderSetup());
 	public static final RenderType QUADS_XRAY = RenderType.create("myriad_quads_xray", RenderSetup.builder(WORLD_QUADS_XRAY).sortOnUpload().createRenderSetup());
+	public static final RenderType FACES = RenderType.create("myriad_faces", RenderSetup.builder(WORLD_FACES).sortOnUpload().createRenderSetup());
+	public static final RenderType FACES_XRAY = RenderType.create("myriad_faces_xray", RenderSetup.builder(WORLD_FACES_XRAY).sortOnUpload().createRenderSetup());
 	public static final RenderType LINES = RenderType.create("myriad_lines", RenderSetup.builder(WORLD_LINES).createRenderSetup());
 	public static final RenderType LINES_XRAY = RenderType.create("myriad_lines_xray", RenderSetup.builder(WORLD_LINES_XRAY).createRenderSetup());
 	public static final RenderType MODEL = RenderType.create("myriad_model_fill", RenderSetup.builder(MODEL_FILL).createRenderSetup());
@@ -156,6 +166,8 @@ public final class MyriadPipelines {
 		IrisCompat.assign(WORLD_LINES_XRAY, "LINES");
 		IrisCompat.assign(WORLD_QUADS, "BASIC");
 		IrisCompat.assign(WORLD_QUADS_XRAY, "BASIC");
+		IrisCompat.assign(WORLD_FACES, "BASIC");
+		IrisCompat.assign(WORLD_FACES_XRAY, "BASIC");
 	}
 
 	private static RenderPipeline blur(String name) {

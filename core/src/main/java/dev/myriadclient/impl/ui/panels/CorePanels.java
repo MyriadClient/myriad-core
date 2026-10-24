@@ -42,6 +42,7 @@ public final class CorePanels {
 	public static final MyriadId WHEELS = MyriadId.of("myriad", "wheels");
 	public static final MyriadId WHEEL = MyriadId.of("myriad", "wheel");
 	public static final MyriadId PREVIEW = MyriadId.of("myriad", "preview");
+	public static final MyriadId RENDER = MyriadId.of("myriad", "render");
 
 	private CorePanels() {
 	}
@@ -79,6 +80,7 @@ public final class CorePanels {
 			return MyriadImpl.get().controlManager().impls().stream().filter(c -> c.id().toString().equals(args.get("id").getAsString()))
 				.findFirst().map(ControlPanelView::new).orElse(null);
 		}).build());
+		ctx.registerPanel(PanelType.builder(RENDER, "Render").icon(Icons.EYE).factory(RenderPanel::new).build());
 		ctx.registerPanel(PanelType.builder(PREVIEW, "Preview").icon(Icons.EYE).factory(PreviewPanel::new).build());
 		ctx.registerPanel(PanelType.builder(WHEELS, "Wheels").icon(WheelsPanel.ICON).factory(WheelsPanel::new).build());
 		// One wheel's window; not listed on its own (the launcher lists each wheel).

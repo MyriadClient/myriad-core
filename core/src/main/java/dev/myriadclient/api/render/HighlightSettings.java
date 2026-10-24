@@ -25,7 +25,12 @@ import java.util.function.Supplier;
  *     e.highlight(highlight.style(), color);
  * }
  * }</pre>
+ *
+ * @deprecated Use {@link RenderSettings}: one look for both render modes, its shader options shown in Shader mode,
+ * drawn by core through {@code RenderEvent}. Removed in 1.0.
  */
+@Deprecated(since = "0.11.0", forRemoval = true)
+@SuppressWarnings("removal")
 public final class HighlightSettings {
 	public enum FillMode {
 		NONE(HighlightStyle.Fill.NONE), SOLID(HighlightStyle.Fill.SOLID), DOTS(HighlightStyle.Fill.DOTS);

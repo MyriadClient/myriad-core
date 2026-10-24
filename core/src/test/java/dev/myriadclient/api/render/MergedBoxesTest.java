@@ -2,6 +2,7 @@ package dev.myriadclient.api.render;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -106,5 +107,36 @@ class MergedBoxesTest {
 		long corner = r.lines.stream().filter(l -> Math.abs(l[0] - 1) < 1e-5 && Math.abs(l[2] - 1) < 1e-5
 			&& Math.abs(l[3] - 1) < 1e-5 && Math.abs(l[5] - 1) < 1e-5 && Math.abs(l[1] - l[4]) > 0.5).count();
 		assertEquals(1, corner);
+	}
+
+	/** Whether quad {@code q}'s corners run anticlockwise seen from outside the box with centre {@code cx, cy, cz}. */
+	private static boolean facesOut(float[] q, double cx, double cy, double cz) {
+		double ux = q[3] - q[0], uy = q[4] - q[1], uz = q[5] - q[2];
+		double vx = q[6] - q[0], vy = q[7] - q[1], vz = q[8] - q[2];
+		double nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+		return nx * (q[0] - cx) + ny * (q[1] - cy) + nz * (q[2] - cz) > 0;
+	}
+
+	@Test
+	void aBoxsFacesPointOut() {
+		Recorder r = new Recorder();
+		r.boxFill(new AABB(-1, 2, 3, 4, 5, 7), 0xFFFFFFFF, false);
+		assertEquals(6, r.quads.size());
+		for (float[] q : r.quads) assertTrue(facesOut(q, 1.5, 3.5, 5), "culled faces would be the front ones");
+	}
+
+	@Test
+	void mergedFacesPointOut() {
+		Recorder r = draw(Set.of(BlockPos.ZERO, new BlockPos(1, 0, 0)), null);
+		for (float[] q : r.quads) assertTrue(facesOut(q, 1, 0.5, 0.5));
+	}
+
+	@Test
+	void aQuadIsSeenFromBothSides() {
+		Recorder r = new Recorder();
+		r.quad(new Vec3(0, 0, 0), new Vec3(1, 0, 0),
+			new Vec3(1, 1, 0), new Vec3(0, 1, 0), 0xFFFFFFFF, false);
+		assertEquals(2, r.quads.size());
+		assertNotEquals(facesOut(r.quads.get(0), 0, 0, -1), facesOut(r.quads.get(1), 0, 0, -1));
 	}
 }

@@ -78,6 +78,8 @@ import java.util.function.Consumer;
  * Work scales with the reach in pixels, not its square. Per-highlight data (colours, gradient rectangle, style) lives
  * in a texel buffer.
  */
+// Keeps HighlightEvent's deprecated Entity and Shapes listeners working until they're removed.
+@SuppressWarnings("removal")
 public final class HighlightRenderer {
 	public static final HighlightRenderer INSTANCE = new HighlightRenderer();
 
@@ -175,13 +177,14 @@ public final class HighlightRenderer {
 			armed = false;
 			return;
 		}
+		RenderRouter.INSTANCE.beginFrame(Minecraft.getInstance().getDeltaTracker().getGameTimeDeltaPartialTick(false));
 		if (entityListeners == null) {
 			entityListeners = Myriad.events().flag(HighlightEvent.Entity.class);
 			shapeListeners = Myriad.events().flag(HighlightEvent.Shapes.class);
 			handListeners = Myriad.events().flag(HighlightEvent.Hand.class);
 		}
 		// A ghost highlighted last frame keeps the pipeline on, as listeners do.
-		armed = entityListeners.isSet() || shapeListeners.isSet() || handListeners.isSet() || frame - ghostFrame <= 2;
+		armed = entityListeners.isSet() || shapeListeners.isSet() || handListeners.isSet() || RenderRouter.INSTANCE.anyShader() || frame - ghostFrame <= 2;
 	}
 
 	/** The frame a ghost last asked for a highlight in. */
@@ -206,7 +209,7 @@ public final class HighlightRenderer {
 	 * is asked about here; the answer is kept for {@link #entity}.
 	 */
 	public boolean shouldRender(Entity entity, boolean shown, Frustum frustum, double camX, double camY, double camZ) {
-		if (!entityListeners.isSet()) return shown;
+		if (!entityListeners.isSet() && !RenderRouter.INSTANCE.anyEntities()) return shown;
 		if (!shown) {
 			if (!entity.shouldRender(camX, camY, camZ) || !frustum.isVisible(entity.getBoundingBox().inflate(0.5))) return false;
 		} else if (!EntityCullingCompat.ACTIVE) {
@@ -220,10 +223,21 @@ public final class HighlightRenderer {
 		return true;
 	}
 
-	/** Who highlights {@code entity}: the listeners, then the {@link HighlightEvent#ENTITY_HIGHLIGHT} hook if it's hooked. */
+	/**
+	 * Who highlights {@code entity}: a {@code RenderEvent} request, else the listeners, then the
+	 * {@link HighlightEvent#ENTITY_HIGHLIGHT} hook if it's hooked.
+	 */
 	private HighlightEvent.EntityHighlight ask(Entity entity, float tickDelta) {
-		HighlightEvent.Entity e = Myriad.events().post(entityEvent.reset(entity, tickDelta));
-		HighlightEvent.EntityHighlight asked = new HighlightEvent.EntityHighlight(entity, e.style(), e.color());
+		HighlightStyle requested = RenderRouter.INSTANCE.entityStyle(entity);
+		HighlightEvent.EntityHighlight asked;
+		if (requested != null) {
+			asked = new HighlightEvent.EntityHighlight(entity, requested, RenderRouter.INSTANCE.entityColor(entity));
+		} else if (entityListeners.isSet()) {
+			HighlightEvent.Entity e = Myriad.events().post(entityEvent.reset(entity, tickDelta));
+			asked = new HighlightEvent.EntityHighlight(entity, e.style(), e.color());
+		} else {
+			asked = new HighlightEvent.EntityHighlight(entity, null, 0);
+		}
 		if (!HighlightEvent.ENTITY_HIGHLIGHT.hooked()) return asked;
 		HighlightEvent.EntityHighlight h = HighlightEvent.ENTITY_HIGHLIGHT.call(null, asked, x -> x);
 		return h == null || h.style() == null || (h.color() >>> 24) == 0 ? new HighlightEvent.EntityHighlight(entity, null, 0) : h;
@@ -251,7 +265,7 @@ public final class HighlightRenderer {
 		if (asked.containsKey(entity)) {
 			style = asked.get(entity);
 			color = askedColor.getInt(entity);
-		} else if (entityListeners.isSet()) {
+		} else if (entityListeners.isSet() || RenderRouter.INSTANCE.anyEntities()) {
 			HighlightEvent.EntityHighlight e = ask(entity, tickDelta);
 			style = e.style();
 			color = e.color();
@@ -272,8 +286,9 @@ public final class HighlightRenderer {
 
 	/** Posts {@link HighlightEvent.Shapes} and submits the frame's boxes to the shapes masks. */
 	public void collectShapes(SubmitNodeCollector collector, PoseStack poseStack, float tickDelta) {
-		if (!armed || !shapeListeners.isSet()) return;
-		Myriad.events().post(shapesEvent.reset(tickDelta));
+		if (!armed || !shapeListeners.isSet() && !RenderRouter.INSTANCE.anyShapes()) return;
+		if (shapeListeners.isSet()) Myriad.events().post(shapesEvent.reset(tickDelta));
+		RenderRouter.INSTANCE.shapesTo(this);
 		for (int l : SHAPE_LAYERS) collectShapes(l, collector, poseStack);
 	}
 

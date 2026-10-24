@@ -61,6 +61,7 @@ import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
 import dev.myriadclient.impl.network.CorePacketChannel;
 import dev.myriadclient.impl.render.CoreRendering;
+import dev.myriadclient.impl.render.RenderRouter;
 import dev.myriadclient.impl.service.AntiCheatTracker;
 import dev.myriadclient.impl.service.BreakManager;
 import dev.myriadclient.impl.service.BuildManager;
@@ -256,6 +257,7 @@ public final class MyriadImpl implements MyriadApi {
 		modules.onRemove(m -> windowManager.modulesChanged());
 
 		events.subscribe(ActionTiming.get());
+		events.subscribe(RenderRouter.INSTANCE);
 		events.subscribe(LeavingGlide.get());
 		hooks.registerCore(Service.ROTATIONS, rotations);
 		hooks.registerCore(Service.INVENTORY, inventory);

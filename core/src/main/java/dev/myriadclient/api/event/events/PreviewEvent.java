@@ -1,6 +1,8 @@
 package dev.myriadclient.api.event.events;
 
 import dev.myriadclient.api.render.HighlightStyle;
+import dev.myriadclient.api.render.RenderMode;
+import dev.myriadclient.api.render.RenderLook;
 import dev.myriadclient.api.render.ShapeBuilder;
 import dev.myriadclient.api.ui.widget.Preview;
 import net.minecraft.world.entity.Entity;
@@ -11,17 +13,17 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * A {@link Preview} is being drawn (a Preview window, or one in a module's settings): show on its subject what your
- * module would show in the world, so the player sees a setting change as they make it. Entities and your hands are
- * highlighted through {@link HighlightEvent.Entity} and {@link HighlightEvent.Hand} as in the world, with nothing more
- * to do here; boxes and lines go on {@link #shapes()}, in the subject's coordinates ({@link #box()} is its box), and a
- * block's shader highlight through {@link #highlight}.
+ * module would show in the world, so the player sees a setting change as they make it. {@link #render} shows the
+ * subject in your look in the {@link RenderMode} that's on, as {@code RenderEvent} does in the world; anything else
+ * you draw goes on {@link #shapes()}, in the subject's coordinates ({@link #box()} is its box). Your hands are
+ * highlighted through {@link HighlightEvent.Hand} as in the world.
  * <p>
  * Posted on the render thread, every frame, for each preview drawn. One instance is reused: don't keep it.
  *
  * <pre>{@code
  * @Subscribe
  * private void onPreview(PreviewEvent e) {
- *     if (e.block() != null && e.block().is(Blocks.CHEST)) e.highlight(outline.style(), color.argb());
+ *     if (e.block() != null && e.block().is(Blocks.CHEST)) e.render(look, color.argb());
  * }
  * }</pre>
  */
@@ -32,6 +34,7 @@ public final class PreviewEvent {
 	private AABB box;
 	private ShapeBuilder shapes;
 	private @Nullable HighlightStyle style;
+	private boolean boxed;
 	private int color;
 
 	@ApiStatus.Internal
@@ -46,6 +49,7 @@ public final class PreviewEvent {
 		this.box = box;
 		this.shapes = shapes;
 		this.style = null;
+		this.boxed = false;
 		this.color = 0;
 		return this;
 	}
@@ -83,8 +87,23 @@ public final class PreviewEvent {
 	}
 
 	/**
-	 * Highlights the block or item shown with the shader (outline, glow, fill), as {@link HighlightEvent.Shapes} does a
-	 * block in the world. The first call wins. Entities and hands are asked through {@link HighlightEvent} instead.
+	 * Shows the subject (an entity or a block) in {@code look}, in the mode that's on: a shader highlight around its
+	 * shape, or a box around {@link #box()}. The first call wins.
+	 */
+	public void render(RenderLook look, int color) {
+		if (highlighted() || (color >>> 24) == 0) return;
+		if (RenderMode.current() == RenderMode.SHADER) highlight(look.style(), color);
+		else {
+			look.box(shapes, box, color, 1);
+			// Taken (a fallback look stays off it), but already drawn.
+			style = look.style();
+			boxed = true;
+		}
+	}
+
+	/**
+	 * Highlights the subject with the shader (outline, glow, fill) in {@code style}, whatever the mode; {@link #render}
+	 * follows the mode. The first call wins.
 	 */
 	public void highlight(HighlightStyle style, int color) {
 		if (this.style != null || style == null) return;
@@ -92,14 +111,15 @@ public final class PreviewEvent {
 		this.color = color;
 	}
 
-	/** Whether a handler before this one highlighted it ({@link #highlight}), so a fallback look can stay off it. */
+	/** Whether a handler before this one showed it ({@link #render}, {@link #highlight}), so a fallback look can stay off it. */
 	public boolean highlighted() {
 		return style != null;
 	}
 
+	/** The shader highlight asked for, if there's one to draw (a box from {@link #render} is drawn already). */
 	@ApiStatus.Internal
 	public @Nullable HighlightStyle style() {
-		return style;
+		return boxed ? null : style;
 	}
 
 	@ApiStatus.Internal

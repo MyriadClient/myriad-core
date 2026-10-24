@@ -13,7 +13,9 @@ import dev.myriadclient.api.command.arguments.ChoiceArgumentType;
 import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.render.RenderMode;
 import dev.myriadclient.api.service.AntiCheat;
+import dev.myriadclient.api.setting.EnumSetting;
 import dev.myriadclient.api.util.Baritone;
 import dev.myriadclient.api.util.FakePlayers;
 import dev.myriadclient.api.util.MyriadId;
@@ -23,6 +25,7 @@ import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.dev.Bench;
 import dev.myriadclient.impl.dev.PacketLog;
 import dev.myriadclient.impl.event.MyriadEventBus;
+import dev.myriadclient.impl.render.CoreRenderSettings;
 import dev.myriadclient.impl.render.GpuTimings;
 import dev.myriadclient.impl.event.Profiler;
 import dev.myriadclient.impl.hook.HookManager;
@@ -79,9 +82,28 @@ public final class CoreCommands {
 			ConfigCommands.control(), hooks(), ConfigCommands.macro(), ConfigCommands.cape(), ConfigCommands.theme(),
 			JobCommands.jobs(), JobCommands.job(), packets(),
 			ModuleCommands.modules(), ModuleCommands.binds(), say(), ConfigCommands.reload(), disconnect(),
-			fakePlayer(), menu()
+			fakePlayer(), menu(), render()
 		)) ctx.registerCommand(c);
 		if (Boolean.getBoolean("myriad.dev")) ctx.registerCommand(bench());
+	}
+
+	private static Command render() {
+		return new Command("render", "Shows or switches how modules draw: .render shader, .render box.") {
+			@Override
+			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
+				b.executes(c -> {
+					info("Render mode: " + EnumSetting.displayName(CoreRenderSettings.mode()));
+					return SINGLE_SUCCESS;
+				});
+				for (RenderMode m : RenderMode.values()) {
+					b.then(literal(m.name().toLowerCase(Locale.ROOT)).executes(c -> {
+						CoreRenderSettings.set(m);
+						info("Render mode: " + EnumSetting.displayName(m));
+						return SINGLE_SUCCESS;
+					}));
+				}
+			}
+		};
 	}
 
 	private static Command addons() {

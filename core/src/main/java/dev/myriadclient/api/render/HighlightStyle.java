@@ -4,8 +4,11 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.HighlightEvent;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -209,26 +212,43 @@ public final class HighlightStyle {
 	}
 
 	/**
-	 * What fills the silhouette: one of the built-in fills, or an addon's own ({@link #custom}).
+	 * What fills the silhouette: one of the built-in fills, or an addon's own ({@link #custom}). Every fill, an addon's
+	 * too, is one of the choices in each module's Fill option ({@link RenderSettings}), so a fill an addon adds can be
+	 * picked by any module. In {@link RenderMode#BOX} a box's faces are filled flat in whatever fill is chosen.
 	 */
 	public static final class Fill {
 		/** Nothing inside: outline and glow only. */
-		public static final Fill NONE = new Fill("none", 0);
+		public static final Fill NONE = new Fill("none", "None", 0);
 		/** One flat colour at {@link HighlightStyle#fillOpacity()}. */
-		public static final Fill SOLID = new Fill("solid", 1);
+		public static final Fill SOLID = new Fill("solid", "Solid", 1);
 		/** A grid of round dots ({@link HighlightStyle#dotSpacing()}, {@link HighlightStyle#dotSize()}) that moves with what's highlighted. */
-		public static final Fill DOTS = new Fill("dots", 2);
+		public static final Fill DOTS = new Fill("dots", "Dots", 2);
 
 		private static final Map<Identifier, Fill> CUSTOM = new HashMap<>();
+		/** Every fill in the order it was added: the built-in ones, then addons'. */
+		private static final List<Fill> ALL = new ArrayList<>(List.of(NONE, SOLID, DOTS));
 		/** Addons' fills are numbered from here (the shaders tell them apart by number). */
 		private static final int FIRST_CUSTOM = 16;
 
 		private final String id;
+		private final String name;
 		private final int shaderId;
 
-		private Fill(String id, int shaderId) {
+		private Fill(String id, String name, int shaderId) {
 			this.id = id;
+			this.name = name;
 			this.shaderId = shaderId;
+		}
+
+		/** Every fill there is, the built-in ones first: the choices of a Fill option. */
+		public static synchronized List<Fill> all() {
+			return List.copyOf(ALL);
+		}
+
+		/** The fill named {@code name} (as {@link #name()} gives it, any case), or null. */
+		public static synchronized @Nullable Fill byName(String name) {
+			for (Fill f : ALL) if (f.name.equalsIgnoreCase(name)) return f;
+			return null;
 		}
 
 		/**
@@ -250,13 +270,29 @@ public final class HighlightStyle {
 		 * Create fills while your addon initialises (the shader is compiled with the game's own); the same
 		 * {@code shader} always gives the same fill. Each fill in use adds one pass over its highlights' insides.
 		 */
-		public static synchronized Fill custom(Identifier shader) {
+		public static Fill custom(Identifier shader) {
+			String path = shader.getPath().substring(shader.getPath().lastIndexOf('/') + 1).replace('_', ' ');
+			return custom(shader, path.isEmpty() ? shader.toString() : Character.toUpperCase(path.charAt(0)) + path.substring(1));
+		}
+
+		/**
+		 * {@link #custom(Identifier)} with the name it's listed under in Fill options (a fill's name must be its own: one
+		 * already taken gets the addon's namespace in brackets after it).
+		 */
+		public static synchronized Fill custom(Identifier shader, String name) {
 			Fill existing = CUSTOM.get(shader);
 			if (existing != null) return existing;
-			Fill fill = new Fill(shader.toString(), FIRST_CUSTOM + CUSTOM.size());
+			String listed = byName(name) == null ? name : name + " (" + shader.getNamespace() + ")";
+			Fill fill = new Fill(shader.toString(), listed, FIRST_CUSTOM + CUSTOM.size());
 			CUSTOM.put(shader, fill);
+			ALL.add(fill);
 			Myriad.render().registerFill(fill.shaderId, shader);
 			return fill;
+		}
+
+		/** What it's called in Fill options. */
+		public String name() {
+			return name;
 		}
 
 		/** A stable name, for saving and commands: "none", "solid", "dots", or a custom fill's shader id. */

@@ -50,7 +50,11 @@ public final class FakeApi {
 			if (m.getName().equals("hashCode")) return System.identityHashCode(proxy);
 			if (m.getName().equals("equals")) return proxy == args[0];
 			if (r == boolean.class) return false;
-			if (r == int.class || r == long.class || r == short.class || r == byte.class || r == char.class) return 0;
+			if (r == long.class) return 0L;
+			if (r == int.class) return 0;
+			if (r == short.class) return (short) 0;
+			if (r == byte.class) return (byte) 0;
+			if (r == char.class) return (char) 0;
 			if (r == float.class) return 0f;
 			if (r == double.class) return 0d;
 			if (r.isInterface()) return stub(r);

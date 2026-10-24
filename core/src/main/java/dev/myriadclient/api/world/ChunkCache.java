@@ -10,10 +10,13 @@ import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.HighlightStyle;
 import dev.myriadclient.api.render.MeshBuilder;
+import dev.myriadclient.api.render.RenderMode;
+import dev.myriadclient.api.render.RenderLook;
 import dev.myriadclient.api.render.WorldMesh;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.util.Async;
 import dev.myriadclient.api.util.TickBudget;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrays;
@@ -25,6 +28,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.phys.AABB;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,9 +93,25 @@ public final class ChunkCache<T> {
 		void mesh(T value, MeshBuilder mesh);
 	}
 
+	/** A chunk's value as boxes, each in a colour (ARGB), for {@link Builder#boxes}. */
+	@FunctionalInterface
+	public interface Boxes<T> {
+		void boxes(T value, BoxSink out);
+	}
+
+	/** Takes a chunk's boxes ({@link Boxes}), in world coordinates. */
+	@FunctionalInterface
+	public interface BoxSink {
+		void box(AABB box, int color);
+	}
+
 	private final String name;
 	private final Compute<T> compute;
 	private final @Nullable Mesher<T> mesher;
+	/** Built with {@link Builder#boxes}: the look its meshes are made in, the colours their vertices index, and when the look last changed. */
+	private final @Nullable RenderLook look;
+	private final IntArrayList palette = new IntArrayList();
+	private int lookStamp;
 	private final IntSupplier range;
 	private final boolean neighbours;
 	private final boolean async;
@@ -124,7 +145,9 @@ public final class ChunkCache<T> {
 	private ChunkCache(Builder<T> b) {
 		this.name = b.name;
 		this.compute = b.compute;
-		this.mesher = b.mesher;
+		this.look = b.look;
+		this.mesher = b.boxes != null ? boxMesher(b.boxes) : b.mesher;
+		if (look != null) meshesVisible = RenderMode.current() == RenderMode.BOX;
 		this.range = b.range;
 		this.neighbours = b.neighbours;
 		this.async = b.async;
@@ -208,9 +231,57 @@ public final class ChunkCache<T> {
 	 * so this costs nothing per block, however many there are. Each vertex picks its colour from {@code palette} by
 	 * index ({@link HighlightEvent.Shapes#paletteColor}); build the meshes with those colours. Meshes off screen are
 	 * skipped.
+	 *
+	 * @deprecated Build the cache with {@link Builder#boxes} and hand it to {@code RenderEvent#chunks}: core meshes and
+	 * shows it in the render mode the player picked. Removed in 1.0.
 	 */
+	@Deprecated(since = "0.11.0", forRemoval = true)
+	@SuppressWarnings("removal")
 	public void highlight(HighlightEvent.Shapes event, HighlightStyle style, int... palette) {
 		for (Entry<T> e : entries.values()) if (e.mesh != null && !e.mesh.isEmpty()) event.mesh(e.mesh, style, palette);
+	}
+
+	/**
+	 * Meshes of {@link Boxes}: in {@link RenderMode#BOX}, boxes in the look (shown as they are); in
+	 * {@link RenderMode#SHADER}, their faces as silhouettes, each vertex's colour an index into {@link #palette} (the
+	 * colours as they come), for {@code RenderEvent#chunks} to highlight.
+	 */
+	@SuppressWarnings("removal")
+	private Mesher<T> boxMesher(Boxes<T> boxes) {
+		return (value, mesh) -> {
+			if (RenderMode.current() == RenderMode.BOX) {
+				boxes.boxes(value, (box, color) -> look.box(mesh, box, color, 1));
+				return;
+			}
+			boxes.boxes(value, (box, color) -> mesh.boxFill(box, HighlightEvent.Shapes.paletteColor(paletteIndex(color)), false));
+		};
+	}
+
+	/** {@code color}'s place in the palette: added if it's new and there's room, else the first colour's. */
+	private int paletteIndex(int color) {
+		int i = palette.indexOf(color);
+		if (i >= 0) return i;
+		if (palette.size() >= 256) return 0;
+		palette.add(color);
+		return palette.size() - 1;
+	}
+
+	/** Built with {@link Builder#boxes}: its look, or null. */
+	@ApiStatus.Internal
+	public @Nullable RenderLook look() {
+		return look;
+	}
+
+	/** The colours a {@link Builder#boxes} cache's silhouettes index. */
+	@ApiStatus.Internal
+	public int[] palette() {
+		return palette.isEmpty() ? new int[]{0} : palette.toIntArray();
+	}
+
+	/** Each chunk's mesh that has something in it. */
+	@ApiStatus.Internal
+	public void forEachMesh(Consumer<WorldMesh> action) {
+		for (Entry<T> e : entries.values()) if (e.mesh != null && !e.mesh.isEmpty()) action.accept(e.mesh);
 	}
 
 	/** Rebuilds every chunk's mesh from its kept value, without reading the world: call it when a look changes. */
@@ -286,6 +357,15 @@ public final class ChunkCache<T> {
 			int stamp = SettingColor.paletteStamp();
 			if (stamp != paletteStamp) {
 				paletteStamp = stamp;
+				remeshAll();
+			}
+		}
+		if (look != null) {
+			int stamp = look.meshStamp();
+			if (stamp != lookStamp) {
+				lookStamp = stamp;
+				palette.clear();
+				setMeshesVisible(RenderMode.current() == RenderMode.BOX);
 				remeshAll();
 			}
 		}
@@ -496,6 +576,8 @@ public final class ChunkCache<T> {
 		private final Compute<T> compute;
 		private String name;
 		private @Nullable Mesher<T> mesher;
+		private @Nullable Boxes<T> boxes;
+		private @Nullable RenderLook look;
 		private IntSupplier range = () -> Minecraft.getInstance().options.getEffectiveRenderDistance();
 		private boolean neighbours;
 		private boolean async;
@@ -510,6 +592,17 @@ public final class ChunkCache<T> {
 		/** Draws each chunk's value into a mesh kept on the GPU. */
 		public Builder<T> mesh(Mesher<T> mesher) {
 			this.mesher = mesher;
+			return this;
+		}
+
+		/**
+		 * Each chunk's value as boxes in colours, shown in {@code look} in the {@link RenderMode} that's on: hand the cache to
+		 * {@code RenderEvent#chunks} each frame. The meshes are made again when the look or the mode changes (and after
+		 * {@link #remeshAll()}, for a change of colours); instead of {@link #mesh}.
+		 */
+		public Builder<T> boxes(Boxes<T> boxes, RenderLook look) {
+			this.boxes = Objects.requireNonNull(boxes);
+			this.look = Objects.requireNonNull(look);
 			return this;
 		}
 

@@ -143,7 +143,11 @@ public final class MergedBoxes {
 			for (double[] r : rects) {
 				Vec3 p00 = point(ax, plane, u, r[0], v, r[2]), p10 = point(ax, plane, u, r[1], v, r[2]);
 				Vec3 p11 = point(ax, plane, u, r[1], v, r[3]), p01 = point(ax, plane, u, r[0], v, r[3]);
-				if (fills) out.quad(p00, p10, p11, p01, fillColor, throughWalls);
+				if (fills) {
+					// Wound to face out (u then v turns anticlockwise seen from the normal, except along Y).
+					if (positive != (ax == Direction.Axis.Y)) out.face(p00, p10, p11, p01, fillColor, throughWalls);
+					else out.face(p01, p11, p10, p00, fillColor, throughWalls);
+				}
 				if (lines) {
 					edge(p00, p10, g, lineColor);
 					edge(p01, p11, g, lineColor);

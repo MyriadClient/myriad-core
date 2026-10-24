@@ -36,6 +36,9 @@ public interface Rendering {
 
 	void highlightMesh(WorldMesh mesh, HighlightStyle style, int[] palette, boolean below);
 
+	/** The render mode every module draws in: the player's choice. */
+	RenderMode mode();
+
 	/** The frame count, for work done at most once a frame. */
 	long frame();
 

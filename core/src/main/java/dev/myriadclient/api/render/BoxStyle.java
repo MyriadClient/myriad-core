@@ -23,7 +23,11 @@ import java.util.function.Supplier;
  * // in a Render3DEvent handler
  * style.draw(e.shapes(), box, color.argb(), 1);
  * }</pre>
+ *
+ * @deprecated Use {@link RenderSettings}: one look for both render modes, its box options shown in Box mode, drawn by
+ * core through {@code RenderEvent} (or {@link RenderSettings#box} for what a module draws itself). Removed in 1.0.
  */
+@Deprecated(since = "0.11.0", forRemoval = true)
 public final class BoxStyle {
 	public final EnumSetting<Renderer3D.ShapeMode> shape;
 	public final DoubleSetting fillOpacity;

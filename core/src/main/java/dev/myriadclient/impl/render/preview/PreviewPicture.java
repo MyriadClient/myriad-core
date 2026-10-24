@@ -117,7 +117,9 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 			var renderer = mc.getEntityRenderDispatcher().getRenderer(entity);
 			EntityRenderState render = renderer.createRenderState(entity, 1.0F);
 			render.shadowPieces.clear();
-			HighlightEvent.EntityHighlight asked = HighlightRenderer.INSTANCE.askPreview(entity);
+			// A module's PreviewEvent look, else its HighlightEvent listener's.
+			HighlightEvent.EntityHighlight asked = state.style() != null ? new HighlightEvent.EntityHighlight(entity, state.style(), state.color())
+				: HighlightRenderer.INSTANCE.askPreview(entity);
 			render.outlineColor = highlights.add(asked.style(), asked.color());
 			render.lightCoords = LightCoordsUtil.FULL_BRIGHT;
 			if (render instanceof LivingEntityRenderState living) {
@@ -149,8 +151,8 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 				poseStack.popPose();
 			}
 		}
-		state.shapes().depth.submit(collector, poseStack, MyriadPipelines.QUADS, MyriadPipelines.LINES);
-		state.shapes().xray.submit(collector, poseStack, MyriadPipelines.QUADS_XRAY, MyriadPipelines.LINES_XRAY);
+		state.shapes().depth.submit(collector, poseStack, MyriadPipelines.FACES, MyriadPipelines.LINES);
+		state.shapes().xray.submit(collector, poseStack, MyriadPipelines.FACES_XRAY, MyriadPipelines.LINES_XRAY);
 	}
 
 	/** Your hands and held items as you see them: in front of the camera, with your field of view, turned a little by the view. */

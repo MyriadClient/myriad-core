@@ -44,6 +44,7 @@ import dev.myriadclient.impl.share.ShareCommand;
 import dev.myriadclient.impl.macro.MacroManager;
 import dev.myriadclient.impl.ui.CoreThemes;
 import dev.myriadclient.impl.ui.FilePicker;
+import dev.myriadclient.impl.render.CoreRenderSettings;
 import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.ui.bar.CoreBarWidgets;
 import dev.myriadclient.impl.ui.layout.ColumnsLayout;
@@ -76,6 +77,7 @@ public final class CoreAddon implements MyriadAddon {
 		ctx.registerLayout(new DwindleLayout());
 		ctx.registerLayout(new ColumnsLayout());
 		CoreThemes.register(ctx);
+		CoreRenderSettings.register(ctx);
 		CorePanels.register(ctx, wm);
 		CoreBarWidgets.register(ctx, wm);
 		CoreCommands.register(ctx);

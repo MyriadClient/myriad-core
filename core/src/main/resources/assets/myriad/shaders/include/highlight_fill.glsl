@@ -24,8 +24,8 @@ struct HighlightFill {
     vec2 size;     // that rectangle's size in pixels
     vec4 color;    // the highlight's colour here (gradient applied; alpha includes any fade)
     float opacity; // the style's fill opacity
-    float spacing; // the style's dot spacing, in pixels: a pattern's scale
-    float dotSize; // the style's dot size (diameter), in pixels
+    float spacing; // the look's Pattern Spacing (the style's dot spacing), in pixels: a pattern's scale
+    float dotSize; // the look's Pattern Size (the style's dot size), in pixels
     float scale;   // pixels per GUI pixel
     float time;    // seconds, for animation (wraps every hour)
 };

@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The standard highlight options start where a module asks, and the constructors' defaults stay as they were. */
+@SuppressWarnings("removal")
 class HighlightSettingsTest {
 	@Test
 	void constructorsKeepTheirDefaults() {

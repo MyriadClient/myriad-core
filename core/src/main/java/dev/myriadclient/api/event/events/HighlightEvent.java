@@ -59,7 +59,11 @@ public abstract class HighlightEvent {
 	 * entities are drawn by Myriad's shader too (as a thin outline with a short glow in their team colour).
 	 * <p>
 	 * One instance is reused for every entity: don't keep it past the handler.
+	 *
+	 * @deprecated Show entities through {@link RenderEvent#entity}: drawn in the render mode the player picked (a shader
+	 * highlight, or a box in Box mode). Removed in 1.0.
 	 */
+	@Deprecated(since = "0.11.0", forRemoval = true)
 	public static final class Entity extends HighlightEvent {
 		private net.minecraft.world.entity.Entity entity;
 		private float tickDelta;
@@ -204,7 +208,11 @@ public abstract class HighlightEvent {
 	 * cluster of ores is outlined as one shape.
 	 * <p>
 	 * One instance is reused every frame: don't keep it past the handler.
+	 *
+	 * @deprecated Show boxes, blocks and chunk meshes through {@link RenderEvent}: drawn in the render mode the player
+	 * picked. Removed in 1.0.
 	 */
+	@Deprecated(since = "0.11.0", forRemoval = true)
 	public static final class Shapes extends HighlightEvent {
 		private final boolean below;
 		private float tickDelta;

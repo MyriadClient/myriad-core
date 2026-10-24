@@ -16,6 +16,31 @@ Minecraft's own types, so addons are rebuilt for each Minecraft version whatever
 
 ## 0.11.0 (unreleased)
 
+- **One render mode for every module: Shader or Box.** The new **Render** window (and `.render shader|box`, and a
+  *Switch Render Mode* key) picks how all modules draw what they show: Shader traces each thing's exact shape with an
+  outline, glow and fill; Box draws a box around it, edges and faces, cheaper on a slow GPU. Modules no longer have a
+  Mode option of their own. Each module's Render options show the ones for the mode that's on (Fill, Fill Opacity and
+  Through Walls in both; Outline Width, Glow, Gradient and the pattern's size for Shader; Line Width for Box), and its
+  colours stay its own.
+- **`RenderEvent`, `RenderSettings`, `RenderLook`, `RenderMode`** (in `api.event.events` and `api.render`). A module
+  hands what it shows to `RenderEvent` once a frame (`entity`, `box`, `block`, `below()`, and `chunks` for a cache)
+  with a look and a colour, and core draws it in the mode that's on: in Shader mode as highlights (an entity's exact
+  shape, touching shapes of one look merged), in Box mode as boxes (an entity's hitbox, a block's shape bounds).
+  `RenderSettings.builder(group)` adds the standard Render options (`defaults`, `lineWidth`, `throughWalls`, `named`,
+  `noThroughWalls`, `alwaysShader`, `visible`); `RenderLook.of(style)` is a fixed look; `RenderSettings.migrate` carries
+  a module's saved Box and Highlight options over. `ChunkCache.Builder.boxes(boxes, look)` keeps a cache's boxes on the
+  GPU in either mode, made again by itself when the look or the mode changes. `PreviewEvent.render(look, color)` shows a
+  preview's subject the same way. The `ENTITY_HIGHLIGHT` hook decides entities in Box mode too.
+- **Fills are listed by name and shared.** `HighlightStyle.Fill.all()`, `byName(name)` and `name()`, and
+  `Fill.custom(shader, name)`: an addon's fill shows in every module's Fill option, not only its own (a name already
+  taken gets the addon's namespace after it). In Box mode every fill draws flat.
+- **Boxes are simpler and sit cleanly on blocks.** World shapes are pulled towards the camera by a depth bias in the
+  pipeline (about what vanilla gives block cracks), so a box face lying on a block's face doesn't flicker against it
+  and nobody nudges boxes by hand. A box's faces are drawn from outside only, so a see-through box shows one layer of
+  fill instead of its front and back faces stacked; `ShapeBuilder.quad` stays two-sided.
+- **Deprecated, removed in 1.0:** `BoxStyle`, `HighlightSettings`, `HighlightEvent.Entity`, `HighlightEvent.Shapes` and
+  `ChunkCache.Builder.highlight`, for the above. `HighlightEvent.Hand` and `ENTITY_HIGHLIGHT` stay.
+
 - **Highlights cost the GPU less, most with a wide glow.** The outline and glow searched every pixel around the
   highlights out to the glow's reach, twice (along rows, then columns), at full size. Now the full-size search only
   reaches as far as the outline, and the glow comes from a distance field of its own at half size, or a quarter for a

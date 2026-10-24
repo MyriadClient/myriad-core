@@ -78,8 +78,8 @@ public final class WorldRenderQueue extends ShapeBuilder {
 				xray.line((float) look.x, (float) look.y, (float) look.z, tracers.getFloat(i * 3), tracers.getFloat(i * 3 + 1), tracers.getFloat(i * 3 + 2), c, c, tracerWidths.getFloat(i));
 			}
 		}
-		depth.submit(collector, poseStack, MyriadPipelines.QUADS, MyriadPipelines.LINES);
-		xray.submit(collector, poseStack, MyriadPipelines.QUADS_XRAY, MyriadPipelines.LINES_XRAY);
+		depth.submit(collector, poseStack, MyriadPipelines.FACES, MyriadPipelines.LINES);
+		xray.submit(collector, poseStack, MyriadPipelines.FACES_XRAY, MyriadPipelines.LINES_XRAY);
 		tracers.clear();
 		tracerColors.clear();
 		tracerWidths.clear();

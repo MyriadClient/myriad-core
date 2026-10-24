@@ -2,6 +2,7 @@ package dev.myriadclient.impl.render;
 
 import dev.myriadclient.api.event.events.Render3DEvent;
 import dev.myriadclient.api.render.HighlightStyle;
+import dev.myriadclient.api.render.RenderMode;
 import dev.myriadclient.api.render.Rendering;
 import dev.myriadclient.api.render.ShapeBuilder;
 import dev.myriadclient.api.render.WorldMesh;
@@ -17,6 +18,11 @@ import org.jetbrains.annotations.Nullable;
 
 /** {@link Rendering}: the API's rendering helpers, onto core's renderers. */
 public final class CoreRendering implements Rendering {
+	@Override
+	public RenderMode mode() {
+		return CoreRenderSettings.mode();
+	}
+
 	@Override
 	public ShapeBuilder shapes() {
 		return WorldRenderQueue.INSTANCE;

@@ -2,13 +2,16 @@ package com.example.myriadaddon.modules;
 
 import com.example.myriadaddon.ExampleAddon;
 import dev.myriadclient.api.event.Subscribe;
-import dev.myriadclient.api.event.events.HighlightEvent;
+import dev.myriadclient.api.event.events.RenderEvent;
 import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.HighlightStyle;
+import dev.myriadclient.api.render.RenderSettings;
 import dev.myriadclient.api.setting.ColorSetting;
 import dev.myriadclient.api.setting.DoubleSetting;
 import dev.myriadclient.api.setting.SettingColor;
+import dev.myriadclient.api.setting.SettingGroup;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 
@@ -17,42 +20,35 @@ import net.minecraft.world.entity.decoration.ArmorStand;
  *
  * <p>Shows:
  * <ul>
- *   <li>{@link HighlightEvent.Entity}: core asks about each entity as it's drawn; calling {@code highlight} outlines
- *       its exact shape (armour and held items included), with nothing to draw yourself;</li>
+ *   <li>{@link RenderEvent}: asking for an entity each frame; core draws its exact shape (armour and held items
+ *       included) as a shader highlight, or its hitbox as a box, whichever the player picked in the Render window;</li>
  *   <li>an addon's own fill: {@link ExampleAddon#LOGO_FILL}, a fragment shader in this addon's assets
- *       ({@code shaders/fill/logo_grid.fsh}) registered with {@link HighlightStyle.Fill#custom};</li>
- *   <li>a {@link HighlightStyle} built from settings: the style is immutable, so it's rebuilt only when a setting
- *       changes, not per entity.</li>
+ *       ({@code shaders/fill/logo_grid.fsh}) registered with {@link HighlightStyle.Fill#custom}. It's listed in every
+ *       module's Fill option, not just this one's;</li>
+ *   <li>{@link RenderSettings} starting from that fill: the standard Render options, the pattern size being the
+ *       logos' spacing.</li>
  * </ul>
- * For the standard highlight options (glow, gradient, dots...) as settings, see {@code HighlightSettings}.
  */
 public final class LogoEsp extends Module {
 	private final DoubleSetting range = sgGeneral.decimal("Range").defaultValue(48).range(4, 128).decimals(0).build();
-	private final ColorSetting color = sgGeneral.color("Color").defaultValue(SettingColor.role(SettingColor.Mode.ACCENT)).build();
-	private final DoubleSetting size = sgGeneral.decimal("Logo Size").description("Grid spacing of the logos, in pixels.")
-		.defaultValue(4).range(2, 12).decimals(1).onChanged(v -> rebuild()).build();
-	private final DoubleSetting opacity = sgGeneral.decimal("Fill Opacity").defaultValue(0.8).range(0, 1).decimals(2).onChanged(v -> rebuild()).build();
 
-	private HighlightStyle style;
+	private final SettingGroup sgRender = settings.group("Render");
+	private final ColorSetting color = sgRender.color("Color").defaultValue(SettingColor.role(SettingColor.Mode.ACCENT)).build();
+	// The fill reads the pattern spacing as the logos' (see logo_grid.fsh).
+	private final RenderSettings look = RenderSettings.builder(sgRender)
+		.defaults(HighlightStyle.OUTLINE.withFill(ExampleAddon.LOGO_FILL).withFillOpacity(0.8f).withDots(4, 1).withGlow(4))
+		.build();
 
 	public LogoEsp() {
 		super(Tags.RENDER, "Logo ESP", "Outlines living things and fills them with Myriad logos (a custom highlight fill).");
-		rebuild();
-	}
-
-	private void rebuild() {
-		// The fill reads the style's dot spacing as its scale (see logo_grid.fsh).
-		style = HighlightStyle.OUTLINE
-			.withFill(ExampleAddon.LOGO_FILL)
-			.withFillOpacity(opacity.getFloat())
-			.withDots(size.getFloat(), 1)
-			.withGlow(4);
 	}
 
 	@Subscribe(inGame = true)
-	private void onHighlight(HighlightEvent.Entity e) {
-		if (!(e.entity() instanceof LivingEntity living) || living == mc.player || living instanceof ArmorStand) return;
-		if (living.distanceToSqr(mc.player) > range.get() * range.get()) return;
-		e.highlight(style, color.argb());
+	private void onRender(RenderEvent e) {
+		double r = range.get() * range.get();
+		for (Entity entity : mc.level.entitiesForRendering()) {
+			if (!(entity instanceof LivingEntity living) || living == mc.player || living instanceof ArmorStand) continue;
+			if (living.distanceToSqr(mc.player) <= r) e.entity(living, look, color.argb());
+		}
 	}
 }
