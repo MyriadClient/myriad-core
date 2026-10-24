@@ -20,7 +20,10 @@ jobs:
           TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
           [ -n "$HOOK" ] || { echo "WEBSITE_DEPLOY_HOOK not set, skipping"; exit 0; }
-          curl -fsS -X POST ${TOKEN:+-H "Authorization: Bearer $TOKEN"} "$HOOK" && exit 0
+          # force: build without Docker's cache, as a release changes nothing in the site's source and a cached build
+          # would keep the old release on the download button.
+          case "$HOOK" in *\?*) URL="$HOOK&force=true" ;; *) URL="$HOOK?force=true" ;; esac
+          curl -fsS -X POST ${TOKEN:+-H "Authorization: Bearer $TOKEN"} "$URL" && exit 0
           # Which endpoint answered, without the host, query or ids: Coolify's deploy webhook is /api/v1/deploy.
           echo "failed calling $(echo "$HOOK" | sed -E 's#^https?://[^/]+##; s#\?.*##; s#[A-Za-z0-9_-]{12,}#<id>#g'), token set: ${TOKEN:+yes}"
           exit 1
