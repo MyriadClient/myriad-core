@@ -52,6 +52,19 @@ import java.util.List;
  * Myriad.notifications().info("My Addon", "Hello!");
  * Myriad.ui().openPanel(MyriadId.of("my-addon", "stats"));
  * }</pre>
+ * The accessors by tier (see {@link dev.myriadclient.api the package map}):
+ * <ul>
+ * <li><b>Kernel</b>, the contract: {@link #events()}, {@link #addons()}, {@link #modules()}, {@link #tags()},
+ * {@link #groups()}, {@link #commands()}, {@link #keyActions()}, {@link #addonSettings()}, {@link #config()},
+ * {@link #hooks()}, {@link #jobs()}, and {@link #version()}, {@link #isReady()}.</li>
+ * <li><b>Systems</b>, each arbitrating something shared: {@link #rotations()}, {@link #inventory()},
+ * {@link #placement()}, {@link #breaking()}, {@link #building()}, {@link #containers()}, {@link #elytra()},
+ * {@link #limits()}, {@link #tickSpeed()}, {@link #antiCheat()}, {@link #server()}, {@link #friends()},
+ * {@link #controls()}, {@link #shares()}, {@link #notifications()}.</li>
+ * <li><b>UI</b>: {@link #ui()}, {@link #panels()}, {@link #layouts()}, {@link #themes()}, {@link #barWidgets()}.</li>
+ * <li><b>Libraries</b>: {@link #maps()}; the rest are static helpers in their packages.</li>
+ * </ul>
+ * {@link #render()} and {@link #packets()} are core's own, behind the rendering and packet helpers.
  */
 public final class Myriad {
 	public static final String MOD_ID = "myriad";
