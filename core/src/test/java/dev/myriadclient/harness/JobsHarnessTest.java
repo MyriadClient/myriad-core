@@ -155,7 +155,9 @@ class JobsHarnessTest {
 			blocks.put(new BlockPos(1, 1, 1), Target.exact(Blocks.COBBLESTONE.defaultBlockState()));
 			Job<Void> job = Myriad.jobs().start("builder", Steps.build(Blueprint.of(blocks), Building.Options.forServer()));
 			boolean sawGlass = false, sawCobble = false;
-			for (int t = 0; t < 10; t++) {
+			// Room to spare: solving clicks stops at a millisecond of real time a tick, so a cold JVM or a GC pause can
+			// put a placement off a tick or two (one run in eleven missed the cobblestone with 10 ticks).
+			for (int t = 0; t < 20; t++) {
 				h.tick();
 				sawGlass |= h.player.getInventory().getItem(5).is(Items.GLASS);
 				sawCobble |= h.player.getInventory().getItem(5).is(Items.COBBLESTONE);
