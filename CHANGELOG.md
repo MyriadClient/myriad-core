@@ -16,6 +16,14 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.1.1 (unreleased)
+
+- **Item uses go out in their own tick when joined as 1.17 to 1.20.5**: ViaFabricPlus sends your position and look
+  just before each use packet, as those clients did, and core took that for the tick's movement packet, so it held
+  the use itself until the next tick (actions after the movement packet wait for the next tick, for Grim's sake). A
+  use then reached the server after the movement it was made before: a water bucket under a fall arrived after the
+  landing. Every right-click use (eating, a bucket, a rocket, a pearl) was a tick late this way.
+
 ## 1.1.0
 
 - **`Tags.AUTOMATION`**, a shared tag beside Combat, Movement, Render, Player, World and Misc: modules that do a job

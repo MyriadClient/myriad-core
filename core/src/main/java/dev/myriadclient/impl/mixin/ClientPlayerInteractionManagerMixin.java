@@ -7,6 +7,7 @@ import dev.myriadclient.api.event.events.InteractEvent;
 import dev.myriadclient.api.event.events.ItemUseEvent;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.dev.PacketLog;
+import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.service.RotationManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
@@ -52,11 +53,13 @@ public abstract class ClientPlayerInteractionManagerMixin {
 	@Inject(method = "useItem", at = @At("HEAD"))
 	private void myriad$useItemStart(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
 		if (Myriad.isReady()) MyriadImpl.get().rotationManager().usingItem(hand);
+		ActionTiming.get().usingItem(true);
 	}
 
 	@Inject(method = "useItem", at = @At("RETURN"))
 	private void myriad$useItemEnd(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> cir) {
 		if (Myriad.isReady()) MyriadImpl.get().rotationManager().usingItem(null);
+		ActionTiming.get().usingItem(false);
 	}
 
 	@Inject(method = "interact", at = @At("HEAD"), cancellable = true)

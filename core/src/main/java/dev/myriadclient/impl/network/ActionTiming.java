@@ -44,6 +44,7 @@ public final class ActionTiming {
 	private static final ThreadLocal<Boolean> FLUSHING = ThreadLocal.withInitial(() -> false);
 	private final Deque<Held> held = new ArrayDeque<>();
 	private volatile boolean afterMovement;
+	private volatile boolean inItemUse;
 
 	private ActionTiming() {
 	}
@@ -80,8 +81,20 @@ public final class ActionTiming {
 		afterMovement = true;
 	}
 
-	/** Called for every packet that went out: a movement or tick-end packet closes this tick's window for actions. */
+	/** Called around {@code MultiPlayerGameMode.useItem}: true while it runs. */
+	public void usingItem(boolean using) {
+		inItemUse = using;
+	}
+
+	/**
+	 * Called for every packet that went out: a movement or tick-end packet closes this tick's window for actions. Not
+	 * one sent during an item use: joined as 1.17 to 1.20.5, ViaFabricPlus sends your position and look just before the
+	 * use packet, as those clients did, and the server and Grim take it as part of the use. Closing the window there
+	 * held the use a tick, so it landed after the movement it was made before (a water bucket under a fall, after the
+	 * landing).
+	 */
 	public void sent(Packet<?> p) {
+		if (inItemUse && p instanceof ServerboundMovePlayerPacket) return;
 		if (p instanceof ServerboundMovePlayerPacket || p instanceof ServerboundClientTickEndPacket) afterMovement = true;
 	}
 
