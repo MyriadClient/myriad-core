@@ -14,6 +14,7 @@ import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.ui.layout.DwindleLayout;
 import dev.myriadclient.impl.ui.panels.CorePanels;
 import dev.myriadclient.impl.ui.panels.DialogPanel;
+import dev.myriadclient.impl.ui.panels.MenuGroups;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -62,8 +63,8 @@ final class DesktopStore {
 				WindowManager.LOG.error("Skipping broken window entry {}", j, ex);
 				continue;
 			}
-			if (w == null) still.add(j);
-			else revived.add(w);
+			if (w != null) revived.add(w);
+			else if (!groupsGone(j)) still.add(j);
 		}
 		orphanWindows = still;
 		if (revived.isEmpty()) return;
@@ -182,6 +183,24 @@ final class DesktopStore {
 		for (DesktopBinds.Bind bind : wm.binds.all().values()) if (b.has(bind.id)) bind.bind = Keybind.deserialize(b.get(bind.id).getAsString());
 	}
 
+	/**
+	 * Whether {@code j} is a group window whose groups are gone for good: each one's addon is here and has declared its
+	 * groups, but not that one (renamed or dropped in an update). Such a window would wait as an orphan forever; the
+	 * group under its new name gets a window of its own. A window whose addon is missing keeps waiting for it.
+	 */
+	private static boolean groupsGone(JsonObject j) {
+		if (!j.has("type") || !CorePanels.GROUP.toString().equals(j.get("type").getAsString())) return false;
+		JsonObject args = j.has("args") ? j.getAsJsonObject("args") : new JsonObject();
+		if (!MenuGroups.isCurrent(args)) return false;
+		for (JsonElement e : args.getAsJsonArray("groups")) {
+			String id = e.getAsString();
+			String addon = id.substring(0, Math.max(0, id.indexOf(':')));
+			boolean declared = MenuGroups.all().stream().anyMatch(g -> g.addon().equals(addon));
+			if (!declared || MenuGroups.all().stream().anyMatch(g -> g.id().toString().equals(id))) return false;
+		}
+		return true;
+	}
+
 	/** The saved windows that can be built now, by uid; the others are kept as orphans. */
 	private Map<String, WindowImpl> loadWindows(JsonObject o) {
 		Map<String, WindowImpl> byUid = new LinkedHashMap<>();
@@ -190,6 +209,7 @@ final class DesktopStore {
 			JsonObject j = e.getAsJsonObject();
 			try {
 				WindowImpl w = loadWindow(j);
+				if (w == null && groupsGone(j)) continue;
 				if (w == null) {
 					orphanWindows.add(j);
 					// Its uid stays its own, so a new window doesn't take it before it comes back.

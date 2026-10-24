@@ -16,6 +16,16 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.1.0
+
+- **`Tags.AUTOMATION`**, a shared tag beside Combat, Movement, Render, Player, World and Misc: modules that do a job
+  for you on their own (eating, picking tools, walking, mending, sorting, building), in the theme's second accent.
+- **`ItemHud.Durability.NUMBER`**: an item's durability as the uses left (1561 for a new diamond pickaxe), drawn by
+  `ItemHud.numberText`, or `durabilityText` for whichever text a mode shows. `showsPercent` is true for it too.
+- **A group window whose group its addon no longer declares is dropped** (a group renamed in an update) rather than
+  kept forever as an orphan; the group under its new name gets a window of its own. A window whose addon is missing
+  still waits for it to come back.
+
 ## 1.0.2
 
 - **Shares carry wheels.** Pick them in the Share window or use `.share wheel <name>`: a wheel goes in with its name, icon

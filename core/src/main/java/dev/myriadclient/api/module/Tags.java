@@ -2,6 +2,7 @@ package dev.myriadclient.api.module;
 
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.util.MyriadId;
+import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
 
@@ -16,8 +17,11 @@ public final class Tags {
 	public static final Tag PLAYER = of("player", "Player", "", SettingColor.Mode.GREEN);
 	public static final Tag WORLD = of("world", "World", "", SettingColor.Mode.YELLOW);
 	public static final Tag MISC = of("misc", "Misc", "", SettingColor.Mode.CYAN);
+	/** Modules that do a job for you on their own: eating, picking tools, walking, mending, sorting, building. */
+	@ApiStatus.AvailableSince("1.1")
+	public static final Tag AUTOMATION = of("automation", "Automation", "", SettingColor.Mode.SECONDARY);
 
-	public static final List<Tag> DEFAULTS = List.of(COMBAT, MOVEMENT, RENDER, PLAYER, WORLD, MISC);
+	public static final List<Tag> DEFAULTS = List.of(COMBAT, MOVEMENT, RENDER, PLAYER, WORLD, AUTOMATION, MISC);
 
 	private Tags() {
 	}
