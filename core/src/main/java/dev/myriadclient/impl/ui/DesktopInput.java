@@ -229,7 +229,7 @@ final class DesktopInput {
 				}
 			}
 		}
-		float bx = r.right() - theme.borderSize.get() - 24;
+		float bx = r.right() - theme.borderSize.get() - 24 - wm.titleInset(w);
 		if (button == 0 && mx >= bx + 12 && mx < bx + 23) {
 			wm.closeWindow(w);
 			return;

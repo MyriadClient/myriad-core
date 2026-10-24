@@ -38,7 +38,9 @@ public class ScrollView extends Widget {
 		float h0 = child.height;
 		float view = viewport >= 0 ? viewport : Math.min(maxHeight, Math.max(h0, 1));
 		float max = Math.max(0, h0 - view);
-		target = Math.clamp(target, 0, max);
+		// A new view's child hasn't been laid out yet (height 0): a scroll it was given (a rebuilt panel keeping its
+		// place) waits for the first layout instead of going back to the top.
+		if (h0 > 0) target = Math.clamp(target, 0, max);
 		if (offset.target() != target) offset.animateTo(target, 180, Bezier.EASE_OUT_QUINT);
 		float scrollbar = max > 0 ? 4 : 0;
 		contentHeight = child.layout(canvas, x, y - offset.get(), width - scrollbar);

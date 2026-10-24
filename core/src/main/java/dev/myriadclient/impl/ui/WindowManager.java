@@ -490,10 +490,19 @@ public final class WindowManager implements Desktop {
 		}
 	}
 
+	/** How far in from a window's sides its title bar's contents go: past the rounded corner where it crosses the bar's middle. */
+	float titleInset(WindowImpl w) {
+		float r = w.fullscreen ? 0 : Math.max(0, theme.rounding.get() - theme.borderSize.get()), mid = TITLE_H / 2;
+		return r > mid ? r - (float) Math.sqrt(r * r - (r - mid) * (r - mid)) : 0;
+	}
+
 	Rect contentRect(WindowImpl w, Rect r) {
 		float b = theme.borderSize.get();
 		float title = theme.titleBars.get() && !w.fullscreen ? TITLE_H : 0;
-		return r.inset(b, b + title, b, b);
+		// Clear of the rounded corners: a rectangle inside a corner of radius r keeps r(1 - 1/sqrt 2) from its edges, or
+		// content draws past the curve (a few pixels at most roundings, enough to see at the highest).
+		float corner = w.fullscreen ? 0 : Math.max(0, theme.rounding.get() - b) * (1 - (float) Math.sqrt(0.5));
+		return r.inset(b + corner, b + Math.max(title, corner), b + corner, b + corner);
 	}
 
 	// ================================================================================================================

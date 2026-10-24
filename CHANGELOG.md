@@ -21,6 +21,11 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 - **Trying a shared config turns on only what was on for the sharer**: its control panel took every module in the
   share, and a whole config lists every module, most of them off, so turning it on turned on everything you have. A
   share with none on (settings for modules you turn on yourself) still brings them all.
+- **A panel keeps its place when it's rebuilt**: editing or resetting a theme value scrolled the Theme panel back to the
+  top, as the new view clamped the scroll before its contents had been laid out.
+- **High rounding keeps everything inside the window's corners**: title bars follow the window's curve (they stuck
+  out past it, their own corners being no more than half their height), their icon and buttons start past it, and a
+  panel's contents stay clear of the curve instead of drawing over it.
 
 ## 1.1.1
 

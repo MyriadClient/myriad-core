@@ -292,9 +292,15 @@ final class DesktopPainter {
 
 	private void drawTitleBar(UiRenderer c, WindowImpl w, Rect r, float rad, boolean focused, boolean interactive) {
 		float b = theme.borderSize.get();
-		c.roundRect(r.x() + b, r.y() + b, r.w() - b * 2, WindowManager.TITLE_H, Math.max(0, rad - b), Math.max(0, rad - b), 0, 0, theme.titleBackground.argb());
+		// The window's own shape cut off at the bar's foot: its corners follow the window's at any rounding, where a bar
+		// of its own (a corner can't be more than half its height) stuck out past a window rounded more than that.
+		c.push();
+		c.clip(r.x(), r.y(), r.w(), b + WindowManager.TITLE_H);
+		c.roundRect(r.x() + b, r.y() + b, r.w() - b * 2, r.h() - b * 2, Math.max(0, rad - b), theme.titleBackground.argb());
+		c.pop();
 		float ty = r.y() + b + (WindowManager.TITLE_H - c.textHeight()) / 2;
-		float x = r.x() + b + 6;
+		float inset = wm.titleInset(w);
+		float x = r.x() + b + 6 + inset;
 		String icon = w.panel.icon() != null ? w.panel.icon() : w.type.icon();
 		if (icon != null) {
 			c.text(FontFamily.MONO, c.defaultFontSize(), icon, x, ty, focused ? theme.accent.argb() : theme.textDim.argb());
@@ -314,7 +320,10 @@ final class DesktopPainter {
 		}
 		if (wm.mergeTarget() == w) {
 			// Dropping here merges the dragged category window into this one.
-			c.roundRect(r.x() + b, r.y() + b, r.w() - b * 2, WindowManager.TITLE_H, Math.max(0, rad - b), Math.max(0, rad - b), 0, 0, ColorUtil.withAlpha(theme.accent.argb(), 110));
+			c.push();
+			c.clip(r.x(), r.y(), r.w(), b + WindowManager.TITLE_H);
+			c.roundRect(r.x() + b, r.y() + b, r.w() - b * 2, r.h() - b * 2, Math.max(0, rad - b), ColorUtil.withAlpha(theme.accent.argb(), 110));
+			c.pop();
 			String m = "\uf0c1  Merge";
 			c.text(FontFamily.SANS_BOLD, c.defaultFontSize(), m, r.centerX() - c.textWidth(FontFamily.SANS_BOLD, c.defaultFontSize(), m) / 2, ty, theme.text.argb());
 		}
@@ -335,7 +344,7 @@ final class DesktopPainter {
 			}
 		}
 		// Buttons: float toggle, close.
-		float bx = r.right() - b - 24;
+		float bx = r.right() - b - 24 - inset;
 		boolean hoverFloat = interactive && wm.mouseX >= bx && wm.mouseX < bx + 11 && wm.mouseY >= r.y() && wm.mouseY < r.y() + WindowManager.TITLE_H;
 		boolean hoverClose = interactive && wm.mouseX >= bx + 12 && wm.mouseX < bx + 23 && wm.mouseY >= r.y() && wm.mouseY < r.y() + WindowManager.TITLE_H;
 		c.text(FontFamily.MONO, c.defaultFontSize(), w.floating ? "" : "", bx + 1, ty, hoverFloat ? theme.text.argb() : theme.textDim.argb());
@@ -354,7 +363,7 @@ final class DesktopPainter {
 			return List.of();
 		}
 		List<Map.Entry<TitleControl, Float>> out = new ArrayList<>();
-		float x = r.right() - theme.borderSize.get() - 24 - 3;
+		float x = r.right() - theme.borderSize.get() - 24 - 3 - wm.titleInset(w);
 		for (TitleControl tc : all) {
 			if (!tc.isVisible()) continue;
 			x -= tc.width();
