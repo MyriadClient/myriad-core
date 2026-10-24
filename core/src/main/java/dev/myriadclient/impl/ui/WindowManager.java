@@ -13,7 +13,6 @@ import dev.myriadclient.api.ui.Rect;
 import dev.myriadclient.api.ui.SettingWidgets;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.ThemeSettings;
-import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.Window;
 import dev.myriadclient.api.ui.layout.Layout;
 import dev.myriadclient.api.ui.layout.LayoutState;
@@ -425,13 +424,6 @@ public final class WindowManager implements Desktop {
 		}
 	}
 
-	/** Re-creates panels of a type (e.g. after the module list changed). */
-	public void rebuildPanels(MyriadId type) {
-		for (WindowImpl w : windows) {
-			if (w.type.id().equals(type) && w.panel instanceof WidgetPanel wp) wp.rebuild();
-		}
-	}
-
 	/** Replaces a window's panel in place (used to re-target a module settings window). */
 	public void replacePanel(Window window, Panel panel, JsonObject args) {
 		WindowImpl w = (WindowImpl) window;
@@ -683,11 +675,6 @@ public final class WindowManager implements Desktop {
 	/** Panel instance by window uid (for the panel settings panel). */
 	public Optional<Panel> panelByUid(int uid) {
 		for (WindowImpl w : windows) if (w.uid == uid) return Optional.of(w.panel);
-		return Optional.empty();
-	}
-
-	public Optional<Window> windowByUid(int uid) {
-		for (WindowImpl w : windows) if (w.uid == uid) return Optional.of(w);
 		return Optional.empty();
 	}
 

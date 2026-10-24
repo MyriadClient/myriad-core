@@ -63,12 +63,6 @@ public final class MenuSync {
 		return r.done;
 	}
 
-	/** Whether an ask is out or waiting to go for {@code menu}: clicks meanwhile would carry the made-up state id. */
-	public boolean busy(AbstractContainerMenu menu) {
-		for (Request r : requests) if (r.menu == menu) return true;
-		return false;
-	}
-
 	/** The server sent a menu's whole contents (from ClientPlayNetworkHandlerMixin, after vanilla applied them). */
 	public void onContents(int containerId) {
 		for (Request r : requests) if (r.sent && r.menu.containerId == containerId) r.answeredAt = Ticks.current();

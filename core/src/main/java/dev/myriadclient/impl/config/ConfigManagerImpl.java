@@ -372,9 +372,4 @@ public final class ConfigManagerImpl implements ConfigManager {
 		return name.trim().replaceAll("[^A-Za-z0-9_\\-]", "_");
 	}
 
-	/** For tests and tooling: the raw module JSON including entries for modules not currently installed. */
-	public JsonObject rawModules() {
-		return rawModules;
-	}
-
 }

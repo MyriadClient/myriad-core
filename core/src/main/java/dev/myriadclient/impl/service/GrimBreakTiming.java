@@ -59,11 +59,6 @@ final class GrimBreakTiming {
 		return target;
 	}
 
-	/** Whether Grim is timing air (after a decoy), so any finish passes now. */
-	boolean timingAir() {
-		return target != null && Double.isInfinite(maxDamage);
-	}
-
 	/** Whether a finish sent now passes Grim's timing, keeping its balance under the margin. */
 	boolean finishOk(long now) {
 		if (target == null) return true;

@@ -138,11 +138,6 @@ public final class GpuTimings {
 		open = -1;
 	}
 
-	/** Frames measured so far. */
-	public static int frames() {
-		return Math.max(0, frames);
-	}
-
 	/** Mean GPU milliseconds a frame in {@code pass} (frames it didn't run in count as zero). */
 	public static double gpuMs(Pass pass) {
 		return frames <= 0 ? 0 : totals[pass.ordinal()] / 1e6 / frames;

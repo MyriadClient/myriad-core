@@ -93,10 +93,6 @@ public final class UiRenderer implements Canvas {
 		white = RenderSystem.getDevice().createTextureView(tex);
 	}
 
-	public FontManager fonts() {
-		return fonts;
-	}
-
 	/** Computes the frame's blur if anything drew a backdrop; called by the GUI renderer just before it draws. */
 	public void beforeGuiDraw() {
 		blur.runIfRequested();

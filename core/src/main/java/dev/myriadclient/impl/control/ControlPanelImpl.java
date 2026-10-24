@@ -229,11 +229,6 @@ public final class ControlPanelImpl implements ControlPanel {
 		return remembered.getOrDefault(m.id().toString(), Map.of()).size();
 	}
 
-	/** The remembered settings' keys, for a summary. */
-	public List<String> rememberedKeys(Module m) {
-		return List.copyOf(remembered.getOrDefault(m.id().toString(), Map.of()).keySet());
-	}
-
 	// ---- saving ---------------------------------------------------------------------------------------------------------
 
 	JsonObject toJson() {

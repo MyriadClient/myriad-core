@@ -49,11 +49,6 @@ public final class MeshRenderer {
 		live.remove(mesh);
 	}
 
-	/** Meshes holding GPU buffers right now (for debugging and the console). */
-	public static int liveCount() {
-		return live.size();
-	}
-
 	public static void draw(CameraRenderState camera) {
 		if (live.isEmpty()) return;
 		Frustum frustum = camera.cullFrustum;
