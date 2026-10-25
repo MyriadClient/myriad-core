@@ -41,9 +41,16 @@ public final class ThemedScreens {
 	private static final String CHEVRON_LEFT = "\uf053", CHEVRON_RIGHT = "\uf054";
 	/** Its book (Font Awesome), for the button that opens the recipe book. */
 	private static final String BOOK = "\uf02d";
-	/** And its arrows, flame, plus and cross for the workstations, with the flame's colour. */
+	/** And its arrows, flame, plus and cross for the workstations. */
 	private static final String ARROW = "\uf061", ARROW_DOWN = "\uf063", FIRE = "\uf06d", PLUS = "\uf067", CROSS = "\uf00d";
-	private static final int FLAME = 0xFFFAB387;
+	/** Where a brewing stand's fuel bar and progress arrow go in the theme (x, y, w, h in its screen): under its blaze powder and its ingredient. */
+	private static final int[] BREW_FUEL = {17, 37, 16, 3}, BREW_ARROW = {79, 36, 16, 13};
+	/** Its bubbles in their 12 by 29 box (x, y, radius), bottom to top. */
+	private static final float[][] BUBBLES = {{4, 25, 1.5f}, {8, 19.5f, 2}, {3.5f, 13, 1.5f}, {7.5f, 6.5f, 2}, {4, 1.5f, 1.2f}};
+	/** How far left the theme moves an anvil's name box, to centre it (Minecraft's sits right of an icon the theme doesn't draw). */
+	public static final int ANVIL_NAME_SHIFT = 26;
+	/** The recipe book window's left edge this frame (its tabs end there), or NaN before one's drawn. */
+	private static float bookLeft = Float.NaN;
 	/** Whether this frame's background is drawn already: a screen's texture can come in more than one piece (a chest's). */
 	private static boolean drawn;
 
@@ -85,7 +92,7 @@ public final class ThemedScreens {
 			}
 			case AbstractFurnaceScreen<?> s -> {
 				resultCell(c, t, x + 116, y + 35);
-				centred(c, FIRE, x + 56, y + 36, 14, 14, dim);
+				centred(c, FIRE, x + 56, y + 36, 16, 14, dim);
 				centred(c, ARROW, x + 79, y + 34, 24, 16, dim);
 			}
 			// Its redstone mark stands where the arrow would.
@@ -100,9 +107,10 @@ public final class ThemedScreens {
 				centred(c, PLUS, x + 49, y + 47, 22, 16, dim);
 				centred(c, ARROW, x + 99, y + 45, 28, 21, dim);
 			}
+			// Its fuel under the blaze powder, its progress under the ingredient (Minecraft has both off to the side).
 			case BrewingStandScreen s -> {
-				c.roundRect(x + 60, y + 44, 18, 4, 2, ColorUtil.withAlpha(t.textDim.argb(), 50));
-				centred(c, ARROW_DOWN, x + 97, y + 16, 9, 28, dim);
+				c.roundRect(x + BREW_FUEL[0], y + BREW_FUEL[1], BREW_FUEL[2], BREW_FUEL[3], BREW_FUEL[3] / 2f, ColorUtil.withAlpha(t.textDim.argb(), 50));
+				centred(c, ARROW_DOWN, x + BREW_ARROW[0], y + BREW_ARROW[1], BREW_ARROW[2], BREW_ARROW[3], dim);
 			}
 			default -> {
 			}
@@ -118,21 +126,36 @@ public final class ThemedScreens {
 
 	/**
 	 * Part of a progress sprite (Minecraft draws {@code w} by {@code h} of it at {@code x, y}, from {@code u, v} in its
-	 * {@code texW} by {@code texH}): a furnace's flame and arrow, a brewing stand's fuel and progress, the outline
-	 * {@link #decorate} drew filled in the theme as far as Minecraft would. False to let Minecraft draw it (the bubbles).
+	 * {@code texW} by {@code texH}): a furnace's flame and arrow, a brewing stand's fuel, progress and bubbles, the outline
+	 * {@link #decorate} drew filled in the theme as far as Minecraft would. False to let Minecraft draw it.
 	 */
 	public static boolean spritePart(GuiGraphicsExtractor ctx, Identifier sprite, int texW, int texH, int u, int v, int x, int y, int w, int h) {
 		if (!Myriad.isReady() || !theme().themedScreens.get()) return false;
 		String path = sprite.getPath();
 		// The whole sprite's box, of which x, y, w, h is the part shown.
 		int fx = x - u, fy = y - v;
-		if (path.endsWith("/lit_progress")) return part(ctx, x, y, w, h, c -> centred(c, FIRE, fx, fy, texW, texH, FLAME));
+		// As wide as the slot above it, so the flame centres under it; it burns down from the top.
+		if (path.endsWith("/lit_progress")) return part(ctx, fx, y, texW + 2, h, c -> centred(c, FIRE, fx, fy, texW + 2, texH, theme().yellow.argb()));
 		if (path.endsWith("/burn_progress")) return part(ctx, x, y, w, h, c -> centred(c, ARROW, fx, fy, texW, texH, theme().accent.argb()));
-		if (path.equals("container/brewing_stand/brew_progress")) return part(ctx, x, y, w, h, c -> centred(c, ARROW_DOWN, fx, fy, texW, texH, theme().accent.argb()));
-		if (path.equals("container/brewing_stand/fuel_length")) return part(ctx, x, y, w, h, c -> {
-			ThemeSettings t = theme();
-			c.gradientRect(fx, fy, Math.max(w, texH), texH, texH / 2f, t.activeBorderFrom.argb(), t.activeBorderTo.argb(), 0);
+		// Its bubbles, rising as it brews: little circles in the accent, shown as far up as Minecraft would.
+		if (path.equals("container/brewing_stand/bubbles")) return part(ctx, x, y, w, h, c -> {
+			int color = ColorUtil.withAlpha(theme().accent.argb(), 0xC0);
+			for (float[] b : BUBBLES) c.circle(fx + b[0], fy + b[1], b[2], color);
 		});
+		// A brewing stand's, moved where decorate put their outlines (from Minecraft's places, fx, fy): the same share filled.
+		if (path.equals("container/brewing_stand/brew_progress")) {
+			int left = fx - 97, top = fy - 16;
+			float bx = left + BREW_ARROW[0], by = top + BREW_ARROW[1], bh = BREW_ARROW[3] * h / (float) texH;
+			return part(ctx, (int) bx, (int) by, BREW_ARROW[2], Math.round(bh), c -> centred(c, ARROW_DOWN, bx, by, BREW_ARROW[2], BREW_ARROW[3], theme().accent.argb()));
+		}
+		if (path.equals("container/brewing_stand/fuel_length")) {
+			int left = fx - 60, top = fy - 44;
+			float bw = Math.max(BREW_FUEL[3], BREW_FUEL[2] * w / (float) texW);
+			return w <= 0 || posed(ctx, c -> {
+				ThemeSettings t = theme();
+				c.gradientRect(left + BREW_FUEL[0], top + BREW_FUEL[1], bw, BREW_FUEL[3], BREW_FUEL[3] / 2f, t.activeBorderFrom.argb(), t.activeBorderTo.argb(), 0);
+			});
+		}
 		return false;
 	}
 
@@ -182,7 +205,7 @@ public final class ThemedScreens {
 
 	/**
 	 * One of the sprites Minecraft draws around its screens, by name, in the theme at {@code x, y} ({@code w} by {@code h}):
-	 * the recipe book's recipe slots (dim red where it can't be made, a second edge for one with alternatives), its tabs
+	 * the recipe book's recipe slots (dim red where it can't be made, a dot for one with alternatives), its tabs
 	 * (the selected one in the accent), its alternatives' popup, filter, page arrows and search box, the button opening it, and the cards of the inventory's effect list (an
 	 * ambient one, from a beacon, with a dim border). False to let Minecraft draw it.
 	 */
@@ -193,10 +216,11 @@ public final class ThemedScreens {
 			case "recipe_book/slot_craftable", "recipe_book/slot_many_craftable", "recipe_book/slot_uncraftable", "recipe_book/slot_many_uncraftable" -> posed(ctx, c -> {
 				ThemeSettings t = theme();
 				float r = cellRounding(t);
-				if (path.contains("many")) c.outline(x + 2, y + 2, w - 2, h - 2, r, 1, ColorUtil.withAlpha(t.inactiveBorder.argb(), 0xA0));
 				c.roundRect(x, y, w - 2, h - 2, r, t.surface.argb());
-				if (path.contains("uncraftable")) c.roundRect(x, y, w - 2, h - 2, r, ColorUtil.withAlpha(0xFFF38BA8, 0x40));
+				if (path.contains("uncraftable")) c.roundRect(x, y, w - 2, h - 2, r, ColorUtil.withAlpha(t.red.argb(), 0x40));
 				c.outline(x, y, w - 2, h - 2, r, 1, ColorUtil.withAlpha(t.inactiveBorder.argb(), 0x80));
+				// More than one recipe makes it: a dot in its corner.
+				if (path.contains("many")) c.circle(x + w - 6, y + 3.5f, 1.25f, t.accent.argb());
 			});
 			// A tab squashes up and down while it has new recipes (Minecraft scales it about its middle): its box is mapped
 			// through that rather than the renderer scaling, which is the same both ways.
@@ -206,9 +230,13 @@ public final class ThemedScreens {
 				MyriadImpl.get().windowManager().painter().paintGui(ctx, c -> {
 					ThemeSettings t = theme();
 					float r = Math.min(t.rounding.get(), 4);
+					// Up to the book's edge, so a tab joins it rather than lying over it (its open side towards the book).
+					c.push();
+					if (!Float.isNaN(bookLeft)) c.clip(bx - 8, by - 8, Math.max(0, bookLeft + t.borderSize.get() - (bx - 8)), bh + 16);
 					c.roundRect(bx, by, bw, bh, r, ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xE0, ColorUtil.alpha(t.windowBackground.argb()))));
 					if (path.endsWith("selected")) c.gradientOutline(bx, by, bw, bh, r, 1, t.activeBorderFrom.argb(), t.activeBorderTo.argb(), t.borderAngle.get().floatValue());
 					else c.outline(bx, by, bw, bh, r, 1, t.inactiveBorder.argb());
+					c.pop();
 				});
 				yield true;
 			}
@@ -238,12 +266,12 @@ public final class ThemedScreens {
 				centred(c, path.contains("forward") ? CHEVRON_RIGHT : CHEVRON_LEFT, x, y, w, h, path.endsWith("highlighted") ? t.text.argb() : t.textDim.argb());
 			});
 			// What a workstation can't do with what's in it (an anvil's too costly repair, say).
-			case "container/anvil/error", "container/smithing/error", "container/grindstone/error" -> posed(ctx, c -> centred(c, CROSS, x, y, w, h, 0xFFF38BA8));
+			case "container/anvil/error", "container/smithing/error", "container/grindstone/error" -> posed(ctx, c -> centred(c, CROSS, x, y, w, h, theme().red.argb()));
 			case "container/anvil/text_field", "container/anvil/text_field_disabled" -> posed(ctx, c -> {
 				ThemeSettings t = theme();
-				float r = Math.min(t.rounding.get(), 4);
-				c.roundRect(x, y, w, h, r, path.endsWith("disabled") ? ColorUtil.withAlpha(t.surface.argb(), 0x80) : t.surface.argb());
-				c.outline(x, y, w, h, r, 1, t.inactiveBorder.argb());
+				float r = Math.min(t.rounding.get(), 4), fx = x - ANVIL_NAME_SHIFT;
+				c.roundRect(fx, y, w, h, r, path.endsWith("disabled") ? ColorUtil.withAlpha(t.surface.argb(), 0x80) : t.surface.argb());
+				c.outline(fx, y, w, h, r, 1, t.inactiveBorder.argb());
 			});
 			// Only on a screen drawn in the theme: vanilla's other text boxes keep their look.
 			case "widget/text_field", "widget/text_field_highlighted" -> Minecraft.getInstance().gui.screen() instanceof AbstractContainerScreen<?> screen && themed(screen)
@@ -274,6 +302,7 @@ public final class ThemedScreens {
 	/** The recipe book's own window, in place of its texture at {@code x, y} ({@code w} by {@code h}); false to let Minecraft draw it. */
 	public static boolean recipeBook(GuiGraphicsExtractor ctx, int x, int y, int w, int h) {
 		if (!Myriad.isReady() || !theme().themedScreens.get()) return false;
+		bookLeft = x + ctx.pose().m20();
 		return posed(ctx, c -> window(c, theme(), x, y, w, h, true));
 	}
 
@@ -318,7 +347,12 @@ public final class ThemedScreens {
 		boolean inventory = screen instanceof InventoryScreen;
 		float size = c.defaultFontSize();
 		String title = c.ellipsize(FontFamily.SANS_BOLD, size, screen.getTitle().getString(), w - 16);
-		c.text(FontFamily.SANS_BOLD, size, title, x + s.myriad$titleLabelX(), y + s.myriad$titleLabelY(), theme.text.argb());
+		// A title Minecraft centred is centred again for the theme's font, and an anvil's or smithing table's, which sat
+		// beside an icon the theme doesn't draw.
+		int vanillaWidth = Minecraft.getInstance().font.width(screen.getTitle());
+		boolean centred = Math.abs(s.myriad$titleLabelX() - (s.myriad$imageWidth() - vanillaWidth) / 2) <= 1 || screen instanceof ItemCombinerScreen<?>;
+		float tx = centred && !inventory ? x + (w - c.textWidth(FontFamily.SANS_BOLD, size, title)) / 2 : x + s.myriad$titleLabelX();
+		c.text(FontFamily.SANS_BOLD, size, title, tx, y + s.myriad$titleLabelY(), theme.text.argb());
 		if (!inventory) c.text(s.myriad$playerInventoryTitle().getString(), x + s.myriad$inventoryLabelX(), y + s.myriad$inventoryLabelY(), theme.textDim.argb());
 
 		float cr = cellRounding(theme);

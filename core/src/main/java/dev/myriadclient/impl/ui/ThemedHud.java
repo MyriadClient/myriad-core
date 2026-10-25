@@ -23,8 +23,6 @@ public final class ThemedHud {
 	/** The theme icon font's heart and shield (Material Design) and drumstick (Font Awesome), at a size that fills a 9-pixel icon. */
 	private static final String HEART = "\uDB80\uDED1", DRUMSTICK = "\uEEF9", SHIELD = "\uDB81\uDC98";
 	private static final float ICON_SIZE = 10;
-	/** Heart colours by kind, and food's: soft enough to sit with the theme's own. */
-	private static final int RED = 0xFFF38BA8, POISONED = 0xFFA6E3A1, WITHERED = 0xFF6C7086, GOLDEN = 0xFFF9E2AF, FROZEN = 0xFF89DCEB, FOOD = 0xFFFAB387;
 	/** GUI pixels between the hotbar and the bottom of the screen. */
 	public static final int MARGIN = 3;
 	/** The experience bar drawn thinner than Minecraft's, as the desktop's progress bars are: this far in from its top and bottom. */
@@ -88,32 +86,35 @@ public final class ThemedHud {
 
 	/**
 	 * A heart, food or armour icon, from the name of the sprite Minecraft would draw at {@code x, y} (9 by 9): the theme
-	 * font's own heart, drumstick and shield, in their colours (a heart's by its kind: poisoned, withered, golden, frozen),
+	 * font's own heart, drumstick and shield in the theme's colours (hearts its red, or by kind its green when poisoned,
+	 * dim when withered, yellow for absorption, cyan when frozen; food the accent, the secondary under Hunger; armour the
+	 * text),
 	 * half of one by drawing the full icon over the empty one only on its left, lighter while it flashes. False to let
 	 * Minecraft draw it (a vehicle's hearts, say).
 	 */
 	public static boolean statusIcon(GuiGraphicsExtractor ctx, Identifier sprite, int x, int y) {
 		if (!on()) return false;
 		String path = sprite.getPath();
+		ThemeSettings th = theme();
 		String icon;
 		int color;
 		if (path.startsWith("hud/heart/")) {
 			String kind = path.substring("hud/heart/".length());
 			if (kind.startsWith("vehicle")) return false;
 			icon = HEART;
-			color = kind.startsWith("container") ? 0 : kind.startsWith("poisoned") ? POISONED : kind.startsWith("withered") ? WITHERED
-				: kind.startsWith("absorbing") ? GOLDEN : kind.startsWith("frozen") ? FROZEN : RED;
+			color = kind.startsWith("container") ? 0 : kind.startsWith("poisoned") ? th.green.argb() : kind.startsWith("withered") ? th.textDim.argb()
+				: kind.startsWith("absorbing") ? th.yellow.argb() : kind.startsWith("frozen") ? th.cyan.argb() : th.red.argb();
 		} else if (path.startsWith("hud/food_")) {
 			icon = DRUMSTICK;
-			color = path.contains("empty") ? 0 : path.contains("hunger") ? POISONED : FOOD;
+			color = path.contains("empty") ? 0 : path.contains("hunger") ? th.secondary.argb() : th.accent.argb();
 		} else if (path.startsWith("hud/armor_")) {
 			icon = SHIELD;
-			color = path.contains("empty") ? 0 : -1;
+			color = path.contains("empty") ? 0 : th.text.argb();
 		} else return false;
 		boolean half = path.contains("half"), blinking = path.contains("blinking");
 		return paint(ctx, c -> {
 			ThemeSettings t = theme();
-			int full = color == -1 ? t.accent.argb() : color;
+			int full = color;
 			// The empty icon: under a half one, and what a container or an empty slot is.
 			if (color == 0 || half) glyph(c, icon, x, y, ColorUtil.withAlpha(t.textDim.argb(), 0x60));
 			if (color == 0) return;
