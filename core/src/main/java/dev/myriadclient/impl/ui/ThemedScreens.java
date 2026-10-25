@@ -13,7 +13,9 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractFurnaceScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractMountInventoryScreen;
+import net.minecraft.client.gui.screens.inventory.BeaconScreen;
 import net.minecraft.client.gui.screens.inventory.BrewingStandScreen;
+import net.minecraft.client.gui.screens.inventory.CartographyTableScreen;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CrafterScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
@@ -23,6 +25,7 @@ import net.minecraft.client.gui.screens.inventory.GrindstoneScreen;
 import net.minecraft.client.gui.screens.inventory.HopperScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.inventory.ItemCombinerScreen;
+import net.minecraft.client.gui.screens.inventory.LoomScreen;
 import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen;
 import net.minecraft.client.gui.screens.inventory.SmithingScreen;
@@ -46,7 +49,7 @@ public final class ThemedScreens {
 	/** Its book (Font Awesome), for the button that opens the recipe book. */
 	private static final String BOOK = "\uf02d";
 	/** And its arrows, flame, plus and cross for the workstations. */
-	private static final String ARROW = "\uf061", ARROW_DOWN = "\uf063", FIRE = "\uf06d", PLUS = "\uf067", CROSS = "\uf00d";
+	private static final String ARROW = "\uf061", ARROW_DOWN = "\uf063", FIRE = "\uf06d", PLUS = "\uf067", CROSS = "\uf00d", CHECK = "\uf00c";
 	/** Where a brewing stand's fuel bar and progress arrow go in the theme (x, y, w, h in its screen): under its blaze powder and its ingredient. */
 	private static final int[] BREW_FUEL = {17, 37, 16, 3}, BREW_ARROW = {79, 36, 16, 13};
 	/** Its bubbles in their 12 by 29 box (x, y, radius), bottom to top. */
@@ -71,7 +74,8 @@ public final class ThemedScreens {
 			&& (screen instanceof ContainerScreen || screen instanceof ShulkerBoxScreen || screen instanceof HopperScreen || screen instanceof DispenserScreen
 			|| screen instanceof InventoryScreen || screen instanceof CraftingScreen || screen instanceof AbstractFurnaceScreen<?> || screen instanceof ItemCombinerScreen<?>
 			|| screen instanceof GrindstoneScreen || screen instanceof BrewingStandScreen || screen instanceof CrafterScreen || screen instanceof StonecutterScreen
-			|| screen instanceof EnchantmentScreen || screen instanceof MerchantScreen || screen instanceof AbstractMountInventoryScreen<?>);
+			|| screen instanceof EnchantmentScreen || screen instanceof MerchantScreen || screen instanceof AbstractMountInventoryScreen<?> || screen instanceof BeaconScreen
+			|| screen instanceof LoomScreen || screen instanceof CartographyTableScreen);
 	}
 
 	/** Draws {@code screen}'s themed window in place of its texture; false to let the texture be drawn. */
@@ -112,6 +116,17 @@ public final class ThemedScreens {
 				c.roundRect(x + 94, y + 18, 6, 140, 3, ColorUtil.withAlpha(t.textDim.argb(), 30));
 				resultCell(c, t, x + 220, y + 37);
 				centred(c, ARROW, x + 184, y + 36, 28, 16, dim);
+			}
+			// Its patterns' list and scroll track.
+			case LoomScreen s -> {
+				resultCell(c, t, x + 143, y + 57);
+				inset(c, t, x + 59, y + 12, 58, 58);
+				c.roundRect(x + 119, y + 13, 12, 56, 3, ColorUtil.withAlpha(t.textDim.argb(), 30));
+			}
+			// The map's preview.
+			case CartographyTableScreen s -> {
+				resultCell(c, t, x + 145, y + 39);
+				inset(c, t, x + 66, y + 13, 68, 68);
 			}
 			// The animal's frame, as your figure's is in the inventory.
 			case AbstractMountInventoryScreen<?> s -> {
@@ -314,6 +329,24 @@ public final class ThemedScreens {
 				c.roundRect(x + 0.5f, y + 0.5f, w - 1, h - 1, r, selected ? ColorUtil.withAlpha(t.accent.argb(), 0x38) : hover ? t.surfaceHover.argb() : t.surface.argb());
 				c.outline(x + 0.5f, y + 0.5f, w - 1, h - 1, r, 1, selected || hover ? t.accent.argb() : ColorUtil.withAlpha(t.inactiveBorder.argb(), 0x90));
 			});
+			// A loom's pattern buttons, the selected one in the accent.
+			case "container/loom/pattern", "container/loom/pattern_highlighted", "container/loom/pattern_selected" -> posed(ctx, c -> {
+				ThemeSettings t = theme();
+				float r = cellRounding(t);
+				boolean selected = path.endsWith("selected"), hover = path.endsWith("highlighted");
+				c.roundRect(x, y, w, h, r, selected ? ColorUtil.withAlpha(t.accent.argb(), 0x38) : hover ? t.surfaceHover.argb() : t.surface.argb());
+				c.outline(x, y, w, h, r, 1, selected || hover ? t.accent.argb() : ColorUtil.withAlpha(t.inactiveBorder.argb(), 0x90));
+			});
+			// A beacon's buttons (its powers, confirm and cancel) and the icons of the last two.
+			case "container/beacon/button", "container/beacon/button_highlighted", "container/beacon/button_selected", "container/beacon/button_disabled" -> posed(ctx, c -> {
+				ThemeSettings t = theme();
+				float r = Math.min(t.rounding.get(), 4);
+				boolean selected = path.endsWith("selected"), hover = path.endsWith("highlighted"), off = path.endsWith("disabled");
+				c.roundRect(x, y, w, h, r, selected ? ColorUtil.withAlpha(t.accent.argb(), 0x38) : off ? ColorUtil.withAlpha(t.surface.argb(), 0x50) : hover ? t.surfaceHover.argb() : t.surface.argb());
+				c.outline(x, y, w, h, r, 1, selected || hover ? t.accent.argb() : ColorUtil.withAlpha(t.inactiveBorder.argb(), 0x90));
+			});
+			case "container/beacon/confirm" -> posed(ctx, c -> centred(c, CHECK, x, y, w, h, theme().accent.argb()));
+			case "container/beacon/cancel" -> posed(ctx, c -> centred(c, CROSS, x, y, w, h, theme().red.argb()));
 			// List scroll thumbs.
 			case "container/stonecutter/scroller", "container/stonecutter/scroller_disabled", "container/villager/scroller", "container/villager/scroller_disabled",
 			     "container/loom/scroller", "container/loom/scroller_disabled" -> posed(ctx, c -> {
@@ -350,7 +383,7 @@ public final class ThemedScreens {
 			// A horse's, llama's or other mount's slots: the theme's cells are drawn under every slot already.
 			case String slot when slot.startsWith("container/") && slot.endsWith("/slot") || slot.equals("container/slot") -> screenThemed();
 			// What a workstation can't do with what's in it (an anvil's too costly repair, say).
-			case "container/anvil/error", "container/smithing/error", "container/grindstone/error" -> posed(ctx, c -> centred(c, CROSS, x, y, w, h, theme().red.argb()));
+			case "container/anvil/error", "container/smithing/error", "container/grindstone/error", "container/loom/error" -> posed(ctx, c -> centred(c, CROSS, x, y, w, h, theme().red.argb()));
 			case "container/anvil/text_field", "container/anvil/text_field_disabled" -> posed(ctx, c -> {
 				ThemeSettings t = theme();
 				float r = Math.min(t.rounding.get(), 4), fx = x - ANVIL_NAME_SHIFT;
@@ -479,8 +512,9 @@ public final class ThemedScreens {
 		int vanillaWidth = Minecraft.getInstance().font.width(screen.getTitle());
 		boolean centred = Math.abs(s.myriad$titleLabelX() - (s.myriad$imageWidth() - vanillaWidth) / 2) <= 1 || screen instanceof ItemCombinerScreen<?>;
 		float tx = centred && !inventory ? x + (w - c.textWidth(FontFamily.SANS_BOLD, size, title)) / 2 : x + s.myriad$titleLabelX();
-		// A villager's screen draws its own labels (its level beside the name), which are only recoloured (textColor).
-		boolean ownLabels = screen instanceof MerchantScreen;
+		// A villager's and a beacon's screens draw their own labels (a villager's level beside its name, a beacon's powers),
+		// only recoloured (textColor).
+		boolean ownLabels = screen instanceof MerchantScreen || screen instanceof BeaconScreen;
 		if (!ownLabels) c.text(FontFamily.SANS_BOLD, size, title, tx, y + s.myriad$titleLabelY(), theme.text.argb());
 		if (!inventory && !ownLabels) c.text(s.myriad$playerInventoryTitle().getString(), x + s.myriad$inventoryLabelX(), y + s.myriad$inventoryLabelY(), theme.textDim.argb());
 
