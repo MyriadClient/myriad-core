@@ -91,6 +91,22 @@ final class DesktopPainter {
 		}
 	}
 
+	/**
+	 * Over one of Minecraft's own screens ({@link ThemedScreens}), in its GUI pixels rather than the desktop's units, so
+	 * it lines up with the slots and items Minecraft draws there.
+	 */
+	void paintGui(GuiGraphicsExtractor ctx, Consumer<UiRenderer> drawer) {
+		UiRenderer c = UiRenderer.get();
+		if (c.isActive()) return;
+		prepareRenderer(c);
+		c.begin(ctx, (float) Math.max(1, mc.getWindow().getGuiScale()));
+		try {
+			drawer.accept(c);
+		} finally {
+			c.end();
+		}
+	}
+
 	/** The launcher on its own over the game ({@link LauncherScreen}). */
 	void renderLauncher(GuiGraphicsExtractor ctx, int guiMouseX, int guiMouseY) {
 		wm.updateScale();

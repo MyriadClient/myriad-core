@@ -54,6 +54,12 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   hotbar before, 1000 for an ender chest from a stack, 700 from the main inventory), no flags; on 2b2t, 150 to 220 ms
   after the click. `Placement.use` may now follow a placement at the same block that hasn't been answered; it goes
   after it.
+- **Themed screens and hotbar** (Theme → Preferences → Cosmetics, both on by default): your inventory, chests,
+  barrels, ender chests, shulker boxes, hoppers and dispensers are drawn as a theme window, its surface, border and
+  title with a cell for each slot and the slot under the mouse lit in the accent; the hotbar, the off hand's slot and
+  the experience bar (its level in the accent) likewise. Each takes the place of the texture or sprite Minecraft draws,
+  in its GUI pixels, so the items, slots, clicks and other mods' slot work stay as they were.
+  `ThemeSettings.themedScreens` and `themedHotbar` are new.
 - **A box in an open chest opens too** (`Containers.openItem(owner, view, screenSlot, ticks, options)`, new): one of
   the chest's own (a barrel's, shulker box's, ender chest's, hopper's, dispenser's) is swapped into the hotbar through
   its screen and the chest closed in the tick it's placed; one of yours goes as before, the chest closed first. The

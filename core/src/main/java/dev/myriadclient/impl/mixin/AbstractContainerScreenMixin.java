@@ -1,15 +1,20 @@
 package dev.myriadclient.impl.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.ContainerScreenEvent;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.service.InventoryManager;
+import dev.myriadclient.impl.ui.ThemedScreens;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -30,6 +35,24 @@ public abstract class AbstractContainerScreenMixin {
 	private void myriad$tooltip(GuiGraphicsExtractor graphics, int mouseX, int mouseY, CallbackInfo ci) {
 		if (Myriad.isReady() && Myriad.events().hasListeners(ContainerScreenEvent.Tooltip.class)
 			&& Myriad.events().post(new ContainerScreenEvent.Tooltip((AbstractContainerScreen<?>) (Object) this, hoveredSlot, graphics, mouseX, mouseY)).isCancelled()) ci.cancel();
+	}
+
+	/** The title and inventory labels of a screen drawn in the theme: the themed window draws them (see ThemedScreens). */
+	@WrapOperation(method = "extractLabels", at = @At(value = "INVOKE",
+		target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;text(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)V"))
+	private void myriad$label(GuiGraphicsExtractor graphics, Font font, Component text, int x, int y, int color, boolean shadow, Operation<Void> original) {
+		if (!ThemedScreens.themed((AbstractContainerScreen<?>) (Object) this)) original.call(graphics, font, text, x, y, color, shadow);
+	}
+
+	/** The slot under the mouse, lit in the theme on a screen drawn in it (see ThemedScreens). */
+	@Inject(method = "extractSlotHighlightBack", at = @At("HEAD"), cancellable = true)
+	private void myriad$highlightBack(GuiGraphicsExtractor graphics, CallbackInfo ci) {
+		if (ThemedScreens.highlight((AbstractContainerScreen<?>) (Object) this, hoveredSlot, graphics)) ci.cancel();
+	}
+
+	@Inject(method = "extractSlotHighlightFront", at = @At("HEAD"), cancellable = true)
+	private void myriad$highlightFront(GuiGraphicsExtractor graphics, CallbackInfo ci) {
+		if (ThemedScreens.themed((AbstractContainerScreen<?>) (Object) this)) ci.cancel();
 	}
 
 	/** Your inventory's slots show what masks keep them showing (see Inventory.mask). */

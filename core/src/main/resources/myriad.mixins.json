@@ -6,6 +6,7 @@
 	"client": [
 		"AbstractClientPlayerMixin",
 		"AbstractContainerMenuAccessor",
+		"AbstractContainerScreenAccessor",
 		"AbstractContainerScreenMixin",
 		"ArmedEntityRenderStateMixin",
 		"AvatarRendererMixin",
@@ -26,6 +27,7 @@
 		"EntityMixin",
 		"EntityRenderDispatcherMixin",
 		"EntityRenderStateMixin",
+		"ExperienceBarMixin",
 		"EntityRendererMixin",
 		"FeatureRenderDispatcherMixin",
 		"GameRendererMixin",
@@ -33,6 +35,7 @@
 		"GuiRendererMixin",
 		"HudMixin",
 		"HumanoidMobRendererMixin",
+		"InventoryScreenMixin",
 		"ItemInHandRendererMixin",
 		"ItemStackMixin",
 		"KeyboardMixin",
@@ -47,6 +50,7 @@
 		"PlayerMixin",
 		"RenderPipelinesMixin",
 		"ScreenMixin",
+		"ThemedScreenMixin",
 		"SoundManagerMixin",
 		"WorldRendererMixin"
 	],

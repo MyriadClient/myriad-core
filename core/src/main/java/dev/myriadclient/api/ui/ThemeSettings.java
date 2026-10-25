@@ -11,6 +11,7 @@ import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.Settings;
 import net.minecraft.client.Minecraft;
+import org.jetbrains.annotations.ApiStatus;
 
 /**
  * The live look of the menu, modelled on Hyprland's {@code general}, {@code decoration} and {@code animations}
@@ -124,6 +125,14 @@ public final class ThemeSettings {
 			var mc = Minecraft.getInstance();
 			if (mc.player != null) mc.options.broadcastOptions();
 		}).build();
+	@ApiStatus.AvailableSince("1.2")
+	public final BoolSetting themedScreens = spCosmetics.bool("Themed Screens")
+		.description("Draw your inventory, chests, shulker boxes and the other storage screens in the theme. Off: Minecraft's own look.")
+		.defaultValue(true).build();
+	@ApiStatus.AvailableSince("1.2")
+	public final BoolSetting themedHotbar = spCosmetics.bool("Themed Hotbar")
+		.description("Draw the hotbar, the off hand's slot and the experience bar in the theme. Off: Minecraft's own look.")
+		.defaultValue(true).build();
 
 	private final SettingGroup sgInput = preferences.group("Input");
 	public final EnumSetting<ModKey> modKey = sgInput.oneOf("Mod Key", ModKey.ALT)
