@@ -3,6 +3,7 @@ package dev.myriadclient.impl.service;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.util.Slots;
+import dev.myriadclient.impl.MyriadImpl;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -11,6 +12,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -118,7 +120,7 @@ final class InventoryClicks {
 	 * where the server has none.
 	 */
 	boolean canClick(int clicks) {
-		return mc.player != null && mc.gameMode != null && mc.player.containerMenu == mc.player.inventoryMenu
+		return mc.player != null && mc.gameMode != null && (mc.player.containerMenu == mc.player.inventoryMenu || heldMenu() != null)
 			&& Myriad.limits().canSend(PacketLimits.Kind.INVENTORY, clicks) && gate.prepareClick();
 	}
 
@@ -137,7 +139,23 @@ final class InventoryClicks {
 	}
 
 	private void click(int index, int button, ContainerInput action) {
+		// A container held open (Containers.hold) takes your inventory's clicks, on its own slot for the same item; armour,
+		// which it doesn't show, lets it go first (the close goes out before the click).
+		AbstractContainerMenu held = heldMenu();
+		if (held != null) {
+			for (Slot slot : held.slots) {
+				if (slot.container == mc.player.getInventory() && slot.getContainerSlot() == index) {
+					mc.gameMode.handleContainerInput(held.containerId, slot.index, button, action, mc.player);
+					return;
+				}
+			}
+			Myriad.containers().release();
+		}
 		mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId, Slots.playerScreen(index), button, action, mc.player);
+	}
+
+	private static @Nullable AbstractContainerMenu heldMenu() {
+		return MyriadImpl.get().containerTracker().heldMenu();
 	}
 
 	boolean move(int from, int to) {

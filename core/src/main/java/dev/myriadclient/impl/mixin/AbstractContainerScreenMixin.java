@@ -14,6 +14,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
@@ -35,6 +36,12 @@ public abstract class AbstractContainerScreenMixin {
 	private void myriad$tooltip(GuiGraphicsExtractor graphics, int mouseX, int mouseY, CallbackInfo ci) {
 		if (Myriad.isReady() && Myriad.events().hasListeners(ContainerScreenEvent.Tooltip.class)
 			&& Myriad.events().post(new ContainerScreenEvent.Tooltip((AbstractContainerScreen<?>) (Object) this, hoveredSlot, graphics, mouseX, mouseY)).isCancelled()) ci.cancel();
+	}
+
+	/** A held container's screen closing keeps it open on the server (see Containers.hold): no close goes out. */
+	@WrapOperation(method = "onClose", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;closeContainer()V"))
+	private void myriad$keepHeld(LocalPlayer player, Operation<Void> original) {
+		if (!Myriad.isReady() || !MyriadImpl.get().containerTracker().keepOpen(((AbstractContainerScreen<?>) (Object) this).getMenu())) original.call(player);
 	}
 
 	/** The title and inventory labels of a screen drawn in the theme: the themed window draws them (see ThemedScreens). */

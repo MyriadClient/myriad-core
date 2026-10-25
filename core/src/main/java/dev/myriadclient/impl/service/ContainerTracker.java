@@ -4,6 +4,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.ContainerEvent;
 import dev.myriadclient.api.event.events.PacketEvent;
+import dev.myriadclient.api.event.events.ScreenOpenEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.service.Containers;
@@ -14,6 +15,8 @@ import dev.myriadclient.api.util.Slots;
 import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.world.InteractionHand;
@@ -53,6 +56,9 @@ public final class ContainerTracker implements Containers {
 	private @Nullable Object pendingOwner;
 	/** A close asked for while the server wouldn't take one yet: it goes at the first moment it will. */
 	private boolean closeWanted;
+	/** The container held open on the server after its screen closes (Containers.hold), and that screen, kept to show again. */
+	private @Nullable ViewImpl held;
+	private @Nullable AbstractContainerScreen<?> heldScreen;
 
 	public ContainerTracker(MenuSync sync) {
 		this.sync = sync;
@@ -164,6 +170,10 @@ public final class ContainerTracker implements Containers {
 		if (current == null) return;
 		ViewImpl closed = current;
 		current = null;
+		if (closed == held) {
+			held = null;
+			heldScreen = null;
+		}
 		closeWanted = false;
 		for (MenuJob t : transfers) t.abort("The container closed");
 		transfers.clear();
@@ -249,6 +259,60 @@ public final class ContainerTracker implements Containers {
 	}
 
 	@Override
+	public boolean hold(View view) {
+		if (!(view instanceof ViewImpl v) || v != current || mc.player == null || mc.player.containerMenu != v.handler) return false;
+		held = v;
+		if (mc.gui.screen() instanceof AbstractContainerScreen<?> screen && screen.getMenu() == v.handler) heldScreen = screen;
+		return true;
+	}
+
+	@Override
+	public Optional<View> held() {
+		return Optional.ofNullable(held);
+	}
+
+	@Override
+	public boolean reopen() {
+		if (held == null || heldScreen == null || mc.player == null || mc.player.containerMenu != held.handler) return false;
+		if (mc.gui.screen() != heldScreen) mc.gui.setScreen(heldScreen);
+		return true;
+	}
+
+	@Override
+	public void release() {
+		ViewImpl h = held;
+		held = null;
+		heldScreen = null;
+		if (h != null && mc.player != null && mc.player.containerMenu == h.handler) mc.player.closeContainer();
+	}
+
+	/**
+	 * The held container's screen is closing (from AbstractContainerScreenMixin, its onClose): true to keep it open on the
+	 * server, sending no close. Not with something on the cursor, which closing puts back where the server would.
+	 */
+	public boolean keepOpen(AbstractContainerMenu menu) {
+		if (held == null || held.handler != menu || mc.player == null || mc.player.containerMenu != menu) return false;
+		if (!menu.getCarried().isEmpty()) {
+			held = null;
+			heldScreen = null;
+			return false;
+		}
+		if (mc.gui.screen() instanceof AbstractContainerScreen<?> screen && screen.getMenu() == menu) heldScreen = screen;
+		return true;
+	}
+
+	/** The held container's menu while it's the one open (your inventory's clicks go through it then), else null. */
+	public @Nullable AbstractContainerMenu heldMenu() {
+		return held != null && mc.player != null && mc.player.containerMenu == held.handler ? held.handler : null;
+	}
+
+	/** Opening your inventory while a container's held shows that instead: it shows your inventory too, and takes its clicks. */
+	@Subscribe
+	private void onScreenOpen(ScreenOpenEvent e) {
+		if (e.screen() instanceof InventoryScreen && heldScreen != null && heldMenu() != null && !mc.player.isCreative()) e.setScreen(heldScreen);
+	}
+
+	@Override
 	public void close() {
 		if (mc.player == null || current == null) return;
 		if (Myriad.inventory().prepareClick()) closeNow();
@@ -257,6 +321,11 @@ public final class ContainerTracker implements Containers {
 
 	private void closeNow() {
 		closeWanted = false;
+		// A close asked for in code is a close, held or not.
+		if (current != null && current == held) {
+			held = null;
+			heldScreen = null;
+		}
 		// Only while it's still the menu open: one closed this tick (it's forgotten next tick) would send your inventory's close.
 		if (mc.player != null && current != null && mc.player.containerMenu == current.handler) mc.player.closeContainer();
 	}

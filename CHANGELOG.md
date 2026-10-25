@@ -54,6 +54,11 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   hotbar before, 1000 for an ender chest from a stack, 700 from the main inventory), no flags; on 2b2t, 150 to 220 ms
   after the click. `Placement.use` may now follow a placement at the same block that hasn't been answered; it goes
   after it.
+- **A container can be held open after its screen closes** (`Containers.hold`, `held`, `reopen`, `release`, new): no
+  close goes out when you close its screen, so the server keeps it open, and `reopen()` (or opening your inventory)
+  shows it again at once with no packets. Your inventory's clicks, yours and modules', go through it meanwhile (the
+  server only takes clicks in the container it has open), on its slot for the same item; a click on armour lets it go
+  first. It ends when another container opens, the server closes it, or it's released.
 - **Themed screens and hotbar** (Theme → Preferences → Cosmetics, both on by default): your inventory, chests,
   barrels, ender chests, shulker boxes, hoppers, dispensers, the crafting table, furnaces, smokers, blast furnaces, the
   anvil, smithing table, grindstone, brewing stand, crafter, stonecutter, enchanting table, villager trading, beacon,

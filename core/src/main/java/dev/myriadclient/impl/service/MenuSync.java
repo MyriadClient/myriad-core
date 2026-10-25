@@ -6,6 +6,7 @@ import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.util.Ticks;
+import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.mixin.AbstractContainerMenuAccessor;
 import dev.myriadclient.impl.network.JoinedVersion;
 import net.minecraft.client.Minecraft;
@@ -56,6 +57,9 @@ public final class MenuSync {
 	public CompletableFuture<Void> refresh(AbstractContainerMenu menu) {
 		int protocol = JoinedVersion.get().protocol();
 		if (protocol >= 0 && protocol < FIRST_STATE_ID_PROTOCOL) return CompletableFuture.completedFuture(null);
+		// Your inventory's contents come with a held container's (the server ignores asks on any other while it's open).
+		AbstractContainerMenu held = MyriadImpl.get().containerTracker().heldMenu();
+		if (held != null && mc.player != null && menu == mc.player.inventoryMenu) menu = held;
 		// One that hasn't gone out yet covers this ask too.
 		for (Request r : requests) if (r.menu == menu && !r.sent) return r.done;
 		Request r = new Request(menu);

@@ -120,6 +120,30 @@ public interface Containers {
 	}
 
 	/**
+	 * Keeps the open container {@code view} open on the server when its screen closes: no close goes out, the screen
+	 * goes, and the container stays the one the server has, its contents kept up to date. {@link #reopen()} shows it again
+	 * at once, with no packets, and opening your inventory does too (it shows your inventory below its own). Meanwhile
+	 * your inventory's clicks (yours and other modules') go through it, as the server takes clicks only in the container
+	 * it has open; a click on armour, which it doesn't show, lets it go first. It ends when another container opens (the
+	 * server closes it), the server closes it (a vanilla server does once you're out of reach), you {@link #release()} it,
+	 * or you close its screen with something on the cursor. False if {@code view} isn't the open container.
+	 */
+	@ApiStatus.AvailableSince("1.2")
+	boolean hold(View view);
+
+	/** The container held open ({@link #hold}), whether its screen shows or not. */
+	@ApiStatus.AvailableSince("1.2")
+	Optional<View> held();
+
+	/** Shows the held container's screen again, if there is one ({@link #hold}); false if none. */
+	@ApiStatus.AvailableSince("1.2")
+	boolean reopen();
+
+	/** Lets the held container go: the server is told it's closed, and its screen closes if it shows. */
+	@ApiStatus.AvailableSince("1.2")
+	void release();
+
+	/**
 	 * Closes the open container (and its screen), if any, at a moment the server takes it: Grim flags a close made while
 	 * you move just as it refuses a click then (MultiActionsD), so where clicks have to wait for a still moment
 	 * ({@link Inventory#prepareClick()}), so does the close, first thing in a coming tick. {@link View#isOpen()} says
