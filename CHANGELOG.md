@@ -54,6 +54,13 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   hotbar before, 1000 for an ender chest from a stack, 700 from the main inventory), no flags; on 2b2t, 150 to 220 ms
   after the click. `Placement.use` may now follow a placement at the same block that hasn't been answered; it goes
   after it.
+- **A box in an open chest opens too** (`Containers.openItem(owner, view, screenSlot, ticks, options)`, new): one of
+  the chest's own (a barrel's, shulker box's, ender chest's, hopper's, dispenser's) is swapped into the hotbar through
+  its screen and the chest closed in the tick it's placed; one of yours goes as before, the chest closed first. The
+  session's `finish()` puts it back and opens the chest again, leaving it open: a box from the chest goes back into its
+  slot there, and what made room for it in the hotbar, left there meanwhile, comes back out. 300 ms on the Grim test
+  server through 150 ms of lag, as from the hotbar. The dev console's `openitem c<slot>` opens one from the open
+  container.
 - **Trying a shared config turns on only what was on for the sharer**: its control panel took every module in the
   share, and a whole config lists every module, most of them off, so turning it on turned on everything you have. A
   share with none on (settings for modules you turn on yourself) still brings them all.

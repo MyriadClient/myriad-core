@@ -48,6 +48,7 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Dev runs only ({@code -Dmyriad.devConsole=<file>}): runs the lines appended to a file, one script step at a time, so
@@ -164,10 +165,16 @@ public final class DevConsole {
 		}
 	}
 
-	private void openItem(int index, boolean air, int keepTicks) {
+	/** {@code slot}: an inventory index, or c and the open container's screen slot (c4). */
+	private void openItem(String slot, boolean air, int keepTicks) {
 		long started = Clock.millis();
 		int startTick = devTicks;
-		Myriad.containers().openItem(this, index, 100, Placement.Options.forServer().withAirPlace(air)).whenComplete((session, t) -> {
+		Placement.Options options = Placement.Options.forServer().withAirPlace(air);
+		var opening = slot.startsWith("c") ? Myriad.containers().current()
+			.map(from -> Myriad.containers().openItem(this, from, Integer.parseInt(slot.substring(1)), 100, options))
+			.orElse(CompletableFuture.failedFuture(new IllegalStateException("no container open")))
+			: Myriad.containers().openItem(this, Integer.parseInt(slot), 100, options);
+		opening.whenComplete((session, t) -> {
 			if (t != null) {
 				LOG.info("[dev] openitem failed: {}", t.getCause() == null ? t.getMessage() : t.getCause().getMessage());
 				return;
@@ -280,7 +287,7 @@ public final class DevConsole {
 				}
 				// "openitem 14 air 40": opens the box at inventory index 14 (air placing where it may), logs how long it took to
 				// open, and puts it back after 40 ticks.
-				case "openitem" -> openItem(Integer.parseInt(a[1]), a.length > 2 && a[2].equals("air"), a.length > 3 ? Integer.parseInt(a[3]) : 20);
+				case "openitem" -> openItem(a[1], a.length > 2 && a[2].equals("air"), a.length > 3 ? Integer.parseInt(a[3]) : 20);
 				case "status" -> status();
 				// Closes whatever screen is open (a container's as the game does, telling the server).
 				case "closescreen" -> {

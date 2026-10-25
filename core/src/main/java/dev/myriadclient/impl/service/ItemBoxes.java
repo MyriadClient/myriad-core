@@ -17,6 +17,7 @@ import dev.myriadclient.api.util.BlockInfo;
 import dev.myriadclient.api.util.Client;
 import dev.myriadclient.api.util.ItemInfo;
 import dev.myriadclient.api.util.Reach;
+import dev.myriadclient.impl.MyriadImpl;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -25,6 +26,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
@@ -42,8 +44,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Shulker boxes and ender chests from the inventory ({@link Containers#openItem}): put down above your head (else beside
- * you), opened in the same tick, and later broken, picked up and put back in their slot. Both halves run as jobs made
+ * Shulker boxes and ender chests from the inventory or an open container ({@link Containers#openItem}): put down above
+ * your head (else beside you), opened in the same tick, and later broken, picked up and put back in their slot (the
+ * container opened again for one that came from it). Both halves run as jobs made
  * of the services' steps. Getting it out is the owner's job; putting it back is Myriad's own, so a box is never left in
  * the world because a module turned off or its work failed.
  */
@@ -67,7 +70,18 @@ final class ItemBoxes {
 	}
 
 	static CompletableFuture<Containers.ItemSession> open(Object owner, int index, int ticks, Placement.Options options) {
-		Session s = new Session(index, ticks, options);
+		return start(owner, new Session(index, ticks, options, null, -1));
+	}
+
+	static CompletableFuture<Containers.ItemSession> open(Object owner, Containers.View from, int screenSlot, int ticks, Placement.Options options) {
+		var slots = from.handler().slots;
+		Slot slot = screenSlot >= 0 && screenSlot < slots.size() ? slots.get(screenSlot) : null;
+		boolean yours = slot != null && slot.container == Client.player().getInventory();
+		int own = slot != null && !yours && screenSlot < from.size() ? screenSlot : -1;
+		return start(owner, new Session(yours ? slot.getContainerSlot() : -1, ticks, options, from, own));
+	}
+
+	private static CompletableFuture<Containers.ItemSession> start(Object owner, Session s) {
 		Job<Containers.View> job = Myriad.jobs().start(owner, s.getOut());
 		// Asked for by a job: the box work ends with it (the put-back still runs, being Myriad's).
 		if (owner instanceof Job<?> parent) parent.result().whenComplete((r, t) -> {
@@ -77,8 +91,12 @@ final class ItemBoxes {
 	}
 
 	private static final class Session implements Containers.ItemSession {
+		/** Its inventory index, or -1 when it's in {@link #origin}'s own slot {@link #own}. */
 		private final int index, ticks;
 		private final Placement.Options options;
+		/** The container open when it was asked for from one, opened again once it's back; and the slot there it came from, or -1. */
+		private final @Nullable Containers.View origin;
+		private final int own;
 		private ItemStack box = ItemStack.EMPTY;
 		private boolean ender;
 		/** The hotbar slot it's placed from: its own, or the one it was brought into from the inventory. */
@@ -88,10 +106,12 @@ final class ItemBoxes {
 		private boolean placed;
 		private @Nullable CompletableFuture<Void> back;
 
-		Session(int index, int ticks, Placement.Options options) {
+		Session(int index, int ticks, Placement.Options options, @Nullable Containers.View origin, int own) {
 			this.index = index;
 			this.ticks = ticks;
 			this.options = options;
+			this.origin = origin;
+			this.own = own;
 		}
 
 		@Override
@@ -114,20 +134,27 @@ final class ItemBoxes {
 
 		Step<Containers.View> getOut() {
 			Step<Void> check = Step.of("Checking", () -> ctx -> {
-				box = Client.player().getInventory().getItem(index).copy();
+				if (origin != null && (!origin.isOpen() || origin.pos() == null))
+					return Progress.failed(Why.of(Why.UNSUPPORTED, "the container isn't open, or wasn't opened from a block to open again"));
+				box = (own >= 0 ? origin.stack(own) : index >= 0 ? Client.player().getInventory().getItem(index) : ItemStack.EMPTY).copy();
 				ender = box.is(Items.ENDER_CHEST);
 				if (!ender && !ItemInfo.isShulkerBox(box)) return Progress.failed(Why.of(Why.NO_ITEM, "no shulker box or ender chest in slot " + index));
 				if (ender && Myriad.inventory().count(ItemBoxes::silkTouch) == 0)
 					return Progress.failed(Why.of(Why.NO_ITEM, "a Silk Touch pickaxe, to pick the ender chest back up"));
 				spot = spot(options, ender);
 				if (spot == null) return Progress.failed(Why.of(Why.NO_ROOM, "nowhere above or beside you to put it down"));
-				// Placing with your inventory open would click it, not the floor.
-				if (Minecraft.getInstance().gui.screen() instanceof InventoryScreen) Client.player().closeContainer();
+				// Placing with your inventory open would click it, not the floor. A container it came from stays open until
+				// it's swapped out of it; one it didn't is closed at a moment the server takes it (MultiActionsD).
+				if (origin != null && own < 0) {
+					if (!Myriad.inventory().prepareClick()) return ctx.ticks() > PLACE_TICKS ? Progress.failed(Why.of(Why.TIMEOUT, "couldn't close the container")) : Progress.running();
+					Client.player().closeContainer();
+				} else if (Minecraft.getInstance().gui.screen() instanceof InventoryScreen) Client.player().closeContainer();
 				return Progress.done();
 			});
-			// From the inventory, into the hotbar: placed from there in the same tick (the server has the click first).
+			// From the inventory or the container, into the hotbar: placed from there in the same tick (the server has the
+			// click first).
 			Step<Void> toHotbar = Step.of("Into the hotbar", () -> ctx -> {
-				if (index < 9) {
+				if (index >= 0 && index < 9) {
 					from = index;
 					return Progress.done();
 				}
@@ -140,6 +167,7 @@ final class ItemBoxes {
 						return Progress.running();
 					}
 				}
+				if (own >= 0) return swapOut(ctx);
 				int to = Myriad.inventory().pullToHotbar(index, s -> true);
 				if (to >= 0) {
 					from = to;
@@ -163,6 +191,24 @@ final class ItemBoxes {
 				.finallyDo(() -> {
 					if (placed && view == null) finish();
 				});
+		}
+
+		/**
+		 * Swaps the box out of the container's slot into a hotbar slot, through the container's screen, and closes it:
+		 * what was in the hotbar slot waits in the box's place there until it's back.
+		 */
+		private Progress<Void> swapOut(JobContext ctx) {
+			if (!origin.isOpen()) return Progress.failed(Why.of(Why.CANCELLED, "the container closed"));
+			int to = MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory ? inventory.hotbarRoom() : -1;
+			if (to >= 0 && Myriad.inventory().prepareClick()) {
+				origin.swapWithHotbar(own, to);
+				if (Client.player().getInventory().getItem(to).is(box.getItem())) {
+					Client.player().closeContainer();
+					from = to;
+					return Progress.done();
+				}
+			}
+			return ctx.ticks() > PLACE_TICKS ? Progress.failed(Why.of(Why.TIMEOUT, "couldn't bring it into the hotbar")) : Progress.running();
 		}
 
 		/**
@@ -222,15 +268,28 @@ final class ItemBoxes {
 			}).then(Steps.breakBlock(spot.pos(), 10, Breaking.Options.forServer()).timeout(BREAK_TICKS))
 				.finallyDo(() -> Myriad.inventory().spare(PUT_BACK, null));
 			Step<Void> pickUp = Step.of("Picking it up", () -> new PickUp(box, spot.pos(), held[0]));
+			// Into its slot, or for one from a container the hotbar slot it left by, to go back through the container's screen.
 			Step<Void> home = Step.of("Back to its slot", () -> ctx -> {
 				LocalPlayer p = Client.player();
-				if (!p.getInventory().getItem(index).isEmpty() || p.containerMenu != p.inventoryMenu) return Progress.done();
+				int to = own >= 0 ? from : index;
+				if (!p.getInventory().getItem(to).isEmpty() || p.containerMenu != p.inventoryMenu) return Progress.done();
 				int landed = newest(before);
-				if (landed < 0 || landed == index) return Progress.done();
-				if (Myriad.inventory().prepareClick() && Myriad.inventory().move(landed, index)) return Progress.done();
+				if (landed < 0 || landed == to) return Progress.done();
+				if (Myriad.inventory().prepareClick() && Myriad.inventory().move(landed, to)) return Progress.done();
 				return ctx.ticks() > RETURN_TICKS ? Progress.done() : Progress.running();
 			});
-			return close.then(breakIt).then(pickUp).then(home).named(() -> ender ? "Putting the ender chest back" : "Putting the shulker box back");
+			Step<Void> reopen = origin == null ? Step.nothing() : Steps.openContainer(origin.pos(), ticks, options).then(this::intoContainer).recover(why -> Step.nothing());
+			return close.then(breakIt).then(pickUp).then(home).then(reopen).named(() -> ender ? "Putting the ender chest back" : "Putting the shulker box back");
+		}
+
+		/** Back into the container's slot it came from, swapping out what waited there in its place. */
+		private Step<Void> intoContainer(Containers.View view) {
+			return Step.of("Into the container", () -> ctx -> {
+				if (own < 0 || !view.isOpen() || !Client.player().getInventory().getItem(from).is(box.getItem())) return Progress.done();
+				if (!Myriad.inventory().prepareClick()) return ctx.ticks() > RETURN_TICKS ? Progress.done() : Progress.running();
+				view.swapWithHotbar(own, from);
+				return Progress.done();
+			});
 		}
 
 		/** The slot the box landed in: one holding its item now that didn't before the break. */

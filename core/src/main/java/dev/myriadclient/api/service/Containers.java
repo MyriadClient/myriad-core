@@ -88,6 +88,18 @@ public interface Containers {
 	CompletableFuture<ItemSession> openItem(Object owner, int inventoryIndex, int ticks, Placement.Options options);
 
 	/**
+	 * {@link #openItem(Object, int, int, Placement.Options)} for a box in the open container {@code from}, at its screen
+	 * slot {@code screenSlot}: one of the container's own, or of your inventory below them. One of the container's own
+	 * is swapped into the hotbar through its screen and the container closed, in the tick it's placed. Then
+	 * {@link ItemSession#finish()} puts it back and opens {@code from} again, leaving it open, so closing the box brings
+	 * you back to it: one from the container goes back into its slot there, and what made room for it in the hotbar,
+	 * left in that slot meanwhile, comes back out. Fails with {@code UNSUPPORTED} unless {@code from} is open and was
+	 * opened from a block ({@link View#pos()}), to be opened again.
+	 */
+	@ApiStatus.AvailableSince("1.2")
+	CompletableFuture<ItemSession> openItem(Object owner, View from, int screenSlot, int ticks, Placement.Options options);
+
+	/**
 	 * A shulker box or ender chest from your inventory, placed and open ({@link #openItem}). Put it back with
 	 * {@link #finish()} when you're done, whatever happened.
 	 */
@@ -101,7 +113,7 @@ public interface Containers {
 
 		/**
 		 * Closes it, breaks it (with the Silk Touch pickaxe for an ender chest), picks it up and puts it back in the
-		 * slot it came from; completes once it's back, or fails saying where it was left. Runs as Myriad's own job, so
+		 * slot it came from (opening again the container it was opened from, if any); completes once it's back, or fails saying where it was left. Runs as Myriad's own job, so
 		 * it finishes even if your module turns off meanwhile. Asking again returns the same future.
 		 */
 		CompletableFuture<Void> finish();
