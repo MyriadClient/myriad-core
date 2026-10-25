@@ -12,17 +12,21 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractFurnaceScreen;
+import net.minecraft.client.gui.screens.inventory.AbstractMountInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.BrewingStandScreen;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CrafterScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.DispenserScreen;
+import net.minecraft.client.gui.screens.inventory.EnchantmentScreen;
 import net.minecraft.client.gui.screens.inventory.GrindstoneScreen;
 import net.minecraft.client.gui.screens.inventory.HopperScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.inventory.ItemCombinerScreen;
+import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen;
 import net.minecraft.client.gui.screens.inventory.SmithingScreen;
+import net.minecraft.client.gui.screens.inventory.StonecutterScreen;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.Slot;
 import org.jetbrains.annotations.Nullable;
@@ -66,7 +70,8 @@ public final class ThemedScreens {
 		return Myriad.isReady() && theme().themedScreens.get()
 			&& (screen instanceof ContainerScreen || screen instanceof ShulkerBoxScreen || screen instanceof HopperScreen || screen instanceof DispenserScreen
 			|| screen instanceof InventoryScreen || screen instanceof CraftingScreen || screen instanceof AbstractFurnaceScreen<?> || screen instanceof ItemCombinerScreen<?>
-			|| screen instanceof GrindstoneScreen || screen instanceof BrewingStandScreen || screen instanceof CrafterScreen);
+			|| screen instanceof GrindstoneScreen || screen instanceof BrewingStandScreen || screen instanceof CrafterScreen || screen instanceof StonecutterScreen
+			|| screen instanceof EnchantmentScreen || screen instanceof MerchantScreen || screen instanceof AbstractMountInventoryScreen<?>);
 	}
 
 	/** Draws {@code screen}'s themed window in place of its texture; false to let the texture be drawn. */
@@ -95,6 +100,24 @@ public final class ThemedScreens {
 				centred(c, FIRE, x + 56, y + 36, 16, 14, dim);
 				centred(c, ARROW, x + 79, y + 34, 24, 16, dim);
 			}
+			// Its recipes' list and scroll track.
+			case StonecutterScreen s -> {
+				resultCell(c, t, x + 143, y + 33);
+				inset(c, t, x + 51, y + 13, 66, 56);
+				c.roundRect(x + 119, y + 14, 12, 56, 3, ColorUtil.withAlpha(t.textDim.argb(), 30));
+			}
+			// The offers' list and scroll track, and the arrow between what you give and what you get.
+			case MerchantScreen s -> {
+				inset(c, t, x + 4, y + 17, 89, 142);
+				c.roundRect(x + 94, y + 18, 6, 140, 3, ColorUtil.withAlpha(t.textDim.argb(), 30));
+				resultCell(c, t, x + 220, y + 37);
+				centred(c, ARROW, x + 184, y + 36, 28, 16, dim);
+			}
+			// The animal's frame, as your figure's is in the inventory.
+			case AbstractMountInventoryScreen<?> s -> {
+				c.roundRect(x + 26, y + 18, 52, 52, cellRounding(t), t.surface.argb());
+				c.outline(x + 26, y + 18, 52, 52, cellRounding(t), 1, t.inactiveBorder.argb());
+			}
 			// Its redstone mark stands where the arrow would.
 			case CrafterScreen s -> resultCell(c, t, x + 134, y + 35);
 			case GrindstoneScreen s -> {
@@ -115,6 +138,13 @@ public final class ThemedScreens {
 			default -> {
 			}
 		}
+	}
+
+	/** A sunken area behind a list (a stonecutter's recipes, a villager's offers). */
+	private static void inset(UiRenderer c, ThemeSettings t, float x, float y, float w, float h) {
+		float r = cellRounding(t);
+		c.roundRect(x, y, w, h, r, ColorUtil.withAlpha(0xFF000000, 0x30));
+		c.outline(x, y, w, h, r, 1, ColorUtil.withAlpha(t.inactiveBorder.argb(), 0x90));
 	}
 
 	/** A larger cell under what a workstation makes, as Minecraft frames it. */
@@ -143,6 +173,17 @@ public final class ThemedScreens {
 			for (float[] b : BUBBLES) c.circle(fx + b[0], fy + b[1], b[2], color);
 		});
 		// A brewing stand's, moved where decorate put their outlines (from Minecraft's places, fx, fy): the same share filled.
+		// A mount's chest slots: under the theme's cells.
+		if (path.endsWith("/chest_slots")) return screenThemed();
+		// A villager's experience towards its next level, and what this trade would add.
+		if (path.equals("container/villager/experience_bar_current") || path.equals("container/villager/experience_bar_result")) {
+			boolean result = path.endsWith("result");
+			return w <= 0 || posed(ctx, c -> {
+				ThemeSettings t = theme();
+				if (result) c.roundRect(x, y + 1, w, h - 2, (h - 2) / 2f, ColorUtil.withAlpha(t.accent.argb(), 0x70));
+				else c.gradientRect(x, y + 1, Math.max(w, h - 2), h - 2, (h - 2) / 2f, t.activeBorderFrom.argb(), t.activeBorderTo.argb(), 0);
+			});
+		}
 		if (path.equals("container/brewing_stand/brew_progress")) {
 			int left = fx - 97, top = fy - 16;
 			float bx = left + BREW_ARROW[0], by = top + BREW_ARROW[1], bh = BREW_ARROW[3] * h / (float) texH;
@@ -265,6 +306,49 @@ public final class ThemedScreens {
 				ThemeSettings t = theme();
 				centred(c, path.contains("forward") ? CHEVRON_RIGHT : CHEVRON_LEFT, x, y, w, h, path.endsWith("highlighted") ? t.text.argb() : t.textDim.argb());
 			});
+			// A stonecutter's recipe buttons, the selected one in the accent.
+			case "container/stonecutter/recipe", "container/stonecutter/recipe_highlighted", "container/stonecutter/recipe_selected" -> posed(ctx, c -> {
+				ThemeSettings t = theme();
+				float r = cellRounding(t);
+				boolean selected = path.endsWith("selected"), hover = path.endsWith("highlighted");
+				c.roundRect(x + 0.5f, y + 0.5f, w - 1, h - 1, r, selected ? ColorUtil.withAlpha(t.accent.argb(), 0x38) : hover ? t.surfaceHover.argb() : t.surface.argb());
+				c.outline(x + 0.5f, y + 0.5f, w - 1, h - 1, r, 1, selected || hover ? t.accent.argb() : ColorUtil.withAlpha(t.inactiveBorder.argb(), 0x90));
+			});
+			// List scroll thumbs.
+			case "container/stonecutter/scroller", "container/stonecutter/scroller_disabled", "container/villager/scroller", "container/villager/scroller_disabled",
+			     "container/loom/scroller", "container/loom/scroller_disabled" -> posed(ctx, c -> {
+				ThemeSettings t = theme();
+				c.roundRect(x + 1, y, w - 2, h, (w - 2) / 2f, path.endsWith("disabled") ? ColorUtil.withAlpha(t.textDim.argb(), 0x60) : t.accent.argb());
+			});
+			// An enchanting table's three choices and the level each costs.
+			case "container/enchanting_table/enchantment_slot", "container/enchanting_table/enchantment_slot_highlighted",
+			     "container/enchanting_table/enchantment_slot_disabled" -> posed(ctx, c -> {
+				ThemeSettings t = theme();
+				float r = Math.min(t.rounding.get(), 4);
+				boolean off = path.endsWith("disabled"), hover = path.endsWith("highlighted");
+				c.roundRect(x, y + 0.5f, w, h - 1, r, off ? ColorUtil.withAlpha(t.surface.argb(), 0x50) : hover ? t.surfaceHover.argb() : t.surface.argb());
+				c.outline(x, y + 0.5f, w, h - 1, r, 1, hover ? t.accent.argb() : ColorUtil.withAlpha(t.inactiveBorder.argb(), 0x90));
+			});
+			case "container/enchanting_table/level_1", "container/enchanting_table/level_2", "container/enchanting_table/level_3",
+			     "container/enchanting_table/level_1_disabled", "container/enchanting_table/level_2_disabled", "container/enchanting_table/level_3_disabled" -> posed(ctx, c -> {
+				ThemeSettings t = theme();
+				boolean off = path.endsWith("disabled");
+				String level = path.substring("container/enchanting_table/level_".length(), "container/enchanting_table/level_".length() + 1);
+				c.circle(x + w / 2f, y + h / 2f, w / 2f - 1, off ? ColorUtil.withAlpha(t.textDim.argb(), 0x40) : ColorUtil.withAlpha(t.accent.argb(), 0x40));
+				float size = c.defaultFontSize();
+				c.text(FontFamily.SANS_BOLD, size, level, x + (w - c.textWidth(FontFamily.SANS_BOLD, size, level)) / 2, y + (h - c.textHeight(FontFamily.SANS_BOLD, size)) / 2,
+					off ? t.textDim.argb() : t.accent.argb());
+			});
+			// A villager's offer: the arrow from price to goods, the cross over one sold out, the line through a discounted price.
+			case "container/villager/trade_arrow", "container/villager/trade_arrow_out_of_stock" -> posed(ctx, c -> {
+				ThemeSettings t = theme();
+				centred(c, ARROW, x, y, w, h, path.endsWith("stock") ? ColorUtil.withAlpha(t.red.argb(), 0xC0) : t.textDim.argb());
+			});
+			case "container/villager/out_of_stock" -> posed(ctx, c -> centred(c, CROSS, x, y, w, h, theme().red.argb()));
+			case "container/villager/discount_strikethrough" -> posed(ctx, c -> c.rect(x, y + h / 2f - 0.5f, w, 1, theme().red.argb()));
+			case "container/villager/experience_bar_background" -> posed(ctx, c -> c.roundRect(x, y + 1, w, h - 2, (h - 2) / 2f, ColorUtil.withAlpha(theme().textDim.argb(), 50)));
+			// A horse's, llama's or other mount's slots: the theme's cells are drawn under every slot already.
+			case String slot when slot.startsWith("container/") && slot.endsWith("/slot") || slot.equals("container/slot") -> screenThemed();
 			// What a workstation can't do with what's in it (an anvil's too costly repair, say).
 			case "container/anvil/error", "container/smithing/error", "container/grindstone/error" -> posed(ctx, c -> centred(c, CROSS, x, y, w, h, theme().red.argb()));
 			case "container/anvil/text_field", "container/anvil/text_field_disabled" -> posed(ctx, c -> {
@@ -290,6 +374,49 @@ public final class ThemedScreens {
 				else c.gradientOutline(x, y, w, h, r, Math.max(1, t.borderSize.get()), t.activeBorderFrom.argb(), t.activeBorderTo.argb(), t.borderAngle.get().floatValue());
 			});
 			default -> false;
+		};
+	}
+
+	/** Whether the open screen is drawn in the theme: some sprites (a button, a text box, a slot) are themed only there. */
+	private static boolean screenThemed() {
+		return Minecraft.getInstance().gui.screen() instanceof AbstractContainerScreen<?> screen && themed(screen);
+	}
+
+	/**
+	 * A button on a screen drawn in the theme (a villager's offers), as a theme button, its label Minecraft's; {@code argb}
+	 * is the tint Minecraft gives it (its fade). False elsewhere, or for another sprite.
+	 */
+	public static boolean button(GuiGraphicsExtractor ctx, Identifier sprite, int x, int y, int w, int h, int argb) {
+		String path = sprite.getPath();
+		if (!path.startsWith("widget/button") || !screenThemed()) return false;
+		return posed(ctx, c -> {
+			ThemeSettings t = theme();
+			boolean off = path.endsWith("disabled"), hover = path.endsWith("highlighted");
+			float r = Math.min(t.rounding.get(), 4);
+			c.push();
+			c.alpha(ColorUtil.alpha(argb) / 255f);
+			c.roundRect(x, y, w, h, r, off ? ColorUtil.withAlpha(t.surface.argb(), 0x50) : hover ? t.surfaceHover.argb() : t.surface.argb());
+			c.outline(x, y, w, h, r, 1, hover ? t.accent.argb() : ColorUtil.withAlpha(t.inactiveBorder.argb(), 0x90));
+			c.pop();
+		});
+	}
+
+	/**
+	 * Text a themed screen draws in Minecraft's dark label grey or its enchanting table's browns and yellow, in the
+	 * theme's text colours instead (they're unreadable on a dark window). Others are left as they are.
+	 */
+	public static int textColor(int argb) {
+		if (!Myriad.isReady() || !screenThemed()) return argb;
+		ThemeSettings t = theme();
+		return switch (argb & 0xFFFFFF) {
+			case 0x404040 -> t.textDim.argb();
+			// The enchanting table's: its choices' words, the one under the mouse, and the levels they cost.
+			case 0x685E4A -> t.textDim.argb();
+			case 0x342F25 -> ColorUtil.withAlpha(t.textDim.argb(), 0x70);
+			case 0xFFFF80 -> t.text.argb();
+			case 0x80FF20 -> t.accent.argb();
+			case 0x407F10 -> ColorUtil.withAlpha(t.textDim.argb(), 0x90);
+			default -> argb;
 		};
 	}
 
@@ -352,8 +479,10 @@ public final class ThemedScreens {
 		int vanillaWidth = Minecraft.getInstance().font.width(screen.getTitle());
 		boolean centred = Math.abs(s.myriad$titleLabelX() - (s.myriad$imageWidth() - vanillaWidth) / 2) <= 1 || screen instanceof ItemCombinerScreen<?>;
 		float tx = centred && !inventory ? x + (w - c.textWidth(FontFamily.SANS_BOLD, size, title)) / 2 : x + s.myriad$titleLabelX();
-		c.text(FontFamily.SANS_BOLD, size, title, tx, y + s.myriad$titleLabelY(), theme.text.argb());
-		if (!inventory) c.text(s.myriad$playerInventoryTitle().getString(), x + s.myriad$inventoryLabelX(), y + s.myriad$inventoryLabelY(), theme.textDim.argb());
+		// A villager's screen draws its own labels (its level beside the name), which are only recoloured (textColor).
+		boolean ownLabels = screen instanceof MerchantScreen;
+		if (!ownLabels) c.text(FontFamily.SANS_BOLD, size, title, tx, y + s.myriad$titleLabelY(), theme.text.argb());
+		if (!inventory && !ownLabels) c.text(s.myriad$playerInventoryTitle().getString(), x + s.myriad$inventoryLabelX(), y + s.myriad$inventoryLabelY(), theme.textDim.argb());
 
 		float cr = cellRounding(theme);
 		int edge = ColorUtil.withAlpha(theme.inactiveBorder.argb(), 0x50);

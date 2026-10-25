@@ -56,7 +56,8 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   after it.
 - **Themed screens and hotbar** (Theme → Preferences → Cosmetics, both on by default): your inventory, chests,
   barrels, ender chests, shulker boxes, hoppers, dispensers, the crafting table, furnaces, smokers, blast furnaces, the
-  anvil, smithing table, grindstone, brewing stand and crafter are drawn as a theme window, its surface, border and
+  anvil, smithing table, grindstone, brewing stand, crafter, stonecutter, enchanting table, villager trading and horse,
+  donkey and llama inventories are drawn as a theme window, its surface, border and
   title with a cell for each slot and the slot under the mouse lit in the accent, with every tooltip (items, buttons)
   drawn as the desktop's are, the inventory's effect list as theme cards and the recipe book as a theme window (its
   recipe slots, tabs, filter, page arrows, search box and the button opening it); the hotbar, the off hand's slot and
