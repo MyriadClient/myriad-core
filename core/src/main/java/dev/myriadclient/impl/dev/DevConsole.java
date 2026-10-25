@@ -289,6 +289,14 @@ public final class DevConsole {
 				// open, and puts it back after 40 ticks.
 				case "openitem" -> openItem(a[1], a.length > 2 && a[2].equals("air"), a.length > 3 ? Integer.parseInt(a[3]) : 20);
 				case "status" -> status();
+				// The swap bar's tabs, and a switch to one by its place on the bar (see ContainerTabs).
+				case "tabs" -> LOG.info("[dev] tabs: {}", MyriadImpl.get().containerTabs().tabs().stream()
+					.map(t -> (MyriadImpl.get().containerTabs().isCurrent(t) ? "*" : "") + (t.you() ? "you" : t.pos().toShortString() + (t.box() != null ? " box" : ""))).toList());
+				case "tab" -> {
+					var tabs = MyriadImpl.get().containerTabs().tabs();
+					int i = Integer.parseInt(a[1]);
+					LOG.info("[dev] tab {}: {}", i, i < tabs.size() && MyriadImpl.get().containerTabs().switchTo(tabs.get(i)));
+				}
 				// Closes whatever screen is open (a container's as the game does, telling the server).
 				case "closescreen" -> {
 					if (mc.gui.screen() instanceof AbstractContainerScreen<?>) mc.player.closeContainer();

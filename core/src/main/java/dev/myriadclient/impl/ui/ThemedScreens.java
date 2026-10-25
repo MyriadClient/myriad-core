@@ -8,6 +8,7 @@ import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.mixin.AbstractContainerScreenAccessor;
 import dev.myriadclient.impl.render.UiRenderer;
+import dev.myriadclient.impl.service.ContainerTabs;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.PauseScreen;
@@ -36,6 +37,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.Slot;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Minecraft's inventory and storage screens (chests, barrels, ender chests, shulker boxes, hoppers, dispensers) drawn in
  * the theme while Theme → Preferences → Themed Screens is on: a window's surface, border and title where the screen's
@@ -60,6 +64,12 @@ public final class ThemedScreens {
 	public static final int ANVIL_NAME_SHIFT = 26;
 	/** The themed window this frame (x, y, w, h), for what stands at its edges (a creative inventory's tabs), or null. */
 	private static float @Nullable [] window;
+	/** A swap bar tab's size, and how far it reaches into the window under it. */
+	private static final float TAB_W = 24, TAB_H = 22, TAB_OVERLAP = 3;
+	/** The swap bar as last drawn: on which screen, its tabs and where each was (x, y, w, h), for clicks. */
+	private static @Nullable AbstractContainerScreen<?> tabScreen;
+	private static @Nullable List<ContainerTabs.Tab> tabList;
+	private static final List<float[]> tabRects = new ArrayList<>();
 	/** The recipe book window's left edge this frame (its tabs end there), or NaN before one's drawn. */
 	private static float bookLeft = Float.NaN;
 	/** Whether this frame's background is drawn already: a screen's texture can come in more than one piece (a chest's). */
@@ -571,5 +581,58 @@ public final class ThemedScreens {
 		}
 
 		if (b > 0) c.gradientOutline(x, y, w, h, r, b, theme.activeBorderFrom.argb(), theme.activeBorderTo.argb(), theme.borderAngle.get().floatValue());
+		tabs(c, theme, screen, x, y, b);
+	}
+
+	/**
+	 * The swap bar over the window (ContainerTabs): a tab per container to switch to, your head for your inventory, the
+	 * one showing joined to the window, one out of reach dim. Where they were drawn is kept for clicks. Not over the
+	 * creative inventory, whose own tabs stand there.
+	 */
+	private static void tabs(UiRenderer c, ThemeSettings t, AbstractContainerScreen<?> screen, float x, float y, float b) {
+		tabRects.clear();
+		tabScreen = screen;
+		if (screen instanceof CreativeModeInventoryScreen) return;
+		ContainerTabs bar = MyriadImpl.get().containerTabs();
+		var tabs = bar.tabs();
+		if (tabs.size() < 2) return;
+		var mc = Minecraft.getInstance();
+		var window = mc.getWindow();
+		double mx = mc.mouseHandler.xpos() * window.getGuiScaledWidth() / window.getScreenWidth();
+		double my = mc.mouseHandler.ypos() * window.getGuiScaledHeight() / window.getScreenHeight();
+		float r = Math.min(t.rounding.get(), 4);
+		for (int i = 0; i < tabs.size(); i++) {
+			ContainerTabs.Tab tab = tabs.get(i);
+			float tx = x + 4 + i * (TAB_W + 2), ty = y - TAB_H + TAB_OVERLAP;
+			boolean current = bar.isCurrent(tab), reachable = bar.reachable(tab);
+			boolean hover = !current && mx >= tx && mx < tx + TAB_W && my >= ty && my < y;
+			c.push();
+			// Not past the window's top: inside is the window's own, and the one showing joins it there.
+			c.clip(tx - 2, ty - 2, TAB_W + 4, y + b - (ty - 2));
+			if (!reachable) c.alpha(0.45f);
+			c.roundRect(tx, ty, TAB_W, TAB_H, r, current ? t.windowBackground.argb() : hover ? t.surfaceHover.argb()
+				: ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xC0, ColorUtil.alpha(t.windowBackground.argb()) - 0x20)));
+			if (current) c.gradientOutline(tx, ty, TAB_W, TAB_H, r, Math.max(1, b), t.activeBorderFrom.argb(), t.activeBorderTo.argb(), t.borderAngle.get().floatValue());
+			else c.outline(tx, ty, TAB_W, TAB_H, r, 1, hover ? t.accent.argb() : t.inactiveBorder.argb());
+			c.pop();
+			c.push();
+			if (!reachable) c.alpha(0.45f);
+			c.item(tab.icon(), tx + (TAB_W - 16) / 2f, ty + 3, 16, false);
+			c.pop();
+			tabRects.add(new float[]{tx, ty, TAB_W, y - ty});
+		}
+		tabList = tabs;
+	}
+
+	/** A click at {@code mx, my} on {@code screen}'s swap bar switches to that tab; true if it was on the bar (it goes no further). */
+	public static boolean tabClicked(AbstractContainerScreen<?> screen, double mx, double my, int button) {
+		if (screen != tabScreen || tabList == null || !themed(screen)) return false;
+		for (int i = 0; i < tabRects.size() && i < tabList.size(); i++) {
+			float[] rr = tabRects.get(i);
+			if (mx < rr[0] || mx >= rr[0] + rr[2] || my < rr[1] || my >= rr[1] + rr[3]) continue;
+			if (button == 0) MyriadImpl.get().containerTabs().switchTo(tabList.get(i));
+			return true;
+		}
+		return false;
 	}
 }

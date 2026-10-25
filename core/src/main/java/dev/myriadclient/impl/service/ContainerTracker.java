@@ -13,6 +13,7 @@ import dev.myriadclient.api.util.Interactions;
 import dev.myriadclient.api.util.Reach;
 import dev.myriadclient.api.util.Slots;
 import dev.myriadclient.api.util.Threads;
+import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -261,6 +262,8 @@ public final class ContainerTracker implements Containers {
 	@Override
 	public boolean hold(View view) {
 		if (!(view instanceof ViewImpl v) || v != current || mc.player == null || mc.player.containerMenu != v.handler) return false;
+		// A box put down for you goes back when you close it; holding it would leave it standing.
+		if (MyriadImpl.get().containerTabs().isBox(v.pos)) return false;
 		held = v;
 		if (mc.gui.screen() instanceof AbstractContainerScreen<?> screen && screen.getMenu() == v.handler) heldScreen = screen;
 		return true;

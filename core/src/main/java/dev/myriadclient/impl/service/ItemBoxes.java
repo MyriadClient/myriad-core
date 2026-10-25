@@ -128,6 +128,11 @@ final class ItemBoxes {
 		}
 
 		@Override
+		public void finishWhenClosed() {
+			MyriadImpl.get().containerTabs().add(this);
+		}
+
+		@Override
 		public synchronized CompletableFuture<Void> finish() {
 			if (back == null) back = Myriad.jobs().start(PUT_BACK, putBack()).result();
 			return back;

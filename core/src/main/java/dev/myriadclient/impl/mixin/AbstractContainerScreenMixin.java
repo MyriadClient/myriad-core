@@ -16,6 +16,7 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -38,10 +39,22 @@ public abstract class AbstractContainerScreenMixin {
 			&& Myriad.events().post(new ContainerScreenEvent.Tooltip((AbstractContainerScreen<?>) (Object) this, hoveredSlot, graphics, mouseX, mouseY)).isCancelled()) ci.cancel();
 	}
 
-	/** A held container's screen closing keeps it open on the server (see Containers.hold): no close goes out. */
+	/**
+	 * You closing a screen yourself: the boxes standing go back (ContainerTabs), and a held container's stays open on the
+	 * server (Containers.hold), no close going out.
+	 */
 	@WrapOperation(method = "onClose", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;closeContainer()V"))
 	private void myriad$keepHeld(LocalPlayer player, Operation<Void> original) {
-		if (!Myriad.isReady() || !MyriadImpl.get().containerTracker().keepOpen(((AbstractContainerScreen<?>) (Object) this).getMenu())) original.call(player);
+		AbstractContainerMenu menu = ((AbstractContainerScreen<?>) (Object) this).getMenu();
+		// You closed it yourself: the boxes standing go back (see ContainerTabs).
+		if (Myriad.isReady()) MyriadImpl.get().containerTabs().userClosed(menu);
+		if (!Myriad.isReady() || !MyriadImpl.get().containerTracker().keepOpen(menu)) original.call(player);
+	}
+
+	/** A click on the swap bar over a themed screen switches to that tab (see ThemedScreens). */
+	@Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
+	private void myriad$tab(MouseButtonEvent event, boolean doubleClick, CallbackInfoReturnable<Boolean> cir) {
+		if (ThemedScreens.tabClicked((AbstractContainerScreen<?>) (Object) this, event.x(), event.y(), event.button())) cir.setReturnValue(true);
 	}
 
 	/** The title and inventory labels of a screen drawn in the theme: the themed window draws them (see ThemedScreens). */

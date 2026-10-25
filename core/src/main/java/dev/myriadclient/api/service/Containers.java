@@ -117,6 +117,15 @@ public interface Containers {
 		 * it finishes even if your module turns off meanwhile. Asking again returns the same future.
 		 */
 		CompletableFuture<Void> finish();
+
+		/**
+		 * Leaves it standing until you close a screen yourself, then {@link #finish()}es it: switching to another container
+		 * meanwhile (the swap bar over themed screens, where it has a tab, or opening one by hand) keeps it there to open
+		 * again. Boxes go back newest first, so one opened from another goes back into it before that one goes; one left
+		 * out of reach with no screen open goes back at once. Instead of watching its screen to call finish().
+		 */
+		@ApiStatus.AvailableSince("1.2")
+		void finishWhenClosed();
 	}
 
 	/**

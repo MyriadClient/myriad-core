@@ -54,6 +54,12 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   hotbar before, 1000 for an ender chest from a stack, 700 from the main inventory), no flags; on 2b2t, 150 to 220 ms
   after the click. `Placement.use` may now follow a placement at the same block that hasn't been answered; it goes
   after it.
+- **The swap bar** (over themed container screens): while boxes put down for you stand (`ItemSession.finishWhenClosed`,
+  new) or a container is held, a tab for your inventory (your head), the container you opened and each box, the one
+  showing joined to the window. The server keeps one container open at a time, so a tab opens its container again with
+  a click on its block (the held one shows at once); boxes stay standing while you switch, and go back, newest first,
+  once you close a screen yourself, a box left out of reach with nothing open at once. Putting a box back into a
+  container opens that one again for it, and then it's closed, as you'd closed everything.
 - **A container can be held open after its screen closes** (`Containers.hold`, `held`, `reopen`, `release`, new): no
   close goes out when you close its screen, so the server keeps it open, and `reopen()` (or opening your inventory)
   shows it again at once with no packets. Your inventory's clicks, yours and modules', go through it meanwhile (the

@@ -62,6 +62,7 @@ import dev.myriadclient.impl.render.RenderRouter;
 import dev.myriadclient.impl.service.AntiCheatTracker;
 import dev.myriadclient.impl.service.BreakManager;
 import dev.myriadclient.impl.service.BuildManager;
+import dev.myriadclient.impl.service.ContainerTabs;
 import dev.myriadclient.impl.service.ContainerTracker;
 import dev.myriadclient.impl.service.FriendsManager;
 import dev.myriadclient.impl.service.InventoryManager;
@@ -131,6 +132,7 @@ public final class MyriadImpl implements MyriadApi {
 	private final ServerStatsTracker serverStats = new ServerStatsTracker();
 	private final MenuSync menuSync = new MenuSync();
 	private final ContainerTracker containers = new ContainerTracker(menuSync);
+	private final ContainerTabs containerTabs = new ContainerTabs();
 	private final JobRunner jobs = new JobRunner();
 	private final WindowManager windowManager = new WindowManager();
 	private final CommandManager commandManager = new CommandManager(commands);
@@ -272,6 +274,7 @@ public final class MyriadImpl implements MyriadApi {
 		events.subscribe(antiCheat);
 		events.subscribe(menuSync);
 		events.subscribe(containers);
+		events.subscribe(containerTabs);
 		events.subscribe(jobs);
 		events.subscribe(keybindManager);
 		events.subscribe(commandManager);
@@ -510,6 +513,10 @@ public final class MyriadImpl implements MyriadApi {
 
 	public TickSpeedManager tickSpeedManager() {
 		return tickSpeed;
+	}
+
+	public ContainerTabs containerTabs() {
+		return containerTabs;
 	}
 
 	public ContainerTracker containerTracker() {
