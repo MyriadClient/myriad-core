@@ -57,7 +57,7 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 - **Themed screens and hotbar** (Theme → Preferences → Cosmetics, both on by default): your inventory, chests,
   barrels, ender chests, shulker boxes, hoppers, dispensers, the crafting table, furnaces, smokers, blast furnaces, the
   anvil, smithing table, grindstone, brewing stand, crafter, stonecutter, enchanting table, villager trading, beacon,
-  loom, cartography table and horse, donkey and llama inventories are drawn as a theme window, its surface, border and
+  loom, cartography table, creative inventory and horse, donkey and llama inventories are drawn as a theme window, its surface, border and
   title with a cell for each slot and the slot under the mouse lit in the accent, with every tooltip (items, buttons)
   drawn as the desktop's are, the inventory's effect list as theme cards and the recipe book as a theme window (its
   recipe slots, tabs, filter, page arrows, search box and the button opening it); the hotbar, the off hand's slot and
@@ -65,8 +65,9 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   the theme font's heart, drumstick and shield in their colours (a heart's by its kind, food green under Hunger), the
   hotbar and what sits on it lifted 3 pixels off the screen's edge. Each takes the place of the texture or sprite Minecraft draws,
   in its GUI pixels, so the items, slots, clicks and other mods' slot work stay as they were.
-  A third, Theme Font, sets chat and item counts in the theme's font: it's registered with Minecraft as `myriad:ui`
-  (the theme's sans, falling back to Minecraft's own), so Minecraft wraps chat and finds clicks on its links at the
+  The pause menu's buttons are theme buttons too. A third, Theme Font, sets chat and item counts in the theme's font:
+  it's registered with Minecraft as `myriad:ui` (the theme's semibold sans, falling back to Minecraft's own, rasterised
+  at the GUI scale and again when that changes), so Minecraft wraps chat and finds clicks on its links at the
   widths it draws. `ThemeSettings.themedScreens`, `themedHotbar` and `themeFont` are new; the bundled fonts moved from
   `assets/myriad/fonts/` to `assets/myriad/font/`, where Minecraft's font loader looks.
 - **A box in an open chest opens too** (`Containers.openItem(owner, view, screenSlot, ticks, options)`, new): one of

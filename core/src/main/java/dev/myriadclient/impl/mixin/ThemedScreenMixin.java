@@ -13,6 +13,7 @@ import net.minecraft.client.gui.screens.inventory.BrewingStandScreen;
 import net.minecraft.client.gui.screens.inventory.CartographyTableScreen;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CrafterScreen;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.DispenserScreen;
 import net.minecraft.client.gui.screens.inventory.EnchantmentScreen;
@@ -33,7 +34,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** The screens drawn in the theme: their texture's place taken by the themed window (see ThemedScreens). */
 @Mixin({ContainerScreen.class, ShulkerBoxScreen.class, HopperScreen.class, DispenserScreen.class, InventoryScreen.class, CraftingScreen.class,
 	AbstractFurnaceScreen.class, ItemCombinerScreen.class, GrindstoneScreen.class, BrewingStandScreen.class, CrafterScreen.class, StonecutterScreen.class,
-	EnchantmentScreen.class, MerchantScreen.class, AbstractMountInventoryScreen.class, BeaconScreen.class, LoomScreen.class, CartographyTableScreen.class})
+	EnchantmentScreen.class, MerchantScreen.class, AbstractMountInventoryScreen.class, BeaconScreen.class, LoomScreen.class, CartographyTableScreen.class,
+	CreativeModeInventoryScreen.class})
 public abstract class ThemedScreenMixin {
 	@Inject(method = "extractBackground", at = @At("HEAD"))
 	private void myriad$beginBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta, CallbackInfo ci) {
@@ -44,6 +46,6 @@ public abstract class ThemedScreenMixin {
 		target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blit(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIFFIIII)V"))
 	private void myriad$background(GuiGraphicsExtractor graphics, RenderPipeline pipeline, Identifier texture, int x, int y, float u, float v, int w, int h,
 	                               int textureW, int textureH, Operation<Void> original) {
-		if (!ThemedScreens.background((AbstractContainerScreen<?>) (Object) this, graphics)) original.call(graphics, pipeline, texture, x, y, u, v, w, h, textureW, textureH);
+		if (!ThemedScreens.background((AbstractContainerScreen<?>) (Object) this, graphics, texture)) original.call(graphics, pipeline, texture, x, y, u, v, w, h, textureW, textureH);
 	}
 }

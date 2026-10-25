@@ -75,6 +75,7 @@ import dev.myriadclient.impl.service.ServerStatsTracker;
 import dev.myriadclient.impl.service.TickSpeedManager;
 import dev.myriadclient.impl.share.ShareManager;
 import dev.myriadclient.impl.ui.MyriadTitleScreen;
+import dev.myriadclient.impl.ui.ThemedText;
 import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.ui.panels.ConsoleLog;
 import dev.myriadclient.impl.update.UpdateManager;
@@ -250,6 +251,7 @@ public final class MyriadImpl implements MyriadApi {
 
 		events.subscribe(ActionTiming.get());
 		events.subscribe(RenderRouter.INSTANCE);
+		events.subscribe(ThemedText.INSTANCE);
 		events.subscribe(LeavingGlide.get());
 		hooks.registerCore(Service.ROTATIONS, rotations);
 		hooks.registerCore(Service.INVENTORY, inventory);

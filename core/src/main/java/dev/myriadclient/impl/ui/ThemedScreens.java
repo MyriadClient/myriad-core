@@ -10,6 +10,7 @@ import dev.myriadclient.impl.mixin.AbstractContainerScreenAccessor;
 import dev.myriadclient.impl.render.UiRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractFurnaceScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractMountInventoryScreen;
@@ -18,6 +19,7 @@ import net.minecraft.client.gui.screens.inventory.BrewingStandScreen;
 import net.minecraft.client.gui.screens.inventory.CartographyTableScreen;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CrafterScreen;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.DispenserScreen;
 import net.minecraft.client.gui.screens.inventory.EnchantmentScreen;
@@ -56,6 +58,8 @@ public final class ThemedScreens {
 	private static final float[][] BUBBLES = {{4, 25, 1.5f}, {8, 19.5f, 2}, {3.5f, 13, 1.5f}, {7.5f, 6.5f, 2}, {4, 1.5f, 1.2f}};
 	/** How far left the theme moves an anvil's name box, to centre it (Minecraft's sits right of an icon the theme doesn't draw). */
 	public static final int ANVIL_NAME_SHIFT = 26;
+	/** The themed window this frame (x, y, w, h), for what stands at its edges (a creative inventory's tabs), or null. */
+	private static float @Nullable [] window;
 	/** The recipe book window's left edge this frame (its tabs end there), or NaN before one's drawn. */
 	private static float bookLeft = Float.NaN;
 	/** Whether this frame's background is drawn already: a screen's texture can come in more than one piece (a chest's). */
@@ -75,15 +79,20 @@ public final class ThemedScreens {
 			|| screen instanceof InventoryScreen || screen instanceof CraftingScreen || screen instanceof AbstractFurnaceScreen<?> || screen instanceof ItemCombinerScreen<?>
 			|| screen instanceof GrindstoneScreen || screen instanceof BrewingStandScreen || screen instanceof CrafterScreen || screen instanceof StonecutterScreen
 			|| screen instanceof EnchantmentScreen || screen instanceof MerchantScreen || screen instanceof AbstractMountInventoryScreen<?> || screen instanceof BeaconScreen
-			|| screen instanceof LoomScreen || screen instanceof CartographyTableScreen);
+			|| screen instanceof LoomScreen || screen instanceof CartographyTableScreen || screen instanceof CreativeModeInventoryScreen);
 	}
 
-	/** Draws {@code screen}'s themed window in place of its texture; false to let the texture be drawn. */
-	public static boolean background(AbstractContainerScreen<?> screen, GuiGraphicsExtractor ctx) {
+	/**
+	 * Draws {@code screen}'s themed window in place of its {@code texture} (which tells a creative inventory's tabs
+	 * apart); false to let the texture be drawn.
+	 */
+	public static boolean background(AbstractContainerScreen<?> screen, GuiGraphicsExtractor ctx, Identifier texture) {
 		if (!themed(screen)) return false;
 		if (drawn) return true;
 		drawn = true;
-		MyriadImpl.get().windowManager().painter().paintGui(ctx, c -> paint(c, screen));
+		AbstractContainerScreenAccessor a = (AbstractContainerScreenAccessor) screen;
+		window = new float[]{a.myriad$leftPos(), a.myriad$topPos(), a.myriad$imageWidth(), a.myriad$imageHeight()};
+		MyriadImpl.get().windowManager().painter().paintGui(ctx, c -> paint(c, screen, texture.getPath()));
 		return true;
 	}
 
@@ -92,7 +101,7 @@ public final class ThemedScreens {
 	 * the "+" between an anvil's inputs, and the dim outlines a furnace's flame and arrow and a brewing stand's fuel and
 	 * progress fill over (see {@link #spritePart}). Places are Minecraft's, in the screen's own pixels.
 	 */
-	private static void decorate(UiRenderer c, ThemeSettings t, AbstractContainerScreen<?> screen, float x, float y) {
+	private static void decorate(UiRenderer c, ThemeSettings t, AbstractContainerScreen<?> screen, String texture, float x, float y) {
 		int dim = ColorUtil.withAlpha(t.textDim.argb(), 0x70);
 		switch (screen) {
 			case CraftingScreen s -> {
@@ -127,6 +136,18 @@ public final class ThemedScreens {
 			case CartographyTableScreen s -> {
 				resultCell(c, t, x + 145, y + 39);
 				inset(c, t, x + 66, y + 13, 68, 68);
+			}
+			// The scroll track; on the inventory tab your figure's frame, on the search tab its field.
+			case CreativeModeInventoryScreen s -> {
+				c.roundRect(x + 175, y + 18, 12, 112, 3, ColorUtil.withAlpha(t.textDim.argb(), 30));
+				if (texture.endsWith("tab_inventory.png")) {
+					c.roundRect(x + 73, y + 6, 32, 43, cellRounding(t), t.surface.argb());
+					c.outline(x + 73, y + 6, 32, 43, cellRounding(t), 1, t.inactiveBorder.argb());
+				} else if (texture.endsWith("tab_item_search.png")) {
+					float r = Math.min(t.rounding.get(), 4);
+					c.roundRect(x + 79, y + 4, 88, 12, r, t.surface.argb());
+					c.outline(x + 79, y + 4, 88, 12, r, 1, t.inactiveBorder.argb());
+				}
 			}
 			// The animal's frame, as your figure's is in the inventory.
 			case AbstractMountInventoryScreen<?> s -> {
@@ -347,8 +368,25 @@ public final class ThemedScreens {
 			});
 			case "container/beacon/confirm" -> posed(ctx, c -> centred(c, CHECK, x, y, w, h, theme().accent.argb()));
 			case "container/beacon/cancel" -> posed(ctx, c -> centred(c, CROSS, x, y, w, h, theme().red.argb()));
+			// A creative inventory's tabs, above and below the window: the selected one joins it, as the recipe book's do.
+			case String tab when tab.startsWith("container/creative_inventory/tab_") -> posed(ctx, c -> {
+				ThemeSettings t = theme();
+				float r = Math.min(t.rounding.get(), 4), b = t.borderSize.get();
+				boolean selected = tab.contains("_selected"), top = tab.contains("tab_top");
+				c.push();
+				if (window != null) {
+					// Not past the window's edge it stands on (inside it is the window's own).
+					if (top) c.clip(x - 4, y - 4, w + 8, window[1] + b - (y - 4));
+					else c.clip(x - 4, window[1] + window[3] - b, w + 8, y + h + 4 - (window[1] + window[3] - b));
+				}
+				c.roundRect(x, y, w, h, r, selected ? t.windowBackground.argb() : ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xC0, ColorUtil.alpha(t.windowBackground.argb()) - 0x20)));
+				if (selected) c.gradientOutline(x, y, w, h, r, Math.max(1, b), t.activeBorderFrom.argb(), t.activeBorderTo.argb(), t.borderAngle.get().floatValue());
+				else c.outline(x, y, w, h, r, 1, t.inactiveBorder.argb());
+				c.pop();
+			});
 			// List scroll thumbs.
-			case "container/stonecutter/scroller", "container/stonecutter/scroller_disabled", "container/villager/scroller", "container/villager/scroller_disabled",
+			case "container/creative_inventory/scroller", "container/creative_inventory/scroller_disabled",
+			     "container/stonecutter/scroller", "container/stonecutter/scroller_disabled", "container/villager/scroller", "container/villager/scroller_disabled",
 			     "container/loom/scroller", "container/loom/scroller_disabled" -> posed(ctx, c -> {
 				ThemeSettings t = theme();
 				c.roundRect(x + 1, y, w - 2, h, (w - 2) / 2f, path.endsWith("disabled") ? ColorUtil.withAlpha(t.textDim.argb(), 0x60) : t.accent.argb());
@@ -416,12 +454,14 @@ public final class ThemedScreens {
 	}
 
 	/**
-	 * A button on a screen drawn in the theme (a villager's offers), as a theme button, its label Minecraft's; {@code argb}
+	 * A button on a screen drawn in the theme (a villager's offers) or the pause menu, as a theme button, its label Minecraft's; {@code argb}
 	 * is the tint Minecraft gives it (its fade). False elsewhere, or for another sprite.
 	 */
 	public static boolean button(GuiGraphicsExtractor ctx, Identifier sprite, int x, int y, int w, int h, int argb) {
 		String path = sprite.getPath();
-		if (!path.startsWith("widget/button") || !screenThemed()) return false;
+		// The pause menu's too: its buttons are the theme's while Themed Screens is on.
+		boolean pause = Myriad.isReady() && theme().themedScreens.get() && Minecraft.getInstance().gui.screen() instanceof PauseScreen;
+		if (!path.startsWith("widget/button") || !screenThemed() && !pause) return false;
 		return posed(ctx, c -> {
 			ThemeSettings t = theme();
 			boolean off = path.endsWith("disabled"), hover = path.endsWith("highlighted");
@@ -495,7 +535,7 @@ public final class ThemedScreens {
 		return MyriadImpl.get().windowManager().theme();
 	}
 
-	private static void paint(UiRenderer c, AbstractContainerScreen<?> screen) {
+	private static void paint(UiRenderer c, AbstractContainerScreen<?> screen, String texture) {
 		ThemeSettings theme = theme();
 		AbstractContainerScreenAccessor s = (AbstractContainerScreenAccessor) screen;
 		float x = s.myriad$leftPos(), y = s.myriad$topPos(), w = s.myriad$imageWidth(), h = s.myriad$imageHeight();
@@ -507,14 +547,11 @@ public final class ThemedScreens {
 		boolean inventory = screen instanceof InventoryScreen;
 		float size = c.defaultFontSize();
 		String title = c.ellipsize(FontFamily.SANS_BOLD, size, screen.getTitle().getString(), w - 16);
-		// A title Minecraft centred is centred again for the theme's font, and an anvil's or smithing table's, which sat
-		// beside an icon the theme doesn't draw.
-		int vanillaWidth = Minecraft.getInstance().font.width(screen.getTitle());
-		boolean centred = Math.abs(s.myriad$titleLabelX() - (s.myriad$imageWidth() - vanillaWidth) / 2) <= 1 || screen instanceof ItemCombinerScreen<?>;
-		float tx = centred && !inventory ? x + (w - c.textWidth(FontFamily.SANS_BOLD, size, title)) / 2 : x + s.myriad$titleLabelX();
-		// A villager's and a beacon's screens draw their own labels (a villager's level beside its name, a beacon's powers),
-		// only recoloured (textColor).
-		boolean ownLabels = screen instanceof MerchantScreen || screen instanceof BeaconScreen;
+		// Titles centred over the window, but your inventory's (Crafting), over its grid beside your figure.
+		float tx = !inventory ? x + (w - c.textWidth(FontFamily.SANS_BOLD, size, title)) / 2 : x + s.myriad$titleLabelX();
+		// A villager's, a beacon's and the creative inventory's screens draw their own labels (a villager's level beside its
+		// name, a beacon's powers, the tab's name), only recoloured (textColor).
+		boolean ownLabels = screen instanceof MerchantScreen || screen instanceof BeaconScreen || screen instanceof CreativeModeInventoryScreen;
 		if (!ownLabels) c.text(FontFamily.SANS_BOLD, size, title, tx, y + s.myriad$titleLabelY(), theme.text.argb());
 		if (!inventory && !ownLabels) c.text(s.myriad$playerInventoryTitle().getString(), x + s.myriad$inventoryLabelX(), y + s.myriad$inventoryLabelY(), theme.textDim.argb());
 
@@ -525,7 +562,7 @@ public final class ThemedScreens {
 			c.roundRect(x + slot.x + CELL_AT, y + slot.y + CELL_AT, CELL, CELL, cr, theme.surface.argb());
 			c.outline(x + slot.x + CELL_AT, y + slot.y + CELL_AT, CELL, CELL, cr, 1, edge);
 		}
-		decorate(c, theme, screen, x, y);
+		decorate(c, theme, screen, texture, x, y);
 		if (inventory) {
 			// Your figure's frame, and the arrow from the crafting grid to what it makes.
 			c.roundRect(x + 26, y + 8, 49, 70, cr, theme.surface.argb());
