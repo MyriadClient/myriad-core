@@ -569,9 +569,9 @@ public final class InventoryManager implements Inventory {
 		return to >= 0 && moveToHotbar(inventoryIndex, to) ? to : -1;
 	}
 
-	/** A hotbar slot to bring something into (see {@link Borrows#roomFor}), or -1. */
-	int hotbarRoom() {
-		return borrows.roomFor(s -> true);
+	/** A hotbar slot to bring something into, an empty one or else one holding what {@code replaceable} accepts (see {@link Borrows#roomFor}), or -1. */
+	int hotbarRoom(Predicate<ItemStack> replaceable) {
+		return borrows.roomFor(replaceable);
 	}
 
 	@Override

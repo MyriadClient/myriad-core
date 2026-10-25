@@ -317,6 +317,8 @@ public final class BreakManager implements Breaking {
 		if (!rebreakReady) return;
 		BreakJob j = find(rebreakPos);
 		if (j == null || j.phase != BreakJob.Phase.QUEUED || !j.packet() || !aim.canAct(j) || !budget(1)) return;
+		// Its tool still on its way from the inventory: a finish breaks with whatever's held (an ender chest to obsidian).
+		if (tools.toolComing() == j) return;
 		// Fast Grim: past Grim's allowance, a decoy first and the finish next tick.
 		if (!rebreakable(j.pos, j.options.mode() == Mode.FAST) && !(j.grim() && rebreakable(j.pos, true) && grimLets(j))) return;
 		BlockState state = mc.level.getBlockState(j.pos);

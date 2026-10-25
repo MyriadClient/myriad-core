@@ -64,9 +64,15 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   the chest's own (a barrel's, shulker box's, ender chest's, hopper's, dispenser's) is swapped into the hotbar through
   its screen and the chest closed in the tick it's placed; one of yours goes as before, the chest closed first. The
   session's `finish()` puts it back and opens the chest again, leaving it open: a box from the chest goes back into its
-  slot there, and what made room for it in the hotbar, left there meanwhile, comes back out. 300 ms on the Grim test
+  slot there. With the hotbar full, what makes room for it waits in an empty slot of your inventory (two swaps in the
+  tick), only with that full too in the box's place in the chest, and never the Silk Touch pickaxe an ender chest is
+  picked back up with; an ender chest is left standing, saying where, rather than broken without one. A shulker box
+  goes only a block above your head (its lid right over it pushes you down), else beside you. 300 ms on the Grim test
   server through 150 ms of lag, as from the hotbar. The dev console's `openitem c<slot>` opens one from the open
   container.
+- **A block broken again by a finish alone waits for its tool from the inventory**, as a first break does: it broke
+  with whatever was held, so an ender chest put down twice at one spot came back as obsidian (seen on 2b2t). And
+  opening a container in the tick another closed no longer sends your inventory's close as well.
 - **Trying a shared config turns on only what was on for the sharer**: its control panel took every module in the
   share, and a whole config lists every module, most of them off, so turning it on turned on everything you have. A
   share with none on (settings for modules you turn on yourself) still brings them all.

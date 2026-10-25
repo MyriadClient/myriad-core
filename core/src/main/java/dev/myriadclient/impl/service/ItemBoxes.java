@@ -26,6 +26,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -101,6 +102,8 @@ final class ItemBoxes {
 		private boolean ender;
 		/** The hotbar slot it's placed from: its own, or the one it was brought into from the inventory. */
 		private int from = -1;
+		/** With the hotbar full, the empty inventory slot what made room for a box from a container waits in, or -1. */
+		private int parked = -1;
 		private @Nullable Spot spot;
 		private @Nullable Containers.View view;
 		private boolean placed;
@@ -194,17 +197,23 @@ final class ItemBoxes {
 		}
 
 		/**
-		 * Swaps the box out of the container's slot into a hotbar slot, through the container's screen, and closes it:
-		 * what was in the hotbar slot waits in the box's place there until it's back.
+		 * Swaps the box out of the container's slot into a hotbar slot, through the container's screen, and closes it. Into
+		 * an empty hotbar slot if there is one; else what was in the hotbar slot waits in an empty slot of your inventory
+		 * (two swaps in the tick), or, with that full too, in the box's place in the container, until it's back.
 		 */
 		private Progress<Void> swapOut(JobContext ctx) {
 			if (!origin.isOpen()) return Progress.failed(Why.of(Why.CANCELLED, "the container closed"));
-			int to = MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory ? inventory.hotbarRoom() : -1;
+			var inv = Client.player().getInventory();
+			// Never the Silk Touch pickaxe an ender chest is picked back up with.
+			int to = MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory ? inventory.hotbarRoom(s -> !ender || !silkTouch(s)) : -1;
 			if (to >= 0 && Myriad.inventory().prepareClick()) {
+				int spare = inv.getItem(to).isEmpty() ? -1 : Myriad.inventory().findInInventory(ItemStack::isEmpty);
+				if (spare >= 0) origin.click(origin.playerSlot(spare), to, ContainerInput.SWAP);
 				origin.swapWithHotbar(own, to);
-				if (Client.player().getInventory().getItem(to).is(box.getItem())) {
+				if (inv.getItem(to).is(box.getItem())) {
 					Client.player().closeContainer();
 					from = to;
+					parked = spare;
 					return Progress.done();
 				}
 			}
@@ -258,6 +267,9 @@ final class ItemBoxes {
 			ItemStack[] before = new ItemStack[36];
 			int[] held = {0};
 			Step<Void> close = Steps.closeContainer().recover(why -> Step.nothing());
+			// An ender chest broken without Silk Touch is obsidian: rather left standing, saying where.
+			Step<Void> silk = Step.of("Silk Touch", () -> ctx -> !ender || Myriad.inventory().count(ItemBoxes::silkTouch) > 0 ? Progress.done()
+				: Progress.failed(Why.of(Why.NO_ITEM, "no Silk Touch pickaxe to pick the ender chest back up: it's left at " + spot.pos().toShortString(), spot.pos())));
 			Step<Void> breakIt = Step.run("Before", () -> {
 				LocalPlayer p = Client.player();
 				for (int i = 0; i < 36; i++) before[i] = p.getInventory().getItem(i).copy();
@@ -279,15 +291,17 @@ final class ItemBoxes {
 				return ctx.ticks() > RETURN_TICKS ? Progress.done() : Progress.running();
 			});
 			Step<Void> reopen = origin == null ? Step.nothing() : Steps.openContainer(origin.pos(), ticks, options).then(this::intoContainer).recover(why -> Step.nothing());
-			return close.then(breakIt).then(pickUp).then(home).then(reopen).named(() -> ender ? "Putting the ender chest back" : "Putting the shulker box back");
+			return close.then(silk).then(breakIt).then(pickUp).then(home).then(reopen).named(() -> ender ? "Putting the ender chest back" : "Putting the shulker box back");
 		}
 
-		/** Back into the container's slot it came from, swapping out what waited there in its place. */
+		/** Back into the container's slot it came from, swapping out what waited there in its place (or in your inventory). */
 		private Step<Void> intoContainer(Containers.View view) {
 			return Step.of("Into the container", () -> ctx -> {
 				if (own < 0 || !view.isOpen() || !Client.player().getInventory().getItem(from).is(box.getItem())) return Progress.done();
 				if (!Myriad.inventory().prepareClick()) return ctx.ticks() > RETURN_TICKS ? Progress.done() : Progress.running();
 				view.swapWithHotbar(own, from);
+				// And what made room for it, from the inventory slot it waited in.
+				if (parked >= 0 && Client.player().getInventory().getItem(from).isEmpty()) view.click(view.playerSlot(parked), from, ContainerInput.SWAP);
 				return Progress.done();
 			});
 		}
@@ -390,14 +404,15 @@ final class ItemBoxes {
 	/**
 	 * Above your head, so it falls back on you when it's broken, and placing and opening it share one look straight up:
 	 * into the empty space itself where air placement is on, else against the underside of the block over it. A shulker
-	 * box then faces down, so it goes a block higher where there's room: its lid opens into the space below it, and
-	 * one opening into the space your head is in pushes you down. An ender chest stays shut under a solid block, so it
-	 * only goes there by air placement.
+	 * box then faces down, so it goes a block higher, its lid opening into the space below it (one opening into the space
+	 * your head is in pushes you down), and with no room there it goes beside you. An ender chest has no lid to push, so
+	 * right over your head does too, but it stays shut under a solid block, so it only goes there by air placement.
 	 */
 	private static @Nullable Spot above(Placement.Options options, boolean ender) {
 		BlockPos head = BlockPos.containing(Client.player().getX(), Math.ceil(Client.player().getBoundingBox().maxY), Client.player().getZ());
 		Spot higher = above(options, ender, head.above());
-		return higher != null ? higher : above(options, ender, head);
+		// Right over your head only an ender chest: a shulker box's lid there pushes you down as it opens.
+		return higher != null || !ender ? higher : above(options, true, head);
 	}
 
 	private static @Nullable Spot above(Placement.Options options, boolean ender, BlockPos pos) {

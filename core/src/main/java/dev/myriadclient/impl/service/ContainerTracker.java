@@ -257,7 +257,8 @@ public final class ContainerTracker implements Containers {
 
 	private void closeNow() {
 		closeWanted = false;
-		if (mc.player != null && current != null) mc.player.closeContainer();
+		// Only while it's still the menu open: one closed this tick (it's forgotten next tick) would send your inventory's close.
+		if (mc.player != null && current != null && mc.player.containerMenu == current.handler) mc.player.closeContainer();
 	}
 
 	private final class ViewImpl implements View {
