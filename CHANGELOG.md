@@ -40,16 +40,20 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   back to what the server last had, as its answer would have, and the placement counts as failed; the same when an
   action times out. A dropped placement at the end of a burst used to stay a ghost, and builds took it as placed.
 - **A shulker box or ender chest from the inventory opens a round trip sooner** (`Containers.openItem`): it goes
-  above your head where it can (into the empty space with Air Place, else under a block over it; an ender chest only
-  the first way, as it stays shut under a solid block), so it falls back on you when it's broken, else beside you as
-  before, and it's opened with the next click instead of once the server has answered the placement. Where looks are
-  checked, that click waits for the movement packet after the placement: Grim takes a placement into its world only
-  then, and a click on the block before it is a click on air there (AirLiquidPlace). One from the main inventory gives
-  back what made room for it through the box's own screen, instead of before it opens, and an ender chest from a
-  stack no longer waits half a second for its slot to empty. On the Grim test server through 150 ms of lag: a shulker
-  box from the hotbar opens in 270 to 300 ms (500), an ender chest from a stack in 270 to 300 (1000), one from the
-  main inventory in 400 to 470 (700). `Placement.use` may now follow a placement at the same block that hasn't been
-  answered; it goes after it.
+  above your head where it can, a block up if there's room (a shulker box's lid opening into your head's space pushed
+  you down), into the empty space with Air Place, else under a block over it (an ender chest only the first way, as it
+  stays shut under a solid block), so it falls back on you when it's broken; else beside you as before. It's opened
+  with the next click instead of once the server has answered the placement. Where looks are checked, that click
+  waits for the movement packet after the placement: Grim takes a placement into its world only then, and a click on
+  the block before it is a click on air there (AirLiquidPlace). One from the main inventory is brought into the hotbar
+  in the tick it's placed, after the look there has gone out (a slot a click changed may be placed from only in that
+  tick, else a round trip later), and what made room for it goes back through the box's own screen once it's open; an
+  ender chest from a stack no longer waits half a second for its slot to empty. An ender chest is picked back up with
+  a Silk Touch pickaxe from anywhere in the inventory, swapped in for the break, where one had to be in the hotbar and
+  was held in view. On the Grim test server through 150 ms of lag, every kind opens in 270 to 300 ms (500 from the
+  hotbar before, 1000 for an ender chest from a stack, 700 from the main inventory), no flags; on 2b2t, 150 to 220 ms
+  after the click. `Placement.use` may now follow a placement at the same block that hasn't been answered; it goes
+  after it.
 - **Trying a shared config turns on only what was on for the sharer**: its control panel took every module in the
   share, and a whole config lists every module, most of them off, so turning it on turned on everything you have. A
   share with none on (settings for modules you turn on yourself) still brings them all.

@@ -12,6 +12,7 @@ import dev.myriadclient.api.job.Why;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Placement;
+import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.util.BlockInfo;
 import dev.myriadclient.api.util.Client;
 import dev.myriadclient.api.util.ItemInfo;
@@ -29,6 +30,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -49,6 +51,8 @@ final class ItemBoxes {
 	private static final int PLACE_TICKS = 60, GIVE_BACK_TICKS = 10, BREAK_TICKS = 20 * 10, PICKUP_TICKS = 60, RETURN_TICKS = 20;
 	/** Times the opening click is made again when it didn't go (no look onto the box in time), the box being there. */
 	private static final int OPEN_TRIES = 3;
+	/** How long it may wait to look at its spot before bringing a box from the inventory into the hotbar anyway. */
+	private static final int LOOK_TICKS = 3;
 	/** Ticks to wait for the box to be picked up where it fell before stepping towards it. */
 	private static final int WALK_AFTER_TICKS = 12;
 	/** Owns the put-back jobs: they finish whatever happens to whoever opened the box. */
@@ -77,7 +81,6 @@ final class ItemBoxes {
 		private final Placement.Options options;
 		private ItemStack box = ItemStack.EMPTY;
 		private boolean ender;
-		private int silk = -1;
 		/** The hotbar slot it's placed from: its own, or the one it was brought into from the inventory. */
 		private int from = -1;
 		private @Nullable Spot spot;
@@ -114,10 +117,8 @@ final class ItemBoxes {
 				box = Client.player().getInventory().getItem(index).copy();
 				ender = box.is(Items.ENDER_CHEST);
 				if (!ender && !ItemInfo.isShulkerBox(box)) return Progress.failed(Why.of(Why.NO_ITEM, "no shulker box or ender chest in slot " + index));
-				if (ender) {
-					silk = Myriad.inventory().findInHotbar(s -> s.is(ItemTags.PICKAXES) && ItemInfo.enchantmentLevel(s, Enchantments.SILK_TOUCH) > 0);
-					if (silk < 0) return Progress.failed(Why.of(Why.NO_ITEM, "a Silk Touch pickaxe in the hotbar, to pick the ender chest back up"));
-				}
+				if (ender && Myriad.inventory().count(ItemBoxes::silkTouch) == 0)
+					return Progress.failed(Why.of(Why.NO_ITEM, "a Silk Touch pickaxe, to pick the ender chest back up"));
 				spot = spot(options, ender);
 				if (spot == null) return Progress.failed(Why.of(Why.NO_ROOM, "nowhere above or beside you to put it down"));
 				// Placing with your inventory open would click it, not the floor.
@@ -129,6 +130,15 @@ final class ItemBoxes {
 				if (index < 9) {
 					from = index;
 					return Progress.done();
+				}
+				// Where looks are checked, the placement turns first and goes the tick after; a slot a click changed may
+				// be placed from only in the tick of the click (or a round trip on). So it looks first, then pulls.
+				if (options.rotate() && ctx.ticks() < LOOK_TICKS) {
+					float[] look = Myriad.rotations().anglesTo(spot.click().getLocation());
+					if (!Myriad.rotations().isFacing(look[0], look[1], 1)) {
+						Myriad.rotations().request(ctx.job(), look[0], look[1], Rotations.PRIORITY_HIGH, Rotations.Options.MOVE_FIX, null);
+						return Progress.running();
+					}
 				}
 				int to = Myriad.inventory().pullToHotbar(index, s -> true);
 				if (to >= 0) {
@@ -200,21 +210,17 @@ final class ItemBoxes {
 
 		Step<Void> putBack() {
 			ItemStack[] before = new ItemStack[36];
-			int[] selected = {-1}, held = {0};
+			int[] held = {0};
 			Step<Void> close = Steps.closeContainer().recover(why -> Step.nothing());
 			Step<Void> breakIt = Step.run("Before", () -> {
 				LocalPlayer p = Client.player();
 				for (int i = 0; i < 36; i++) before[i] = p.getInventory().getItem(i).copy();
 				held[0] = count(box);
-				// The Silk Touch pickaxe, not the fastest tool: an ender chest breaks to obsidian otherwise.
-				if (ender) {
-					selected[0] = p.getInventory().getSelectedSlot();
-					Myriad.inventory().select(silk);
-				}
-			}).then(Steps.breakBlock(spot.pos(), 10, ender ? Breaking.Options.forServer().withAutoTool(false) : Breaking.Options.forServer()).timeout(BREAK_TICKS))
-				.finallyDo(() -> {
-					if (selected[0] >= 0 && Client.inGame()) Myriad.inventory().select(selected[0]);
-				});
+				// The Silk Touch pickaxe, not the fastest tool: an ender chest breaks to obsidian otherwise. Every other
+				// tool for it is spared, so the break's own tool choice takes that one, from the inventory too.
+				if (ender) Myriad.inventory().spare(PUT_BACK, s -> s.getDestroySpeed(Blocks.ENDER_CHEST.defaultBlockState()) > 1 && !silkTouch(s));
+			}).then(Steps.breakBlock(spot.pos(), 10, Breaking.Options.forServer()).timeout(BREAK_TICKS))
+				.finallyDo(() -> Myriad.inventory().spare(PUT_BACK, null));
 			Step<Void> pickUp = Step.of("Picking it up", () -> new PickUp(box, spot.pos(), held[0]));
 			Step<Void> home = Step.of("Back to its slot", () -> ctx -> {
 				LocalPlayer p = Client.player();
@@ -301,6 +307,10 @@ final class ItemBoxes {
 		}
 	}
 
+	private static boolean silkTouch(ItemStack s) {
+		return s.is(ItemTags.PICKAXES) && ItemInfo.enchantmentLevel(s, Enchantments.SILK_TOUCH) > 0;
+	}
+
 	/** How many of the box's item (its colour, or ender chests) the inventory holds. */
 	private static int count(ItemStack box) {
 		int n = 0;
@@ -321,14 +331,21 @@ final class ItemBoxes {
 	/**
 	 * Above your head, so it falls back on you when it's broken, and placing and opening it share one look straight up:
 	 * into the empty space itself where air placement is on, else against the underside of the block over it. A shulker
-	 * box then faces down, its lid opening into the space your head is in (players don't stop it); an ender chest stays
-	 * shut under a solid block, so it only goes there by air placement.
+	 * box then faces down, so it goes a block higher where there's room: its lid opens into the space below it, and
+	 * one opening into the space your head is in pushes you down. An ender chest stays shut under a solid block, so it
+	 * only goes there by air placement.
 	 */
 	private static @Nullable Spot above(Placement.Options options, boolean ender) {
+		BlockPos head = BlockPos.containing(Client.player().getX(), Math.ceil(Client.player().getBoundingBox().maxY), Client.player().getZ());
+		Spot higher = above(options, ender, head.above());
+		return higher != null ? higher : above(options, ender, head);
+	}
+
+	private static @Nullable Spot above(Placement.Options options, boolean ender, BlockPos pos) {
 		LocalPlayer p = Client.player();
 		Level level = Client.level();
-		BlockPos pos = BlockPos.containing(p.getX(), Math.ceil(p.getBoundingBox().maxY), p.getZ()), head = pos.below(), over = pos.above();
-		if (!level.getBlockState(pos).canBeReplaced() || !level.getBlockState(head).getCollisionShape(level, head).isEmpty()) return null;
+		BlockPos under = pos.below(), over = pos.above();
+		if (!level.getBlockState(pos).canBeReplaced() || !level.getBlockState(under).getCollisionShape(level, under).isEmpty()) return null;
 		if (p.getBoundingBox().intersects(new AABB(pos)) || !Myriad.placement().check(pos, options).ok()) return null;
 		BlockState overState = level.getBlockState(over);
 		if (ender && overState.isRedstoneConductor(level, over)) return null;

@@ -81,7 +81,9 @@ final class BreakTools {
 		int selected = mc.player.getInventory().getSelectedSlot();
 		if (!o.autoTool()) return selected;
 		int best = Mining.fastestSlot(state, 0, 9);
-		return best < 0 || Mining.delta(state, pos, selected) >= Mining.delta(state, pos, best) ? selected : best;
+		// What you hold is passed over too when it's spared (an ender chest's plain pickaxe, while one with Silk Touch is wanted).
+		boolean spared = Myriad.inventory().isSpared(mc.player.getInventory().getItem(selected));
+		return best < 0 || !spared && Mining.delta(state, pos, selected) >= Mining.delta(state, pos, best) ? selected : best;
 	}
 
 	/** The break waiting for its better tool to come in (it doesn't start until then), or null. */

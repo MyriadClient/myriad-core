@@ -71,13 +71,13 @@ public interface Containers {
 
 	/**
 	 * Opens the shulker box or ender chest at inventory index {@code inventoryIndex} (0-35) where you stand: places it
-	 * above your head (into the empty space with {@link Placement.Options#airPlace()}, else against a block over it; an
-	 * ender chest only the first way, as it won't open under a solid block), or else beside you on the floor, opens it
-	 * in the same tick, and completes with the session once its contents have arrived. Where the server checks looks
+	 * above your head, a block up where there's room (into the empty space with {@link Placement.Options#airPlace()},
+	 * else against a block over it; an ender chest only the first way, as it won't open under a solid block), or else
+	 * beside you on the floor, opens it in the same tick, and completes with the session once its contents have arrived. Where the server checks looks
 	 * ({@code options}, usually {@code Placement.Options.forServer()}) both clicks go with one look. One from the
 	 * inventory is brought into the hotbar for the placement, and what it displaced goes back once it's open.
-	 * {@link ItemSession#finish()} puts it back, where it came from. An ender chest needs a Silk Touch pickaxe in the
-	 * hotbar, or breaking it would only drop obsidian.
+	 * {@link ItemSession#finish()} puts it back, where it came from. An ender chest needs a Silk Touch pickaxe (anywhere
+	 * in the inventory: it's swapped in for the break), or breaking it would only drop obsidian.
 	 * <p>
 	 * It runs as a job of {@code owner}'s (a module, or a job: then it ends with that job), so the Jobs window shows it.
 	 * Fails with a {@code JobException} whose reason says why: {@code NO_ITEM} (not a box there, or no Silk Touch
