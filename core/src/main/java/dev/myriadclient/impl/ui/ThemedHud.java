@@ -14,16 +14,21 @@ import java.util.function.Consumer;
 /**
  * The hotbar, the off hand's slot and the experience bar drawn in the theme while Theme → Preferences → Themed Hotbar
  * is on: each sprite Minecraft draws for them is swapped for the theme's own shapes in the same place, so its items,
- * counts and the bars' sizes stay Minecraft's.
+ * counts and the bars' sizes stay Minecraft's. The hotbar and what sits on it (hearts, food, armour, the bars) are
+ * moved up {@link #MARGIN} off the screen's edge (HudMixin).
  */
 public final class ThemedHud {
 	/** A hotbar cell around its 16-pixel item; hotbar items are 20 apart, so two pixels between. */
 	private static final float CELL = 18;
+	/** GUI pixels between the hotbar and the bottom of the screen. */
+	public static final int MARGIN = 3;
+	/** Where Minecraft's experience bar divides its 18 segments: every 10 pixels, a double line in the middle. */
+	private static final int[] NOTCHES = {10, 20, 30, 40, 50, 60, 70, 80, 90, 91, 101, 111, 121, 131, 141, 151, 161, 171};
 
 	private ThemedHud() {
 	}
 
-	private static boolean on() {
+	public static boolean on() {
 		return Myriad.isReady() && theme().themedHotbar.get();
 	}
 
@@ -65,6 +70,7 @@ public final class ThemedHud {
 		return paint(ctx, c -> {
 			ThemeSettings t = theme();
 			c.roundRect(x, y, w, h, h / 2f, ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xC0, ColorUtil.alpha(t.windowBackground.argb()))));
+			notches(c, x, y, w, h, ColorUtil.withAlpha(t.textDim.argb(), 0x70));
 			c.outline(x, y, w, h, h / 2f, 1, ColorUtil.withAlpha(t.inactiveBorder.argb(), 0x80));
 		});
 	}
@@ -76,6 +82,7 @@ public final class ThemedHud {
 		return paint(ctx, c -> {
 			ThemeSettings t = theme();
 			c.gradientRect(x, y, Math.max(w, h), h, h / 2f, t.activeBorderFrom.argb(), t.activeBorderTo.argb(), 0);
+			notches(c, x, y, Math.max(w, h), h, ColorUtil.withAlpha(t.windowBackground.argb(), 0xC0));
 		});
 	}
 
@@ -93,6 +100,11 @@ public final class ThemedHud {
 		});
 	}
 
+	/** The bar's segment lines within its first {@code w} pixels. */
+	private static void notches(UiRenderer c, float x, float y, float w, float h, int color) {
+		for (int n : NOTCHES) if (n < w) c.rect(x + n, y + 1, 1, h - 2, color);
+	}
+
 	/** A small window's surface and border, as the desktop draws its windows. */
 	private static void window(UiRenderer c, ThemeSettings t, float x, float y, float w, float h) {
 		float r = Math.min(t.rounding.get(), h / 2), b = t.borderSize.get();
@@ -105,7 +117,12 @@ public final class ThemedHud {
 	}
 
 	private static boolean paint(GuiGraphicsExtractor ctx, Consumer<UiRenderer> draw) {
-		MyriadImpl.get().windowManager().painter().paintGui(ctx, draw);
+		// Where Minecraft's own drawing is moved to (the margin), which the renderer doesn't follow by itself.
+		float dx = ctx.pose().m20(), dy = ctx.pose().m21();
+		MyriadImpl.get().windowManager().painter().paintGui(ctx, c -> {
+			c.translate(dx, dy);
+			draw.accept(c);
+		});
 		return true;
 	}
 }

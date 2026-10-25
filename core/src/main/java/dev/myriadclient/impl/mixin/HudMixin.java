@@ -8,6 +8,7 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import dev.myriadclient.api.util.Slots;
 import dev.myriadclient.impl.ui.ThemedHud;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.Hud;
@@ -16,6 +17,8 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * The hotbar, the selected item's name and the armour bar show what masks and borrows keep them showing (see
@@ -31,6 +34,24 @@ public abstract class HudMixin {
 	@ModifyExpressionValue(method = "extractItemHotbar", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/player/Player;getOffhandItem()Lnet/minecraft/world/item/ItemStack;"))
 	private ItemStack myriad$shownOffhand(ItemStack stack) {
 		return Myriad.isReady() ? Myriad.inventory().shown(Slots.OFF_HAND) : stack;
+	}
+
+	/** Whether this frame's hotbar and what sits on it were moved up off the screen's edge (see ThemedHud#MARGIN). */
+	private boolean myriad$lifted;
+
+	@Inject(method = "extractHotbarAndDecorations", at = @At("HEAD"))
+	private void myriad$lift(GuiGraphicsExtractor graphics, DeltaTracker delta, CallbackInfo ci) {
+		myriad$lifted = ThemedHud.on();
+		if (myriad$lifted) {
+			graphics.pose().pushMatrix();
+			graphics.pose().translate(0, -ThemedHud.MARGIN);
+		}
+	}
+
+	@Inject(method = "extractHotbarAndDecorations", at = @At("TAIL"))
+	private void myriad$lower(GuiGraphicsExtractor graphics, DeltaTracker delta, CallbackInfo ci) {
+		if (myriad$lifted) graphics.pose().popMatrix();
+		myriad$lifted = false;
 	}
 
 	/** The hotbar's pieces, drawn in the theme while it's on (see ThemedHud). */
