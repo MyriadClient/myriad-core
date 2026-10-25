@@ -61,6 +61,19 @@ public abstract class HudMixin {
 		if (!ThemedHud.hotbar(graphics, sprite, x, y)) original.call(graphics, pipeline, sprite, x, y, w, h);
 	}
 
+	/** Hearts and food, each icon in the theme where Minecraft draws it (its wave, shake and flashing are Minecraft's own). */
+	@WrapOperation(method = {"extractHeart", "extractFood"}, at = @At(value = "INVOKE",
+		target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIII)V"))
+	private void myriad$statusIcon(GuiGraphicsExtractor graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h, Operation<Void> original) {
+		if (!ThemedHud.statusIcon(graphics, sprite, x, y)) original.call(graphics, pipeline, sprite, x, y, w, h);
+	}
+
+	@WrapOperation(method = "extractArmor", at = @At(value = "INVOKE",
+		target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIII)V"))
+	private static void myriad$armorIcon(GuiGraphicsExtractor graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h, Operation<Void> original) {
+		if (!ThemedHud.statusIcon(graphics, sprite, x, y)) original.call(graphics, pipeline, sprite, x, y, w, h);
+	}
+
 	@WrapOperation(method = "extractHotbarAndDecorations", at = @At(value = "INVOKE",
 		target = "Lnet/minecraft/client/gui/contextualbar/ContextualBar;extractExperienceLevel(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/gui/Font;I)V"))
 	private void myriad$level(GuiGraphicsExtractor graphics, Font font, int level, Operation<Void> original) {

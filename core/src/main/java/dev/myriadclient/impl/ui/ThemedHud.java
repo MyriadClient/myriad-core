@@ -20,10 +20,15 @@ import java.util.function.Consumer;
 public final class ThemedHud {
 	/** A hotbar cell around its 16-pixel item; hotbar items are 20 apart, so two pixels between. */
 	private static final float CELL = 18;
+	/** The theme icon font's heart and shield (Material Design) and drumstick (Font Awesome), at a size that fills a 9-pixel icon. */
+	private static final String HEART = "\uDB80\uDED1", DRUMSTICK = "\uEEF9", SHIELD = "\uDB81\uDC98";
+	private static final float ICON_SIZE = 10;
+	/** Heart colours by kind, and food's: soft enough to sit with the theme's own. */
+	private static final int RED = 0xFFF38BA8, POISONED = 0xFFA6E3A1, WITHERED = 0xFF6C7086, GOLDEN = 0xFFF9E2AF, FROZEN = 0xFF89DCEB, FOOD = 0xFFFAB387;
 	/** GUI pixels between the hotbar and the bottom of the screen. */
 	public static final int MARGIN = 3;
-	/** Where Minecraft's experience bar divides its 18 segments: every 10 pixels, a double line in the middle. */
-	private static final int[] NOTCHES = {10, 20, 30, 40, 50, 60, 70, 80, 90, 91, 101, 111, 121, 131, 141, 151, 161, 171};
+	/** The experience bar drawn thinner than Minecraft's, as the desktop's progress bars are: this far in from its top and bottom. */
+	private static final float BAR_INSET = 1;
 
 	private ThemedHud() {
 	}
@@ -67,12 +72,7 @@ public final class ThemedHud {
 	/** The experience bar's track, where Minecraft puts it; false to let Minecraft draw it. */
 	public static boolean experienceTrack(GuiGraphicsExtractor ctx, int x, int y, int w, int h) {
 		if (!on()) return false;
-		return paint(ctx, c -> {
-			ThemeSettings t = theme();
-			c.roundRect(x, y, w, h, h / 2f, ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xC0, ColorUtil.alpha(t.windowBackground.argb()))));
-			notches(c, x, y, w, h, ColorUtil.withAlpha(t.textDim.argb(), 0x70));
-			c.outline(x, y, w, h, h / 2f, 1, ColorUtil.withAlpha(t.inactiveBorder.argb(), 0x80));
-		});
+		return paint(ctx, c -> c.roundRect(x, y + BAR_INSET, w, h - 2 * BAR_INSET, (h - 2 * BAR_INSET) / 2f, ColorUtil.withAlpha(theme().textDim.argb(), 50)));
 	}
 
 	/** Its fill, {@code w} of the track's width; false to let Minecraft draw it. */
@@ -81,9 +81,58 @@ public final class ThemedHud {
 		if (w <= 0) return true;
 		return paint(ctx, c -> {
 			ThemeSettings t = theme();
-			c.gradientRect(x, y, Math.max(w, h), h, h / 2f, t.activeBorderFrom.argb(), t.activeBorderTo.argb(), 0);
-			notches(c, x, y, Math.max(w, h), h, ColorUtil.withAlpha(t.windowBackground.argb(), 0xC0));
+			float bh = h - 2 * BAR_INSET;
+			c.gradientRect(x, y + BAR_INSET, Math.max(w, bh), bh, bh / 2, t.activeBorderFrom.argb(), t.activeBorderTo.argb(), 0);
 		});
+	}
+
+	/**
+	 * A heart, food or armour icon, from the name of the sprite Minecraft would draw at {@code x, y} (9 by 9): the theme
+	 * font's own heart, drumstick and shield, in their colours (a heart's by its kind: poisoned, withered, golden, frozen),
+	 * half of one by drawing the full icon over the empty one only on its left, lighter while it flashes. False to let
+	 * Minecraft draw it (a vehicle's hearts, say).
+	 */
+	public static boolean statusIcon(GuiGraphicsExtractor ctx, Identifier sprite, int x, int y) {
+		if (!on()) return false;
+		String path = sprite.getPath();
+		String icon;
+		int color;
+		if (path.startsWith("hud/heart/")) {
+			String kind = path.substring("hud/heart/".length());
+			if (kind.startsWith("vehicle")) return false;
+			icon = HEART;
+			color = kind.startsWith("container") ? 0 : kind.startsWith("poisoned") ? POISONED : kind.startsWith("withered") ? WITHERED
+				: kind.startsWith("absorbing") ? GOLDEN : kind.startsWith("frozen") ? FROZEN : RED;
+		} else if (path.startsWith("hud/food_")) {
+			icon = DRUMSTICK;
+			color = path.contains("empty") ? 0 : path.contains("hunger") ? POISONED : FOOD;
+		} else if (path.startsWith("hud/armor_")) {
+			icon = SHIELD;
+			color = path.contains("empty") ? 0 : -1;
+		} else return false;
+		boolean half = path.contains("half"), blinking = path.contains("blinking");
+		return paint(ctx, c -> {
+			ThemeSettings t = theme();
+			int full = color == -1 ? t.accent.argb() : color;
+			// The empty icon: under a half one, and what a container or an empty slot is.
+			if (color == 0 || half) glyph(c, icon, x, y, ColorUtil.withAlpha(t.textDim.argb(), 0x60));
+			if (color == 0) return;
+			if (blinking) full = ColorUtil.lerp(full, 0xFFFFFFFF, 0.45f);
+			if (half) {
+				c.push();
+				c.clip(x, y - 2, 4.5f, 13);
+				glyph(c, icon, x, y, full);
+				c.pop();
+			} else glyph(c, icon, x, y, full);
+		});
+	}
+
+	/** {@code icon} centred in the 9-pixel square at {@code x, y}, with a faint shadow so it reads over the world. */
+	private static void glyph(UiRenderer c, String icon, float x, float y, int color) {
+		float w = c.textWidth(FontFamily.MONO, ICON_SIZE, icon), h = c.textHeight(FontFamily.MONO, ICON_SIZE);
+		float gx = x + (9 - w) / 2, gy = y + (9 - h) / 2;
+		if (ColorUtil.alpha(color) > 0x80) c.text(FontFamily.MONO, ICON_SIZE, icon, gx + 0.6f, gy + 0.6f, ColorUtil.withAlpha(0xFF000000, 0x90));
+		c.text(FontFamily.MONO, ICON_SIZE, icon, gx, gy, color);
 	}
 
 	/** The experience level over the bar, in the theme's font and accent; false to let Minecraft draw it. */
@@ -98,11 +147,6 @@ public final class ThemedHud {
 			c.text(FontFamily.SANS_BOLD, size, text, x + 0.75f, y + 0.75f, 0xC0000000);
 			c.text(FontFamily.SANS_BOLD, size, text, x, y, t.accent.argb());
 		});
-	}
-
-	/** The bar's segment lines within its first {@code w} pixels. */
-	private static void notches(UiRenderer c, float x, float y, float w, float h, int color) {
-		for (int n : NOTCHES) if (n < w) c.rect(x + n, y + 1, 1, h - 2, color);
 	}
 
 	/** A small window's surface and border, as the desktop draws its windows. */
