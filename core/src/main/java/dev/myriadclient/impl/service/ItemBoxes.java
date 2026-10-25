@@ -12,6 +12,7 @@ import dev.myriadclient.api.job.Why;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Placement;
+import dev.myriadclient.api.util.BlockInfo;
 import dev.myriadclient.api.util.Client;
 import dev.myriadclient.api.util.ItemInfo;
 import dev.myriadclient.api.util.Reach;
@@ -27,6 +28,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -34,15 +37,18 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Comparator;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 
 /**
- * Shulker boxes and ender chests from the inventory ({@link Containers#openItem}): put down beside you, opened, and
- * later broken, picked up and put back in their slot. Both halves run as jobs made of the services' steps. Getting it
- * out is the owner's job; putting it back is Myriad's own, so a box is never left in the world because a module turned
- * off or its work failed.
+ * Shulker boxes and ender chests from the inventory ({@link Containers#openItem}): put down above your head (else beside
+ * you), opened in the same tick, and later broken, picked up and put back in their slot. Both halves run as jobs made
+ * of the services' steps. Getting it out is the owner's job; putting it back is Myriad's own, so a box is never left in
+ * the world because a module turned off or its work failed.
  */
 final class ItemBoxes {
 	private static final int PLACE_TICKS = 60, GIVE_BACK_TICKS = 10, BREAK_TICKS = 20 * 10, PICKUP_TICKS = 60, RETURN_TICKS = 20;
+	/** Times the opening click is made again when it didn't go (no look onto the box in time), the box being there. */
+	private static final int OPEN_TRIES = 3;
 	/** Ticks to wait for the box to be picked up where it fell before stepping towards it. */
 	private static final int WALK_AFTER_TICKS = 12;
 	/** Owns the put-back jobs: they finish whatever happens to whoever opened the box. */
@@ -72,7 +78,9 @@ final class ItemBoxes {
 		private ItemStack box = ItemStack.EMPTY;
 		private boolean ender;
 		private int silk = -1;
-		private @Nullable BlockPos spot;
+		/** The hotbar slot it's placed from: its own, or the one it was brought into from the inventory. */
+		private int from = -1;
+		private @Nullable Spot spot;
 		private @Nullable Containers.View view;
 		private boolean placed;
 		private @Nullable CompletableFuture<Void> back;
@@ -90,7 +98,7 @@ final class ItemBoxes {
 
 		@Override
 		public BlockPos where() {
-			return spot;
+			return spot == null ? null : spot.pos();
 		}
 
 		@Override
@@ -110,30 +118,82 @@ final class ItemBoxes {
 					silk = Myriad.inventory().findInHotbar(s -> s.is(ItemTags.PICKAXES) && ItemInfo.enchantmentLevel(s, Enchantments.SILK_TOUCH) > 0);
 					if (silk < 0) return Progress.failed(Why.of(Why.NO_ITEM, "a Silk Touch pickaxe in the hotbar, to pick the ender chest back up"));
 				}
-				spot = spot(options);
-				if (spot == null) return Progress.failed(Why.of(Why.NO_ROOM, "nowhere beside you to put it down"));
+				spot = spot(options, ender);
+				if (spot == null) return Progress.failed(Why.of(Why.NO_ROOM, "nowhere above or beside you to put it down"));
 				// Placing with your inventory open would click it, not the floor.
 				if (Minecraft.getInstance().gui.screen() instanceof InventoryScreen) Client.player().closeContainer();
 				return Progress.done();
 			});
-			Step<Void> place = Step.choose("Putting it down", () -> {
-				Placement.Options sneaking = options.withSneak(true);
-				// From the hotbar, or borrowed into it for the placement and given back after.
-				Step<Void> down = index < 9 ? Steps.place(floorClick(spot), index, sneaking)
-					: Steps.borrow(index).then(slot -> Steps.place(floorClick(spot), slot, sneaking));
-				return down.timeout(PLACE_TICKS).then(Step.run("Placed", () -> placed = true));
+			// From the inventory, into the hotbar: placed from there in the same tick (the server has the click first).
+			Step<Void> toHotbar = Step.of("Into the hotbar", () -> ctx -> {
+				if (index < 9) {
+					from = index;
+					return Progress.done();
+				}
+				int to = Myriad.inventory().pullToHotbar(index, s -> true);
+				if (to >= 0) {
+					from = to;
+					return Progress.done();
+				}
+				return ctx.ticks() > PLACE_TICKS ? Progress.failed(Why.of(Why.TIMEOUT, "couldn't bring it into the hotbar")) : Progress.running();
 			});
-			// Whatever made room for it in the hotbar goes back first: core doesn't click in a container a module opened.
-			Step<Void> givenBack = Step.until("Giving back", () -> Client.player().getInventory().getItem(index).isEmpty(), GIVE_BACK_TICKS)
-				.recover(why -> Step.nothing());
-			Step<Containers.View> opened = Step.choose("Opening", () -> Steps.openContainer(spot, ticks, options))
-				.peek(v -> view = v);
-			return check.then(place).then(givenBack).then(opened)
+			Step<Containers.View> opened = Step.of("Putting it down", PutDown::new).peek(v -> view = v);
+			// What made room for it in the hotbar goes back to the inventory, through the box's own screen (it shows your
+			// inventory too) rather than before it opens.
+			Step<Void> givenBack = Step.of("Giving back", () -> ctx -> {
+				var inv = Client.player().getInventory();
+				if (index < 9 || !view.isOpen() || inv.getItem(index).isEmpty() && inv.getItem(from).isEmpty()) return Progress.done();
+				if (!Myriad.inventory().prepareClick()) return ctx.ticks() > GIVE_BACK_TICKS ? Progress.done() : Progress.running();
+				view.swapWithHotbar(view.playerSlot(index), from);
+				return Progress.done();
+			});
+			return check.then(toHotbar).then(opened).then(v -> givenBack.then(Step.supply("Open", () -> v)))
 				.named(() -> ender ? "Opening an ender chest" : "Opening a shulker box")
 				// Put down but not opened (a failure, the owner turning off): it mustn't be left behind.
 				.finallyDo(() -> {
 					if (placed && view == null) finish();
 				});
+		}
+
+		/**
+		 * Puts the box down and opens it in the same tick: the opening click follows the placement with the same look (one
+		 * straight up for a box above your head), and the server takes them in that order, so it opens a round trip
+		 * sooner than waiting for the placement's answer would.
+		 */
+		private final class PutDown implements Step.Run<Containers.View> {
+			private @Nullable CompletableFuture<Boolean> placing;
+			private @Nullable CompletableFuture<Containers.View> opening;
+			private int tries;
+
+			@Override
+			public Progress<Containers.View> tick(JobContext ctx) {
+				BlockPos pos = spot.pos();
+				if (placing == null) {
+					Placement.Attempt a = Myriad.placement().place(ctx.job(), spot.click(), from, options.withSneak(spot.sneak()));
+					if (!a.sent()) {
+						if (ctx.ticks() > PLACE_TICKS) return Progress.failed(Why.of(Why.TIMEOUT, "couldn't put it down", pos));
+						Why why = Why.of(a.check(), pos);
+						return why == null ? Progress.running() : why.is(Why.UNSUPPORTED) ? Progress.failed(why) : Progress.stuck(why);
+					}
+					placing = a.result();
+					placed = true;
+				}
+				if (placing.isDone() && !placing.join() && !Client.level().getBlockState(pos).is(Block.byItem(box.getItem()))) {
+					placed = false;
+					return Progress.failed(Why.of(Why.SERVER_REFUSED, pos.toShortString(), pos));
+				}
+				if (opening == null) opening = Myriad.containers().open(ctx.job(), pos, ticks, options);
+				if (!opening.isDone()) return Progress.running();
+				try {
+					return Progress.done(opening.join());
+				} catch (RuntimeException e) {
+					opening = null;
+					Throwable cause = e.getCause() == null ? e : e.getCause();
+					if (cause instanceof TimeoutException) return Progress.failed(Why.of(Why.TIMEOUT, "it didn't open", pos));
+					// The click didn't go (no look onto the box in time): again, now that the box is there.
+					return ++tries < OPEN_TRIES ? Progress.running() : Progress.failed(Why.of(Why.NO_CONTAINER, pos.toShortString(), pos));
+				}
+			}
 		}
 
 		// ---- putting it back --------------------------------------------------------------------------------------
@@ -151,11 +211,11 @@ final class ItemBoxes {
 					selected[0] = p.getInventory().getSelectedSlot();
 					Myriad.inventory().select(silk);
 				}
-			}).then(Steps.breakBlock(spot, 10, ender ? Breaking.Options.forServer().withAutoTool(false) : Breaking.Options.forServer()).timeout(BREAK_TICKS))
+			}).then(Steps.breakBlock(spot.pos(), 10, ender ? Breaking.Options.forServer().withAutoTool(false) : Breaking.Options.forServer()).timeout(BREAK_TICKS))
 				.finallyDo(() -> {
 					if (selected[0] >= 0 && Client.inGame()) Myriad.inventory().select(selected[0]);
 				});
-			Step<Void> pickUp = Step.of("Picking it up", () -> new PickUp(box, spot, held[0]));
+			Step<Void> pickUp = Step.of("Picking it up", () -> new PickUp(box, spot.pos(), held[0]));
 			Step<Void> home = Step.of("Back to its slot", () -> ctx -> {
 				LocalPlayer p = Client.player();
 				if (!p.getInventory().getItem(index).isEmpty() || p.containerMenu != p.inventoryMenu) return Progress.done();
@@ -249,11 +309,42 @@ final class ItemBoxes {
 		return n;
 	}
 
+	/** Where a box goes and the click that puts it there, sneaking where the clicked block would open instead. */
+	private record Spot(BlockPos pos, BlockHitResult click, boolean sneak) {
+	}
+
+	private static @Nullable Spot spot(Placement.Options options, boolean ender) {
+		Spot above = above(options, ender);
+		return above != null ? above : beside(options);
+	}
+
 	/**
-	 * Where a box goes: a free block beside your feet with a floor to stand on and room above for the lid, clear of you,
-	 * in reach and placeable, nearest the way you face first.
+	 * Above your head, so it falls back on you when it's broken, and placing and opening it share one look straight up:
+	 * into the empty space itself where air placement is on, else against the underside of the block over it. A shulker
+	 * box then faces down, its lid opening into the space your head is in (players don't stop it); an ender chest stays
+	 * shut under a solid block, so it only goes there by air placement.
 	 */
-	private static @Nullable BlockPos spot(Placement.Options options) {
+	private static @Nullable Spot above(Placement.Options options, boolean ender) {
+		LocalPlayer p = Client.player();
+		Level level = Client.level();
+		BlockPos pos = BlockPos.containing(p.getX(), Math.ceil(p.getBoundingBox().maxY), p.getZ()), head = pos.below(), over = pos.above();
+		if (!level.getBlockState(pos).canBeReplaced() || !level.getBlockState(head).getCollisionShape(level, head).isEmpty()) return null;
+		if (p.getBoundingBox().intersects(new AABB(pos)) || !Myriad.placement().check(pos, options).ok()) return null;
+		BlockState overState = level.getBlockState(over);
+		if (ender && overState.isRedstoneConductor(level, over)) return null;
+		// Straight above your eyes, so the look is straight up.
+		Vec3 eyes = p.getEyePosition();
+		double x = Math.clamp(eyes.x, pos.getX() + 0.05, pos.getX() + 0.95), z = Math.clamp(eyes.z, pos.getZ() + 0.05, pos.getZ() + 0.95);
+		if (options.airPlace() && level.getBlockState(pos).isAir()) return new Spot(pos, new BlockHitResult(new Vec3(x, pos.getY(), z), Direction.DOWN, pos, false), false);
+		if (ender || !overState.isFaceSturdy(level, over, Direction.DOWN) || BlockInfo.isClickable(overState)) return null;
+		return new Spot(pos, new BlockHitResult(new Vec3(x, over.getY(), z), Direction.DOWN, over, false), false);
+	}
+
+	/**
+	 * Beside your feet: a free block with a floor to stand on and room above for the lid, clear of you, in reach and
+	 * placeable, nearest the way you face first. Placed on the floor's top, so it faces up.
+	 */
+	private static @Nullable Spot beside(Placement.Options options) {
 		LocalPlayer p = Client.player();
 		Level level = Client.level();
 		BlockPos feet = p.blockPosition();
@@ -275,12 +366,9 @@ final class ItemBoxes {
 				}
 			}
 		}
-		return best;
-	}
-
-	/** A click on the top of the block under {@code spot}, so the box faces up and its lid opens into the air above. */
-	private static BlockHitResult floorClick(BlockPos spot) {
-		BlockPos floor = spot.below();
-		return new BlockHitResult(Vec3.atCenterOf(floor).add(0, 0.5, 0), Direction.UP, floor, false);
+		if (best == null) return null;
+		BlockPos floor = best.below();
+		// Sneaking only where the floor would open or be used instead (a chest under it).
+		return new Spot(best, new BlockHitResult(Vec3.atCenterOf(floor).add(0, 0.5, 0), Direction.UP, floor, false), BlockInfo.isClickable(level.getBlockState(floor)));
 	}
 }

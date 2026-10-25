@@ -426,7 +426,9 @@ public interface Placement {
 	 * without, at once on {@code hit}. Clicks and placements share one rotation a tick, in the order asked. With
 	 * {@link Options#sneak()} the server gets the sneak key down for the click; without, the click goes unsneaked
 	 * even while you sneak, so it uses the block instead of placing what you hold. {@link Options#range()} is how far
-	 * the click may reach; {@link Options#airPlace()} and {@link Options#visibleFaces()} don't apply.
+	 * the click may reach; {@link Options#airPlace()} and {@link Options#visibleFaces()} don't apply. It may follow a
+	 * placement at the block the server hasn't answered yet (to open a box just put down in the same tick): it goes
+	 * after it, and the server takes them in that order.
 	 *
 	 * <p>The attempt's position is the clicked block; its result completes with true once the server answered the click
 	 * (the block as it is after, in the world), false if it was dropped (no look onto the block in time, out of reach,
@@ -462,7 +464,7 @@ public interface Placement {
 	 */
 	List<BlockHitResult> clickTargets(BlockPos pos);
 
-	/** True while a placement at {@code pos} is waiting to be sent or for the server's answer. */
+	/** True while a placement at {@code pos}, or a click using the block there, is waiting to be sent or for the server's answer. */
 	boolean isPending(BlockPos pos);
 
 	/** A block to place, for {@link #AIM}. */

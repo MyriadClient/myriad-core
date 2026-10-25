@@ -4,6 +4,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Priority;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.MovementPacketsEvent;
+import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.ScreenOpenEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
@@ -22,6 +23,7 @@ import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -38,11 +40,12 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -85,6 +88,14 @@ public final class PlacementManager implements Placement {
 	private final Minecraft mc = Minecraft.getInstance();
 	private final BlockAckTracker acks;
 	private final Map<BlockPos, CompletableFuture<Boolean>> pending = new HashMap<>();
+	/** Use clicks the server hasn't answered, by block: apart from placements, as one may follow a placement there (see {@link #use}). */
+	private final Map<BlockPos, CompletableFuture<Boolean>> uses = new HashMap<>();
+	/**
+	 * Blocks placed since the last movement packet. Grim checks a click on a block as it arrives but takes a placement
+	 * into its world only with the next movement packet, so until then a click on the block placed is a click on air
+	 * there (AirLiquidPlace): where looks are checked, a use click there waits for one.
+	 */
+	private final Set<BlockPos> placedUnseen = new HashSet<>();
 	private final List<Queued> queue = new ArrayList<>();
 	private final ClickSolver solver = new ClickSolver(this);
 	private final PlacementAim aims = new PlacementAim();
@@ -104,7 +115,7 @@ public final class PlacementManager implements Placement {
 
 	@Override
 	public boolean isPending(BlockPos pos) {
-		return pending.containsKey(pos);
+		return pending.containsKey(pos) || uses.containsKey(pos);
 	}
 
 	@Override
@@ -236,18 +247,26 @@ public final class PlacementManager implements Placement {
 		Threads.assertRender();
 		BlockPos pos = hit.getBlockPos().immutable();
 		if (hotbarSlot < -1 || hotbarSlot > 8 || mc.player == null || mc.level == null) return Attempt.refused(pos, Check.UNAVAILABLE);
-		if (pending.containsKey(pos)) return Attempt.refused(pos, Check.PENDING);
+		// One may follow a placement there not yet answered (opening a box just put down): it goes after it, and the
+		// server takes them in that order.
+		if (uses.containsKey(pos)) return Attempt.refused(pos, Check.PENDING);
 		double eyeHeight = aims.eyeHeightFor(new AABB(pos), o.range());
 		if (Double.isNaN(eyeHeight)) return Attempt.refused(pos, Check.OUT_OF_RANGE);
 		if (hotbarSlot >= 0 && !handsFree(hotbarSlot)) return Attempt.refused(pos, Check.RATE_LIMITED);
 		if (!o.rotate() && (!Myriad.limits().canSend(PacketLimits.Kind.INTERACT, 1) || ActionTiming.get().isLate() && sneakChanges(o)))
 			return Attempt.refused(pos, Check.RATE_LIMITED);
 		CompletableFuture<Boolean> result = new CompletableFuture<>();
-		pending.put(pos, result);
-		result.whenComplete((answered, t) -> pending.remove(pos, result));
-		if (o.rotate()) queue.add(new Queued(owner, pos, new PlacementAim.Aim(hit, eyeHeight), hotbarSlot, o, result, tick + QUEUE_TICKS, true, null, Float.NaN, Float.NaN));
+		uses.put(pos, result);
+		result.whenComplete((answered, t) -> uses.remove(pos, result));
+		if (o.rotate() || placementQueued(pos)) queue.add(new Queued(owner, pos, new PlacementAim.Aim(hit, eyeHeight), hotbarSlot, o, result, tick + QUEUE_TICKS, true, null, Float.NaN, Float.NaN));
 		else clickUse(hit, hotbarSlot, o, result);
 		return new Attempt(pos, Check.OK, result);
+	}
+
+	/** Whether a placement at {@code pos} is still waiting for its look: a use click there goes after it. */
+	private boolean placementQueued(BlockPos pos) {
+		for (Queued q : queue) if (!q.use && q.pos.equals(pos) && !q.result.isDone()) return true;
+		return false;
 	}
 
 	/** Whether a use click with {@code o} needs the sneak key sent the other way round for it (see {@link SneakClick}). */
@@ -304,6 +323,7 @@ public final class PlacementManager implements Placement {
 		BlockState was = mc.level.getBlockState(pos);
 		// Clicking the empty space itself: an air placement.
 		boolean air = airClick(target, pos);
+		placedUnseen.add(pos);
 		if (placing(slot).getItem() instanceof SignItem) signPlacedAt = Clock.millis();
 		InventoryManager inventory = MyriadImpl.get().inventoryManager() instanceof InventoryManager i ? i : null;
 		if (inventory != null) inventory.slotUsed(slot);
@@ -453,7 +473,7 @@ public final class PlacementManager implements Placement {
 			return;
 		}
 		PlacementAim.Aim aim = first.aim;
-		float[] r = anglesFromNextPosition(aim.hit().getLocation(), aim.eyeHeight());
+		float[] r = nudged(first, anglesFromNextPosition(aim.hit().getLocation(), aim.eyeHeight()));
 		Myriad.rotations().request(this, r[0], r[1], Rotations.PRIORITY_HIGH, MOVE_FIX, null);
 	}
 
@@ -467,8 +487,22 @@ public final class PlacementManager implements Placement {
 		// A solved click's look is exact already, and the look after one isn't to be moved.
 		if (queue.isEmpty() || mc.player == null || queue.getFirst().click != null || follow.sent()) return;
 		PlacementAim.Aim aim = queue.getFirst().aim;
-		float[] r = MathUtil.anglesTo(aims.eyes(aim.eyeHeight()), aim.hit().getLocation());
+		float[] r = nudged(queue.getFirst(), MathUtil.anglesTo(aims.eyes(aim.eyeHeight()), aim.hit().getLocation()));
 		Myriad.rotations().request(this, r[0], r[1], REFINED_PRIORITY, MOVE_FIX, null);
+	}
+
+	/**
+	 * A use click waiting for a movement packet after the placement there (see {@link #placedUnseen}) turns a hair if
+	 * its look is the one the server has: the look alone wouldn't send one.
+	 */
+	private float[] nudged(Queued q, float[] r) {
+		if (!q.use || !placedUnseen.contains(q.pos) || r[0] != Myriad.rotations().serverYaw() || r[1] != Myriad.rotations().serverPitch()) return r;
+		return new float[]{r[0], r[1] + (r[1] > 0 ? -0.01f : 0.01f)};
+	}
+
+	@Subscribe(priority = Priority.LOWEST, packets = ServerboundMovePlayerPacket.class)
+	private void onMoveSent(PacketEvent.Send e) {
+		if (!e.isCancelled()) placedUnseen.clear();
 	}
 
 	/**
@@ -508,9 +542,9 @@ public final class PlacementManager implements Placement {
 				continue;
 			}
 			if (q.use) {
-				if (q.slot >= 0 && !handsFree(q.slot)) continue;
+				if (q.slot >= 0 && !handsFree(q.slot) || placementQueued(q.pos) || q.options.rotate() && placedUnseen.contains(q.pos)) continue;
 				// Where the look lands on the block, whichever face: the server checks the look is on it.
-				BlockHitResult on = Reach.rayHit(yaw, pitch, q.pos, q.options.range());
+				BlockHitResult on = q.options.rotate() ? Reach.rayHit(yaw, pitch, q.pos, q.options.range()) : q.target();
 				if (on == null) continue;
 				it.remove();
 				if (!Myriad.limits().canSend(PacketLimits.Kind.INTERACT, 1)) {
@@ -580,6 +614,8 @@ public final class PlacementManager implements Placement {
 		for (Queued q : new ArrayList<>(queue)) q.result.complete(false);
 		queue.clear();
 		pending.clear();
+		uses.clear();
+		placedUnseen.clear();
 		follow.clear();
 		yawTickAgo = Float.NaN;
 	}

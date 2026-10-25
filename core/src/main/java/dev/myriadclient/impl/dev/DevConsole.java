@@ -6,12 +6,15 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.InputEvent;
 import dev.myriadclient.api.event.events.MouseButtonEvent;
 import dev.myriadclient.api.event.events.TickEvent;
+import dev.myriadclient.api.job.Step;
+import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.command.CommandManager;
 import dev.myriadclient.impl.service.InventoryManager;
 import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.ui.panels.CorePanels;
+import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -89,7 +92,7 @@ public final class DevConsole {
 	private final Deque<String> pending = new ArrayDeque<>();
 	private final Set<Key> held = EnumSet.noneOf(Key.class);
 	private long read;
-	private int waitTicks, holdTicks;
+	private int waitTicks, holdTicks, devTicks;
 	private boolean sprintKeyDown;
 	private SelfTest selfTest;
 
@@ -112,6 +115,7 @@ public final class DevConsole {
 	 */
 	@Subscribe(priority = Priority.BEFORE_ACTIONS + 1000)
 	private void onTick(TickEvent.Pre e) {
+		devTicks++;
 		poll();
 		if (holdTicks > 0 && --holdTicks == 0) held.clear();
 		// The sprint key itself too: ViaFabricPlus, joined as an older version, starts sprinting from the key as those did.
@@ -158,6 +162,22 @@ public final class DevConsole {
 			for (String line : text.substring(0, end).split("\n")) if (!line.isBlank()) pending.add(line.strip());
 		} catch (IOException ignored) {
 		}
+	}
+
+	private void openItem(int index, boolean air, int keepTicks) {
+		long started = Clock.millis();
+		int startTick = devTicks;
+		Myriad.containers().openItem(this, index, 100, Placement.Options.forServer().withAirPlace(air)).whenComplete((session, t) -> {
+			if (t != null) {
+				LOG.info("[dev] openitem failed: {}", t.getCause() == null ? t.getMessage() : t.getCause().getMessage());
+				return;
+			}
+			LOG.info("[dev] openitem open at {} after {} ms, {} ticks", session.where().toShortString(), Clock.millis() - started, devTicks - startTick);
+			int until = devTicks + keepTicks;
+			Myriad.jobs().start(this, Step.until("Holding", () -> devTicks >= until, keepTicks + 20).recover(why -> Step.nothing()))
+				.result().whenComplete((r, t2) -> session.finish().whenComplete((v, t3) ->
+					LOG.info("[dev] openitem back{}", t3 == null ? "" : ": " + (t3.getCause() == null ? t3.getMessage() : t3.getCause().getMessage()))));
+		});
 	}
 
 	private void run(String line) {
@@ -258,6 +278,9 @@ public final class DevConsole {
 					selfTest = new SelfTest(ticks, skip);
 					selfTest.start();
 				}
+				// "openitem 14 air 40": opens the box at inventory index 14 (air placing where it may), logs how long it took to
+				// open, and puts it back after 40 ticks.
+				case "openitem" -> openItem(Integer.parseInt(a[1]), a.length > 2 && a[2].equals("air"), a.length > 3 ? Integer.parseInt(a[3]) : 20);
 				case "status" -> status();
 				// Closes whatever screen is open (a container's as the game does, telling the server).
 				case "closescreen" -> {
