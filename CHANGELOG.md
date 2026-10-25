@@ -56,7 +56,9 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   after it.
 - **Themed screens and hotbar** (Theme → Preferences → Cosmetics, both on by default): your inventory, chests,
   barrels, ender chests, shulker boxes, hoppers and dispensers are drawn as a theme window, its surface, border and
-  title with a cell for each slot and the slot under the mouse lit in the accent; the hotbar, the off hand's slot and
+  title with a cell for each slot and the slot under the mouse lit in the accent, with every tooltip (items, buttons)
+  drawn as the desktop's are, the inventory's effect list as theme cards and the recipe book as a theme window (its
+  recipe slots, tabs, filter, page arrows, search box and the button opening it); the hotbar, the off hand's slot and
   the experience bar a thin pill as the desktop's progress bars are (its level in the accent), hearts, food and armour
   the theme font's heart, drumstick and shield in their colours (a heart's by its kind, food green under Hunger), the
   hotbar and what sits on it lifted 3 pixels off the screen's edge. Each takes the place of the texture or sprite Minecraft draws,
