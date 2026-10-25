@@ -130,6 +130,14 @@ public final class ThemeSettings {
 		.description("Draw your inventory, chests, shulker boxes and the other storage screens in the theme. Off: Minecraft's own look.")
 		.defaultValue(true).build();
 	@ApiStatus.AvailableSince("1.2")
+	public final BoolSetting themeFont = spCosmetics.bool("Theme Font")
+		.description("Chat and item counts in the theme's font. Off: Minecraft's own.")
+		.defaultValue(true).onChanged(v -> {
+			// Chat's lines are split by the font they're drawn in: split again.
+			var mc = Minecraft.getInstance();
+			if (mc.gui != null) mc.gui.hud.getChat().rescaleChat();
+		}).build();
+	@ApiStatus.AvailableSince("1.2")
 	public final BoolSetting themedHotbar = spCosmetics.bool("Themed Hotbar")
 		.description("Draw the hotbar, the off hand's slot, the experience bar, hearts, food and armour in the theme. Off: Minecraft's own look.")
 		.defaultValue(true).build();

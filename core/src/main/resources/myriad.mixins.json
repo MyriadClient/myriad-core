@@ -49,6 +49,7 @@
 		"HumanoidMobRendererMixin",
 		"ImageButtonMixin",
 		"InventoryScreenMixin",
+		"ItemCountMixin",
 		"ItemInHandRendererMixin",
 		"ItemStackMixin",
 		"KeyboardMixin",

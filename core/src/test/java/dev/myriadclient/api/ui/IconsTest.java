@@ -18,7 +18,7 @@ class IconsTest {
 	@Test
 	void everyIconIsInTheBundledFont() throws Exception {
 		Font font;
-		try (InputStream in = IconsTest.class.getResourceAsStream("/assets/myriad/fonts/mono.ttf")) {
+		try (InputStream in = IconsTest.class.getResourceAsStream("/assets/myriad/font/mono.ttf")) {
 			font = Font.createFont(Font.TRUETYPE_FONT, in);
 		}
 		List<String> missing = new ArrayList<>();

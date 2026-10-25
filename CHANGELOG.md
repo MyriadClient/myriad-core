@@ -65,7 +65,10 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   the theme font's heart, drumstick and shield in their colours (a heart's by its kind, food green under Hunger), the
   hotbar and what sits on it lifted 3 pixels off the screen's edge. Each takes the place of the texture or sprite Minecraft draws,
   in its GUI pixels, so the items, slots, clicks and other mods' slot work stay as they were.
-  `ThemeSettings.themedScreens` and `themedHotbar` are new.
+  A third, Theme Font, sets chat and item counts in the theme's font: it's registered with Minecraft as `myriad:ui`
+  (the theme's sans, falling back to Minecraft's own), so Minecraft wraps chat and finds clicks on its links at the
+  widths it draws. `ThemeSettings.themedScreens`, `themedHotbar` and `themeFont` are new; the bundled fonts moved from
+  `assets/myriad/fonts/` to `assets/myriad/font/`, where Minecraft's font loader looks.
 - **A box in an open chest opens too** (`Containers.openItem(owner, view, screenSlot, ticks, options)`, new): one of
   the chest's own (a barrel's, shulker box's, ender chest's, hopper's, dispenser's) is swapped into the hotbar through
   its screen and the chest closed in the tick it's placed; one of yours goes as before, the chest closed first. The

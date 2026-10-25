@@ -39,7 +39,7 @@ public final class FontManager {
 	}
 
 	private static Font load(String file) {
-		try (InputStream in = FontManager.class.getResourceAsStream("/assets/myriad/fonts/" + file)) {
+		try (InputStream in = FontManager.class.getResourceAsStream("/assets/myriad/font/" + file)) {
 			if (in == null) throw new IllegalStateException("missing");
 			return Font.createFont(Font.TRUETYPE_FONT, in);
 		} catch (Exception e) {

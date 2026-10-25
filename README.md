@@ -330,4 +330,4 @@ The code layout borrows ideas from [Meteor Client](https://github.com/MeteorDeve
 borrows from Hyprland.
 
 Bundled fonts: Noto Sans (SIL OFL 1.1) and JetBrains Mono Nerd Font (SIL OFL 1.1). The license texts are in
-`core/src/main/resources/assets/myriad/fonts/`.
+`core/src/main/resources/assets/myriad/font/`.
