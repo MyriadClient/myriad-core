@@ -127,6 +127,27 @@ public abstract class ChatHudMixin {
 		ThemedChat.drawing = false;
 	}
 
+	/**
+	 * Chat's rows in the theme's font: as tall as it is (ThemedChat.rowHeight), not Minecraft's 9, with the text placed
+	 * as far up them as vanilla places its own (its 8, the row less the gap under the text), and as many lines a page.
+	 */
+	@ModifyConstant(method = "extractRenderState(Lnet/minecraft/client/gui/components/ChatComponent$ChatGraphicsAccess;IILnet/minecraft/client/gui/components/ChatComponent$DisplayMode;)V",
+		constant = @Constant(intValue = 9))
+	private int myriad$rowHeight(int height) {
+		return ThemedChat.rowHeight();
+	}
+
+	@ModifyConstant(method = "extractRenderState(Lnet/minecraft/client/gui/components/ChatComponent$ChatGraphicsAccess;IILnet/minecraft/client/gui/components/ChatComponent$DisplayMode;)V",
+		constant = @Constant(doubleValue = 8.0))
+	private double myriad$textInRow(double offset) {
+		return ThemedChat.rowHeight() == 9 ? offset : ThemedChat.rowHeight();
+	}
+
+	@ModifyConstant(method = "getLineHeight", constant = @Constant(doubleValue = 9.0))
+	private double myriad$lineHeight(double height) {
+		return ThemedChat.rowHeight();
+	}
+
 	@Inject(method = "addMessage", at = @At("HEAD"), cancellable = true)
 	private void myriad$receive(Component message, MessageSignature signature, GuiMessageSource source, GuiMessageTag indicator, CallbackInfo ci) {
 		if (myriad$readding || !Myriad.isReady() || !Myriad.events().hasListeners(ChatReceiveEvent.class)) return;

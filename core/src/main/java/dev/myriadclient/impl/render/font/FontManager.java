@@ -38,7 +38,7 @@ public final class FontManager {
 		chains.put(FontFamily.MONO.id(), new Font[]{mono, dialog});
 	}
 
-	private static Font load(String file) {
+	static Font load(String file) {
 		try (InputStream in = FontManager.class.getResourceAsStream("/assets/myriad/font/" + file)) {
 			if (in == null) throw new IllegalStateException("missing");
 			return Font.createFont(Font.TRUETYPE_FONT, in);

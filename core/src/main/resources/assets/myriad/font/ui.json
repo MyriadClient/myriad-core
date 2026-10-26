@@ -1,13 +1,6 @@
 {
 	"providers": [
 		{
-			"type": "ttf",
-			"file": "myriad:ui-semibold.ttf",
-			"size": 9.5,
-			"oversample": 3.0,
-			"shift": [0.0, 1.0]
-		},
-		{
 			"type": "reference",
 			"id": "minecraft:default"
 		}

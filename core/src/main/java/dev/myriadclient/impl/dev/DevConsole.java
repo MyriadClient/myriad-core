@@ -6,6 +6,7 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.InputEvent;
 import dev.myriadclient.api.event.events.MouseButtonEvent;
 import dev.myriadclient.api.event.events.TickEvent;
+import dev.myriadclient.api.event.events.WindowResizeEvent;
 import dev.myriadclient.api.job.Step;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.util.MyriadId;
@@ -323,6 +324,18 @@ public final class DevConsole {
 					case "front" -> CameraType.THIRD_PERSON_FRONT;
 					default -> CameraType.FIRST_PERSON;
 				});
+				// "guiscale 3": the GUI scale option (0: auto), applied as its slider does. "guiscale 3 force": the window's scale
+				// itself, past what its size allows (a tiled window too small for the scale being tested).
+				case "guiscale" -> {
+					if (a.length > 2 && a[2].equals("force")) {
+						mc.getWindow().setGuiScale(Integer.parseInt(a[1]));
+						Myriad.events().post(new WindowResizeEvent(mc.getWindow().getWidth(), mc.getWindow().getHeight()));
+					} else {
+						mc.options.guiScale().set(Integer.parseInt(a[1]));
+						mc.resizeGui();
+					}
+					LOG.info("[dev] guiscale {}: {}", a[1], mc.getWindow().getGuiScale());
+				}
 				// Opens chat, as the chat key does.
 				case "openchat" -> mc.gui.hud.getChat().openScreen(ChatComponent.ChatMethod.MESSAGE, ChatScreen::new);
 				case "screenshot" -> Screenshot.grab(mc.gameDirectory, a[1] + ".png", mc.gameRenderer.mainRenderTarget(), 1, message -> {

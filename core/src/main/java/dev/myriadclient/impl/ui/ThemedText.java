@@ -1,57 +1,87 @@
 package dev.myriadclient.impl.ui;
 
+import com.mojang.blaze3d.font.GlyphProvider;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.TickEvent;
+import dev.myriadclient.api.event.events.WindowResizeEvent;
 import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.mixin.FontSetAccessor;
+import dev.myriadclient.impl.render.font.ThemeGlyphs;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.font.FontOption;
+import net.minecraft.client.gui.font.FontSet;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.FontDescription;
 import net.minecraft.resources.Identifier;
+import org.jspecify.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Item counts in the theme's font while Theme → Preferences → Theme Font is on, and chat while Chat → Font is Theme
- * (ThemedChat). The font is registered with
- * Minecraft as {@code myriad:ui} (assets/myriad/font/ui.json: the theme's sans, then Minecraft's own for anything it
- * lacks), and the text is given it as its style's font, so Minecraft measures, wraps and finds clicks in it with the
- * widths it's drawn at.
+ * (ThemedChat). The font is registered with Minecraft as {@code myriad:ui}: Myriad's own glyphs (ThemeGlyphs, given it
+ * by FontManagerMixin), then what assets/myriad/font/ui.json lists (Minecraft's own, for anything they lack). The text
+ * is given it as its style's font, so Minecraft measures, wraps and finds clicks in it with the widths it's drawn at.
  * <p>
- * Minecraft rasterises a TTF once, at its oversample, and scales that: thin strokes thin out further unless it's the
- * GUI scale the glyphs are drawn at. So the font is rasterised at the GUI scale (TrueTypeGlyphProviderDefinitionMixin),
- * and when that has changed and settled, with the font on, Minecraft's resources are reloaded (as F3+T does) to
- * rasterise it again.
+ * The glyphs are rasterised at the GUI scale they're drawn at, as Myriad's own text is. When the scale changes, they're
+ * given the new one and only this font is reloaded (FontSet.reload, as Force Unicode does), not the resources.
  */
 public final class ThemedText {
-	public static final FontDescription FONT = new FontDescription.Resource(Identifier.fromNamespaceAndPath("myriad", "ui"));
+	public static final Identifier FONT_ID = Identifier.fromNamespaceAndPath("myriad", "ui");
+	public static final FontDescription FONT = new FontDescription.Resource(FONT_ID);
 	public static final ThemedText INSTANCE = new ThemedText();
-	/** Ticks the GUI scale has to stay changed before the font is rasterised again (a window being resized steps through several). */
-	private static final int SETTLE_TICKS = 20;
 
-	/** The GUI scale the font was last rasterised at (0 before it was). */
-	private static volatile int rasterised;
-	private int settled;
+	private static @Nullable ThemeGlyphs glyphs;
+	/** The font set Minecraft made for {@code myriad:ui} at its last resource reload. */
+	private static @Nullable FontSet set;
 
 	private ThemedText() {
 	}
 
-	/** The oversample to rasterise the theme's font at: the GUI scale now, noted as the one it's rasterised at. */
-	public static float oversample() {
-		var window = Minecraft.getInstance().getWindow();
-		rasterised = window == null ? 1 : Math.max(1, window.getGuiScale());
-		return rasterised;
+	/** {@code myriad:ui}'s providers, Myriad's glyphs first, as {@code set} is loaded with them. */
+	public static List<GlyphProvider.Conditional> providers(FontSet set, List<GlyphProvider.Conditional> providers) {
+		ThemedText.set = set;
+		if (glyphs == null) glyphs = new ThemeGlyphs("ui-semibold.ttf", guiScale());
+		else glyphs.scale(guiScale());
+		List<GlyphProvider.Conditional> all = new ArrayList<>(providers.size() + 1);
+		all.add(new GlyphProvider.Conditional(glyphs, FontOption.Filter.ALWAYS_PASS));
+		all.addAll(providers);
+		return all;
 	}
 
+	/**
+	 * The glyphs at the new GUI scale: the font set's baked ones dropped, as a reload drops them, but its providers kept
+	 * (a reload chooses them again, going through every glyph Minecraft's own fonts have) and its glyphs by advance.
+	 */
+	@Subscribe
+	private void onResize(WindowResizeEvent e) {
+		rescale();
+	}
+
+	/** A scale set before Myriad was up to hear of it (the window resized while the game loaded). */
 	@Subscribe
 	private void onTick(TickEvent.Post e) {
+		rescale();
+	}
+
+	private static void rescale() {
+		int scale = guiScale();
+		if (glyphs == null || set == null || glyphs.scale() == scale) return;
+		glyphs.scale(scale);
+		var fonts = (FontSetAccessor) set;
+		var widths = new Int2ObjectOpenHashMap<>(fonts.myriad$glyphsByWidth());
+		fonts.myriad$resetTextures();
+		fonts.myriad$glyphsByWidth().putAll(widths);
 		var mc = Minecraft.getInstance();
-		if (rasterised == 0 || mc.getWindow() == null || !on() && !ThemedChat.themeFont() || Math.max(1, mc.getWindow().getGuiScale()) == rasterised) {
-			settled = 0;
-			return;
-		}
-		if (++settled < SETTLE_TICKS) return;
-		settled = 0;
-		rasterised = 0;
-		mc.reloadResourcePacks();
+		if (ThemedChat.themeFont() && mc.gui != null) mc.gui.hud.getChat().rescaleChat();
+	}
+
+	private static int guiScale() {
+		var window = Minecraft.getInstance().getWindow();
+		return window == null ? 1 : Math.max(1, window.getGuiScale());
 	}
 
 	public static boolean on() {

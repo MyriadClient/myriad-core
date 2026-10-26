@@ -212,6 +212,15 @@ public final class ThemedChat {
 		return Myriad.isReady() && theme().chatStackRepeats.get();
 	}
 
+	/**
+	 * How tall chat's rows are, before Line Spacing: Minecraft's 9, or 11 in the theme's font, whose ascenders and
+	 * descenders (7.5 above the baseline and 2.5 below, at GUI scale 2) don't fit in 9. Only accents on capitals reach
+	 * into the row above.
+	 */
+	public static int rowHeight() {
+		return themeFont() ? 11 : 9;
+	}
+
 	/** Whether chat is in the theme's font. */
 	public static boolean themeFont() {
 		return Myriad.isReady() && theme().chatFont.get() == ThemeSettings.ChatFont.THEME;

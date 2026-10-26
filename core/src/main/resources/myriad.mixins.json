@@ -44,6 +44,8 @@
 		"EntityRenderStateMixin",
 		"ExperienceBarMixin",
 		"FeatureRenderDispatcherMixin",
+		"FontManagerMixin",
+		"FontSetAccessor",
 		"GameRendererMixin",
 		"GrindstoneScreenMixin",
 		"GuiMixin",
@@ -78,7 +80,6 @@
 		"StonecutterScreenMixin",
 		"ThemedScreenMixin",
 		"TooltipRenderUtilMixin",
-		"TrueTypeGlyphProviderDefinitionMixin",
 		"WalkAnimationStateAccessor",
 		"WorldRendererMixin"
 	],
