@@ -148,6 +148,10 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 - **Trying a shared config turns on only what was on for the sharer**: its control panel took every module in the
   share, and a whole config lists every module, most of them off, so turning it on turned on everything you have. A
   share with none on (settings for modules you turn on yourself) still brings them all.
+- **The Theme window no longer closes what you have open as you edit**: a theme's edits are saved 400 ms after the
+  last change, and saving them rebuilt the whole window, so an open colour picker, dropdown or text field closed about
+  half a second after each change. Saving no longer rebuilds it (only the list or a name changing does); the swatch,
+  the Edited badge and the Reset button follow as they draw.
 - **A panel keeps its place when it's rebuilt**: editing or resetting a theme value scrolled the Theme panel back to the
   top, as the new view clamped the scroll before its contents had been laid out.
 - **High rounding keeps everything inside the window's corners**: title bars follow the window's curve (they stuck

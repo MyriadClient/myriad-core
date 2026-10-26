@@ -331,7 +331,9 @@ public final class ThemeManager {
 		e.values = e.isUser() ? now : diff(now, pristine(e));
 		e.swatch = null;
 		save(e);
-		version++;
+		// No version bump: the list and names are as they were, and what shows the edits (the swatch, the Edited badge)
+		// reads them as it draws. A rebuild here, when the desktop's autosave commits, closed whatever the Theme window
+		// had open (a colour picker, a dropdown) while you were editing.
 	}
 
 	/** Creates a user theme from the current values and makes it active. */

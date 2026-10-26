@@ -93,7 +93,7 @@ public final class ThemePanel extends WidgetPanel {
 			author.addWeighted(new TextField(active::author).onSubmit(a -> themes.setAuthor(active, a)), 1);
 			content.add(author);
 		} else {
-			content.add(new Label(active.isModified()
+			content.add(new Label(() -> active.isModified()
 				? "Editing a built-in preset. Your changes are saved on top of it; Reset brings the original back."
 				: "Editing a built-in preset saves your changes on top of it. Duplicate it to make a theme you can rename and share.").dim());
 		}
