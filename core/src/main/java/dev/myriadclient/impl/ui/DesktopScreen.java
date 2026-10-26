@@ -40,7 +40,7 @@ public final class DesktopScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-		return wm.input().mouseClicked(event.x(), event.y(), event.button());
+		return wm.input().mouseClicked(event.x(), event.y(), event.button(), event.hasShiftDown());
 	}
 
 	@Override

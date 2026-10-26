@@ -33,8 +33,8 @@ import java.util.Set;
 
 /**
  * A rofi/wofi-style launcher: fuzzy search over modules, panels, categories, themes, profiles and workspaces.
- * Enter runs the selection; Shift+Enter runs its alternate action (e.g. open a module's settings instead of
- * toggling it). Mod+Space also opens it on its own over the game ({@link LauncherScreen}): what it runs there that
+ * Enter (or a click) runs the selection; Shift+Enter (a Shift or right click) runs its alternate action (e.g. open a
+ * module's settings instead of toggling it). Mod+Space also opens it on its own over the game ({@link LauncherScreen}): what it runs there that
  * needs the desktop (a panel, a group's window, settings) opens the menu first, the rest happens without it.
  */
 final class Launcher {
@@ -300,7 +300,7 @@ final class Launcher {
 		c.pop();
 	}
 
-	boolean mouseClicked(float mx, float my, int button, float screenW, float screenH) {
+	boolean mouseClicked(float mx, float my, int button, boolean shift, float screenW, float screenH) {
 		if (!visible) return false;
 		float x = (screenW - WIDTH) / 2, y = screenH * 0.22f;
 		int rows = (int) Math.min(MAX_ROWS, results.size());
@@ -311,7 +311,8 @@ final class Launcher {
 		int first = Math.max(0, selected - (int) MAX_ROWS + 1);
 		int i = (int) ((my - y - 24) / ROW);
 		if (my >= y + 24 && i >= 0 && i < rows && first + i < results.size()) {
-			run(results.get(first + i), button == 1);
+			// A right click, or a click with Shift held as Shift+Enter, runs the alternate action.
+			run(results.get(first + i), button == 1 || shift);
 		}
 		return true;
 	}

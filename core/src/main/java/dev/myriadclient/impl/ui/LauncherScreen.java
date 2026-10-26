@@ -57,7 +57,7 @@ final class LauncherScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-		return wm.launcherOpen() && closeIfDone(wm.input().mouseClicked(event.x(), event.y(), event.button()));
+		return wm.launcherOpen() && closeIfDone(wm.input().mouseClicked(event.x(), event.y(), event.button(), event.hasShiftDown()));
 	}
 
 	@Override

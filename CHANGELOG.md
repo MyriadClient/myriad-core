@@ -129,6 +129,8 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 - **A block broken again by a finish alone waits for its tool from the inventory**, as a first break does: it broke
   with whatever was held, so an ender chest put down twice at one spot came back as obsidian (seen on 2b2t). And
   opening a container in the tick another closed no longer sends your inventory's close as well.
+- **A Shift-click in the launcher runs the alternate action**, as Shift+Enter does (a module's settings instead of
+  turning it on); only a right click did. Shift is read from the click itself.
 - **Trying a shared config turns on only what was on for the sharer**: its control panel took every module in the
   share, and a whole config lists every module, most of them off, so turning it on turned on everything you have. A
   share with none on (settings for modules you turn on yourself) still brings them all.

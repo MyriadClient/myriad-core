@@ -98,11 +98,12 @@ final class DesktopInput {
 		return cornerX == cornerY ? resizeNwse : resizeNesw;
 	}
 
-	boolean mouseClicked(double gx, double gy, int button) {
+	/** A click, {@code shift} if it was made with Shift held (from the click itself, not the key's state). */
+	boolean mouseClicked(double gx, double gy, int button, boolean shift) {
 		float mx = wm.toUnits(gx), my = wm.toUnits(gy);
 		wm.mouseX = mx;
 		wm.mouseY = my;
-		if (wm.launcher.mouseClicked(mx, my, button, wm.screenW, wm.screenH)) return true;
+		if (wm.launcher.mouseClicked(mx, my, button, shift, wm.screenW, wm.screenH)) return true;
 		if (theme.bar.get() && clickBar(mx, my, button)) return true;
 
 		WindowImpl w = wm.topWindowAt(mx, my);
