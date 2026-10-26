@@ -138,9 +138,11 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 - **A block broken again by a finish alone waits for its tool from the inventory**, as a first break does: it broke
   with whatever was held, so an ender chest put down twice at one spot came back as obsidian (seen on 2b2t). And
   opening a container in the tick another closed no longer sends your inventory's close as well.
-- **The Preview's player stands still with resource packs that animate players** (Entity Model Features', such as
-  Fresh Animations): the stand-in is never ticked, so it stayed in the air it starts in and they played its landing
-  over and over, a crouch every second. It's on the ground now.
+- **The Preview's player moves as you do in your inventory with resource packs that animate players** (Entity Model
+  Features', such as Fresh Animations): the stand-in is never ticked, so it stayed in the air it starts in with its
+  cape up, and they played a fall or landing over and over. Each frame it now takes what ticking has left you: where
+  you are and were, on the ground or falling, moving, how old, crouching, your walk and your cape's swing and bob
+  (your avatar state); vanilla's inventory draws you yourself, which is why it looked right there.
 - **The mod key and Vim Keys are set in Keybinds** (Myriad → Menu), with the binds they go with, rather than among
   the theme's preferences; `ThemeSettings.modKey` and `vimKeys` stay where they are.
 - **A Shift-click in the launcher runs the alternate action**, as Shift+Enter does (a module's settings instead of

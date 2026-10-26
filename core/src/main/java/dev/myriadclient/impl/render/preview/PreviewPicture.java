@@ -19,7 +19,6 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.block.BlockModelRenderState;
 import net.minecraft.client.renderer.block.BlockModelResolver;
 import net.minecraft.client.renderer.block.model.BlockDisplayContext;
-import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
@@ -123,13 +122,8 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 			// No name tag (vanilla would give the stand-in yours, facing a camera that isn't there).
 			render.nameTag = null;
 			render.scoreText = null;
-			// Standing still, as vanilla settles a player that isn't moving: preview entities are never ticked, so their
-			// cape and elytra would keep the animation's starting values (the cape flung up, the wings shut).
-			if (render instanceof AvatarRenderState avatar) {
-				avatar.capeFlap = 0;
-				avatar.capeLean = 0;
-				avatar.capeLean2 = 0;
-			}
+			// The wings at rest: preview entities are never ticked, so their elytra would keep its animation's starting
+			// values (shut). The stand-in player's cape swings as yours does (PreviewSubjects.moved).
 			if (render instanceof HumanoidRenderState humanoid) {
 				humanoid.elytraRotX = (float) (Math.PI / 12);
 				humanoid.elytraRotY = 0;

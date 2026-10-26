@@ -1,7 +1,10 @@
 package dev.myriadclient.impl.render.preview;
 
+import com.mojang.authlib.GameProfile;
 import dev.myriadclient.api.ui.widget.Preview;
+import dev.myriadclient.impl.mixin.WalkAnimationStateAccessor;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.entity.ClientAvatarState;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.player.RemotePlayer;
@@ -63,17 +66,18 @@ final class PreviewSubjects {
 		level = now;
 	}
 
-	/** A player looking as you do now: your profile (so your skin), skin layers, main arm and what you wear and hold. */
+	/**
+	 * A player looking and moving as you do now: your profile (so your skin), skin layers, main arm and what you wear and
+	 * hold, and what ticking gives you (moved).
+	 */
 	private static RemotePlayer standIn(LocalPlayer you) {
 		if (standIn == null) {
-			standIn = new RemotePlayer(level, you.getGameProfile());
+			standIn = new StandIn(level, you.getGameProfile());
 			standIn.setId(nextId--);
 			// Equipping makes a sound.
 			standIn.setSilent(true);
 		}
-		// Standing on the ground: it's never ticked, so it would stay in the air it starts in, and resource packs that
-		// animate players (Entity Model Features') played their landing over and over.
-		standIn.setOnGround(true);
+		moved(standIn, you);
 		standIn.getEntityData().set(Avatar.DATA_PLAYER_MODE_CUSTOMISATION, you.getEntityData().get(Avatar.DATA_PLAYER_MODE_CUSTOMISATION));
 		standIn.setMainArm(you.getMainArm());
 		for (EquipmentSlot slot : WORN) {
@@ -81,6 +85,49 @@ final class PreviewSubjects {
 			if (!ItemStack.matches(standIn.getItemBySlot(slot), worn)) standIn.setItemSlot(slot, worn.copy());
 		}
 		return standIn;
+	}
+
+	/**
+	 * {@code standIn} as ticking has left {@code you}, as it's never ticked itself: where you are and were, on the ground
+	 * or falling, moving, how old, crouching, your walk and (StandIn) your cape's swing and bob. Resource packs that
+	 * animate players (Entity Model Features') go by all of these, and on an entity that's never ticked played a fall or
+	 * landing over and over, its cape up; vanilla's inventory draws you yourself, so they look right there. It faces the
+	 * preview's way, as the inventory turns you before drawing you.
+	 */
+	private static void moved(RemotePlayer standIn, LocalPlayer you) {
+		standIn.setPos(you.position());
+		standIn.xo = you.xo;
+		standIn.yo = you.yo;
+		standIn.zo = you.zo;
+		standIn.setOnGround(you.onGround());
+		standIn.setDeltaMovement(you.getDeltaMovement());
+		standIn.fallDistance = you.fallDistance;
+		standIn.horizontalCollision = you.horizontalCollision;
+		standIn.verticalCollision = you.verticalCollision;
+		standIn.tickCount = you.tickCount;
+		standIn.setShiftKeyDown(you.isShiftKeyDown());
+		standIn.setPose(you.getPose());
+		WalkAnimationStateAccessor walk = (WalkAnimationStateAccessor) standIn.walkAnimation;
+		walk.myriad$setSpeedOld(((WalkAnimationStateAccessor) you.walkAnimation).myriad$speedOld());
+		walk.myriad$setSpeed(you.walkAnimation.speed());
+		walk.myriad$setPosition(you.walkAnimation.position());
+		standIn.yBodyRot = standIn.yBodyRotO = standIn.yHeadRot = standIn.yHeadRotO = standIn.yRotO = 180;
+		standIn.setYRot(180);
+		standIn.setXRot(0);
+		standIn.xRotO = 0;
+	}
+
+	/** The stand-in: its cape swings and bobs as yours do (your avatar state, which ticking keeps). */
+	private static final class StandIn extends RemotePlayer {
+		StandIn(ClientLevel level, GameProfile profile) {
+			super(level, profile);
+		}
+
+		@Override
+		public ClientAvatarState avatarState() {
+			LocalPlayer you = Minecraft.getInstance().player;
+			return you != null ? you.avatarState() : super.avatarState();
+		}
 	}
 
 	/** The subject's box, in its own coordinates. */

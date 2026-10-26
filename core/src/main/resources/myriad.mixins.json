@@ -79,6 +79,7 @@
 		"ThemedScreenMixin",
 		"TooltipRenderUtilMixin",
 		"TrueTypeGlyphProviderDefinitionMixin",
+		"WalkAnimationStateAccessor",
 		"WorldRendererMixin"
 	],
 	"injectors": {
