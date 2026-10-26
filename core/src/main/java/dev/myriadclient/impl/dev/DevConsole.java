@@ -291,6 +291,16 @@ public final class DevConsole {
 				case "status" -> status();
 				// The swap bar's tabs, and a switch to one by its place on the bar (see ContainerTabs).
 				case "themed" -> MyriadImpl.get().windowManager().theme().themedScreens.set(a[1].equals("on"));
+				// "pref chat.width 200": a theme setting (Theme or Preferences) by group.id or id, to a value as typed; with no
+				// value, what it is.
+				case "pref" -> {
+					var theme = MyriadImpl.get().windowManager().theme();
+					var setting = theme.preferences.get(a[1]).or(() -> theme.settings.get(a[1]));
+					String value = line.substring(line.indexOf(a[1]) + a[1].length()).strip();
+					if (setting.isPresent() && value.isEmpty()) LOG.info("[dev] pref {} = {}", a[1], setting.get().get());
+					else if (setting.isEmpty() || !setting.get().parse(value)) LOG.warn("[dev] pref {}: no such setting, or {} isn't a value for it", a[1], value);
+					else LOG.info("[dev] pref {} = {}", a[1], setting.get().get());
+				}
 				case "tabs" -> LOG.info("[dev] tabs: {}", MyriadImpl.get().containerTabs().tabs().stream()
 					.map(t -> (MyriadImpl.get().containerTabs().isCurrent(t) ? "*" : "") + (t.you() ? "you" : t.pos().toShortString() + (t.box() != null ? " box" : ""))).toList());
 				case "tab" -> {

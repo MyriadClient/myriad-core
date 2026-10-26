@@ -12,6 +12,7 @@ import dev.myriadclient.api.setting.IntSetting;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.Settings;
+import dev.myriadclient.api.setting.StringListSetting;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.ApiStatus;
 import org.lwjgl.glfw.GLFW;
@@ -76,6 +77,24 @@ public final class ThemeSettings {
 
 	public enum BarPosition {
 		TOP, BOTTOM
+	}
+
+	/** The font chat is drawn in. */
+	@ApiStatus.AvailableSince("1.2")
+	public enum ChatFont {
+		MINECRAFT, THEME
+	}
+
+	/** What chat's lines are drawn on: the theme's window colour, Minecraft's black, or nothing. */
+	@ApiStatus.AvailableSince("1.2")
+	public enum ChatBackground {
+		THEME, VANILLA, NONE
+	}
+
+	/** Which messages chat shows (Minecraft's Chat setting). */
+	@ApiStatus.AvailableSince("1.2")
+	public enum ChatShown {
+		ALL, COMMANDS_ONLY, HIDDEN
 	}
 
 	public enum Curve {
@@ -173,16 +192,55 @@ public final class ThemeSettings {
 		.defaultValue(true).build();
 	@ApiStatus.AvailableSince("1.2")
 	public final BoolSetting themeFont = spCosmetics.bool("Theme Font")
-		.description("Chat and item counts in the theme's font. Off: Minecraft's own.")
-		.defaultValue(true).onChanged(v -> {
-			// Chat's lines are split by the font they're drawn in: split again.
-			var mc = Minecraft.getInstance();
-			if (mc.gui != null) mc.gui.hud.getChat().rescaleChat();
-		}).build();
+		.description("Item counts in the theme's font. Off: Minecraft's own. Chat's font is under Chat.")
+		.defaultValue(true).build();
 	@ApiStatus.AvailableSince("1.2")
 	public final BoolSetting themedHotbar = spCosmetics.bool("Themed Hotbar")
 		.description("Draw the hotbar, the off hand's slot, the experience bar, hearts, food and armour in the theme. Off: Minecraft's own look.")
 		.defaultValue(true).build();
+
+	// Chat. What Minecraft's own Chat Settings have is kept in step with them: changing either changes both.
+	private final SettingGroup spChat = preferences.group("Chat");
+	@ApiStatus.AvailableSince("1.2")
+	public final EnumSetting<ChatFont> chatFont = spChat.oneOf("Font", ChatFont.THEME).description("Theme: the theme's font. Minecraft: its own.")
+		.onChanged(v -> rescaleChat()).build();
+	@ApiStatus.AvailableSince("1.2")
+	public final DoubleSetting chatSize = spChat.decimal("Size").description("How large chat's text is.").defaultValue(1.0).range(0, 1).decimals(2).build();
+	@ApiStatus.AvailableSince("1.2")
+	public final IntSetting chatWidth = spChat.integer("Width").description("In GUI pixels.").defaultValue(320).range(40, 320).build();
+	@ApiStatus.AvailableSince("1.2")
+	public final IntSetting chatHeight = spChat.integer("Height").description("While chat is open, in GUI pixels.").defaultValue(180).range(20, 180).build();
+	@ApiStatus.AvailableSince("1.2")
+	public final IntSetting chatHeightUnfocused = spChat.integer("Height Closed").description("While chat is closed, in GUI pixels.").defaultValue(90).range(20, 180).build();
+	@ApiStatus.AvailableSince("1.2")
+	public final DoubleSetting chatTextOpacity = spChat.decimal("Text Opacity").defaultValue(1.0).range(0, 1).decimals(2).build();
+	@ApiStatus.AvailableSince("1.2")
+	public final DoubleSetting chatBackgroundOpacity = spChat.decimal("Background Opacity").defaultValue(0.5).range(0, 1).decimals(2).build();
+	@ApiStatus.AvailableSince("1.2")
+	public final DoubleSetting chatLineSpacing = spChat.decimal("Line Spacing").defaultValue(0.0).range(0, 1).decimals(2).build();
+	@ApiStatus.AvailableSince("1.2")
+	public final EnumSetting<ChatShown> chatShown = spChat.oneOf("Shown", ChatShown.ALL).description("All messages, only commands' answers, or none.").build();
+	@ApiStatus.AvailableSince("1.2")
+	public final EnumSetting<ChatBackground> chatBackground = spChat.oneOf("Background", ChatBackground.THEME)
+		.description("What chat's lines are drawn on: the theme's window colour, Minecraft's black, or nothing.").build();
+	@ApiStatus.AvailableSince("1.2")
+	public final BoolSetting chatShadow = spChat.bool("Text Shadow").defaultValue(true).build();
+	@ApiStatus.AvailableSince("1.2")
+	public final StringListSetting chatFilters = spChat.stringList("Filters")
+		.description("Messages containing any of these are hidden (a pattern in /slashes/ is a regular expression; case doesn't matter).")
+		.onChanged(v -> rescaleChat()).build();
+	@ApiStatus.AvailableSince("1.2")
+	public final BoolSetting chatStackRepeats = spChat.bool("Stack Repeats").description("The same message again shows once, with (x2), (x3).")
+		.defaultValue(true).build();
+	@ApiStatus.AvailableSince("1.2")
+	public final IntSetting chatHistory = spChat.integer("History").description("Messages kept to scroll back through (Minecraft keeps 100).")
+		.defaultValue(1000).range(100, 10000).build();
+
+	/** Chat's lines are split by the font and width they're drawn at, and shown by the filters: split again. */
+	private static void rescaleChat() {
+		var mc = Minecraft.getInstance();
+		if (mc.gui != null) mc.gui.hud.getChat().rescaleChat();
+	}
 
 	private final SettingGroup sgInput = preferences.group("Input");
 	public final EnumSetting<ModKey> modKey = sgInput.oneOf("Mod Key", ModKey.ALT)

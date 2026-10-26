@@ -10,7 +10,8 @@ import net.minecraft.network.chat.FontDescription;
 import net.minecraft.resources.Identifier;
 
 /**
- * Chat and item counts in the theme's font while Theme → Preferences → Theme Font is on. The font is registered with
+ * Item counts in the theme's font while Theme → Preferences → Theme Font is on, and chat while Chat → Font is Theme
+ * (ThemedChat). The font is registered with
  * Minecraft as {@code myriad:ui} (assets/myriad/font/ui.json: the theme's sans, then Minecraft's own for anything it
  * lacks), and the text is given it as its style's font, so Minecraft measures, wraps and finds clicks in it with the
  * widths it's drawn at.
@@ -43,7 +44,7 @@ public final class ThemedText {
 	@Subscribe
 	private void onTick(TickEvent.Post e) {
 		var mc = Minecraft.getInstance();
-		if (rasterised == 0 || mc.getWindow() == null || !on() || Math.max(1, mc.getWindow().getGuiScale()) == rasterised) {
+		if (rasterised == 0 || mc.getWindow() == null || !on() && !ThemedChat.themeFont() || Math.max(1, mc.getWindow().getGuiScale()) == rasterised) {
 			settled = 0;
 			return;
 		}

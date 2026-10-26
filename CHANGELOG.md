@@ -98,6 +98,13 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 - **`ThemeSettings.ModKey.isDown()` and `in(modifiers)`** (new): whether the Mod key is held, from the window's key
   events as well as its key state (a compositor can keep the key state from showing a held modifier), and whether a
   click's modifiers have it.
+- **Chat options** (Theme → Preferences → Chat): its font (the theme's or Minecraft's), size, width, height open and
+  closed, text and background opacity, line spacing and what's shown, kept in step with Minecraft's own Chat Settings
+  (a change to either is the other's too); its background (the theme's window colour, Minecraft's black or none) and
+  text shadow; filters (messages containing a word, or matching a /regular expression/, aren't shown); repeats stacked
+  (the same message again shows once, with (x2), (x3)); and how many messages are kept, 1000 by default where
+  Minecraft keeps 100. `ThemeSettings.chatFont` and the other `chat` settings, with `ChatFont`, `ChatBackground` and
+  `ChatShown`, are new.
 - **Separate bars for the recipe book's and creative inventory's tabs** on themed screens, as the swap bar is, rather
   than tabs joined to the window.
 - **Themed screens and hotbar** (Theme → Preferences → Cosmetics, both on by default): your inventory, chests,
@@ -111,8 +118,8 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   the theme font's heart, drumstick and shield in their colours (a heart's by its kind, food green under Hunger), the
   hotbar and what sits on it lifted 3 pixels off the screen's edge. Each takes the place of the texture or sprite Minecraft draws,
   in its GUI pixels, so the items, slots, clicks and other mods' slot work stay as they were.
-  The pause menu's buttons are theme buttons too. A third, Theme Font, sets chat and item counts in the theme's font:
-  it's registered with Minecraft as `myriad:ui` (the theme's semibold sans, falling back to Minecraft's own, rasterised
+  The pause menu's buttons are theme buttons too. A third, Theme Font, sets item counts in the theme's font (chat's
+  font is under Chat): it's registered with Minecraft as `myriad:ui` (the theme's semibold sans, falling back to Minecraft's own, rasterised
   at the GUI scale and again when that changes), so Minecraft wraps chat and finds clicks on its links at the
   widths it draws. `ThemeSettings.themedScreens`, `themedHotbar` and `themeFont` are new; the bundled fonts moved from
   `assets/myriad/fonts/` to `assets/myriad/font/`, where Minecraft's font loader looks.
