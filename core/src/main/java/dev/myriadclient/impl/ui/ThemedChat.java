@@ -12,6 +12,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.OptionInstance;
 import net.minecraft.client.Options;
 import net.minecraft.client.multiplayer.chat.GuiMessage;
+import net.minecraft.client.multiplayer.chat.GuiMessageSource;
 import net.minecraft.world.entity.player.ChatVisiblity;
 import org.jetbrains.annotations.Nullable;
 
@@ -33,6 +34,8 @@ import java.util.regex.PatternSyntaxException;
  */
 public final class ThemedChat {
 	public static final ThemedChat INSTANCE = new ThemedChat();
+	/** A server's chat line: {@code <name> message}. */
+	private static final Pattern CHAT_LINE = Pattern.compile("^<[^<>\\s]{1,32}> ");
 	/** Ticks a change is saved to Minecraft's options after (a slider dragged changes it every frame). */
 	private static final int SAVE_TICKS = 20;
 
@@ -122,14 +125,15 @@ public final class ThemedChat {
 		if (shownLast == null) shownLast = mine;
 		if (mine != shownLast) {
 			o.chatVisibility().set(switch (mine) {
-				case ALL -> ChatVisiblity.FULL;
+				case ALL, WHILE_OPEN -> ChatVisiblity.FULL;
 				case COMMANDS_ONLY -> ChatVisiblity.SYSTEM;
 				case HIDDEN -> ChatVisiblity.HIDDEN;
 			});
 			shownLast = mine;
 			return true;
 		}
-		if (theirs != mine) {
+		// Shown only while open is all of them to Minecraft.
+		if (theirs != mine && !(mine == ThemeSettings.ChatShown.WHILE_OPEN && theirs == ThemeSettings.ChatShown.ALL)) {
 			t.chatShown.set(theirs);
 			shownLast = theirs;
 		}
@@ -137,6 +141,11 @@ public final class ThemedChat {
 	}
 
 	// ---- read by the chat mixins ------------------------------------------------------------------------------------
+
+	/** Whether chat closed shows nothing (Shown: While Open). */
+	public static boolean hiddenClosed() {
+		return Myriad.isReady() && theme().chatShown.get() == ThemeSettings.ChatShown.WHILE_OPEN;
+	}
 
 	/** Whether chat's text has its shadow. */
 	public static boolean shadow() {
@@ -154,12 +163,18 @@ public final class ThemedChat {
 		};
 	}
 
-	/** Whether {@code message} is shown: none of the filters is in it. */
+	/**
+	 * Whether {@code message} is shown: none of the filters is in it, and with only commands' answers shown, it's no
+	 * player's chat (Minecraft hides signed chat then, but a server like 2b2t sends chat as its own lines).
+	 */
 	public static boolean shown(GuiMessage message) {
 		if (!Myriad.isReady()) return true;
+		String text = message.content().getString();
+		if (theme().chatShown.get() == ThemeSettings.ChatShown.COMMANDS_ONLY && (message.source() == GuiMessageSource.PLAYER || CHAT_LINE.matcher(text).find())) {
+			return false;
+		}
 		List<Pattern> patterns = INSTANCE.patterns();
 		if (patterns.isEmpty()) return true;
-		String text = message.content().getString();
 		for (Pattern p : patterns) if (p.matcher(text).find()) return false;
 		return true;
 	}

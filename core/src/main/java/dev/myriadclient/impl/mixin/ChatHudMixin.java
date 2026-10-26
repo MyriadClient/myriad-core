@@ -10,6 +10,7 @@ import dev.myriadclient.impl.ui.ThemedChat;
 import dev.myriadclient.impl.ui.ThemedText;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.ChatComponent;
 import net.minecraft.client.multiplayer.chat.GuiMessage;
 import net.minecraft.client.multiplayer.chat.GuiMessageSource;
@@ -110,8 +111,14 @@ public abstract class ChatHudMixin {
 	}
 
 	/** Chat drawing: its text shadow and line backgrounds follow Theme → Chat (ThemedChat). */
-	@Inject(method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/gui/Font;IIILnet/minecraft/client/gui/components/ChatComponent$DisplayMode;Z)V", at = @At("HEAD"))
-	private void myriad$drawing(CallbackInfo ci) {
+	@Inject(method = "extractRenderState(Lnet/minecraft/client/gui/GuiGraphicsExtractor;Lnet/minecraft/client/gui/Font;IIILnet/minecraft/client/gui/components/ChatComponent$DisplayMode;Z)V",
+		at = @At("HEAD"), cancellable = true)
+	private void myriad$drawing(GuiGraphicsExtractor graphics, Font font, int ticks, int mouseX, int mouseY, ChatComponent.DisplayMode mode, boolean cursor, CallbackInfo ci) {
+		// Shown only while open: the HUD's chat (any mod's that draws it) isn't, the open chat screen's (foreground) is.
+		if (!mode.foreground && ThemedChat.hiddenClosed()) {
+			ci.cancel();
+			return;
+		}
 		ThemedChat.drawing = true;
 	}
 

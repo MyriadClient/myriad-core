@@ -16,7 +16,10 @@ import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.ui.panels.CorePanels;
 import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.KeyboardHandler;
+import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.ChatScreen;
+import net.minecraft.client.gui.components.ChatComponent;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.Screenshot;
@@ -314,6 +317,14 @@ public final class DevConsole {
 					else if (mc.gui.screen() != null) mc.gui.setScreen(null);
 				}
 				case "echo" -> LOG.info("[dev] echo {}", line.substring(4).strip());
+				// "camera front": first person, back or front, as F5 steps through.
+				case "camera" -> mc.options.setCameraType(switch (a[1]) {
+					case "back" -> CameraType.THIRD_PERSON_BACK;
+					case "front" -> CameraType.THIRD_PERSON_FRONT;
+					default -> CameraType.FIRST_PERSON;
+				});
+				// Opens chat, as the chat key does.
+				case "openchat" -> mc.gui.hud.getChat().openScreen(ChatComponent.ChatMethod.MESSAGE, ChatScreen::new);
 				case "screenshot" -> Screenshot.grab(mc.gameDirectory, a[1] + ".png", mc.gameRenderer.mainRenderTarget(), 1, message -> {
 				});
 				case "menu" -> {
@@ -357,6 +368,7 @@ public final class DevConsole {
 			case "left" -> GLFW.GLFW_KEY_LEFT;
 			case "right" -> GLFW.GLFW_KEY_RIGHT;
 			case "left_alt" -> GLFW.GLFW_KEY_LEFT_ALT;
+			case "f5" -> GLFW.GLFW_KEY_F5;
 			default -> {
 				char c = n.charAt(0);
 				if (n.length() == 1 && c >= '0' && c <= '9') yield GLFW.GLFW_KEY_0 + (c - '0');

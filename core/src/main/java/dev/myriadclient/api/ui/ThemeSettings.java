@@ -91,10 +91,13 @@ public final class ThemeSettings {
 		THEME, VANILLA, NONE
 	}
 
-	/** Which messages chat shows (Minecraft's Chat setting). */
+	/**
+	 * Which messages chat shows: all, all but only while chat is open, only commands' answers (no player chat, also a
+	 * server's own {@code <name> message} lines), or none.
+	 */
 	@ApiStatus.AvailableSince("1.2")
 	public enum ChatShown {
-		ALL, COMMANDS_ONLY, HIDDEN
+		ALL, WHILE_OPEN, COMMANDS_ONLY, HIDDEN
 	}
 
 	public enum Curve {
@@ -219,7 +222,8 @@ public final class ThemeSettings {
 	@ApiStatus.AvailableSince("1.2")
 	public final DoubleSetting chatLineSpacing = spChat.decimal("Line Spacing").defaultValue(0.0).range(0, 1).decimals(2).build();
 	@ApiStatus.AvailableSince("1.2")
-	public final EnumSetting<ChatShown> chatShown = spChat.oneOf("Shown", ChatShown.ALL).description("All messages, only commands' answers, or none.").build();
+	public final EnumSetting<ChatShown> chatShown = spChat.oneOf("Shown", ChatShown.ALL).description("All messages; all, only while chat is open; "
+		+ "only commands' answers (no player chat, also a server's own <name> lines, as 2b2t sends chat); or none.").onChanged(v -> rescaleChat()).build();
 	@ApiStatus.AvailableSince("1.2")
 	public final EnumSetting<ChatBackground> chatBackground = spChat.oneOf("Background", ChatBackground.THEME)
 		.description("What chat's lines are drawn on: the theme's window colour, Minecraft's black, or nothing.").build();

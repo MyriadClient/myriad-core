@@ -100,7 +100,9 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   click's modifiers have it.
 - **Chat options** (Theme → Preferences → Chat): its font (the theme's or Minecraft's), size, width, height open and
   closed, text and background opacity, line spacing and what's shown, kept in step with Minecraft's own Chat Settings
-  (a change to either is the other's too); its background (the theme's window colour, Minecraft's black or none) and
+  (a change to either is the other's too), with two of Myriad's own for what's shown: While Open (nothing until chat is
+  open) and a Commands Only that also hides a server's own `<name> message` lines, as 2b2t sends chat (Minecraft's
+  hides only signed chat, so it hid nothing there); its background (the theme's window colour, Minecraft's black or none) and
   text shadow; filters (messages containing a word, or matching a /regular expression/, aren't shown); repeats stacked
   (the same message again shows once, with (x2), (x3)); and how many messages are kept, 1000 by default where
   Minecraft keeps 100. `ThemeSettings.chatFont` and the other `chat` settings, with `ChatFont`, `ChatBackground` and
