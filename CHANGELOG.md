@@ -129,6 +129,9 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 - **A block broken again by a finish alone waits for its tool from the inventory**, as a first break does: it broke
   with whatever was held, so an ender chest put down twice at one spot came back as obsidian (seen on 2b2t). And
   opening a container in the tick another closed no longer sends your inventory's close as well.
+- **The Preview's player stands still with resource packs that animate players** (Entity Model Features', such as
+  Fresh Animations): the stand-in is never ticked, so it stayed in the air it starts in and they played its landing
+  over and over, a crouch every second. It's on the ground now.
 - **A Shift-click in the launcher runs the alternate action**, as Shift+Enter does (a module's settings instead of
   turning it on); only a right click did. Shift is read from the click itself.
 - **Trying a shared config turns on only what was on for the sharer**: its control panel took every module in the

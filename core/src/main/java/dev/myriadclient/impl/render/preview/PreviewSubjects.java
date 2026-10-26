@@ -71,6 +71,9 @@ final class PreviewSubjects {
 			// Equipping makes a sound.
 			standIn.setSilent(true);
 		}
+		// Standing on the ground: it's never ticked, so it would stay in the air it starts in, and resource packs that
+		// animate players (Entity Model Features') played their landing over and over.
+		standIn.setOnGround(true);
 		standIn.getEntityData().set(Avatar.DATA_PLAYER_MODE_CUSTOMISATION, you.getEntityData().get(Avatar.DATA_PLAYER_MODE_CUSTOMISATION));
 		standIn.setMainArm(you.getMainArm());
 		for (EquipmentSlot slot : WORN) {
