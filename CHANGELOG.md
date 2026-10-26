@@ -141,6 +141,8 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 - **The Preview's player stands still with resource packs that animate players** (Entity Model Features', such as
   Fresh Animations): the stand-in is never ticked, so it stayed in the air it starts in and they played its landing
   over and over, a crouch every second. It's on the ground now.
+- **The mod key and Vim Keys are set in Keybinds** (Myriad → Menu), with the binds they go with, rather than among
+  the theme's preferences; `ThemeSettings.modKey` and `vimKeys` stay where they are.
 - **A Shift-click in the launcher runs the alternate action**, as Shift+Enter does (a module's settings instead of
   turning it on); only a right click did. Shift is read from the click itself.
 - **Trying a shared config turns on only what was on for the sharer**: its control panel took every module in the

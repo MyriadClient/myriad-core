@@ -3,6 +3,8 @@ package dev.myriadclient.impl.ui.panels;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.setting.Setting;
+import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Button;
@@ -101,8 +103,26 @@ public final class ThemePanel extends WidgetPanel {
 
 		VBox prefs = new VBox(4, 0);
 		prefs.add(new Label("These stay the same whichever theme is active.").dim());
-		prefs.add(SettingsView.build(wm.theme().preferences));
+		prefs.add(preferences());
 		content.add(new Collapsible("Preferences", prefs).indent(10));
+	}
+
+	/** The preferences, but for Input (the mod key, vim keys): binds, they're set in Keybinds (KeybindsPanel). */
+	private VBox preferences() {
+		VBox box = new VBox(4, 0);
+		for (SettingGroup group : wm.theme().preferences.groups()) {
+			if (group.settings().isEmpty() || group.id().equals("input")) continue;
+			VBox body = new VBox(3, 0);
+			for (Setting<?> s : group.settings()) {
+				Widget row = Myriad.ui().settingWidgets().create(s);
+				if (row != null) body.add(row);
+			}
+			Collapsible section = new Collapsible(group::name, body, group::isExpanded, group::setExpanded).indent(10)
+				.hint(() -> group.isExpanded() ? "" : String.valueOf(group.settings().stream().filter(Setting::isVisible).count()));
+			section.visible(() -> group.settings().stream().anyMatch(Setting::isVisible));
+			box.add(section);
+		}
+		return box;
 	}
 
 	/** One theme: colour swatches, name, a badge for user/modified themes, and a check on the active one. */

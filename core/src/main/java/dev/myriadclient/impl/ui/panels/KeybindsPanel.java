@@ -8,6 +8,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.Addon;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.service.KeyAction;
+import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.api.ui.widget.HBox;
@@ -15,6 +16,7 @@ import dev.myriadclient.api.ui.widget.KeybindButton;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.VBox;
+import dev.myriadclient.api.ui.widget.Widget;
 import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.ui.DesktopBinds;
@@ -105,7 +107,12 @@ public final class KeybindsPanel extends WidgetPanel {
 		Section myriad = new Section(null, "Myriad");
 		actions(myriad, Myriad.MOD_ID);
 		Section menu = myriad.child("Menu");
-		menu.body.add(new Label(() -> "Pressed together with the mod key (" + wm.theme().modKey.get().name().toLowerCase(Locale.ROOT) + ", change it in Theme → Preferences). Workspaces 1–9, the HUD and the launcher also work in game, without the menu open.").dim());
+		menu.body.add(new Label("Pressed together with the mod key. Workspaces 1–9, the HUD and the launcher also work in game, without the menu open.").dim());
+		// The mod key and vim keys: binds, so here rather than among the theme's preferences (where they're kept).
+		for (Setting<?> s : List.of(wm.theme().modKey, wm.theme().vimKeys)) {
+			Widget row = Myriad.ui().settingWidgets().create(s);
+			if (row != null) menu.body.add(row);
+		}
 		for (DesktopBinds.Bind b : wm.binds().values()) {
 			menu.row(b.name, () -> b.bind, k -> {
 				b.bind = k;
