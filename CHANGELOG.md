@@ -16,7 +16,7 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
-## 1.2.0 (unreleased)
+## 1.2.0
 
 - **A 2b2t profile** (`AntiCheat.Profile.GRIM_2B2T`, picked for 2b2t.org): Grim's answers, but placements and item
   uses go without a swing, and a slot swapped in for one goes back in the same tick, the off hand's for an air placement
