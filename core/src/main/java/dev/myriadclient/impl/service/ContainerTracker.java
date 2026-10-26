@@ -19,18 +19,25 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
+import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
@@ -42,6 +49,17 @@ import java.util.function.Predicate;
 public final class ContainerTracker implements Containers {
 	/** A click more than this long before the screen opened isn't what opened it. */
 	private static final long CLICK_WINDOW_MS = 2000;
+	/** Ticks the held ender chest gets to open over itself. */
+	private static final int UNLINK_TICKS = 40;
+	/** Ticks that open is tried again on while its click can't go (a look still turning for something else, say). */
+	private static final int UNLINK_TRIES = 40;
+	/** Owns that open. */
+	private static final Object HOLD = new Object() {
+		@Override
+		public String toString() {
+			return "Myriad";
+		}
+	};
 
 	private final Minecraft mc = Minecraft.getInstance();
 	private final MenuSync sync;
@@ -60,6 +78,18 @@ public final class ContainerTracker implements Containers {
 	/** The container held open on the server after its screen closes (Containers.hold), and that screen, kept to show again. */
 	private @Nullable ViewImpl held;
 	private @Nullable AbstractContainerScreen<?> heldScreen;
+	/** The held ender chest is to be opened once more over itself (see hold), and where it's being opened so. */
+	private boolean unlinkWanted;
+	private @Nullable BlockPos unlinking;
+	private int unlinkTries;
+	/** Per owner, what its boxes do with no way back (noWayBack). */
+	private final Map<Object, NoWayBack> noWayBack = Collections.synchronizedMap(new WeakHashMap<>());
+	/** The next container opened in code here shows no screen if none is up as it opens (see unseen). */
+	private @Nullable BlockPos unseen;
+	/** The open container's screen that wasn't shown (unseen, or the held ender chest opened over itself with none up). */
+	private @Nullable AbstractContainerScreen<?> hiddenScreen;
+	/** Your inventory's screen is being shown over the held container (showInventory), not that one's instead. */
+	private boolean showingInventory;
 
 	public ContainerTracker(MenuSync sync) {
 		this.sync = sync;
@@ -78,6 +108,13 @@ public final class ContainerTracker implements Containers {
 		}
 		boolean byCode = pending != null;
 		current = new ViewImpl(menu, pos, byCode ? pendingOwner : null, !byCode);
+		if (unlinking != null && unlinking.equals(pos)) {
+			// The held ender chest, opened over itself: held still, and now from anywhere (hold).
+			current.free = true;
+			held = current;
+			heldScreen = screenOf(menu);
+		}
+		unseen = null;
 		Myriad.events().post(new ContainerEvent.Opened(current));
 	}
 
@@ -114,6 +151,19 @@ public final class ContainerTracker implements Containers {
 		if (closeWanted) {
 			if (current == null || mc.player == null) closeWanted = false;
 			else if (Myriad.inventory().prepareClick()) closeNow();
+		}
+		if (unlinkWanted && held != null && held == current && held.loaded && pending == null) {
+			unlinkWanted = false;
+			unlinking = held.pos;
+			ViewImpl h = held;
+			open(HOLD, held.pos, UNLINK_TICKS, Placement.Options.forServer()).whenComplete((v, t) -> {
+				unlinking = null;
+				// Not opened (the click didn't go): again next tick, while it's still the one held.
+				if (t != null && held == h && h == current && !h.free) {
+					if (unlinkTries == 0 || unlinkTries == UNLINK_TRIES - 1) MyriadImpl.LOG.info("Opening the held ender chest over itself: {}", t.getMessage());
+					if (++unlinkTries < UNLINK_TRIES) unlinkWanted = true;
+				}
+			});
 		}
 		MenuJob t = transfers.peek();
 		if (t != null && t.tick(sync)) transfers.poll();
@@ -159,6 +209,11 @@ public final class ContainerTracker implements Containers {
 	private void onTick(TickEvent.Post e) {
 		if (current != null && (mc.player == null || mc.player.containerMenu != current.handler)) closeTracked();
 		if (pending != null && --pendingTicks <= 0) fail(new TimeoutException("Container at " + pendingPos + " didn't open"));
+		// Your inventory's screen over the held one shows what's on the cursor in that (inventoryClick).
+		AbstractContainerMenu h = heldMenu();
+		if (h != null && mc.gui.screen() instanceof InventoryScreen && !ItemStack.matches(h.getCarried(), mc.player.inventoryMenu.getCarried())) {
+			mc.player.inventoryMenu.setCarried(h.getCarried().copy());
+		}
 	}
 
 	@Subscribe
@@ -175,6 +230,7 @@ public final class ContainerTracker implements Containers {
 			held = null;
 			heldScreen = null;
 		}
+		if (hiddenScreen != null && hiddenScreen.getMenu() == closed.handler) hiddenScreen = null;
 		closeWanted = false;
 		for (MenuJob t : transfers) t.abort("The container closed");
 		transfers.clear();
@@ -215,22 +271,34 @@ public final class ContainerTracker implements Containers {
 	}
 
 	@Override
+	public CompletableFuture<ItemSession> putDownItem(Object owner, int inventoryIndex, int ticks, Placement.Options options) {
+		return ItemBoxes.putDown(owner, inventoryIndex, ticks, options);
+	}
+
+	@Override
+	public CompletableFuture<ItemSession> putDownItem(Object owner, View from, int screenSlot, int ticks, Placement.Options options) {
+		return ItemBoxes.putDown(owner, from, screenSlot, ticks, options);
+	}
+
+	@Override
 	public CompletableFuture<View> open(@Nullable Object owner, BlockPos pos, int timeoutTicks, @Nullable Placement.Options options) {
 		Threads.assertRender();
-		if (pending != null) fail(new IllegalStateException("Replaced by another open()"));
 		CompletableFuture<View> f = new CompletableFuture<>();
 		double range = options == null ? Reach.blockRange() : options.range();
 		BlockHitResult hit = Reach.hitFor(pos, false, range);
+		// One out of reach leaves an open under way alone: asked again each tick while it's stuck, it would end every other.
 		if (mc.player == null || hit == null) {
 			f.completeExceptionally(new IllegalStateException("Can't reach " + pos));
 			return f;
 		}
-		if (current != null && pos.equals(current.pos) && current.loaded) {
+		if (pending != null) fail(new IllegalStateException("Replaced by another open()"));
+		if (current != null && pos.equals(current.pos) && current.loaded && unlinking == null) {
 			f.complete(current);
 			return f;
 		}
-		// Another container is open: it closes first, as it would for a click on a block by hand.
-		if (current != null) closeNow();
+		// Another container open stays so, its screen up until this one's replaces it: the server closes it itself as it
+		// opens this one (ServerPlayer.openMenu), so no close goes first, none while you move (Grim's MultiActionsD) and
+		// no frame of the world shows between the two.
 		pending = f;
 		pendingOwner = owner;
 		pendingPos = pos.immutable();
@@ -260,12 +328,40 @@ public final class ContainerTracker implements Containers {
 	}
 
 	@Override
+	public void noWayBack(Object owner, NoWayBack what) {
+		noWayBack.put(owner, what);
+	}
+
+	/** What a box {@code owner} takes out does with no way back (noWayBack). */
+	NoWayBack noWayBackOf(Object owner) {
+		return noWayBack.getOrDefault(owner, NoWayBack.REFUSE);
+	}
+
+	/** Whether {@code view} is an ender chest's: its block, or the held one opened over itself (its block may be gone). */
+	boolean isEnderChest(View view) {
+		return view instanceof ViewImpl v && (v.free || v.pos != null && mc.level != null && mc.level.getBlockState(v.pos).is(Blocks.ENDER_CHEST));
+	}
+
+	@Override
+	public void swapBar(Object owner, boolean on) {
+		MyriadImpl.get().containerTabs().want(owner, on);
+	}
+
+	@Override
 	public boolean hold(View view) {
 		if (!(view instanceof ViewImpl v) || v != current || mc.player == null || mc.player.containerMenu != v.handler) return false;
-		// A box put down for you goes back when you close it; holding it would leave it standing.
-		if (MyriadImpl.get().containerTabs().isBox(v.pos)) return false;
+		// An ender chest is opened once more over itself: the server's ender chest inventory forgets its block when its
+		// menu is replaced, after the new one's block was set (PlayerEnderChestContainer.stopOpen, called from openMenu's
+		// close), and without a block it never checks your distance (stillValid). So it stays open however far away, and
+		// with its block broken: one put down for you (a box) goes back and stays held.
+		boolean ender = v.pos != null && mc.level.getBlockState(v.pos).is(Blocks.ENDER_CHEST);
+		// Any other box put down for you goes back when you close it; holding it would leave it standing.
+		if (!ender && MyriadImpl.get().containerTabs().isBox(v.pos)) return false;
 		held = v;
-		if (mc.gui.screen() instanceof AbstractContainerScreen<?> screen && screen.getMenu() == v.handler) heldScreen = screen;
+		AbstractContainerScreen<?> screen = screenOf(v.handler);
+		if (screen != null) heldScreen = screen;
+		unlinkWanted = ender && !v.free;
+		unlinkTries = 0;
 		return true;
 	}
 
@@ -294,6 +390,13 @@ public final class ContainerTracker implements Containers {
 	 * server, sending no close. Not with something on the cursor, which closing puts back where the server would.
 	 */
 	public boolean keepOpen(AbstractContainerMenu menu) {
+		// Your inventory's screen over the held one (showInventory): closing it leaves that open too.
+		if (mc.player != null && menu == mc.player.inventoryMenu && heldMenu() != null) {
+			if (held.handler.getCarried().isEmpty()) return true;
+			held = null;
+			heldScreen = null;
+			return false;
+		}
 		if (held == null || held.handler != menu || mc.player == null || mc.player.containerMenu != menu) return false;
 		if (!menu.getCarried().isEmpty()) {
 			held = null;
@@ -304,6 +407,75 @@ public final class ContainerTracker implements Containers {
 		return true;
 	}
 
+	/**
+	 * Shows your inventory's screen: over the held container, if one is, which stays open on the server and takes that
+	 * screen's clicks (inventoryClick), rather than showing that one instead.
+	 */
+	public void showInventory() {
+		if (mc.player == null) return;
+		showingInventory = true;
+		try {
+			mc.gui.setScreen(new InventoryScreen(mc.player));
+		} finally {
+			showingInventory = false;
+		}
+	}
+
+	/**
+	 * Closes the open container (a held one let go) as LocalPlayer.closeContainer does, but leaves the screen to the
+	 * caller: hiding it grabs the mouse, and showing the next one lets it go again at the window's centre.
+	 */
+	public void closeUnderScreen() {
+		if (mc.player == null) return;
+		held = null;
+		heldScreen = null;
+		if (mc.player.containerMenu == mc.player.inventoryMenu) return;
+		mc.player.connection.send(new ServerboundContainerClosePacket(mc.player.containerMenu.containerId));
+		mc.player.containerMenu = mc.player.inventoryMenu;
+	}
+
+	/**
+	 * A click in your inventory's screen shown over the held container (showInventory, from the mixin on
+	 * MultiPlayerGameMode.handleContainerInput): the server takes clicks only in the held one, so it goes to that one's
+	 * own slot for the same item. One on what it doesn't show (armour, the off hand, the crafting grid), or a shift or
+	 * double click, which would move things into it, lets it go first, the close going out before the click. What's on
+	 * the cursor then the close puts back into your inventory (AbstractContainerMenu.removed), so it's picked up again
+	 * from there for the click: an armour piece carried onto its slot goes on. True if it was made here.
+	 */
+	public boolean inventoryClick(int containerId, int slotId, int button, ContainerInput input) {
+		AbstractContainerMenu h = heldMenu();
+		if (h == null || containerId != mc.player.inventoryMenu.containerId || !(mc.gui.screen() instanceof InventoryScreen)) return false;
+		int to = slotId;
+		if (slotId >= 0) {
+			to = -1;
+			Slot from = slotId < mc.player.inventoryMenu.slots.size() ? mc.player.inventoryMenu.slots.get(slotId) : null;
+			if (from != null && from.container == mc.player.getInventory()) {
+				for (Slot s : h.slots) if (s.container == from.container && s.getContainerSlot() == from.getContainerSlot()) to = s.index;
+			}
+		}
+		boolean same = input == ContainerInput.PICKUP || input == ContainerInput.SWAP || input == ContainerInput.THROW
+			|| input == ContainerInput.CLONE || input == ContainerInput.QUICK_CRAFT;
+		if (same && (slotId < 0 || to >= 0)) {
+			mc.gameMode.handleContainerInput(h.containerId, to, button, input, mc.player);
+			mc.player.inventoryMenu.setCarried(h.getCarried().copy());
+			return true;
+		}
+		ItemStack carried = h.getCarried().copy();
+		closeUnderScreen();
+		if (!carried.isEmpty()) {
+			Inventory inventory = mc.player.getInventory();
+			int back = inventory.getSlotWithRemainingSpace(carried);
+			if (back < 0) back = inventory.getFreeSlot();
+			mc.player.inventoryMenu.setCarried(ItemStack.EMPTY);
+			if (back >= 0) {
+				// Where the server puts it, the same way.
+				inventory.placeItemBackInInventory(carried);
+				mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId, Slots.playerScreen(back), 0, ContainerInput.PICKUP, mc.player);
+			}
+		}
+		return false;
+	}
+
 	/** The held container's menu while it's the one open (your inventory's clicks go through it then), else null. */
 	public @Nullable AbstractContainerMenu heldMenu() {
 		return held != null && mc.player != null && mc.player.containerMenu == held.handler ? held.handler : null;
@@ -312,7 +484,28 @@ public final class ContainerTracker implements Containers {
 	/** Opening your inventory while a container's held shows that instead: it shows your inventory too, and takes its clicks. */
 	@Subscribe
 	private void onScreenOpen(ScreenOpenEvent e) {
-		if (e.screen() instanceof InventoryScreen && heldScreen != null && heldMenu() != null && !mc.player.isCreative()) e.setScreen(heldScreen);
+		if (e.screen() instanceof InventoryScreen && !showingInventory && heldScreen != null && heldMenu() != null && !mc.player.isCreative()) e.setScreen(heldScreen);
+		// Opened with no screen up, for code that only needs it open on the server: it shows none. The menu is the
+		// client's already (MenuScreens sets it before showing the screen), so its clicks and contents go on as shown.
+		else if (e.screen() instanceof AbstractContainerScreen<?> s && mc.gui.screen() == null && pending != null && pendingPos != null
+			&& (pendingPos.equals(unseen) || pendingPos.equals(unlinking)) && mc.player != null && s.getMenu() == mc.player.containerMenu) {
+			hiddenScreen = s;
+			e.cancel();
+		}
+	}
+
+	/**
+	 * The next open in code of the container at {@code pos} shows no screen if none is up as it opens: a box put back into
+	 * the container it came from, after you closed it all, opens it only for the server.
+	 */
+	public void unseen(BlockPos pos) {
+		unseen = pos.immutable();
+	}
+
+	/** {@code menu}'s screen, showing or opened unseen; null if it has none. */
+	private @Nullable AbstractContainerScreen<?> screenOf(AbstractContainerMenu menu) {
+		if (mc.gui.screen() instanceof AbstractContainerScreen<?> screen && screen.getMenu() == menu) return screen;
+		return hiddenScreen != null && hiddenScreen.getMenu() == menu ? hiddenScreen : null;
 	}
 
 	@Override
@@ -339,6 +532,8 @@ public final class ContainerTracker implements Containers {
 		private final @Nullable Object opener;
 		private final boolean byHand;
 		private boolean loaded;
+		/** An ender chest opened over itself, which the server keeps open anywhere (hold). */
+		private boolean free;
 
 		ViewImpl(AbstractContainerMenu handler, BlockPos pos, @Nullable Object opener, boolean byHand) {
 			this.handler = handler;

@@ -55,6 +55,7 @@ class OptionsTest {
 		assertEquals(Building.Options.STRICT, Building.Options.forProfile(grim));
 		assertEquals(Placement.Options.DEFAULT, Placement.Options.forProfile(vanilla));
 		assertEquals(Breaking.Options.FAST, Breaking.Options.forProfile(vanilla));
+		assertEquals(Breaking.Options.FAST_GRIM, Breaking.Options.forProfile(AntiCheat.Profile.GRIM_2B2T));
 		assertEquals(Rotations.Options.INSTANT, Rotations.Options.forProfile(vanilla));
 		assertEquals(Building.Options.DEFAULT, Building.Options.forProfile(vanilla));
 		// NoCheatPlus acts as the vanilla server did for it before it had a profile of its own.

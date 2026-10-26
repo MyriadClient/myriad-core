@@ -51,7 +51,13 @@ public abstract class AbstractContainerScreenMixin {
 		if (!Myriad.isReady() || !MyriadImpl.get().containerTracker().keepOpen(menu)) original.call(player);
 	}
 
-	/** A click on the swap bar over a themed screen switches to that tab (see ThemedScreens). */
+	/** The swap bar over a screen not drawn in the theme, under what's on the cursor (see ThemedScreens). */
+	@Inject(method = "extractCarriedItem", at = @At("HEAD"))
+	private void myriad$plainTabs(GuiGraphicsExtractor graphics, int mouseX, int mouseY, CallbackInfo ci) {
+		ThemedScreens.plainTabs((AbstractContainerScreen<?>) (Object) this, graphics);
+	}
+
+	/** A click on the swap bar switches to that tab (see ThemedScreens). */
 	@Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
 	private void myriad$tab(MouseButtonEvent event, boolean doubleClick, CallbackInfoReturnable<Boolean> cir) {
 		if (ThemedScreens.tabClicked((AbstractContainerScreen<?>) (Object) this, event.x(), event.y(), event.button())) cir.setReturnValue(true);

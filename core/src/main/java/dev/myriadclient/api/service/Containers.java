@@ -72,8 +72,9 @@ public interface Containers {
 	/**
 	 * Opens the shulker box or ender chest at inventory index {@code inventoryIndex} (0-35) where you stand: places it
 	 * above your head, a block up where there's room (into the empty space with {@link Placement.Options#airPlace()},
-	 * else against a block over it; an ender chest only the first way, as it won't open under a solid block), or else
-	 * beside you on the floor, opens it in the same tick, and completes with the session once its contents have arrived. Where the server checks looks
+	 * else against a block over it; an ender chest only the first way, as it won't open under a solid block), or else in
+	 * one of the eight blocks around your feet (on the floor, or with air placement in the air) or, with air placement,
+	 * around the block over your head, opens it in the same tick, and completes with the session once its contents have arrived. Where the server checks looks
 	 * ({@code options}, usually {@code Placement.Options.forServer()}) both clicks go with one look. One from the
 	 * inventory is brought into the hotbar for the placement, and what it displaced goes back once it's open.
 	 * {@link ItemSession#finish()} puts it back, where it came from. An ender chest needs a Silk Touch pickaxe (anywhere
@@ -92,12 +93,27 @@ public interface Containers {
 	 * slot {@code screenSlot}: one of the container's own, or of your inventory below them. One of the container's own
 	 * is swapped into the hotbar through its screen and the container closed, in the tick it's placed. Then
 	 * {@link ItemSession#finish()} puts it back and opens {@code from} again, leaving it open, so closing the box brings
-	 * you back to it: one from the container goes back into its slot there, and what made room for it in the hotbar,
-	 * left in that slot meanwhile, comes back out. Fails with {@code UNSUPPORTED} unless {@code from} is open and was
+	 * you back to it: one from the container goes back into it (the first free slot), and what made room for it in the
+	 * hotbar comes back. Fails with {@code UNSUPPORTED} unless {@code from} is open and was
 	 * opened from a block ({@link View#pos()}), to be opened again.
 	 */
 	@ApiStatus.AvailableSince("1.2")
 	CompletableFuture<ItemSession> openItem(Object owner, View from, int screenSlot, int ticks, Placement.Options options);
+
+	/**
+	 * {@link #openItem(Object, int, int, Placement.Options)} without opening it: the box is put down, and the session
+	 * completes once the server has it standing. Your inventory's screen, if it's up, stays up. Hand it to the swap bar
+	 * ({@link ItemSession#finishWhenClosed}) to open it from there; {@link ItemSession#view()} is null until it's opened.
+	 */
+	@ApiStatus.AvailableSince("1.2")
+	CompletableFuture<ItemSession> putDownItem(Object owner, int inventoryIndex, int ticks, Placement.Options options);
+
+	/**
+	 * {@link #openItem(Object, View, int, int, Placement.Options)} without opening it: {@code from} stays open, its screen
+	 * up, so several can be put down one after another and opened from the swap bar.
+	 */
+	@ApiStatus.AvailableSince("1.2")
+	CompletableFuture<ItemSession> putDownItem(Object owner, View from, int screenSlot, int ticks, Placement.Options options);
 
 	/**
 	 * A shulker box or ender chest from your inventory, placed and open ({@link #openItem}). Put it back with
@@ -105,15 +121,16 @@ public interface Containers {
 	 */
 	@ApiStatus.NonExtendable
 	interface ItemSession {
-		/** The open box. */
+		/** The open box: the last time it was opened, for one {@link #putDownItem put down} and opened later; null until then. */
 		View view();
 
 		/** Where it stands. */
 		BlockPos where();
 
 		/**
-		 * Closes it, breaks it (with the Silk Touch pickaxe for an ender chest), picks it up and puts it back in the
-		 * slot it came from (opening again the container it was opened from, if any); completes once it's back, or fails saying where it was left. Runs as Myriad's own job, so
+		 * Closes it, breaks it (with the Silk Touch pickaxe for an ender chest), picks it up and puts it back where it
+		 * came from: your inventory, wherever it lands, or the container it was opened from, opened again for it, into
+		 * the first free slot there (your inventory if that's full); completes once it's back, or fails saying where it was left. Runs as Myriad's own job, so
 		 * it finishes even if your module turns off meanwhile. Asking again returns the same future.
 		 */
 		CompletableFuture<Void> finish();
@@ -121,21 +138,56 @@ public interface Containers {
 		/**
 		 * Leaves it standing until you close a screen yourself, then {@link #finish()}es it: switching to another container
 		 * meanwhile (the swap bar over themed screens, where it has a tab, or opening one by hand) keeps it there to open
-		 * again. Boxes go back newest first, so one opened from another goes back into it before that one goes; one left
-		 * out of reach with no screen open goes back at once. Instead of watching its screen to call finish().
+		 * again. Boxes go back all together, broken one after another and each container they came from opened once; one
+		 * opened from another goes back into it before that one goes; one left out of reach with no screen open goes back
+		 * at once. Instead of watching its screen to call finish().
 		 */
 		@ApiStatus.AvailableSince("1.2")
 		void finishWhenClosed();
 	}
+
+	/** What a box does when the container it came from can't be opened again to put it back ({@link #noWayBack}). */
+	@ApiStatus.AvailableSince("1.2")
+	enum NoWayBack {
+		/** It isn't taken out: {@link #openItem} and {@link #putDownItem} fail with {@code OUT_OF_REACH}. */
+		REFUSE,
+		/**
+		 * From an ender chest: one from your inventory is put down to put it back through, and picked up again (a Silk
+		 * Touch pickaxe needed); without one it isn't taken out. From anything else, as {@link #REFUSE}.
+		 */
+		ENDER_CHEST,
+		/** Taken out anyway: it goes back into your inventory. */
+		INVENTORY
+	}
+
+	/**
+	 * What a box {@code owner} takes out of a container does when that container can't be opened again to put it back,
+	 * a held one far away ({@link #hold}): {@link NoWayBack#REFUSE} until set. One from an ender chest goes back through
+	 * any ender chest in reach first, whatever this says, as every ender chest holds the same things.
+	 */
+	@ApiStatus.AvailableSince("1.2")
+	void noWayBack(Object owner, NoWayBack what);
+
+	/**
+	 * Shows the swap bar over container screens while any owner has it {@code on}: a tab for your inventory, the
+	 * container you last opened and each box handed to it ({@link ItemSession#finishWhenClosed}), the one showing
+	 * highlighted; a click opens that one again. Drawn in the theme whether container screens are or not. It shows while
+	 * boxes stand or a container is {@link #hold held} regardless.
+	 */
+	@ApiStatus.AvailableSince("1.2")
+	void swapBar(Object owner, boolean on);
 
 	/**
 	 * Keeps the open container {@code view} open on the server when its screen closes: no close goes out, the screen
 	 * goes, and the container stays the one the server has, its contents kept up to date. {@link #reopen()} shows it again
 	 * at once, with no packets, and opening your inventory does too (it shows your inventory below its own). Meanwhile
 	 * your inventory's clicks (yours and other modules') go through it, as the server takes clicks only in the container
-	 * it has open; a click on armour, which it doesn't show, lets it go first. It ends when another container opens (the
-	 * server closes it), the server closes it (a vanilla server does once you're out of reach), you {@link #release()} it,
-	 * or you close its screen with something on the cursor. False if {@code view} isn't the open container.
+	 * it has open; a click on armour, which it doesn't show, lets it go first. An ender chest is opened once more over
+	 * itself (a round trip), after which the server keeps it open however far away and with its block broken, so one
+	 * {@link #openItem put down} from your inventory goes back and stays held. It ends when another container opens (the
+	 * server closes it), the server closes it (a vanilla server does once you're out of reach of anything else), you
+	 * {@link #release()} it, or you close its screen with something on the cursor. False if {@code view} isn't the open
+	 * container.
 	 */
 	@ApiStatus.AvailableSince("1.2")
 	boolean hold(View view);

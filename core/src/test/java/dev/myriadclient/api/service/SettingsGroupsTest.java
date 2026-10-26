@@ -35,8 +35,9 @@ class SettingsGroupsTest {
 		Settings settings = new Settings();
 		BreakingSettings b = new BreakingSettings(settings.group("General"));
 		assertEquals(Breaking.Options.PACKET, b.options(GRIM));
-		// Where breaks aren't timed the server's preset is already fast; double break only comes with Fast.
-		assertEquals(Breaking.Options.FAST.withDoubleBreak(false), b.options(VANILLA));
+		// Where breaks aren't timed, or a decoy fools the timing (2b2t), the server's preset is already fast, double break too.
+		assertEquals(Breaking.Options.FAST, b.options(VANILLA));
+		assertEquals(Breaking.Options.FAST_GRIM, b.options(AntiCheat.Profile.GRIM_2B2T));
 		assertFalse(b.doubleBreak.isVisible());
 		b.mode.set(BreakingSettings.Mode.FAST);
 		assertTrue(b.doubleBreak.isVisible());

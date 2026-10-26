@@ -74,6 +74,12 @@ public abstract class ClientPlayerInteractionManagerMixin {
 		if (Myriad.isReady()) MyriadImpl.get().inventoryManager().beforeCarriedSync();
 	}
 
+	/** A click in your inventory's screen shown over a held container goes through that (see ContainerTracker.inventoryClick). */
+	@Inject(method = "handleContainerInput", at = @At("HEAD"), cancellable = true)
+	private void myriad$throughHeld(int containerId, int slotNum, int buttonNum, ContainerInput input, Player player, CallbackInfo ci) {
+		if (MyriadImpl.get() != null && MyriadImpl.get().containerTracker().inventoryClick(containerId, slotNum, buttonNum, input)) ci.cancel();
+	}
+
 	/** Counts every click made, whichever way it then reaches the server (see PacketLimiter.recordClick). */
 	@Inject(method = "handleContainerInput", at = @At("HEAD"))
 	private void myriad$countClick(int containerId, int slotNum, int buttonNum, ContainerInput input, Player player, CallbackInfo ci) {

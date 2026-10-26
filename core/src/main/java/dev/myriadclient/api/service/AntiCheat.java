@@ -60,7 +60,14 @@ public interface AntiCheat {
 		 * The anti-cheat times each break from its start (Grim's FastBreak): the full time, with small allowances for
 		 * an early finish and a quick next start. Finishes before it are refused and the block comes back.
 		 */
-		CHECKED
+		CHECKED,
+		/**
+		 * Timed as {@link #CHECKED}, by a build of it that a start for the same spot far above the world fools: it then
+		 * times air, which breaks at once, so a break may finish at 70% of its time ({@link Breaking.Mode#FAST_GRIM}),
+		 * and a second block can be mined meanwhile. 2b2t's Grim.
+		 */
+		@ApiStatus.AvailableSince("1.2")
+		DECOYABLE
 	}
 
 	/**
@@ -92,10 +99,11 @@ public interface AntiCheat {
 		/**
 		 * 2b2t's Grim: Grim's answers, but it lets placements and item uses go without a swing, and a slot swapped in for
 		 * one go back in the same tick, so your hand never shows the item (live captures, 2026-10-24: no setback, nothing
-		 * refused). Picked for 2b2t.org.
+		 * refused); and its break timing is fooled by a decoy start ({@link BreakTiming#DECOYABLE}). Picked for 2b2t.org.
 		 */
 		@ApiStatus.AvailableSince("1.2")
-		public static final Profile GRIM_2B2T = GRIM.named("myriad:2b2t", "2b2t").withChecksSwings(false).withChecksPacketOrder(false);
+		public static final Profile GRIM_2B2T = GRIM.named("myriad:2b2t", "2b2t").withChecksSwings(false).withChecksPacketOrder(false)
+			.withBreakTiming(BreakTiming.DECOYABLE);
 		/**
 		 * NoCheatPlus (6b6t runs a fork of it). It checks the glide only against loose limits rather than simulating it,
 		 * which is what lets Elytra Fly's Control work there; everything else is treated as on a vanilla server, as it

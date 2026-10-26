@@ -5,6 +5,7 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.impl.MyriadImpl;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.world.inventory.ContainerInput;
@@ -80,8 +81,10 @@ final class ScreenClicks {
 		try {
 			while (!waiting.isEmpty()) {
 				ScreenClick c = waiting.poll();
-				// Clicks for a screen that has closed since are dropped: the client never showed them.
-				if (mc.player.containerMenu.containerId == c.containerId) mc.gameMode.handleContainerInput(c.containerId, c.slotId, c.button, c.input, mc.player);
+				// Clicks for a screen that has closed since are dropped: the client never showed them. Your inventory's, shown
+				// over a held container, go through that (ContainerTracker.inventoryClick).
+				boolean throughHeld = c.containerId == mc.player.inventoryMenu.containerId && MyriadImpl.get().containerTracker().heldMenu() != null;
+				if (mc.player.containerMenu.containerId == c.containerId || throughHeld) mc.gameMode.handleContainerInput(c.containerId, c.slotId, c.button, c.input, mc.player);
 			}
 		} finally {
 			replaying = false;

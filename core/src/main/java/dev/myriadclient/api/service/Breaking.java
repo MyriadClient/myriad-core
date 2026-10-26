@@ -95,14 +95,19 @@ public interface Breaking {
 
 		/**
 		 * Packet mining with your hand free, as fast as the server allows: {@link #PACKET} where an anti-cheat times
-		 * breaks ({@link AntiCheat.BreakTiming#CHECKED}), otherwise {@link #FAST}.
+		 * breaks ({@link AntiCheat.BreakTiming#CHECKED}), {@link #FAST_GRIM} with double break where a decoy start fools
+		 * its timing ({@link AntiCheat.BreakTiming#DECOYABLE}, 2b2t), otherwise {@link #FAST}.
 		 */
 		public static Options forServer() {
 			return forProfile(AntiCheat.inEffect());
 		}
 
 		static Options forProfile(AntiCheat.Profile p) {
-			return p.breakTiming() == AntiCheat.BreakTiming.CHECKED ? PACKET : FAST;
+			return switch (p.breakTiming()) {
+				case SERVER -> FAST;
+				case CHECKED -> PACKET;
+				case DECOYABLE -> FAST_GRIM;
+			};
 		}
 
 		/** How blocks are mined; see {@link Mode}. */

@@ -33,7 +33,9 @@ import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen;
 import net.minecraft.client.gui.screens.inventory.SmithingScreen;
 import net.minecraft.client.gui.screens.inventory.StonecutterScreen;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.Mth;
 import net.minecraft.world.inventory.Slot;
 import org.jetbrains.annotations.Nullable;
 
@@ -62,16 +64,14 @@ public final class ThemedScreens {
 	private static final float[][] BUBBLES = {{4, 25, 1.5f}, {8, 19.5f, 2}, {3.5f, 13, 1.5f}, {7.5f, 6.5f, 2}, {4, 1.5f, 1.2f}};
 	/** How far left the theme moves an anvil's name box, to centre it (Minecraft's sits right of an icon the theme doesn't draw). */
 	public static final int ANVIL_NAME_SHIFT = 26;
-	/** The themed window this frame (x, y, w, h), for what stands at its edges (a creative inventory's tabs), or null. */
-	private static float @Nullable [] window;
-	/** A swap bar tab's size, and how far it reaches into the window under it. */
-	private static final float TAB_W = 24, TAB_H = 22, TAB_OVERLAP = 3;
+	/** A swap bar cell around its 16-pixel icon, 20 apart, as the hotbar's; the gap between the bar and the window. */
+	private static final float TAB_CELL = 18, TAB_STEP = 20, BAR_GAP = 3;
+	/** Which of a creative inventory's tab bars (1 above, 2 below) are drawn this frame. */
+	private static int tabBars;
 	/** The swap bar as last drawn: on which screen, its tabs and where each was (x, y, w, h), for clicks. */
 	private static @Nullable AbstractContainerScreen<?> tabScreen;
 	private static @Nullable List<ContainerTabs.Tab> tabList;
 	private static final List<float[]> tabRects = new ArrayList<>();
-	/** The recipe book window's left edge this frame (its tabs end there), or NaN before one's drawn. */
-	private static float bookLeft = Float.NaN;
 	/** Whether this frame's background is drawn already: a screen's texture can come in more than one piece (a chest's). */
 	private static boolean drawn;
 
@@ -80,6 +80,7 @@ public final class ThemedScreens {
 
 	public static void beginBackground() {
 		drawn = false;
+		tabBars = 0;
 	}
 
 	/** Whether {@code screen} is drawn in the theme. */
@@ -101,9 +102,36 @@ public final class ThemedScreens {
 		if (drawn) return true;
 		drawn = true;
 		AbstractContainerScreenAccessor a = (AbstractContainerScreenAccessor) screen;
-		window = new float[]{a.myriad$leftPos(), a.myriad$topPos(), a.myriad$imageWidth(), a.myriad$imageHeight()};
 		MyriadImpl.get().windowManager().painter().paintGui(ctx, c -> paint(c, screen, texture.getPath()));
+		tabTooltip(ctx);
 		return true;
+	}
+
+	/**
+	 * The swap bar over a screen not drawn in the theme (its window Minecraft's), drawn in the theme over it: the bar
+	 * belongs to the swap, not to the screens' look.
+	 */
+	public static void plainTabs(AbstractContainerScreen<?> screen, GuiGraphicsExtractor ctx) {
+		if (!Myriad.isReady() || themed(screen)) return;
+		AbstractContainerScreenAccessor a = (AbstractContainerScreenAccessor) screen;
+		MyriadImpl.get().windowManager().painter().paintGui(ctx, c -> tabs(c, theme(), screen, a.myriad$leftPos(), a.myriad$topPos(), 0));
+		tabTooltip(ctx);
+	}
+
+	/** The swap bar cell under the mouse says what it is. */
+	private static void tabTooltip(GuiGraphicsExtractor ctx) {
+		if (tabList == null || tabRects.isEmpty()) return;
+		double[] m = mouse();
+		double mx = m[0], my = m[1];
+		for (int i = 0; i < tabRects.size() && i < tabList.size(); i++) {
+			float[] rr = tabRects.get(i);
+			if (mx < rr[0] || mx >= rr[0] + rr[2] || my < rr[1] || my >= rr[1] + rr[3]) continue;
+			ContainerTabs.Tab tab = tabList.get(i);
+			ContainerTabs tabs = MyriadImpl.get().containerTabs();
+			String name = !tabs.reachable(tab) ? tab.name() + " (out of reach)" : tabs.isHeld(tab) ? tab.name() + " (right-click to close)" : tab.name();
+			ctx.setTooltipForNextFrame(Component.literal(name), (int) mx, (int) my);
+			return;
+		}
 	}
 
 	/**
@@ -311,20 +339,15 @@ public final class ThemedScreens {
 			});
 			// A tab squashes up and down while it has new recipes (Minecraft scales it about its middle): its box is mapped
 			// through that rather than the renderer scaling, which is the same both ways.
+			// A tab's cell in the bar beside the book (recipeBook), the selected one highlighted as the hotbar's. Minecraft
+			// draws the selected one 2 further out, and squashes a tab up and down about its middle while it has new
+			// recipes: its box is mapped through that by hand.
 			case "recipe_book/tab", "recipe_book/tab_selected" -> {
 				var pose = ctx.pose();
-				float bx = pose.m00() * x + pose.m20(), by = pose.m11() * y + pose.m21(), bw = pose.m00() * w, bh = pose.m11() * h;
-				MyriadImpl.get().windowManager().painter().paintGui(ctx, c -> {
-					ThemeSettings t = theme();
-					float r = Math.min(t.rounding.get(), 4);
-					// Up to the book's edge, so a tab joins it rather than lying over it (its open side towards the book).
-					c.push();
-					if (!Float.isNaN(bookLeft)) c.clip(bx - 8, by - 8, Math.max(0, bookLeft + t.borderSize.get() - (bx - 8)), bh + 16);
-					c.roundRect(bx, by, bw, bh, r, ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xE0, ColorUtil.alpha(t.windowBackground.argb()))));
-					if (path.endsWith("selected")) c.gradientOutline(bx, by, bw, bh, r, 1, t.activeBorderFrom.argb(), t.activeBorderTo.argb(), t.borderAngle.get().floatValue());
-					else c.outline(bx, by, bw, bh, r, 1, t.inactiveBorder.argb());
-					c.pop();
-				});
+				boolean selected = path.endsWith("selected");
+				float tx = x + (selected ? 2 : 0);
+				float bx = pose.m00() * (tx + 2) + pose.m20(), by = pose.m11() * (y + 2) + pose.m21(), bw = pose.m00() * (w - 4), bh = pose.m11() * (h - 4);
+				MyriadImpl.get().windowManager().painter().paintGui(ctx, c -> cell(c, theme(), bx, by, bw, bh, selected, !selected && hovered(bx, by, bw, bh)));
 				yield true;
 			}
 			case "recipe_book/overlay_recipe" -> posed(ctx, c -> window(c, theme(), x, y, w, h, false));
@@ -378,21 +401,18 @@ public final class ThemedScreens {
 			});
 			case "container/beacon/confirm" -> posed(ctx, c -> centred(c, CHECK, x, y, w, h, theme().accent.argb()));
 			case "container/beacon/cancel" -> posed(ctx, c -> centred(c, CROSS, x, y, w, h, theme().red.argb()));
-			// A creative inventory's tabs, above and below the window: the selected one joins it, as the recipe book's do.
+			// A creative inventory's tabs, in a bar above the window and one below as the hotbar holds its items (Minecraft's
+			// tab is 26 by 32, reaching 4 into the window), the selected one highlighted as the hotbar's.
 			case String tab when tab.startsWith("container/creative_inventory/tab_") -> posed(ctx, c -> {
 				ThemeSettings t = theme();
-				float r = Math.min(t.rounding.get(), 4), b = t.borderSize.get();
 				boolean selected = tab.contains("_selected"), top = tab.contains("tab_top");
-				c.push();
-				if (window != null) {
-					// Not past the window's edge it stands on (inside it is the window's own).
-					if (top) c.clip(x - 4, y - 4, w + 8, window[1] + b - (y - 4));
-					else c.clip(x - 4, window[1] + window[3] - b, w + 8, y + h + 4 - (window[1] + window[3] - b));
+				// Under the row's first tab drawn: the selected one is drawn after the window, the rest before.
+				int bar = top ? 1 : 2;
+				if ((tabBars & bar) == 0 && Minecraft.getInstance().gui.screen() instanceof AbstractContainerScreenAccessor a) {
+					tabBars |= bar;
+					window(c, t, a.myriad$leftPos(), top ? y + 1 : y + 4 + BAR_GAP, a.myriad$imageWidth(), 24, false);
 				}
-				c.roundRect(x, y, w, h, r, selected ? t.windowBackground.argb() : ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xC0, ColorUtil.alpha(t.windowBackground.argb()) - 0x20)));
-				if (selected) c.gradientOutline(x, y, w, h, r, Math.max(1, b), t.activeBorderFrom.argb(), t.activeBorderTo.argb(), t.borderAngle.get().floatValue());
-				else c.outline(x, y, w, h, r, 1, t.inactiveBorder.argb());
-				c.pop();
+				cell(c, t, x + 2, top ? y + 2 : y + 4 + BAR_GAP + 1, 22, selected, hovered(x + 2, top ? y + 2 : y + 8, 22, 22));
 			});
 			// List scroll thumbs.
 			case "container/creative_inventory/scroller", "container/creative_inventory/scroller_disabled",
@@ -509,11 +529,20 @@ public final class ThemedScreens {
 		c.text(FontFamily.MONO, size, icon, x + (w - c.textWidth(FontFamily.MONO, size, icon)) / 2, y + (h - c.textHeight(FontFamily.MONO, size)) / 2, color);
 	}
 
-	/** The recipe book's own window, in place of its texture at {@code x, y} ({@code w} by {@code h}); false to let Minecraft draw it. */
-	public static boolean recipeBook(GuiGraphicsExtractor ctx, int x, int y, int w, int h) {
+	/** The recipe book's own window, in place of its texture at {@code x, y} ({@code w} by {@code h}), and the bar its {@code tabs} tabs stand in; false to let Minecraft draw it. */
+	public static boolean recipeBook(GuiGraphicsExtractor ctx, int x, int y, int w, int h, int tabs) {
 		if (!Myriad.isReady() || !theme().themedScreens.get()) return false;
-		bookLeft = x + ctx.pose().m20();
-		return posed(ctx, c -> window(c, theme(), x, y, w, h, true));
+		return posed(ctx, c -> {
+			ThemeSettings t = theme();
+			window(c, t, x, y, w, h, true);
+			// Minecraft's tabs are 35 by 27, 27 apart from 3 below the book's top, here out to BAR_GAP left of it.
+			if (tabs > 0) window(c, t, x - 30 - recipeTabsOut(), y + 3, 35, tabs * 27, false);
+		});
+	}
+
+	/** How much further out than Minecraft's the recipe book's tabs stand (Minecraft tucks them 5 under the book): 0 unthemed. */
+	public static int recipeTabsOut() {
+		return Myriad.isReady() && theme().themedScreens.get() ? 5 + (int) BAR_GAP : 0;
 	}
 
 	/** A window as the desktop draws one: shadow (if {@code shadow} and the theme has one), backdrop, surface and border. */
@@ -585,9 +614,10 @@ public final class ThemedScreens {
 	}
 
 	/**
-	 * The swap bar over the window (ContainerTabs): a tab per container to switch to, your head for your inventory, the
-	 * one showing joined to the window, one out of reach dim. Where they were drawn is kept for clicks. Not over the
-	 * creative inventory, whose own tabs stand there.
+	 * The swap bar above the window (ContainerTabs), as the hotbar is drawn: a bar of cells, one per container to switch
+	 * to (your head for your inventory), the one showing highlighted, one out of reach dim. To the window's left when
+	 * there's no room above. Where the cells were is kept for clicks. Not over the creative inventory, whose own tabs stand
+	 * there.
 	 */
 	private static void tabs(UiRenderer c, ThemeSettings t, AbstractContainerScreen<?> screen, float x, float y, float b) {
 		tabRects.clear();
@@ -595,42 +625,72 @@ public final class ThemedScreens {
 		if (screen instanceof CreativeModeInventoryScreen) return;
 		ContainerTabs bar = MyriadImpl.get().containerTabs();
 		var tabs = bar.tabs();
+		tabList = null;
 		if (tabs.size() < 2) return;
-		var mc = Minecraft.getInstance();
-		var window = mc.getWindow();
-		double mx = mc.mouseHandler.xpos() * window.getGuiScaledWidth() / window.getScreenWidth();
-		double my = mc.mouseHandler.ypos() * window.getGuiScaledHeight() / window.getScreenHeight();
-		float r = Math.min(t.rounding.get(), 4);
+		// As many in a row as the window is wide (a column as it's high, to its left), more rows above (columns further out).
+		AbstractContainerScreenAccessor a = (AbstractContainerScreenAccessor) screen;
+		int perRow = Math.max(1, (a.myriad$imageWidth() - 2) / (int) TAB_STEP), perColumn = Math.max(1, (a.myriad$imageHeight() - 2) / (int) TAB_STEP);
+		int rows = Mth.ceil(tabs.size() / (float) perRow);
+		boolean side = y - BAR_GAP - (rows * TAB_STEP + 2) < 2;
+		int across = side ? Math.min(tabs.size(), perColumn) : Math.min(tabs.size(), perRow), lines = Mth.ceil(tabs.size() / (float) across);
+		// Wrapped, it's as long as the window's side, its cells still filling from the start.
+		float length = lines > 1 ? side ? a.myriad$imageHeight() : a.myriad$imageWidth() : across * TAB_STEP + 2, depth = lines * TAB_STEP + 2;
+		float bx = side ? x - BAR_GAP - depth : x, by = side ? y : y - BAR_GAP - depth;
+		window(c, t, bx, by, side ? depth : length, side ? length : depth, false);
 		for (int i = 0; i < tabs.size(); i++) {
 			ContainerTabs.Tab tab = tabs.get(i);
-			float tx = x + 4 + i * (TAB_W + 2), ty = y - TAB_H + TAB_OVERLAP;
-			boolean current = bar.isCurrent(tab), reachable = bar.reachable(tab);
-			boolean hover = !current && mx >= tx && mx < tx + TAB_W && my >= ty && my < y;
+			int along = i % across, line = i / across;
+			float cx = side ? bx + 2 + line * TAB_STEP : bx + 2 + along * TAB_STEP, cy = side ? by + 2 + along * TAB_STEP : by + 2 + line * TAB_STEP;
+			boolean current = bar.isCurrent(tab);
 			c.push();
-			// Not past the window's top: inside is the window's own, and the one showing joins it there.
-			c.clip(tx - 2, ty - 2, TAB_W + 4, y + b - (ty - 2));
-			if (!reachable) c.alpha(0.45f);
-			c.roundRect(tx, ty, TAB_W, TAB_H, r, current ? t.windowBackground.argb() : hover ? t.surfaceHover.argb()
-				: ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xC0, ColorUtil.alpha(t.windowBackground.argb()) - 0x20)));
-			if (current) c.gradientOutline(tx, ty, TAB_W, TAB_H, r, Math.max(1, b), t.activeBorderFrom.argb(), t.activeBorderTo.argb(), t.borderAngle.get().floatValue());
-			else c.outline(tx, ty, TAB_W, TAB_H, r, 1, hover ? t.accent.argb() : t.inactiveBorder.argb());
+			if (!bar.reachable(tab)) c.alpha(0.45f);
+			cell(c, t, cx, cy, TAB_CELL, current, !current && hovered(cx, cy, TAB_CELL, TAB_CELL));
+			c.item(tab.icon(), cx + 1, cy + 1, 16, false);
 			c.pop();
-			c.push();
-			if (!reachable) c.alpha(0.45f);
-			c.item(tab.icon(), tx + (TAB_W - 16) / 2f, ty + 3, 16, false);
-			c.pop();
-			tabRects.add(new float[]{tx, ty, TAB_W, y - ty});
+			tabRects.add(new float[]{cx, cy, TAB_CELL, TAB_CELL});
 		}
 		tabList = tabs;
 	}
 
+	/** A bar's cell, as the hotbar's: the selected one in the accent. */
+	private static void cell(UiRenderer c, ThemeSettings t, float x, float y, float size, boolean selected, boolean hover) {
+		cell(c, t, x, y, size, size, selected, hover);
+	}
+
+	private static void cell(UiRenderer c, ThemeSettings t, float x, float y, float w, float h, boolean selected, boolean hover) {
+		float r = cellRounding(t);
+		c.roundRect(x, y, w, h, r, hover ? t.surfaceHover.argb() : t.surface.argb());
+		if (selected) {
+			c.roundRect(x, y, w, h, r, ColorUtil.withAlpha(t.accent.argb(), 0x40));
+			c.outline(x, y, w, h, r, 1, t.accent.argb());
+		} else if (hover) c.outline(x, y, w, h, r, 1, ColorUtil.withAlpha(t.accent.argb(), 0x90));
+	}
+
+	/** The mouse in GUI pixels. */
+	private static double[] mouse() {
+		var mc = Minecraft.getInstance();
+		var window = mc.getWindow();
+		return new double[]{mc.mouseHandler.xpos() * window.getGuiScaledWidth() / window.getScreenWidth(), mc.mouseHandler.ypos() * window.getGuiScaledHeight() / window.getScreenHeight()};
+	}
+
+	private static boolean hovered(float x, float y, float w, float h) {
+		double[] m = mouse();
+		return m[0] >= x && m[0] < x + w && m[1] >= y && m[1] < y + h;
+	}
+
+	/** How far a creative inventory's tab icon moves to sit in its cell in the bar (up for the top row's, down for the bottom's). */
+	public static int creativeIconShift(boolean top) {
+		return Myriad.isReady() && theme().themedScreens.get() ? top ? -4 : 4 : 0;
+	}
+
 	/** A click at {@code mx, my} on {@code screen}'s swap bar switches to that tab; true if it was on the bar (it goes no further). */
 	public static boolean tabClicked(AbstractContainerScreen<?> screen, double mx, double my, int button) {
-		if (screen != tabScreen || tabList == null || !themed(screen)) return false;
+		if (!Myriad.isReady() || screen != tabScreen || tabList == null) return false;
 		for (int i = 0; i < tabRects.size() && i < tabList.size(); i++) {
 			float[] rr = tabRects.get(i);
 			if (mx < rr[0] || mx >= rr[0] + rr[2] || my < rr[1] || my >= rr[1] + rr[3]) continue;
 			if (button == 0) MyriadImpl.get().containerTabs().switchTo(tabList.get(i));
+			else if (button == 1) MyriadImpl.get().containerTabs().letGo(tabList.get(i));
 			return true;
 		}
 		return false;

@@ -1,5 +1,7 @@
 package dev.myriadclient.api.ui;
 
+import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.platform.Window;
 import dev.myriadclient.api.render.Bezier;
 import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.setting.BoolSetting;
@@ -12,6 +14,7 @@ import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.Settings;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.ApiStatus;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * The live look of the menu, modelled on Hyprland's {@code general}, {@code decoration} and {@code animations}
@@ -29,7 +32,46 @@ public final class ThemeSettings {
 	}
 
 	public enum ModKey {
-		ALT, SUPER, CTRL
+		ALT(GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_RIGHT_ALT, GLFW.GLFW_MOD_ALT), SUPER(GLFW.GLFW_KEY_LEFT_SUPER, GLFW.GLFW_KEY_RIGHT_SUPER, GLFW.GLFW_MOD_SUPER),
+		CTRL(GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_RIGHT_CONTROL, GLFW.GLFW_MOD_CONTROL);
+
+		private final int left, right, mask;
+		/** Held, as the window's key events last said (left and right). */
+		private volatile boolean leftHeld, rightHeld;
+
+		ModKey(int left, int right, int mask) {
+			this.left = left;
+			this.right = right;
+			this.mask = mask;
+		}
+
+		/** Whether it was held with an input whose GLFW modifier bits are {@code modifiers} (a click's, say). */
+		@ApiStatus.AvailableSince("1.2")
+		public boolean in(int modifiers) {
+			return (modifiers & mask) != 0;
+		}
+
+		/**
+		 * Whether it's held now, on either side: as the window's key events last said, or its key state (some compositors
+		 * keep the window from seeing a held modifier in the key state).
+		 */
+		@ApiStatus.AvailableSince("1.2")
+		public boolean isDown() {
+			Minecraft mc = Minecraft.getInstance();
+			// Its release goes to another window once focus has moved (Alt-Tab, say).
+			if (!mc.isWindowActive()) leftHeld = rightHeld = false;
+			Window window = mc.getWindow();
+			return leftHeld || rightHeld || InputConstants.isKeyDown(window, left) || InputConstants.isKeyDown(window, right);
+		}
+
+		/** A key event from the window (KeyboardMixin): pressed or released, if it's one of the modifier keys. */
+		@ApiStatus.Internal
+		public static void keyEvent(int key, int action) {
+			for (ModKey m : values()) {
+				if (key == m.left) m.leftHeld = action != GLFW.GLFW_RELEASE;
+				if (key == m.right) m.rightHeld = action != GLFW.GLFW_RELEASE;
+			}
+		}
 	}
 
 	public enum BarPosition {

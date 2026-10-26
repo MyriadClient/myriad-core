@@ -54,17 +54,52 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   hotbar before, 1000 for an ender chest from a stack, 700 from the main inventory), no flags; on 2b2t, 150 to 220 ms
   after the click. `Placement.use` may now follow a placement at the same block that hasn't been answered; it goes
   after it.
-- **The swap bar** (over themed container screens): while boxes put down for you stand (`ItemSession.finishWhenClosed`,
-  new) or a container is held, a tab for your inventory (your head), the container you opened and each box, the one
-  showing joined to the window. The server keeps one container open at a time, so a tab opens its container again with
-  a click on its block (the held one shows at once); boxes stay standing while you switch, and go back, newest first,
-  once you close a screen yourself, a box left out of reach with nothing open at once. Putting a box back into a
-  container opens that one again for it, and then it's closed, as you'd closed everything.
+- **The swap bar**: a bar above a container screen's window, as the hotbar is, with a tab for your inventory, the
+  container you opened, the nearest ender chest in reach (nothing solid on it), a held one, and each box put down for
+  you (`ItemSession.finishWhenClosed`, new), the one showing highlighted and its name on hover. It shows over every
+  container screen, themed or not, while an owner wants it (`Containers.swapBar`, new; Inventory Tweaks does) or boxes
+  stand; to the window's left where there's no room above, and wrapped into rows the window's width (columns its
+  height) once it holds more than fit. The server keeps one container open at a time, so a tab opens its container
+  again with a click on its block, without closing the one open first (the server closes it itself), so its screen
+  stays up until the next one's replaces it and no close goes out while you move (Grim's MultiActionsD). Your
+  inventory's tab leaves a held container open, your inventory's clicks going through it; one on armour, the off hand
+  or the crafting grid, or a shift or double click, lets it go first, picking back up what was on the cursor. A right
+  click on a held one's tab lets it go. Showing your inventory no longer moves the mouse to the middle of the window.
+- **Boxes go back together**: once you close a screen yourself, every box standing is broken one after another
+  (queued with the breaking service, each starting as the last finishes rather than a round trip later) and picked up
+  as they fall, then each container they came from is opened once, unseen (`Containers.open` with no screen up shows
+  none), for all of its own: a shift-click each, into the first free slot there (your inventory if it's full); one from
+  your inventory stays where it lands. Two of one colour are told apart by what's in them. As many go at a time as
+  the inventory has room for. Picking up steps to a box lying out of reach as soon as it can be picked up, down a ledge
+  as far as a fall that doesn't hurt and up a block with a jump; the container, left out of reach, is walked back to.
+  What made room in the hotbar goes back once they're all in. Three boxes from a chest, two of one colour, on the Grim
+  test server through 72 ms of lag: 3.5 to 5.9 s one at a time, 2.0 to 2.9 s now.
+- **A box can be put down without opening** (`Containers.putDownItem`, new): it stands with a tab on the swap bar, the
+  screen you're in staying up, so several can be put down in a row and opened from the bar. It goes above your head
+  where it can, else in any of the eight blocks around your feet (on the floor, or in the air with air placement) or,
+  with air placement, around the block over your head, clicked on the face you see.
+- **No way back** (`Containers.NoWayBack`, `noWayBack`, new): what a box does when the container it came from can't be
+  opened again, a held one far away: refused (the default), put back through an ender chest put down from your
+  inventory, or into your inventory. One from an ender chest goes back through any ender chest in reach first, as
+  every one holds the same things.
 - **A container can be held open after its screen closes** (`Containers.hold`, `held`, `reopen`, `release`, new): no
   close goes out when you close its screen, so the server keeps it open, and `reopen()` (or opening your inventory)
   shows it again at once with no packets. Your inventory's clicks, yours and modules', go through it meanwhile (the
   server only takes clicks in the container it has open), on its slot for the same item; a click on armour lets it go
-  first. It ends when another container opens, the server closes it, or it's released.
+  first. It ends when another container opens, the server closes it, or it's released. An ender chest is opened once
+  more over itself: the server's ender chest inventory forgets its block when its menu is replaced
+  (`PlayerEnderChestContainer.stopOpen`), and without one never checks your distance, so it stays open from anywhere,
+  its block broken too: one put down from your inventory goes back and stays held. Held 20 blocks away on the test
+  server, past where a server closes one; 35 on 2b2t.
+- **On 2b2t, breaks finish early, with double break**: its Grim times breaks but a start for the same spot above the
+  world fools it (`AntiCheat.BreakTiming.DECOYABLE`, new, its profile's answer), so `Breaking.Options.forServer()` is
+  `FAST_GRIM` there, and Breaking settings' Packet mode follows (Double Break shows wherever blocks finish early). On
+  2b2t, mined blocks with the decoy stayed broken, none came back. Elsewhere on Grim it stays packet mining.
+- **`ThemeSettings.ModKey.isDown()` and `in(modifiers)`** (new): whether the Mod key is held, from the window's key
+  events as well as its key state (a compositor can keep the key state from showing a held modifier), and whether a
+  click's modifiers have it.
+- **Separate bars for the recipe book's and creative inventory's tabs** on themed screens, as the swap bar is, rather
+  than tabs joined to the window.
 - **Themed screens and hotbar** (Theme → Preferences → Cosmetics, both on by default): your inventory, chests,
   barrels, ender chests, shulker boxes, hoppers, dispensers, the crafting table, furnaces, smokers, blast furnaces, the
   anvil, smithing table, grindstone, brewing stand, crafter, stonecutter, enchanting table, villager trading, beacon,
@@ -83,9 +118,9 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   `assets/myriad/fonts/` to `assets/myriad/font/`, where Minecraft's font loader looks.
 - **A box in an open chest opens too** (`Containers.openItem(owner, view, screenSlot, ticks, options)`, new): one of
   the chest's own (a barrel's, shulker box's, ender chest's, hopper's, dispenser's) is swapped into the hotbar through
-  its screen and the chest closed in the tick it's placed; one of yours goes as before, the chest closed first. The
-  session's `finish()` puts it back and opens the chest again, leaving it open: a box from the chest goes back into its
-  slot there. With the hotbar full, what makes room for it waits in an empty slot of your inventory (two swaps in the
+  its screen, which stays up until the box's replaces it; one of yours goes as before, the chest closed first. The
+  session's `finish()` puts it back and opens the chest again, leaving it open: a box from the chest goes back into
+  it. With the hotbar full, what makes room for it waits in an empty slot of your inventory (two swaps in the
   tick), only with that full too in the box's place in the chest, and never the Silk Touch pickaxe an ender chest is
   picked back up with; an ender chest is left standing, saying where, rather than broken without one. A shulker box
   goes only a block above your head (its lid right over it pushes you down), else beside you. 300 ms on the Grim test

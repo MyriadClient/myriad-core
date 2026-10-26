@@ -290,6 +290,7 @@ public final class DevConsole {
 				case "openitem" -> openItem(a[1], a.length > 2 && a[2].equals("air"), a.length > 3 ? Integer.parseInt(a[3]) : 20);
 				case "status" -> status();
 				// The swap bar's tabs, and a switch to one by its place on the bar (see ContainerTabs).
+				case "themed" -> MyriadImpl.get().windowManager().theme().themedScreens.set(a[1].equals("on"));
 				case "tabs" -> LOG.info("[dev] tabs: {}", MyriadImpl.get().containerTabs().tabs().stream()
 					.map(t -> (MyriadImpl.get().containerTabs().isCurrent(t) ? "*" : "") + (t.you() ? "you" : t.pos().toShortString() + (t.box() != null ? " box" : ""))).toList());
 				case "tab" -> {
@@ -345,6 +346,7 @@ public final class DevConsole {
 			case "down" -> GLFW.GLFW_KEY_DOWN;
 			case "left" -> GLFW.GLFW_KEY_LEFT;
 			case "right" -> GLFW.GLFW_KEY_RIGHT;
+			case "left_alt" -> GLFW.GLFW_KEY_LEFT_ALT;
 			default -> {
 				char c = n.charAt(0);
 				if (n.length() == 1 && c >= '0' && c <= '9') yield GLFW.GLFW_KEY_0 + (c - '0');
