@@ -8,6 +8,7 @@ import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.ui.Shortcuts;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 
@@ -99,7 +100,7 @@ public final class ConsolePanel extends Panel {
 				scroll = 0;
 			}
 			case GLFW.GLFW_KEY_BACKSPACE -> {
-				if (!input.isEmpty()) input = (mods & GLFW.GLFW_MOD_CONTROL) != 0 ? "" : input.substring(0, input.length() - 1);
+				if (!input.isEmpty()) input = Shortcuts.ctrl(mods) ? "" : input.substring(0, input.length() - 1);
 			}
 			case GLFW.GLFW_KEY_TAB -> input += suggestion;
 			case GLFW.GLFW_KEY_UP -> {
@@ -116,16 +117,16 @@ public final class ConsolePanel extends Panel {
 				} else input = history.get(historyIndex);
 			}
 			case GLFW.GLFW_KEY_V -> {
-				if ((mods & GLFW.GLFW_MOD_CONTROL) != 0) input += Minecraft.getInstance().keyboardHandler.getClipboard().replace("\n", " ");
+				if (Shortcuts.ctrl(mods)) input += Minecraft.getInstance().keyboardHandler.getClipboard().replace("\n", " ");
 			}
 			case GLFW.GLFW_KEY_L -> {
-				if ((mods & GLFW.GLFW_MOD_CONTROL) != 0) ConsoleLog.clear();
+				if (Shortcuts.ctrl(mods)) ConsoleLog.clear();
 			}
 			case GLFW.GLFW_KEY_ESCAPE -> {
 				return false;
 			}
 			default -> {
-				if ((mods & GLFW.GLFW_MOD_CONTROL) != 0) return false;
+				if (Shortcuts.ctrl(mods)) return false;
 			}
 		}
 		updateSuggestion();

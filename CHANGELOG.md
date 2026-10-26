@@ -29,6 +29,10 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   reaches 7.5 pixels above its baseline and 2.5 below, so in Minecraft's rows accents ran into the line above,
   descenders into the line below, and the last line hung out of chat's box. Only accents on capitals still reach into
   the row above.
+- **Cmd works where Ctrl does on a Mac** in Myriad's text fields, console and launcher: select all, copy and paste
+  (Cmd+A, Cmd+C, Cmd+V), Cmd+P/N/J/K to move through the launcher's results, Cmd+Backspace to clear, Cmd+L to clear
+  the console. Ctrl still works too. Minecraft's own text fields take Cmd on a Mac (InputQuirks), and Myriad's took
+  only Ctrl.
 
 ## 1.2.0
 

@@ -334,22 +334,22 @@ final class Launcher {
 			}
 			case GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_TAB -> selected = Math.min(results.size() - 1, selected + 1);
 			case GLFW.GLFW_KEY_UP -> selected = Math.max(0, selected - 1);
-			// Walker/fzf style: Ctrl+j/k or Ctrl+n/p move the selection.
+			// Walker/fzf style: Ctrl+j/k or Ctrl+n/p move the selection (Cmd too on a Mac).
 			case GLFW.GLFW_KEY_J, GLFW.GLFW_KEY_N -> {
-				if ((mods & GLFW.GLFW_MOD_CONTROL) != 0) selected = Math.min(results.size() - 1, selected + 1);
+				if (Shortcuts.ctrl(mods)) selected = Math.min(results.size() - 1, selected + 1);
 			}
 			case GLFW.GLFW_KEY_K, GLFW.GLFW_KEY_P -> {
-				if ((mods & GLFW.GLFW_MOD_CONTROL) != 0) selected = Math.max(0, selected - 1);
+				if (Shortcuts.ctrl(mods)) selected = Math.max(0, selected - 1);
 			}
 			case GLFW.GLFW_KEY_BACKSPACE -> {
 				if (!query.isEmpty()) {
-					query = (mods & GLFW.GLFW_MOD_CONTROL) != 0 ? "" : query.substring(0, query.length() - 1);
+					query = Shortcuts.ctrl(mods) ? "" : query.substring(0, query.length() - 1);
 					selected = 0;
 					refresh();
 				}
 			}
 			case GLFW.GLFW_KEY_V -> {
-				if ((mods & GLFW.GLFW_MOD_CONTROL) != 0) {
+				if (Shortcuts.ctrl(mods)) {
 					query += Minecraft.getInstance().keyboardHandler.getClipboard();
 					refresh();
 				}

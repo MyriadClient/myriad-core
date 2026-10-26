@@ -3,6 +3,7 @@ package dev.myriadclient.api.ui.widget;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.util.ColorUtil;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.input.InputQuirks;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
@@ -138,6 +139,8 @@ public class TextField extends Widget {
 		if (!isFocused()) return false;
 		blinkStart = System.nanoTime();
 		boolean ctrl = (mods & GLFW.GLFW_MOD_CONTROL) != 0;
+		// Select all, copy and paste take Cmd too on a Mac, as Minecraft's own text fields do.
+		boolean edit = ctrl || (mods & InputQuirks.EDIT_SHORTCUT_KEY_MODIFIER) != 0;
 		switch (key) {
 			case GLFW.GLFW_KEY_ESCAPE -> blur();
 			case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
@@ -175,13 +178,13 @@ public class TextField extends Widget {
 			case GLFW.GLFW_KEY_HOME -> cursor = 0;
 			case GLFW.GLFW_KEY_END -> cursor = text.length();
 			case GLFW.GLFW_KEY_A -> {
-				if (ctrl) selectAll = true;
+				if (edit) selectAll = true;
 			}
 			case GLFW.GLFW_KEY_C -> {
-				if (ctrl) Minecraft.getInstance().keyboardHandler.setClipboard(text);
+				if (edit) Minecraft.getInstance().keyboardHandler.setClipboard(text);
 			}
 			case GLFW.GLFW_KEY_V -> {
-				if (ctrl) insert(Minecraft.getInstance().keyboardHandler.getClipboard().replace("\n", " "));
+				if (edit) insert(Minecraft.getInstance().keyboardHandler.getClipboard().replace("\n", " "));
 			}
 			default -> {
 			}
