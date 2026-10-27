@@ -1,6 +1,9 @@
 package dev.myriadclient.impl.ui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.event.Subscribe;
+import dev.myriadclient.api.event.events.InputEvent;
 import dev.myriadclient.api.render.Animated;
 import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.ui.ThemeSettings;
@@ -9,6 +12,7 @@ import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.impl.render.UiRenderer;
 import dev.myriadclient.impl.wheel.WheelImpl;
 import dev.myriadclient.impl.wheel.WheelSlot;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
@@ -22,7 +26,8 @@ import java.util.List;
 /**
  * A wheel over the game while its bind is held: its slots as round buttons on a ring around a disc that names the one
  * the mouse points at. Letting go of the bind runs that one (pointing at the middle runs nothing); a click runs one
- * too, Escape or a right click closes it. Drawn in the desktop's theme, over a blur of the game.
+ * too, Escape or a right click closes it. Drawn in the desktop's theme, over a blur of the game. You keep walking
+ * meanwhile: the movement keys you hold still move you, and what already moves you (Baritone, Auto Walk) carries on.
  */
 public final class WheelScreen extends Screen {
 	/** A slot's button radius, in the desktop's units. */
@@ -38,6 +43,7 @@ public final class WheelScreen extends Screen {
 	private final List<Animated> grow = new ArrayList<>();
 	private int hovered = -1;
 	private boolean done;
+	private boolean subscribed;
 
 	public WheelScreen(WheelImpl wheel, Keybind bind) {
 		super(Component.literal(wheel.name()));
@@ -45,6 +51,43 @@ public final class WheelScreen extends Screen {
 		this.bind = bind;
 		this.slots = wheel.slots();
 		for (int i = 0; i < slots.size(); i++) grow.add(new Animated(0));
+	}
+
+	@Override
+	protected void init() {
+		if (!subscribed) {
+			subscribed = true;
+			Myriad.events().subscribe(this);
+		}
+	}
+
+	@Override
+	public void removed() {
+		if (subscribed) {
+			subscribed = false;
+			Myriad.events().unsubscribe(this);
+		}
+	}
+
+	/** Opening a screen lets go of every key: the movement keys still held count again, on top of any other input. */
+	@Subscribe
+	private void onInput(InputEvent e) {
+		e.forward |= held(minecraft.options.keyUp);
+		e.backward |= held(minecraft.options.keyDown);
+		e.left |= held(minecraft.options.keyLeft);
+		e.right |= held(minecraft.options.keyRight);
+		e.jump |= held(minecraft.options.keyJump);
+		e.sneak |= held(minecraft.options.keyShift);
+		e.sprint |= held(minecraft.options.keySprint);
+	}
+
+	/** Whether the key or mouse button bound to {@code mapping} is held, read straight from the window. */
+	private boolean held(KeyMapping mapping) {
+		if (mapping.isUnbound()) return false;
+		InputConstants.Key key = InputConstants.getKey(mapping.saveString());
+		long window = minecraft.getWindow().handle();
+		if (key.getType() == InputConstants.Type.MOUSE) return GLFW.glfwGetMouseButton(window, key.getValue()) == GLFW.GLFW_PRESS;
+		return InputConstants.isKeyDown(minecraft.getWindow(), key.getValue());
 	}
 
 	private WindowManager wm() {

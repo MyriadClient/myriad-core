@@ -59,6 +59,9 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   (Cmd+A, Cmd+C, Cmd+V), Cmd+P/N/J/K to move through the launcher's results, Cmd+Backspace to clear, Cmd+L to clear
   the console. Ctrl still works too. Minecraft's own text fields take Cmd on a Mac (InputQuirks), and Myriad's took
   only Ctrl.
+- **You keep walking with a wheel open.** Opening a screen lets go of every key, and a wheel is one: walking with
+  the keys stopped while you picked from it. The movement keys you hold (walk, jump, sneak, sprint) still move you
+  while it's shown. Baritone and other input walking you carry on as before.
 
 ## 1.2.0
 
