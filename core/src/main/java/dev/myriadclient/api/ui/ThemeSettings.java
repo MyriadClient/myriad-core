@@ -79,14 +79,20 @@ public final class ThemeSettings {
 		TOP, BOTTOM
 	}
 
-	/** The font chat is drawn in. */
+	/** The font chat is drawn in.
+	 * @deprecated Chat is no longer core's (see the Chat settings below); removed in 2.0.
+	 */
 	@ApiStatus.AvailableSince("1.2")
+	@Deprecated(since = "1.3", forRemoval = true)
 	public enum ChatFont {
 		MINECRAFT, THEME
 	}
 
-	/** What chat's lines are drawn on: the theme's window colour, Minecraft's black, or nothing. */
+	/** What chat's lines are drawn on: the theme's window colour, Minecraft's black, or nothing.
+	 * @deprecated Chat is no longer core's (see the Chat settings below); removed in 2.0.
+	 */
 	@ApiStatus.AvailableSince("1.2")
+	@Deprecated(since = "1.3", forRemoval = true)
 	public enum ChatBackground {
 		THEME, VANILLA, NONE
 	}
@@ -94,8 +100,10 @@ public final class ThemeSettings {
 	/**
 	 * Which messages chat shows: all, all but only while chat is open, only commands' answers (no player chat, also a
 	 * server's own {@code <name> message} lines), or none.
+	 * @deprecated Chat is no longer core's (see the Chat settings below); removed in 2.0.
 	 */
 	@ApiStatus.AvailableSince("1.2")
+	@Deprecated(since = "1.3", forRemoval = true)
 	public enum ChatShown {
 		ALL, WHILE_OPEN, COMMANDS_ONLY, HIDDEN
 	}
@@ -195,56 +203,63 @@ public final class ThemeSettings {
 		.defaultValue(true).build();
 	@ApiStatus.AvailableSince("1.2")
 	public final BoolSetting themeFont = spCosmetics.bool("Theme Font")
-		.description("Item counts in the theme's font. Off: Minecraft's own. Chat's font is under Chat.")
+		.description("Item counts in the theme's font. Off: Minecraft's own.")
 		.defaultValue(true).build();
 	@ApiStatus.AvailableSince("1.2")
 	public final BoolSetting themedHotbar = spCosmetics.bool("Themed Hotbar")
 		.description("Draw the hotbar, the off hand's slot, the experience bar, hearts, food and armour in the theme. Off: Minecraft's own look.")
 		.defaultValue(true).build();
 
-	// Chat. What Minecraft's own Chat Settings have is kept in step with them: changing either changes both.
+	// Chat: no longer core's (1.3). The settings stay, hidden and not applied, so what was saved is still read (an addon
+	// can carry it over) and addons reading them still build; removed in 2.0. Chat's look and filters are an addon's now.
 	private final SettingGroup spChat = preferences.group("Chat");
 	@ApiStatus.AvailableSince("1.2")
-	public final EnumSetting<ChatFont> chatFont = spChat.oneOf("Font", ChatFont.THEME).description("Theme: the theme's font. Minecraft: its own.")
-		.onChanged(v -> rescaleChat()).build();
+	@Deprecated(since = "1.3", forRemoval = true)
+	public final EnumSetting<ChatFont> chatFont = spChat.oneOf("Font", ChatFont.THEME).description("Theme: the theme's font. Minecraft: its own.").visible(() -> false).build();
 	@ApiStatus.AvailableSince("1.2")
-	public final DoubleSetting chatSize = spChat.decimal("Size").description("How large chat's text is.").defaultValue(1.0).range(0, 1).decimals(2).build();
+	@Deprecated(since = "1.3", forRemoval = true)
+	public final DoubleSetting chatSize = spChat.decimal("Size").description("How large chat's text is.").defaultValue(1.0).range(0, 1).decimals(2).visible(() -> false).build();
 	@ApiStatus.AvailableSince("1.2")
-	public final IntSetting chatWidth = spChat.integer("Width").description("In GUI pixels.").defaultValue(320).range(40, 320).build();
+	@Deprecated(since = "1.3", forRemoval = true)
+	public final IntSetting chatWidth = spChat.integer("Width").description("In GUI pixels.").defaultValue(320).range(40, 320).visible(() -> false).build();
 	@ApiStatus.AvailableSince("1.2")
-	public final IntSetting chatHeight = spChat.integer("Height").description("While chat is open, in GUI pixels.").defaultValue(180).range(20, 180).build();
+	@Deprecated(since = "1.3", forRemoval = true)
+	public final IntSetting chatHeight = spChat.integer("Height").description("While chat is open, in GUI pixels.").defaultValue(180).range(20, 180).visible(() -> false).build();
 	@ApiStatus.AvailableSince("1.2")
-	public final IntSetting chatHeightUnfocused = spChat.integer("Height Closed").description("While chat is closed, in GUI pixels.").defaultValue(90).range(20, 180).build();
+	@Deprecated(since = "1.3", forRemoval = true)
+	public final IntSetting chatHeightUnfocused = spChat.integer("Height Closed").description("While chat is closed, in GUI pixels.").defaultValue(90).range(20, 180).visible(() -> false).build();
 	@ApiStatus.AvailableSince("1.2")
-	public final DoubleSetting chatTextOpacity = spChat.decimal("Text Opacity").defaultValue(1.0).range(0, 1).decimals(2).build();
+	@Deprecated(since = "1.3", forRemoval = true)
+	public final DoubleSetting chatTextOpacity = spChat.decimal("Text Opacity").defaultValue(1.0).range(0, 1).decimals(2).visible(() -> false).build();
 	@ApiStatus.AvailableSince("1.2")
-	public final DoubleSetting chatBackgroundOpacity = spChat.decimal("Background Opacity").defaultValue(0.5).range(0, 1).decimals(2).build();
+	@Deprecated(since = "1.3", forRemoval = true)
+	public final DoubleSetting chatBackgroundOpacity = spChat.decimal("Background Opacity").defaultValue(0.5).range(0, 1).decimals(2).visible(() -> false).build();
 	@ApiStatus.AvailableSince("1.2")
-	public final DoubleSetting chatLineSpacing = spChat.decimal("Line Spacing").defaultValue(0.0).range(0, 1).decimals(2).build();
+	@Deprecated(since = "1.3", forRemoval = true)
+	public final DoubleSetting chatLineSpacing = spChat.decimal("Line Spacing").defaultValue(0.0).range(0, 1).decimals(2).visible(() -> false).build();
 	@ApiStatus.AvailableSince("1.2")
+	@Deprecated(since = "1.3", forRemoval = true)
 	public final EnumSetting<ChatShown> chatShown = spChat.oneOf("Shown", ChatShown.ALL).description("All messages; all, only while chat is open; "
-		+ "only commands' answers (no player chat, also a server's own <name> lines, as 2b2t sends chat); or none.").onChanged(v -> rescaleChat()).build();
+		+ "only commands' answers (no player chat, also a server's own <name> lines, as 2b2t sends chat); or none.").visible(() -> false).build();
 	@ApiStatus.AvailableSince("1.2")
+	@Deprecated(since = "1.3", forRemoval = true)
 	public final EnumSetting<ChatBackground> chatBackground = spChat.oneOf("Background", ChatBackground.THEME)
-		.description("What chat's lines are drawn on: the theme's window colour, Minecraft's black, or nothing.").build();
+		.description("What chat's lines are drawn on: the theme's window colour, Minecraft's black, or nothing.").visible(() -> false).build();
 	@ApiStatus.AvailableSince("1.2")
-	public final BoolSetting chatShadow = spChat.bool("Text Shadow").defaultValue(true).build();
+	@Deprecated(since = "1.3", forRemoval = true)
+	public final BoolSetting chatShadow = spChat.bool("Text Shadow").defaultValue(true).visible(() -> false).build();
 	@ApiStatus.AvailableSince("1.2")
+	@Deprecated(since = "1.3", forRemoval = true)
 	public final StringListSetting chatFilters = spChat.stringList("Filters")
-		.description("Messages containing any of these are hidden (a pattern in /slashes/ is a regular expression; case doesn't matter).")
-		.onChanged(v -> rescaleChat()).build();
+		.description("Messages containing any of these are hidden (a pattern in /slashes/ is a regular expression; case doesn't matter).").visible(() -> false).build();
 	@ApiStatus.AvailableSince("1.2")
+	@Deprecated(since = "1.3", forRemoval = true)
 	public final BoolSetting chatStackRepeats = spChat.bool("Stack Repeats").description("The same message again shows once, with (x2), (x3).")
-		.defaultValue(true).build();
+		.defaultValue(true).visible(() -> false).build();
 	@ApiStatus.AvailableSince("1.2")
+	@Deprecated(since = "1.3", forRemoval = true)
 	public final IntSetting chatHistory = spChat.integer("History").description("Messages kept to scroll back through (Minecraft keeps 100).")
-		.defaultValue(1000).range(100, 10000).build();
-
-	/** Chat's lines are split by the font and width they're drawn at, and shown by the filters: split again. */
-	private static void rescaleChat() {
-		var mc = Minecraft.getInstance();
-		if (mc.gui != null) mc.gui.hud.getChat().rescaleChat();
-	}
+		.defaultValue(1000).range(100, 10000).visible(() -> false).build();
 
 	private final SettingGroup sgInput = preferences.group("Input");
 	public final EnumSetting<ModKey> modKey = sgInput.oneOf("Mod Key", ModKey.ALT)

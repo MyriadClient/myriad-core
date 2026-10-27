@@ -16,7 +16,7 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
-## 1.2.1
+## 1.3.0
 
 - **Resizing the window no longer reloads resources** with the theme's font on, for chat or item counts. Minecraft
   draws a TTF font once, at a fixed scale, so Myriad reloaded every resource (as F3+T does) whenever the GUI scale
@@ -25,10 +25,16 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   they're drawn again as they're shown: 4 to 22 ms on a scale change in the dev client, chat's lines split again
   included. Widths are Minecraft's to the pixel (its hinted advances, the same at every scale), so chat wraps as it did,
   and now wraps again for the new scale too.
-- **Chat's rows fit the theme's font**: 11 pixels where Minecraft's are 9, Line Spacing on top. The theme's font
-  reaches 7.5 pixels above its baseline and 2.5 below, so in Minecraft's rows accents ran into the line above,
-  descenders into the line below, and the last line hung out of chat's box. Only accents on capitals still reach into
-  the row above.
+- **Chat is no longer core's.** Theme → Preferences → Chat (its font, size, width, heights, opacities, line spacing,
+  what's shown, background, text shadow, filters, stacked repeats and history) is gone from the theme: chat's look and
+  filters belong with the modules, and Myriad Essentials' Chat module has them now, taking what you'd set here the
+  first time it loads. The settings stay on `ThemeSettings`, hidden and no longer applied, so what was saved can still
+  be read and addons reading them still build: `chatFont` to `chatHistory` and the `ChatFont`, `ChatBackground` and
+  `ChatShown` enums are deprecated for removal in 2.0. Core keeps what any chat needs: `ChatReceiveEvent` and its own
+  replaceable lines.
+- **`ThemeFont`** (API): the theme's font as one of Minecraft's, for text Minecraft draws. Give a style
+  `ThemeFont.FONT` (or wrap text in `ThemeFont.styled`) and Minecraft draws, measures and wraps it in the theme's font,
+  at the GUI scale it's drawn at; chat split in it is split again when that changes.
 - **Cmd works where Ctrl does on a Mac** in Myriad's text fields, console and launcher: select all, copy and paste
   (Cmd+A, Cmd+C, Cmd+V), Cmd+P/N/J/K to move through the launcher's results, Cmd+Backspace to clear, Cmd+L to clear
   the console. Ctrl still works too. Minecraft's own text fields take Cmd on a Mac (InputQuirks), and Myriad's took
