@@ -67,6 +67,7 @@
 		"MouseMixin",
 		"OptionsMixin",
 		"OverlayRecipeComponentMixin",
+		"PauseScreenMixin",
 		"PlayerMixin",
 		"RecipeBookComponentMixin",
 		"RecipeBookTabButtonMixin",
@@ -77,6 +78,7 @@
 		"SoundManagerMixin",
 		"StonecutterScreenMixin",
 		"ThemedScreenMixin",
+		"TitleScreenMixin",
 		"TooltipRenderUtilMixin",
 		"WalkAnimationStateAccessor",
 		"WorldRendererMixin"

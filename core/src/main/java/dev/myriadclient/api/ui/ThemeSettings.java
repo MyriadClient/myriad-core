@@ -205,9 +205,20 @@ public final class ThemeSettings {
 	public final BoolSetting themeFont = spCosmetics.bool("Theme Font")
 		.description("Item counts in the theme's font. Off: Minecraft's own.")
 		.defaultValue(true).build();
+	/** The hotbar and the off hand's slot in the theme (the status bars and experience bar have their own, since 1.3). */
 	@ApiStatus.AvailableSince("1.2")
 	public final BoolSetting themedHotbar = spCosmetics.bool("Themed Hotbar")
-		.description("Draw the hotbar, the off hand's slot, the experience bar, hearts, food and armour in the theme. Off: Minecraft's own look.")
+		.description("Draw the hotbar and the off hand's slot in the theme. Off: Minecraft's own look.")
+		.defaultValue(true).build();
+	/** Hearts, food and armour over the hotbar in the theme. */
+	@ApiStatus.AvailableSince("1.3")
+	public final BoolSetting themedStatusBars = spCosmetics.bool("Themed Status Bars")
+		.description("Draw hearts, food and armour in the theme. Off: Minecraft's own look.")
+		.defaultValue(true).build();
+	/** The experience bar and your level in the theme. */
+	@ApiStatus.AvailableSince("1.3")
+	public final BoolSetting themedExperienceBar = spCosmetics.bool("Themed Experience Bar")
+		.description("Draw the experience bar and your level in the theme. Off: Minecraft's own look.")
 		.defaultValue(true).build();
 
 	// Chat: no longer core's (1.3). The settings stay, hidden and not applied, so what was saved is still read (an addon

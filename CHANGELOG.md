@@ -35,6 +35,13 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 - **`ThemeFont`** (API): the theme's font as one of Minecraft's, for text Minecraft draws. Give a style
   `ThemeFont.FONT` (or wrap text in `ThemeFont.styled`) and Minecraft draws, measures and wraps it in the theme's font,
   at the GUI scale it's drawn at; chat split in it is split again when that changes.
+- **The hotbar's theming in three parts**, each its own preference under Cosmetics: Themed Hotbar (the hotbar and the
+  off hand's slot), Themed Status Bars (hearts, food and armour) and Themed Experience Bar (the bar and your level), so
+  Minecraft's hearts can sit over the theme's hotbar, say. Before, Themed Hotbar was all of them; saved with it off, the
+  two new ones start off too. `ThemeSettings.themedStatusBars` and `themedExperienceBar` (API).
+- **A Myriad button on Minecraft's title screen and the pause screen**: the logo, in the brand's mint, at the end of
+  their row of icon buttons (the row centred again with it), opening the menu. The title screen's is there when
+  Myriad's own title screen is off (Theme → Preferences → Title Screen).
 - **Cmd works where Ctrl does on a Mac** in Myriad's text fields, console and launcher: select all, copy and paste
   (Cmd+A, Cmd+C, Cmd+V), Cmd+P/N/J/K to move through the launcher's results, Cmd+Backspace to clear, Cmd+L to clear
   the console. Ctrl still works too. Minecraft's own text fields take Cmd on a Mac (InputQuirks), and Myriad's took

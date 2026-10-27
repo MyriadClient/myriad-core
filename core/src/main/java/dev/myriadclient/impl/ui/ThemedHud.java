@@ -12,10 +12,11 @@ import net.minecraft.resources.Identifier;
 import java.util.function.Consumer;
 
 /**
- * The hotbar, the off hand's slot and the experience bar drawn in the theme while Theme → Preferences → Themed Hotbar
- * is on: each sprite Minecraft draws for them is swapped for the theme's own shapes in the same place, so its items,
- * counts and the bars' sizes stay Minecraft's. The hotbar and what sits on it (hearts, food, armour, the bars) are
- * moved up {@link #MARGIN} off the screen's edge (HudMixin).
+ * The hotbar and the off hand's slot (Theme → Preferences → Themed Hotbar), hearts, food and armour (Themed Status
+ * Bars) and the experience bar and level (Themed Experience Bar) drawn in the theme, each on its own: each sprite
+ * Minecraft draws for them is swapped for the theme's own shapes in the same place, so its items, counts and the bars'
+ * sizes stay Minecraft's. With the hotbar themed, it and what sits on it are moved up {@link #MARGIN} off the screen's
+ * edge (HudMixin).
  */
 public final class ThemedHud {
 	/** A hotbar cell around its 16-pixel item; hotbar items are 20 apart, so two pixels between. */
@@ -31,8 +32,17 @@ public final class ThemedHud {
 	private ThemedHud() {
 	}
 
+	/** Whether the hotbar is in the theme (and lifted off the edge). */
 	public static boolean on() {
 		return Myriad.isReady() && theme().themedHotbar.get();
+	}
+
+	private static boolean statusBars() {
+		return Myriad.isReady() && theme().themedStatusBars.get();
+	}
+
+	private static boolean experienceBar() {
+		return Myriad.isReady() && theme().themedExperienceBar.get();
 	}
 
 	private static ThemeSettings theme() {
@@ -69,13 +79,13 @@ public final class ThemedHud {
 
 	/** The experience bar's track, where Minecraft puts it; false to let Minecraft draw it. */
 	public static boolean experienceTrack(GuiGraphicsExtractor ctx, int x, int y, int w, int h) {
-		if (!on()) return false;
+		if (!experienceBar()) return false;
 		return paint(ctx, c -> c.roundRect(x, y + BAR_INSET, w, h - 2 * BAR_INSET, (h - 2 * BAR_INSET) / 2f, ColorUtil.withAlpha(theme().textDim.argb(), 50)));
 	}
 
 	/** Its fill, {@code w} of the track's width; false to let Minecraft draw it. */
 	public static boolean experienceFill(GuiGraphicsExtractor ctx, int x, int y, int w, int h) {
-		if (!on()) return false;
+		if (!experienceBar()) return false;
 		if (w <= 0) return true;
 		return paint(ctx, c -> {
 			ThemeSettings t = theme();
@@ -93,7 +103,7 @@ public final class ThemedHud {
 	 * Minecraft draw it (a vehicle's hearts, say).
 	 */
 	public static boolean statusIcon(GuiGraphicsExtractor ctx, Identifier sprite, int x, int y) {
-		if (!on()) return false;
+		if (!statusBars()) return false;
 		String path = sprite.getPath();
 		ThemeSettings th = theme();
 		String icon;
@@ -138,7 +148,7 @@ public final class ThemedHud {
 
 	/** The experience level over the bar, in the theme's font and accent; false to let Minecraft draw it. */
 	public static boolean level(GuiGraphicsExtractor ctx, int level) {
-		if (!on()) return false;
+		if (!experienceBar()) return false;
 		return paint(ctx, c -> {
 			ThemeSettings t = theme();
 			String text = Integer.toString(level);
