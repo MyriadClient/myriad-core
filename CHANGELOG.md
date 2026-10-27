@@ -39,9 +39,12 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   off hand's slot), Themed Status Bars (hearts, food and armour) and Themed Experience Bar (the bar and your level), so
   Minecraft's hearts can sit over the theme's hotbar, say. Before, Themed Hotbar was all of them; saved with it off, the
   two new ones start off too. `ThemeSettings.themedStatusBars` and `themedExperienceBar` (API).
-- **A Myriad button on Minecraft's title screen and the pause screen**: the logo, in the brand's mint, at the end of
-  their row of icon buttons (the row centred again with it), opening the menu. The title screen's is there when
-  Myriad's own title screen is off (Theme → Preferences → Title Screen).
+- **A Myriad button on Minecraft's title screen and the pause screen**, as wide as the buttons around it and opening
+  the menu: under Minecraft Realms on the title screen (the rows below move down one; it's there when Myriad's own
+  title screen is off, Theme → Preferences → Title Screen, the logo and how to open the menu staying in the corner),
+  under Back to Game on the pause screen.
+- **Minecraft's title screen means Minecraft's pause menu**: with Title Screen off, the pause menu keeps Minecraft's
+  buttons, where Themed Screens drew them in the theme.
 - **Cmd works where Ctrl does on a Mac** in Myriad's text fields, console and launcher: select all, copy and paste
   (Cmd+A, Cmd+C, Cmd+V), Cmd+P/N/J/K to move through the launcher's results, Cmd+Backspace to clear, Cmd+L to clear
   the console. Ctrl still works too. Minecraft's own text fields take Cmd on a Mac (InputQuirks), and Myriad's took

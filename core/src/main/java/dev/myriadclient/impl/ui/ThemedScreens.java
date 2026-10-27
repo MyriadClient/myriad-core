@@ -489,8 +489,9 @@ public final class ThemedScreens {
 	 */
 	public static boolean button(GuiGraphicsExtractor ctx, Identifier sprite, int x, int y, int w, int h, int argb) {
 		String path = sprite.getPath();
-		// The pause menu's too: its buttons are the theme's while Themed Screens is on.
-		boolean pause = Myriad.isReady() && theme().themedScreens.get() && Minecraft.getInstance().gui.screen() instanceof PauseScreen;
+		// The pause menu's too: its buttons are the theme's while Themed Screens is on, and Myriad's own title screen (with
+		// Minecraft's title screen, its pause menu is Minecraft's too).
+		boolean pause = Myriad.isReady() && theme().themedScreens.get() && theme().titleScreen.get() && Minecraft.getInstance().gui.screen() instanceof PauseScreen;
 		if (!path.startsWith("widget/button") || !screenThemed() && !pause) return false;
 		return posed(ctx, c -> {
 			ThemeSettings t = theme();
