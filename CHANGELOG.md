@@ -45,6 +45,16 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
   under Back to Game on the pause screen.
 - **Minecraft's title screen means Minecraft's pause menu**: with Title Screen off, the pause menu keeps Minecraft's
   buttons, where Themed Screens drew them in the theme.
+- **Windows arranged with the mouse alone**: a tiled window dragged by its title bar onto another swaps with it when
+  dropped towards the middle, and splits it when dropped near one of its edges, taking that side (the half it would
+  take is lit up as you drag). A group in a merged window is pulled back out by dragging its header, the drag going on
+  as one of its own window, to be dropped where it should go; a click on the header still folds it. Before, a drop
+  only swapped, and a group came out only through its pop-out button, to beside the window it was in.
+  `LayoutState.insertBeside(window, target, side)` (API): Dwindle splits the target's tile, Columns puts the window
+  before or after it, other layouts add it next to it.
+- **UI Scale asks before it keeps a change**, as a screen resolution does: dragging its slider rescales the menu once
+  you let go (it rescaled at each step, the slider jumping away from the pointer), then "Keep this scale?" goes back
+  by itself after 5 seconds unless you say Keep. Changed with the menu shut (a profile loaded), it's simply taken.
 - **Cmd works where Ctrl does on a Mac** in Myriad's text fields, console and launcher: select all, copy and paste
   (Cmd+A, Cmd+C, Cmd+V), Cmd+P/N/J/K to move through the launcher's results, Cmd+Backspace to clear, Cmd+L to clear
   the console. Ctrl still works too. Minecraft's own text fields take Cmd on a Mac (InputQuirks), and Myriad's took

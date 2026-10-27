@@ -4,6 +4,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.ui.BarWidget;
 import dev.myriadclient.api.ui.Desktop;
+import dev.myriadclient.api.ui.Direction;
 import dev.myriadclient.api.ui.Rect;
 import dev.myriadclient.api.ui.ThemeSettings;
 import dev.myriadclient.api.ui.TitleControl;
@@ -298,7 +299,10 @@ final class DesktopPainter {
 				else c.outline(r.x(), r.y(), r.w(), r.h(), rad, bs, theme.inactiveBorder.argb());
 			}
 			if (wm.drag != null && wm.drag.kind == WindowManager.DragKind.SWAP && wm.drag.window != w && interactive && r.contains(wm.mouseX, wm.mouseY) && wm.mergeTarget() == null) {
-				c.roundRect(r.x(), r.y(), r.w(), r.h(), rad, ColorUtil.withAlpha(theme.accent.argb(), 40));
+				// Where it would go: all of it (a swap) or the half beside the edge it would split.
+				Direction side = wm.splitSide(r, wm.mouseX, wm.mouseY);
+				Rect at = side == null ? r : WindowManager.half(r, side);
+				c.roundRect(at.x(), at.y(), at.w(), at.h(), rad, ColorUtil.withAlpha(theme.accent.argb(), side == null ? 40 : 70));
 			}
 		} finally {
 			c.restoreDepth(depth + 1);

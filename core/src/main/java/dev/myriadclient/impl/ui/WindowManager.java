@@ -9,6 +9,7 @@ import dev.myriadclient.api.service.Notifications;
 import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.ui.PanelType;
+import dev.myriadclient.api.ui.Direction;
 import dev.myriadclient.api.ui.Rect;
 import dev.myriadclient.api.ui.SettingWidgets;
 import dev.myriadclient.api.ui.Theme;
@@ -27,6 +28,7 @@ import dev.myriadclient.impl.ui.panels.ModulesPanel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import org.jspecify.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,6 +81,10 @@ public final class WindowManager implements Desktop {
 
 	// Frame/input state
 	float pixelScale = 2, screenW = 960, screenH = 540;
+	/** UI Scale as drawn and as last kept (see {@link #uiScale}), and the dialog asking to keep it (its id, 0: none). */
+	private double shownUiScale = Double.NaN, keptUiScale = Double.NaN;
+	private int scaleDialog;
+	private static final long KEEP_SCALE_MS = 5000;
 	float mouseX, mouseY;
 	Drag drag;
 	public WindowManager() {
@@ -456,9 +462,39 @@ public final class WindowManager implements Desktop {
 		if (mc.getWindow() == null) return;
 		int fbH = mc.getWindow().getHeight();
 		int fbW = mc.getWindow().getWidth();
-		pixelScale = (float) (Math.max(1f, fbH / 540f) * theme.uiScale.get());
+		pixelScale = (float) (Math.max(1f, fbH / 540f) * uiScale());
 		screenW = fbW / pixelScale;
 		screenH = fbH / pixelScale;
+	}
+
+	/**
+	 * Theme → Preferences → UI Scale as the desktop draws it: changed once the slider is let go, not at each step of a
+	 * drag (the menu rescaled under the pointer as it moved, the slider jumping away from it), and then kept only if you
+	 * say so within {@link #KEEP_SCALE_MS}, as a screen resolution is; otherwise it goes back. Changed with the menu shut
+	 * (a profile loaded, a command), it's simply taken.
+	 */
+	private double uiScale() {
+		double wanted = theme.uiScale.get();
+		if (Double.isNaN(shownUiScale)) shownUiScale = keptUiScale = wanted;
+		if (wanted == shownUiScale) return shownUiScale;
+		if (!isOpen()) {
+			shownUiScale = keptUiScale = wanted;
+			return wanted;
+		}
+		if (GLFW.glfwGetMouseButton(mc.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS) return shownUiScale;
+		shownUiScale = wanted;
+		if (scaleDialog != 0) DialogPanel.dismiss(scaleDialog);
+		JsonObject args = DialogPanel.prepare("UI Scale", left -> "Keep this scale? Going back in " + left + " s.", "Keep", () -> {
+			keptUiScale = shownUiScale;
+			scaleDialog = 0;
+		}, () -> {
+			theme.uiScale.set(keptUiScale);
+			shownUiScale = keptUiScale;
+			scaleDialog = 0;
+		}, KEEP_SCALE_MS);
+		scaleDialog = args.get("id").getAsInt();
+		openPanel(CorePanels.DIALOG, args, active == HUD_WORKSPACE ? 1 : active, true);
+		return shownUiScale;
 	}
 
 	float barHeight() {
@@ -639,6 +675,45 @@ public final class WindowManager implements Desktop {
 			return title && w.panel instanceof ModulesPanel to && to.isGroupWindow() ? w : null;
 		}
 		return null;
+	}
+
+	/** Of a window's width or height, the band at each edge where dropping a window splits it (the rest swaps them). */
+	private static final float SPLIT_BAND = 0.3f;
+
+	/**
+	 * Where dropping a dragged tiled window on {@code target} (at {@code r}) puts it: beside it on the side returned, the
+	 * cursor in the band along that edge, or null for swapping the two (the cursor towards the middle).
+	 */
+	@Nullable Direction splitSide(Rect r, float mx, float my) {
+		float fx = (mx - r.x()) / r.w(), fy = (my - r.y()) / r.h();
+		float left = fx, right = 1 - fx, up = fy, down = 1 - fy;
+		float nearest = Math.min(Math.min(left, right), Math.min(up, down));
+		if (nearest > SPLIT_BAND) return null;
+		return nearest == left ? Direction.LEFT : nearest == right ? Direction.RIGHT : nearest == up ? Direction.UP : Direction.DOWN;
+	}
+
+	/** The half of {@code r} a window dropped on its {@code side} takes. */
+	static Rect half(Rect r, Direction side) {
+		return switch (side) {
+			case LEFT -> new Rect(r.x(), r.y(), r.w() / 2, r.h());
+			case RIGHT -> new Rect(r.x() + r.w() / 2, r.y(), r.w() / 2, r.h());
+			case UP -> new Rect(r.x(), r.y(), r.w(), r.h() / 2);
+			case DOWN -> new Rect(r.x(), r.y() + r.h() / 2, r.w(), r.h() / 2);
+		};
+	}
+
+	/**
+	 * Carries the mouse drag in progress on as one of {@code window} by its title bar, as if it had been grabbed there:
+	 * a group pulled out of a merged window by its header goes on being dragged, to be dropped where it should go.
+	 */
+	public void continueDragAs(Window window) {
+		if (!(window instanceof WindowImpl w)) return;
+		drag = new Drag();
+		drag.window = w;
+		drag.kind = w.floating ? DragKind.MOVE : DragKind.SWAP;
+		drag.offX = 30;
+		drag.offY = TITLE_H / 2f;
+		drag.start = w.floating ? w.floatRect : w.current();
 	}
 
 	enum DragKind {

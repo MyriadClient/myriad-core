@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -162,22 +163,30 @@ public final class ModulesPanel extends WidgetPanel {
 		return p;
 	}
 
-	/** Moves {@code group} out of this merged window into a window of its own, beside this one. */
-	private void popOut(ModuleGroup group) {
+	/** Moves {@code group} out of this merged window into a window of its own, beside this one; that window, if it opened. */
+	private Optional<Window> popOut(ModuleGroup group) {
 		Window w = window();
-		if (w == null || groups == null || groups.size() < 2) return;
+		if (w == null || groups == null || groups.size() < 2) return Optional.empty();
 		WindowManager wm = (WindowManager) Myriad.ui();
 		List<ModuleGroup> rest = new ArrayList<>(groups);
 		rest.remove(group);
 		ModulesPanel kept = new ModulesPanel(rest);
 		kept.unfolded.addAll(unfolded);
 		wm.replacePanel(w, kept, MenuGroups.args(rest));
-		wm.openPanel(CorePanels.GROUP, MenuGroups.args(List.of(group)), w.workspace(), false);
+		return wm.openPanel(CorePanels.GROUP, MenuGroups.args(List.of(group)), w.workspace(), false);
 	}
 
-	/** A merged window's section, with a pop-out button at the right of its header. */
+	/**
+	 * A merged window's section, with a pop-out button at the right of its header. The header dragged pulls the group
+	 * out the same way, the drag going on as one of its new window (to drop where it goes: on another window to swap or
+	 * split, on a group window's title to merge); let go without moving, it folds or unfolds as a click would.
+	 */
 	private final class GroupSection extends Collapsible {
+		/** How far the pointer moves with the header held before it's a drag, not a click. */
+		private static final float DRAG_START = 5;
 		private final ModuleGroup group;
+		/** Where the header was pressed (NaN: it isn't held). */
+		private float pressX = Float.NaN, pressY;
 
 		GroupSection(ModuleGroup group, Supplier<String> title, VBox body) {
 			super(title, body, () -> expanded.getOrDefault(group.id().toString(), true), v -> expanded.put(group.id().toString(), v));
@@ -206,7 +215,30 @@ public final class ModulesPanel extends WidgetPanel {
 				popOut(group);
 				return true;
 			}
+			if (button == 0 && mx >= x && my >= y && mx < x + width && my < y + ROW) {
+				// Held (taking the click makes it the pressed widget, for the drag and release): a click or a drag, told
+				// apart as it moves or is let go.
+				pressX = mx;
+				pressY = my;
+				return true;
+			}
 			return super.mouseClicked(mx, my, button);
+		}
+
+		@Override
+		public boolean mouseDragged(float mx, float my, int button, float dx, float dy) {
+			if (Float.isNaN(pressX) || Math.hypot(mx - pressX, my - pressY) < DRAG_START) return Float.isNaN(pressX) && super.mouseDragged(mx, my, button, dx, dy);
+			pressX = Float.NaN;
+			popOut(group).ifPresent(((WindowManager) Myriad.ui())::continueDragAs);
+			return true;
+		}
+
+		@Override
+		public boolean mouseReleased(float mx, float my, int button) {
+			if (Float.isNaN(pressX)) return super.mouseReleased(mx, my, button);
+			pressX = Float.NaN;
+			activate();
+			return true;
 		}
 	}
 }

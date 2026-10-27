@@ -2,6 +2,7 @@ package dev.myriadclient.api.ui.layout;
 
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.ui.Rect;
+import dev.myriadclient.api.ui.Direction;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
@@ -28,6 +29,18 @@ public interface LayoutState<W> {
 
 	/** Swap the positions of two windows. */
 	void swap(W a, W b);
+
+	/**
+	 * Moves {@code window} next to {@code target}, on its {@code side}: {@code target}'s tile is split, {@code window}
+	 * taking the side towards {@code side} (a window dropped near another's edge). Layouts that can't place a window
+	 * on a side put it next to {@code target} as {@link #add} would.
+	 */
+	@ApiStatus.AvailableSince("1.3")
+	default void insertBeside(W window, W target, Direction side) {
+		if (window == target) return;
+		remove(window);
+		add(window, target);
+	}
 
 	/** Flip the split orientation around {@code window} (dwindle) or do nothing. */
 	default void toggleSplit(W window) {

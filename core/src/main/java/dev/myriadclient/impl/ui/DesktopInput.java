@@ -6,6 +6,7 @@ import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.Panel;
+import dev.myriadclient.api.ui.Direction;
 import dev.myriadclient.api.ui.Rect;
 import dev.myriadclient.api.ui.ThemeSettings;
 import dev.myriadclient.api.ui.layout.LayoutState;
@@ -344,9 +345,13 @@ final class DesktopInput {
 		}
 		switch (d.kind) {
 			case SWAP -> {
+				// Towards the middle of another tiled window: the two swap. Near one of its edges: it splits, the dragged
+				// window taking that side.
 				WindowImpl target = wm.topWindowAt(mx, my);
 				if (target != null && target != d.window && !target.floating && !d.window.floating) {
-					wm.workspaces[wm.active].tiling.swap(d.window, target);
+					Direction side = wm.splitSide(target.current(), mx, my);
+					if (side == null) wm.workspaces[wm.active].tiling.swap(d.window, target);
+					else wm.workspaces[wm.active].tiling.insertBeside(d.window, target, side);
 					wm.markDirty();
 				}
 			}

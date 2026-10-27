@@ -3,6 +3,7 @@ package dev.myriadclient.impl.ui.layout;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import dev.myriadclient.api.ui.Direction;
 import dev.myriadclient.api.ui.Rect;
 import dev.myriadclient.api.ui.layout.Layout;
 import dev.myriadclient.api.ui.layout.LayoutState;
@@ -150,6 +151,16 @@ public final class ColumnsLayout implements Layout {
 		@Override
 		public void reveal(W window) {
 			revealing = window;
+		}
+
+		/** Before {@code target} (left or up) or after it (right or down): columns are one row. */
+		@Override
+		public void insertBeside(W window, W target, Direction side) {
+			if (window == target || !windows.contains(target)) return;
+			remove(window);
+			int at = windows.indexOf(target) + (side == Direction.LEFT || side == Direction.UP ? 0 : 1);
+			windows.add(at, window);
+			weights.add(at, 1f);
 		}
 
 		@Override
