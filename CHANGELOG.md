@@ -16,6 +16,15 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## Unreleased
+
+- **Myriad's HUD and `Render2DEvent` stay under every screen.** Core added its HUD as Fabric's last HUD layer, which
+  Fabric draws with the subtitles, and while a screen is open Minecraft draws those as part of that screen's
+  background. A screen drawing its own background (one an addon draws, Myriad's own menu, launcher and wheel) never
+  asked for them, so Minecraft drew them after everything: HUD panels, nametags and other `Render2DEvent` labels over
+  the screen, its tooltips too. The HUD now comes right after the tab list, in the HUD's own pass, so it's under any
+  screen and over the rest of the HUD as before.
+
 ## 1.3.0
 
 - **Resizing the window no longer reloads resources** with the theme's font on, for chat or item counts. Minecraft

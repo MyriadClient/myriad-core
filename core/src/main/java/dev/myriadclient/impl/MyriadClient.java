@@ -24,6 +24,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.PictureInPictureRendererRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -60,7 +61,10 @@ public class MyriadClient implements ClientModInitializer {
 			myriad.tickSafeMode();
 		});
 
-		HudElementRegistry.addLast(Identifier.fromNamespaceAndPath("myriad", "hud"), (ctx, tickCounter) -> {
+		// After the tab list, not last: Fabric draws its last layers with the subtitles, which Minecraft defers while a
+		// screen is open, to that screen's background; a screen that draws its own background (and doesn't ask for them)
+		// got Myriad's HUD and every Render2DEvent drawn over it. The tab list is drawn in the HUD's own pass, every frame.
+		HudElementRegistry.attachElementAfter(VanillaHudElements.PLAYER_LIST, Identifier.fromNamespaceAndPath("myriad", "hud"), (ctx, tickCounter) -> {
 			if (bus.hasListeners(Render2DEvent.class)) {
 				myriad.windowManager().draw(ctx, canvas -> bus.post(new Render2DEvent(ctx, canvas, tickCounter.getGameTimeDeltaPartialTick(false))));
 			}
