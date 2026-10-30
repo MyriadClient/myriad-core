@@ -16,8 +16,14 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
-## Unreleased
+## 1.3.1
 
+- **The creative inventory's Inventory tab shows your hotbar and armour where they are.** It showed hotbar items in
+  the armour slots (slot 5 on the helmet, 6 to 8 down the rest) and armour and the off hand along the hotbar, the
+  hotbar's own items nowhere, whatever the look. Myriad draws your inventory's slots through its own lookup (so a module
+  can keep a slot showing what it had), by the slot's place in your inventory; that tab's slots stand in for your
+  inventory menu's and report the menu's numbering instead, so the lookup read the wrong slots. It now reads the slot
+  each one stands for, and so do tooltips and what Myriad counts as a hotbar slot you just clicked.
 - **Myriad's HUD and `Render2DEvent` stay under every screen.** Core added its HUD as Fabric's last HUD layer, which
   Fabric draws with the subtitles, and while a screen is open Minecraft draws those as part of that screen's
   background. A screen drawing its own background (one an addon draws, Myriad's own menu, launcher and wheel) never

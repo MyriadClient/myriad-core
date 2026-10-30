@@ -13,6 +13,7 @@ import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.api.util.Ticks;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.network.ActionTiming;
+import dev.myriadclient.impl.util.ScreenSlots;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.game.ClientboundSetHeldSlotPacket;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
@@ -594,7 +595,7 @@ public final class InventoryManager implements Inventory {
 		if (input == ContainerInput.SWAP) inFlight.changed(button);
 		var menu = mc.player.containerMenu;
 		if (menu.containerId != containerId || slotNum < 0 || slotNum >= menu.slots.size()) return;
-		var slot = menu.slots.get(slotNum);
+		var slot = ScreenSlots.real(menu.slots.get(slotNum));
 		if (slot.container == mc.player.getInventory()) inFlight.changed(slot.getContainerSlot());
 	}
 

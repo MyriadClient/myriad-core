@@ -9,6 +9,7 @@ import dev.myriadclient.api.event.events.ContainerScreenEvent;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.service.InventoryManager;
 import dev.myriadclient.impl.ui.ThemedScreens;
+import dev.myriadclient.impl.util.ScreenSlots;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -98,8 +99,9 @@ public abstract class AbstractContainerScreenMixin {
 		if (!Myriad.isReady() || player == null) return stack;
 		ItemStack sorted = MyriadImpl.get().containerTracker().shown(((AbstractContainerScreen<?>) (Object) this).getMenu(), slot.index);
 		if (sorted != null) return sorted;
-		if (slot.container != player.getInventory()) return stack;
-		return Myriad.inventory().shown(slot.getContainerSlot());
+		Slot real = ScreenSlots.real(slot);
+		if (real.container != player.getInventory()) return stack;
+		return Myriad.inventory().shown(real.getContainerSlot());
 	}
 
 	/** Nothing on the cursor while a sort shows its result: what its clicks carry would flicker across the screen. */

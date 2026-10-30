@@ -32,6 +32,7 @@
 		"ClientWorldMixin",
 		"compat.iris.IrisHandRendererMixin",
 		"CreativeModeInventoryScreenMixin",
+		"CreativeSlotWrapperAccessor",
 		"CycleButtonMixin",
 		"EditBoxMixin",
 		"EffectsInInventoryMixin",
