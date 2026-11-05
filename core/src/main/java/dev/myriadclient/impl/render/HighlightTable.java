@@ -17,7 +17,7 @@ import java.util.Arrays;
  */
 final class HighlightTable {
 	/** vec4s per highlight in the data buffer: top colour, bottom colour, gradient rectangle, shape, fill. */
-	static final int TEXELS = 5;
+	static final int TEXELS = 7;
 	static final int FLOATS = TEXELS * 4;
 
 	int count;
@@ -29,6 +29,8 @@ final class HighlightTable {
 	private double[] bounds = new double[12 * 64];
 	/** Per highlight: distance from the camera to its nearest part, for distance scaling. */
 	private double[] nearest = new double[64];
+	/** Per highlight: the way it's turned (radians about y; a mob's body), for fills that lay a pattern on it. */
+	private float[] turns = new float[64];
 	float[] data = new float[FLOATS * 64];
 	/** This frame's merge groups: highlights that look alike (same style and colour) share one, and connect. */
 	private final Object2IntOpenHashMap<GroupKey> groups = new Object2IntOpenHashMap<>();
@@ -66,6 +68,7 @@ final class HighlightTable {
 			groupOf = Arrays.copyOf(groupOf, n);
 			layerOf = Arrays.copyOf(layerOf, n);
 			nearest = Arrays.copyOf(nearest, n);
+			turns = Arrays.copyOf(turns, n);
 			bounds = Arrays.copyOf(bounds, n * 12);
 			data = Arrays.copyOf(data, n * FLOATS);
 		}
@@ -79,7 +82,18 @@ final class HighlightTable {
 		putBox(id * 12, gradientBox);
 		putBox(id * 12 + 6, around);
 		nearest[id] = distance(gradientBox);
+		turns[id] = 0;
 		return id;
+	}
+
+	/** Highlight {@code id} is turned {@code radians} about y (a mob's body), so fills' patterns turn with it. */
+	void turn(int id, float radians) {
+		turns[id] = radians;
+	}
+
+	/** The camera's view back to the world's axes (still relative to the camera), for fills. */
+	Matrix4f viewToWorld(Matrix4f dest) {
+		return view.invert(dest);
 	}
 
 	/** Grows highlight {@code id}'s boxes to cover {@code box}; its widths follow its nearest part. */
@@ -137,6 +151,17 @@ final class HighlightTable {
 			data[i + 18] = style.dotSize() * scale * 0.5f;
 			// Bit 0: hidden parts are dropped; above it the merge group (the mesh mask shader reads it from here).
 			data[i + 19] = (style.throughWalls() ? 0 : 1) + 2 * groupOf[id];
+			// Where it stands for fills' patterns: the bottom middle of its box, from the camera, and how it's turned.
+			int b = id * 12;
+			data[i + 20] = (float) ((bounds[b] + bounds[b + 3]) / 2 - camX);
+			data[i + 21] = (float) (bounds[b + 1] - camY);
+			data[i + 22] = (float) ((bounds[b + 2] + bounds[b + 5]) / 2 - camZ);
+			data[i + 23] = turns[id];
+			// Its size, for fills that work along it (from the feet up, say).
+			data[i + 24] = (float) (bounds[b + 3] - bounds[b]);
+			data[i + 25] = (float) (bounds[b + 4] - bounds[b + 1]);
+			data[i + 26] = (float) (bounds[b + 5] - bounds[b + 2]);
+			data[i + 27] = 0;
 			maxReach = Math.max(maxReach, outline + glow);
 			maxOutline = Math.max(maxOutline, outline);
 		}

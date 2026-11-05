@@ -144,6 +144,9 @@ public final class MyriadPipelines {
 		BindGroupLayout.builder().withSampler("InSampler").build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA16_UNORM, ColorTargetState.WRITE_ALL)));
 	public static final RenderPipeline HIGHLIGHT_GLOW_COLUMN = RenderPipelines.register(highlight("highlight_glow_column",
 		BindGroupLayout.builder().withSampler("InSampler").build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA16_UNORM, ColorTargetState.WRITE_ALL)));
+	/** What's under a highlight, copied for a fill that reads the scene. */
+	public static final RenderPipeline HIGHLIGHT_SCENE_COPY = RenderPipelines.register(highlight("highlight_scene_copy",
+		BindGroupLayout.builder().withSampler("InSampler").build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA8_UNORM, ColorTargetState.WRITE_ALL)));
 	public static final RenderPipeline HIGHLIGHT_COMPOSITE = RenderPipelines.register(highlight("highlight_composite",
 		BindGroupLayout.builder().withSampler("SpreadSampler").withSampler("GlowSampler").build(), new ColorTargetState(BlendFunction.TRANSLUCENT)));
 
@@ -188,7 +191,8 @@ public final class MyriadPipelines {
 			.withVertexShader(id("core/blur"))
 			.withFragmentShader(shader)
 			.withShaderDefine("MYRIAD_FILL_ID", shaderId)
-			.withBindGroupLayout(BindGroupLayout.builder().withSampler("SpreadSampler").withSampler("GlowSampler").build())
+			.withBindGroupLayout(BindGroupLayout.builder().withSampler("SpreadSampler").withSampler("GlowSampler").withSampler("MaskDepth")
+				.withSampler("SceneColor").withSampler("SceneDepth").withUniform("FillOptions", UniformType.UNIFORM_BUFFER).build())
 			.withBindGroupLayout(HIGHLIGHT_DATA)
 			.withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
 			.withPrimitiveTopology(PrimitiveTopology.TRIANGLES)

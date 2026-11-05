@@ -29,6 +29,7 @@ import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.render.HighlightStyle;
 import dev.myriadclient.api.setting.SettingColor;
+import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Theme;
@@ -80,6 +81,11 @@ public final class ExampleAddon implements MyriadAddon {
 		waypoints = new WaypointStore(ctx.storage());
 		waypoints.load();
 		SessionStats stats = new SessionStats();
+		// The fill's own options: settings of this addon's, listed under the fill in the Render window, which its shader
+		// reads in order with highlightOption(0), highlightOption(1)...
+		SettingGroup logoGrid = ctx.settings("Fills").group("Logo Grid");
+		logoGrid.decimal("Drift").description("How fast the logos drift up.").defaultValue(0.05).range(0, 0.5).decimals(2).build();
+		LOGO_FILL.options(logoGrid);
 
 		// 2. Modules, in menu order, in two groups: each is a window of its own in the menu. Each module gets what it
 		// needs through its constructor.

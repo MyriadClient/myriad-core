@@ -27,11 +27,13 @@ import net.minecraft.client.renderer.MappableRingBuffer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
+import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector4f;
 
@@ -230,7 +232,11 @@ public final class HighlightRenderer {
 		double dx = pos.x - entity.getX(), dy = pos.y - entity.getY(), dz = pos.z - entity.getZ();
 		AABB hitbox = entity.getBoundingBox().move(dx, dy, dz);
 		int id = add(ENTITIES, style, color, hitbox, cullingBox.move(dx, dy, dz).inflate(1));
-		if (id >= 0) state.outlineColor = encode(id, highlights.groupOf[id]);
+		if (id < 0) return;
+		// Turned with its body, so a fill's pattern stays on it.
+		float yaw = state instanceof LivingEntityRenderState living ? living.bodyRot : entity.getYRot(tickDelta);
+		highlights.turn(id, (float) Math.toRadians(yaw));
+		state.outlineColor = encode(id, highlights.groupOf[id]);
 	}
 
 	/** Takes the frame's shapes from {@link RenderRouter} and submits their boxes to the shapes masks. */
@@ -398,6 +404,9 @@ public final class HighlightRenderer {
 		this.outlinesShown = outlinesShown;
 	}
 
+	/** The masks' clip space back to view space, for fills that read depth. */
+	private final Matrix4f toView = new Matrix4f(), toWorld = new Matrix4f();
+
 	/** The level projection, view bobbing and nausea included, as the frame is drawn with it. */
 	public void projection(Matrix4fc projection) {
 		highlights.projection.set(projection);
@@ -426,7 +435,8 @@ public final class HighlightRenderer {
 		int radius = Math.min(MAX_RADIUS, (int) Math.ceil(widths[0]) + 1);
 		int boundary = Math.min(radius, (int) Math.ceil(widths[1]) + 1);
 		buffer = HighlightPasses.ring(buffer, "Myriad highlights", highlights.count);
-		GpuBuffer gpuData = HighlightPasses.write(buffer, radius, boundary, highlights.data, 0, highlights.count);
+		GpuBuffer gpuData = HighlightPasses.write(buffer, radius, boundary, highlights.data, 0, highlights.count, highlights.projection.invert(toView),
+			highlights.viewToWorld(toWorld));
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
 		if (shapes && !meshes.isEmpty()) HighlightPasses.drawMeshes(encoder, gpuData, meshes, masks, masked, highlights);
 		GpuTimings.end(GpuTimings.Pass.MASKS);

@@ -3,6 +3,7 @@ package dev.myriadclient.api.render;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.setting.ActionSetting;
 import dev.myriadclient.api.setting.BoolSetting;
 import dev.myriadclient.api.setting.ChoiceSetting;
 import dev.myriadclient.api.setting.ColorSetting;
@@ -11,6 +12,8 @@ import dev.myriadclient.api.setting.SavedSettings;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.util.ColorUtil;
+import dev.myriadclient.api.util.MyriadId;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Optional;
@@ -38,6 +41,9 @@ import java.util.function.Supplier;
 public final class RenderSettings implements RenderLook {
 	public final ChoiceSetting fill;
 	public final DoubleSetting fillOpacity;
+	/** Opens the Render window at the fill's own options, when the fill picked has any ({@link HighlightStyle.Fill#options}). */
+	@ApiStatus.AvailableSince("1.5.0")
+	public final ActionSetting fillOptions;
 	/** A patterned fill's size and spacing (the dots', or an addon fill's scale), in pixels. */
 	public final DoubleSetting patternSpacing;
 	public final DoubleSetting patternSize;
@@ -69,6 +75,9 @@ public final class RenderSettings implements RenderLook {
 			.defaultValue(d.fill().name()).visible(visible).build();
 		fillOpacity = group.decimal(p + "Fill Opacity").defaultValue(snap(d.fillOpacity(), 2)).range(0, 1).decimals(2)
 			.visible(() -> visible.get() && fill() != HighlightStyle.Fill.NONE).build();
+		fillOptions = group.action(p + "Fill Options", () -> Myriad.ui().openPanel(MyriadId.of("myriad", "render")))
+			.description("The fill's own options, the same in every module using it: in the Render window.")
+			.visible(() -> shader.get() && fill().options() != null).build();
 		patternSpacing = group.decimal(p + "Pattern Spacing").description("Distance between the pattern's marks, in pixels.")
 			.defaultValue(snap(Math.min(d.dotSpacing(), 24), 1)).range(2, 24).decimals(1).visible(() -> shader.get() && patterned()).build();
 		patternSize = group.decimal(p + "Pattern Size").description("Size of the pattern's marks, in pixels.")

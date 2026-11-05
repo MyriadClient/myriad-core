@@ -31,6 +31,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemDisplayContext;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +45,8 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 	private static final Logger LOG = LoggerFactory.getLogger("Myriad/Preview");
 
 	private final Projection perspective = new Projection();
+	/** The picture's own projection, as PictureInPictureRenderer sets it up, for highlight fills reading depth. */
+	private final Projection flat = new Projection();
 	private final ProjectionMatrixBuffer perspectiveBuffer = new ProjectionMatrixBuffer("PIP - Myriad preview hands");
 	private static final BlockDisplayContext BLOCK_CONTEXT = BlockDisplayContext.create();
 
@@ -77,7 +80,13 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 	protected void renderToTexture(PreviewRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
 		target = RenderSystem.outputColorTextureOverride;
 		int guiScale = Math.max(1, Minecraft.getInstance().getWindow().getGuiScale());
-		highlights.begin((state.x1() - state.x0()) * guiScale, (state.y1() - state.y0()) * guiScale);
+		int w = (state.x1() - state.x0()) * guiScale, h = (state.y1() - state.y0()) * guiScale;
+		highlights.begin(w, h);
+		// Drawn flat, as the GUI draws pictures (PictureInPictureRenderer): its orthographic projection, centred, a block
+		// being the state's scale in GUI pixels. The view model sets its own (viewModel).
+		flat.setupOrtho(-1000.0F, 1000.0F, w, h, true);
+		float s = state.scale() * guiScale;
+		highlights.projection(flat.getMatrix(new Matrix4f()).translate(w / 2.0F, h / 2.0F, 0).scale(s, -s, s));
 		try {
 			draw(state, poseStack, collector);
 		} catch (RuntimeException e) {
@@ -113,6 +122,12 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 		poseStack.mulPose(view);
 		// The subject's middle on the pivot (a block's box is the cube from 0).
 		Entity entity = PreviewSubjects.entity(state.subject());
+		// For fills laying a pattern on it: the subject's own space to the view the highlights see (y up, z towards you;
+		// the picture's pose has y down and z away).
+		Matrix4f toView = new Matrix4f().scaling(1, -1, -1).mul(poseStack.last().pose());
+		if (entity != null) toView.translate((float) -state.box().getCenter().x, (float) -state.box().getCenter().y, (float) -state.box().getCenter().z);
+		else toView.translate(-0.5F, -0.5F, -0.5F);
+		highlights.subject(toView, state.box());
 		if (entity != null) {
 			poseStack.translate(-state.box().getCenter().x, -state.box().getCenter().y, -state.box().getCenter().z);
 			mc.gameRenderer.lighting().setupFor(Lighting.Entry.ENTITY_IN_UI);
@@ -175,6 +190,7 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 		// Your field of view, so they're framed as on your screen.
 		perspective.setupPerspective(0.05F, 100F, mc.options.fov().get(), width, height);
 		RenderSystem.setProjectionMatrix(perspectiveBuffer.getBuffer(perspective), ProjectionType.PERSPECTIVE);
+		highlights.projection(perspective.getMatrix(new Matrix4f()));
 		// Lit as in the world, where the game draws them.
 		mc.gameRenderer.lighting().setupFor(Lighting.Entry.LEVEL);
 		PoseStack pose = new PoseStack();

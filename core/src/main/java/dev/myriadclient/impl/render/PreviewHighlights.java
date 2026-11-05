@@ -11,6 +11,8 @@ import dev.myriadclient.api.render.HighlightStyle;
 import net.minecraft.client.renderer.MappableRingBuffer;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
 import org.joml.Vector4f;
 
 /**
@@ -29,20 +31,44 @@ public final class PreviewHighlights {
 	private @Nullable TextureTarget mask;
 	private @Nullable MappableRingBuffer buffer;
 	private int width, height;
+	private final Matrix4f toView = new Matrix4f(), toSubject = new Matrix4f();
+	private boolean hasView;
+	private AABB subjectBox = HERE;
 
 	/** Starts a frame of a texture {@code width} by {@code height}. */
 	public void begin(int width, int height) {
 		table.clear();
 		layer.reset();
+		hasView = false;
+		toSubject.identity();
+		subjectBox = HERE;
 		this.width = width;
 		this.height = height;
+	}
+
+	/**
+	 * How the subject was projected this frame: the matrix from its view (x right, y up, the camera looking down -z, in
+	 * blocks) to the texture's clip space, for fills that read depth.
+	 */
+	public void projection(Matrix4fc viewToClip) {
+		viewToClip.invert(toView);
+		hasView = true;
+	}
+
+	/**
+	 * How the subject was turned and moved (from its own space to the view given to {@link #projection}) and its box in
+	 * its own space, for fills laying a pattern on it. Before {@link #add}.
+	 */
+	public void subject(Matrix4fc subjectToView, AABB box) {
+		subjectToView.invert(toSubject);
+		subjectBox = box;
 	}
 
 	/** The outline colour to draw something highlighted with {@code style} and {@code color} in; 0 for no highlight. */
 	public int add(@Nullable HighlightStyle style, int color) {
 		if (style == null || (color >>> 24) == 0) return 0;
 		if (table.count == 0) clearMask();
-		int id = table.add(0, style, color, HERE, HERE);
+		int id = table.add(0, style, color, subjectBox, subjectBox);
 		if (id < 0) return 0;
 		layer.count++;
 		if (style.fill().isCustom()) layer.customFills.add(style.fill().shaderId());
@@ -89,7 +115,7 @@ public final class PreviewHighlights {
 		int radius = Math.min(64, (int) Math.ceil(widths[0]) + 1);
 		int boundary = Math.min(radius, (int) Math.ceil(widths[1]) + 1);
 		buffer = HighlightPasses.ring(buffer, "Myriad preview highlights", table.count);
-		GpuBuffer gpuData = HighlightPasses.write(buffer, radius, boundary, table.data, 0, table.count);
+		GpuBuffer gpuData = HighlightPasses.write(buffer, radius, boundary, table.data, 0, table.count, hasView ? toView : null, toSubject);
 		layer.area = new int[]{0, 0, width, height};
 		layer.anyDepthTested = false;
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();

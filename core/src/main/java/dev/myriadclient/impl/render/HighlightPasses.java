@@ -23,6 +23,7 @@ import net.minecraft.client.renderer.MappableRingBuffer;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
@@ -37,8 +38,13 @@ import java.util.OptionalDouble;
  * its mask and the composite onto the main target, and the data buffer the shaders read the highlights from.
  */
 final class HighlightPasses {
-	/** vec4s before the first highlight: (radius, GUI scale, count, boundary radius), (seconds, 0, 0, 0). */
-	private static final int HEADER = 2;
+	/**
+	 * vec4s before the first highlight: (radius, GUI scale, count, boundary radius), (seconds, legacy, glows, glow scale),
+	 * (1 if the masks' depth can be read, 1 if depth runs 0..1 in clip space rather than -1..1, 0, 0), the four columns
+	 * of the matrix from clip space to view space, then the four of the one from view space to the world's axes (see
+	 * highlight.glsl).
+	 */
+	private static final int HEADER = 11;
 	/**
 	 * Only for .bench render compare: the way it was before the glow had its own field, searching the whole radius
 	 * everywhere at full size.
@@ -57,6 +63,7 @@ final class HighlightPasses {
 	/** Addons' fills: shader id number to its composite pass. */
 	private static final Int2ObjectOpenHashMap<RenderPipeline> FILLS = new Int2ObjectOpenHashMap<>();
 	private static final long START = System.nanoTime();
+	private static @Nullable TextureTarget noDepth, sceneCopy;
 
 	private HighlightPasses() {
 	}
@@ -81,6 +88,10 @@ final class HighlightPasses {
 		int count;
 		boolean anyDepthTested, prepared;
 		int[] area;
+		/** The mask's depth, for addons' fills (null: none). */
+		@Nullable GpuTextureView depth;
+		/** The scene's depth where the layer is composited, for fills reading the scene (null: none, as in a preview). */
+		@Nullable GpuTextureView sceneDepth;
 		final int[] compositeRect = new int[4];
 
 		Layer(String name) {
@@ -155,6 +166,8 @@ final class HighlightPasses {
 						int w, int h) {
 		if (mask == null || mask.getColorTextureView() == null || layer.area == null) return;
 		resize(layer, w, h);
+		layer.depth = mask.getDepthTextureView();
+		layer.sceneDepth = main != null ? main.getDepthTextureView() : null;
 		GpuSampler nearestSampler = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
 		GpuTextureView source = mask.getColorTextureView();
 		int[] area = layer.area;
@@ -216,20 +229,57 @@ final class HighlightPasses {
 
 	/** One layer onto {@code target} (a preview's texture, say), as {@link #composite(CommandEncoder, Layer, RenderTarget, GpuBuffer)}. */
 	static void composite(CommandEncoder encoder, Layer layer, GpuTextureView target, GpuBuffer gpuData) {
-		composite(encoder, MyriadPipelines.HIGHLIGHT_COMPOSITE, layer, target, gpuData);
+		composite(encoder, MyriadPipelines.HIGHLIGHT_COMPOSITE, layer, target, gpuData, null, null);
 		for (int fill : layer.customFills) {
 			RenderPipeline pipeline = FILLS.get(fill);
-			if (pipeline != null) composite(encoder, pipeline, layer, target, gpuData);
+			if (pipeline == null) continue;
+			// A fill reading the scene gets a copy of what's under it, as it is before its own pass.
+			GpuTextureView scene = readsScene(fill) ? copyScene(encoder, layer, target, gpuData) : null;
+			composite(encoder, pipeline, layer, target, gpuData, FillOptions.buffer(encoder, fill), scene);
 		}
 	}
 
-	private static void composite(CommandEncoder encoder, RenderPipeline pipeline, Layer layer, GpuTextureView target, GpuBuffer gpuData) {
+	private static boolean readsScene(int shaderId) {
+		for (HighlightStyle.Fill f : HighlightStyle.Fill.all()) if (f.shaderId() == shaderId) return f.readsScene();
+		return false;
+	}
+
+	/** {@code target} copied where the layer is composited, drawn rather than copied (a preview's picture can't be). */
+	private static GpuTextureView copyScene(CommandEncoder encoder, Layer layer, GpuTextureView target, GpuBuffer gpuData) {
+		int w = target.texture().getWidth(0), h = target.texture().getHeight(0);
+		if (sceneCopy == null) sceneCopy = new TextureTarget("Myriad highlights scene", w, h, false, GpuFormat.RGBA8_UNORM);
+		else if (sceneCopy.width != w || sceneCopy.height != h) sceneCopy.resize(w, h);
+		try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_SCENE_COPY, sceneCopy.getColorTextureView(), gpuData, layer.compositeRect)) {
+			pass.bindTexture("InSampler", target, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+			pass.draw(3, 1, 0, 0);
+		}
+		return sceneCopy.getColorTextureView();
+	}
+
+	private static void composite(CommandEncoder encoder, RenderPipeline pipeline, Layer layer, GpuTextureView target, GpuBuffer gpuData,
+								  @Nullable GpuBuffer options, @Nullable GpuTextureView scene) {
 		try (RenderPass pass = begin(encoder, pipeline, target, gpuData, layer.compositeRect)) {
+			if (options != null) pass.setUniform("FillOptions", options);
 			GpuSampler nearest = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
 			pass.bindTexture("SpreadSampler", layer.spread.getColorTextureView(), nearest);
 			pass.bindTexture("GlowSampler", layer.glow.getColorTextureView(), nearest);
+			// Only addons' fills read the depth; the main pass doesn't take it.
+			if (pipeline != MyriadPipelines.HIGHLIGHT_COMPOSITE) {
+				pass.bindTexture("MaskDepth", layer.depth != null ? layer.depth : noDepth(), nearest);
+				pass.bindTexture("SceneColor", scene != null ? scene : noDepth(), nearest);
+				pass.bindTexture("SceneDepth", scene != null && layer.sceneDepth != null ? layer.sceneDepth : noDepth(), nearest);
+			}
 			pass.draw(3, 1, 0, 0);
 		}
+	}
+
+	/** A texture of one pixel with no depth, for a mask without any (a fill then reads none). */
+	private static GpuTextureView noDepth() {
+		if (noDepth == null) {
+			noDepth = new TextureTarget("Myriad highlights no depth", 1, 1, false, GpuFormat.RGBA8_UNORM);
+			RenderSystem.getDevice().createCommandEncoder().clearColorTexture(noDepth.getColorTexture(), new Vector4f(0));
+		}
+		return noDepth.getColorTextureView();
 	}
 
 	private static RenderPass begin(CommandEncoder encoder, RenderPipeline pipeline, GpuTextureView target, GpuBuffer gpuData, int[] rect) {
@@ -260,13 +310,26 @@ final class HighlightPasses {
 		return new MappableRingBuffer(() -> name, GpuBuffer.USAGE_MAP_WRITE | GpuBuffer.USAGE_UNIFORM_TEXEL_BUFFER, size);
 	}
 
-	/** Writes the header and highlights {@code from} to {@code to} (as ids from 0) to {@code ring}'s current slot. */
-	static GpuBuffer write(MappableRingBuffer ring, int radius, int boundary, float[] data, int from, int to) {
+	/**
+	 * Writes the header and highlights {@code from} to {@code to} (as ids from 0) to {@code ring}'s current slot.
+	 * {@code toView} takes the masks' clip space back to view space (x right, y up, the camera looking down -z, in
+	 * blocks): the inverse of the projection they were drawn with, or null if their depth can't be read. {@code toWorld}
+	 * takes view space on to the world's axes, still from the camera (a preview: the subject's own space); null keeps
+	 * view space.
+	 */
+	static GpuBuffer write(MappableRingBuffer ring, int radius, int boundary, float[] data, int from, int to, @Nullable Matrix4fc toView,
+						   @Nullable Matrix4fc toWorld) {
 		GpuBuffer gpu = ring.currentBuffer();
 		try (GpuBufferSlice.MappedView view = gpu.map(false, true)) {
 			FloatBuffer out = view.data().order(ByteOrder.nativeOrder()).asFloatBuffer();
 			out.put(radius).put((float) Minecraft.getInstance().getWindow().getGuiScale()).put(to - from).put(boundary);
 			out.put((float) ((System.nanoTime() - START) / 1e9 % 3600)).put(legacy ? 1 : 0).put(!legacy && radius > boundary ? 1 : 0).put(glowScale(radius));
+			out.put(toView != null ? 1 : 0).put(RenderSystem.getDevice().getDeviceInfo().isZZeroToOne() ? 1 : 0).put(0).put(0);
+			float[] columns = new float[16];
+			(toView != null ? toView : IDENTITY).get(columns);
+			out.put(columns);
+			(toWorld != null ? toWorld : IDENTITY).get(columns);
+			out.put(columns);
 			out.put(data, from * HighlightTable.FLOATS, (to - from) * HighlightTable.FLOATS);
 		}
 		return gpu;

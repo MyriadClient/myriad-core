@@ -1,12 +1,29 @@
-// The highlight composite: outline, glow and fill from the spread pass. A fill shader (an addon's own fill, see
-// HighlightStyle.Fill.custom) is a fragment shader that imports this and defines customFill:
+// The highlight composite: outline, glow and fill from the spread pass. An addon's own fill (HighlightStyle.Fill.custom)
+// is a fragment shader that imports this and defines customFill, which gets a pixel inside a highlight and returns its
+// colour (alpha 0 leaves it clear):
 //
 //     #version 330
 //     #moj_import <myriad:highlight_fill.glsl>
 //
 //     vec4 customFill(HighlightFill f) {
-//         return vec4(f.color.rgb, f.color.a * f.opacity * pattern(f.local));
+//         float stripe = step(0.5, fract((f.local.x + f.local.y) / f.spacing));
+//         return vec4(f.color.rgb, f.color.a * f.opacity * stripe);
 //     }
+//
+// What a fill has to work with: the HighlightFill fields below, and these functions (since 1.5.0, distances in screen
+// pixels, positions in view space as HighlightFill.position):
+//
+//     vec4  highlightOption(int i)                            the fill's own option i (HighlightStyle.Fill.options)
+//     float highlightEdgeDistance(HighlightFill f, float reach)      to the silhouette's edge, up to reach
+//     float highlightFaceEdgeDistance(HighlightFill f, float reach)  to the edge of the face f is on, up to reach
+//     float highlightCavity(HighlightFill f, float reach)    how the surface bends, measured reach either way
+//     bool  highlightSurface(ivec2 p, out vec3 position)      the surface at any pixel, false where there's none
+//     vec4  highlightScene(ivec2 p)                           the screen at any pixel (with Fill.readsScene)
+//     bool  highlightInView(ivec2 p)                          whether that's the highlighted thing (with readsScene)
+//
+// Only addons' fill passes read the surface, the options and the scene, so they cost nothing elsewhere; a helper costs
+// only when it's called (the distances up to about 60 reads deep inside a shape, the others a few). Everything else in
+// these files is the composite's own and may change.
 //
 // It runs once more per frame for its own highlights' insides (MYRIAD_FILL_ID is its number); the main pass (number 0)
 // draws everything else.
@@ -28,7 +45,144 @@ struct HighlightFill {
     float dotSize; // the look's Pattern Size (the style's dot size), in pixels
     float scale;   // pixels per GUI pixel
     float time;    // seconds, for animation (wraps every hour)
+    // Since Myriad 1.5.0. The shape's surface here, as drawn into the highlight's mask (the front of what's
+    // highlighted, through walls or not):
+    bool hasDepth;  // whether the three below are known (false before 1.5.0's core, or where nothing was drawn)
+    float depth;    // distance from the camera, in blocks (a preview's camera is flat: compare its depths, don't measure)
+    vec3 position;  // the point in view space: x right, y up, the camera looking down -z, in blocks
+    vec3 normal;    // the way the surface faces, in view space; towards the camera, z > 0
+    // The same point and facing in the highlighted thing's own space: blocks from the bottom middle of its box, turned
+    // with it (a mob's body). A pattern laid out with these stays put on it as it and the camera move:
+    vec3 objectPosition;
+    vec3 objectNormal;
+    vec3 objectView;     // from the camera to this point in that space, a unit vector: to look into the surface
+    vec3 objectSize;     // the size of the thing's box, in blocks: objectPosition.y / objectSize.y is 0 at its feet, 1 at its top
+    // How the surface bends here, a pixel either way: above 0 on a ridge (a cube's edge, seen from outside), below 0 in
+    // a valley (where an arm meets the body), 0 on a flat face. Scaled so a right-angled edge is about 1; for wider
+    // edges call highlightCavity.
+    float cavity;
+    // How many blocks one screen pixel spans on the surface here: for sizing lines and fading out detail too fine to
+    // show. (fwidth isn't reliable in a fill: it runs inside a branch.)
+    float pixelSize;
+    // With HighlightStyle.Fill.readsScene: what's on screen here as drawn before the highlights, and whether that's the
+    // highlighted thing itself (in view) rather than something in front of it. Otherwise 0 and false.
+    vec4 scene;
+    bool inView;
 };
+
+#if MYRIAD_FILL_ID != 0
+// The fill's own options (HighlightStyle.Fill.options), in their order: a number in x, a switch as 1 or 0, a colour as
+// RGBA from 0 to 1, a choice as its index. Since Myriad 1.5.0.
+layout(std140) uniform FillOptions {
+    vec4 myriadFillOptions[16];
+};
+
+vec4 highlightOption(int i) {
+    return myriadFillOptions[clamp(i, 0, 15)];
+}
+
+// The highlights' mask depth: 0 where nothing was drawn. Read it with highlightSurface to compare neighbours.
+uniform sampler2D MaskDepth;
+// With HighlightStyle.Fill.readsScene: the screen under the fill as drawn before it, and its depth (in a preview, none).
+uniform sampler2D SceneColor;
+uniform sampler2D SceneDepth;
+
+// What's on screen at pixel p as drawn before the highlights, for comparing neighbours (a fill that reads the scene).
+vec4 highlightScene(ivec2 p) {
+    ivec2 size = textureSize(SceneColor, 0);
+    if (size.x <= 1) return vec4(0.0);
+    return texelFetch(SceneColor, clamp(p, ivec2(0), size - 1), 0);
+}
+
+// Whether what's on screen at pixel p is the highlighted thing itself, not something in front of it.
+bool highlightInView(ivec2 p) {
+    ivec2 size = textureSize(SceneColor, 0), depthSize = textureSize(SceneDepth, 0), maskSize = textureSize(MaskDepth, 0);
+    if (size.x <= 1) return false;
+    if (depthSize.x <= 1 || maskSize.x <= 1) return true;
+    // Depth is reversed (1 near): in view where the mask is as near as the scene, allowing for its precision.
+    return texelFetch(MaskDepth, p, 0).r * 1.002 + 1e-6 >= texelFetch(SceneDepth, p, 0).r;
+}
+
+// The mask's surface at pixel p in view space, or false where nothing was drawn.
+bool highlightSurface(ivec2 p, out vec3 position) {
+    ivec2 size = textureSize(MaskDepth, 0);
+    if (size.x <= 1 || !highlightHasDepth() || p.x < 0 || p.y < 0 || p.x >= size.x || p.y >= size.y) return false;
+    float d = texelFetch(MaskDepth, p, 0).r;
+    if (d <= 0.0) return false;
+    position = highlightViewPosition(vec2(p) + 0.5, d, vec2(size));
+    return true;
+}
+
+// Internal: highlight id's own space from view space (w 1 for a point, 0 for a direction).
+vec3 highlightToObject(int id, vec3 v, float w) {
+    vec4 stands = highlightData(id, 5);
+    vec3 r = highlightToWorld(v, w) - stands.xyz * w;
+    float c = cos(stands.w), s = sin(stands.w);
+    return vec3(r.x * c + r.z * s, r.y, r.z * c - r.x * s);
+}
+
+// Internal: fills in f's depth fields from the mask around pixel p: the normal from the neighbours on the nearer side each way, so
+// it doesn't bend round the shape's edges.
+void highlightDepth(inout HighlightFill f, ivec2 p, int id) {
+    f.hasDepth = false;
+    f.depth = 0.0;
+    f.position = vec3(0.0);
+    f.normal = vec3(0.0, 0.0, 1.0);
+    f.objectPosition = vec3(0.0);
+    f.objectNormal = vec3(0.0, 1.0, 0.0);
+    f.objectView = vec3(0.0, 0.0, -1.0);
+    f.objectSize = highlightData(id, 6).xyz;
+    f.cavity = 0.0;
+    f.pixelSize = 0.0;
+    f.scene = highlightScene(p);
+    f.inView = highlightInView(p);
+    vec3 c;
+    if (!highlightSurface(p, c)) return;
+    f.hasDepth = true;
+    f.position = c;
+    f.depth = length(c);
+    f.objectPosition = highlightToObject(id, c, 1.0);
+    f.objectSize = highlightData(id, 6).xyz;
+    f.objectView = normalize(highlightToObject(id, normalize(c), 0.0));
+    vec3 l, r, d, u;
+    bool hl = highlightSurface(p - ivec2(1, 0), l), hr = highlightSurface(p + ivec2(1, 0), r);
+    bool hd = highlightSurface(p - ivec2(0, 1), d), hu = highlightSurface(p + ivec2(0, 1), u);
+    vec3 dx = hr && (!hl || abs(r.z - c.z) < abs(c.z - l.z)) ? r - c : hl ? c - l : vec3(1.0, 0.0, 0.0);
+    vec3 dy = hu && (!hd || abs(u.z - c.z) < abs(c.z - d.z)) ? u - c : hd ? c - d : vec3(0.0, 1.0, 0.0);
+    f.pixelSize = 0.5 * (length(dx) + length(dy));
+    vec3 n = cross(dx, dy);
+    if (dot(n, n) < 1e-12) return;
+    n = normalize(n);
+    f.normal = n.z < 0.0 ? -n : n;
+    f.objectNormal = normalize(highlightToObject(id, f.normal, 0.0));
+    // From the same five points: how far the middle stands out of the line through its neighbours, along the normal.
+    if (hl && hr) f.cavity -= dot(l + r - 2.0 * c, f.normal) / max(length(r - l), 1e-4);
+    if (hd && hu) f.cavity -= dot(d + u - 2.0 * c, f.normal) / max(length(u - d), 1e-4);
+}
+
+// Internal: the cavity measured reach pixels either way at pixel p (highlightCavity).
+float highlightCavityAt(ivec2 p, int reach) {
+    vec3 c, l, r, d, u;
+    if (!highlightSurface(p, c)) return 0.0;
+    bool hl = highlightSurface(p - ivec2(reach, 0), l), hr = highlightSurface(p + ivec2(reach, 0), r);
+    bool hd = highlightSurface(p - ivec2(0, reach), d), hu = highlightSurface(p + ivec2(0, reach), u);
+    if (!(hl && hr) && !(hd && hu)) return 0.0;
+    vec3 n = cross(hl && hr ? r - l : vec3(1.0, 0.0, 0.0), hd && hu ? u - d : vec3(0.0, 1.0, 0.0));
+    if (dot(n, n) < 1e-12) return 0.0;
+    n = normalize(n);
+    if (n.z < 0.0) n = -n;
+    float bend = 0.0;
+    if (hl && hr) bend -= dot(l + r - 2.0 * c, n) / max(length(r - l), 1e-4);
+    if (hd && hu) bend -= dot(d + u - 2.0 * c, n) / max(length(u - d), 1e-4);
+    return bend;
+}
+
+// The cavity (see HighlightFill.cavity) measured reach pixels either way at f's pixel: wider ridges and valleys, as
+// Blender's cavity's ridge and valley widths. Five reads of the mask's depth each call.
+float highlightCavity(HighlightFill f, float reach) {
+    return highlightCavityAt(ivec2(f.pixel), max(1, int(reach + 0.5)));
+}
+#endif
 
 vec4 customFill(HighlightFill f);
 
@@ -38,6 +192,93 @@ vec4 customFill(HighlightFill f);
 // another group that touches it.
 uniform sampler2D SpreadSampler;
 uniform sampler2D GlowSampler;
+
+#if MYRIAD_FILL_ID != 0
+// Internal: whether pixel p is inside a silhouette.
+bool highlightInside(ivec2 p) {
+    // Off the screen counts as inside, so an edge isn't found along the screen's own.
+    ivec2 size = textureSize(SpreadSampler, 0);
+    if (p.x < 0 || p.y < 0 || p.x >= size.x || p.y >= size.y) return true;
+    return unpack16(texelFetch(SpreadSampler, p, 0).r) % 256 == 0;
+}
+
+// Pixels from f's pixel to the nearest edge of the silhouette it's inside, up to reach: an edge mask for fills that
+// gather at the edges or fade towards the middle. Eight directions feel outwards in growing steps, then close in on the
+// edge they find; they turn a little from pixel to pixel, which grains the result rather than banding it. Up to about
+// 60 reads where it's deep inside, a few near the edge.
+float highlightEdgeDistance(HighlightFill f, float reach) {
+    vec2 pixel = f.pixel;
+    const float STEPS[5] = float[5](0.06, 0.16, 0.32, 0.6, 1.0);
+    uint h = uint(pixel.x) * 0x9e3779b1u ^ uint(pixel.y) * 0x85ebca77u;
+    h = (h ^ (h >> 15)) * 0x2c1b3c6du;
+    float turn = float((h ^ (h >> 12)) & 0xffffu) / 65535.0 * 0.785;
+    float best = reach;
+    for (int i = 0; i < 8; i++) {
+        float a = turn + float(i) * 0.785;
+        vec2 dir = vec2(cos(a), sin(a));
+        float from = 0.0;
+        for (int s = 0; s < 5; s++) {
+            float at = STEPS[s] * reach;
+            if (at >= best) break;
+            if (!highlightInside(ivec2(pixel + dir * at))) {
+                float to = at;
+                for (int b = 0; b < 3; b++) {
+                    float mid = (from + to) * 0.5;
+                    if (highlightInside(ivec2(pixel + dir * mid))) from = mid;
+                    else to = mid;
+                }
+                best = min(best, to);
+                break;
+            }
+            from = at;
+        }
+    }
+    return best;
+}
+
+// Internal: whether the mask's surface at pixel q lies on the face through c facing n (all in view space): within a little of its
+// plane, allowing for the depth's precision further off.
+bool highlightOnFace(ivec2 q, vec3 c, vec3 n) {
+    vec3 p;
+    if (!highlightSurface(q, p)) return false;
+    vec3 d = p - c;
+    return abs(dot(d, n)) <= 0.004 + 0.03 * length(d);
+}
+
+// Pixels from this one to the nearest edge of the face it's on, up to reach: a crease, a step to another part, or the
+// silhouette, whichever is nearest. For a gradient towards each face's middle (frost creeping in from every edge), as
+// highlightEdgeDistance is for the whole silhouette. The same search, testing whether each point is still on this
+// face's plane; without depth it's highlightEdgeDistance. Up to about 60 reads deep inside a face.
+float highlightFaceEdgeDistance(HighlightFill f, float reach) {
+    if (!f.hasDepth) return highlightEdgeDistance(f, reach);
+    const float STEPS[5] = float[5](0.06, 0.16, 0.32, 0.6, 1.0);
+    uint h = uint(f.pixel.x) * 0x9e3779b1u ^ uint(f.pixel.y) * 0x85ebca77u;
+    h = (h ^ (h >> 15)) * 0x2c1b3c6du;
+    float turn = float((h ^ (h >> 12)) & 0xffffu) / 65535.0 * 0.785;
+    float best = reach;
+    for (int i = 0; i < 8; i++) {
+        float a = turn + float(i) * 0.785;
+        vec2 dir = vec2(cos(a), sin(a));
+        float from = 0.0;
+        for (int s = 0; s < 5; s++) {
+            float at = STEPS[s] * reach;
+            if (at >= best) break;
+            if (!highlightOnFace(ivec2(f.pixel + dir * at), f.position, f.normal)) {
+                float to = at;
+                for (int b = 0; b < 3; b++) {
+                    float mid = (from + to) * 0.5;
+                    if (highlightOnFace(ivec2(f.pixel + dir * mid), f.position, f.normal)) from = mid;
+                    else to = mid;
+                }
+                best = min(best, to);
+                break;
+            }
+            from = at;
+        }
+    }
+    return best;
+}
+#endif
 
 out vec4 fragColor;
 
@@ -135,6 +376,22 @@ void main() {
             f.dotSize = fill.z * 2.0;
             f.scale = highlightGuiScale();
             f.time = highlightTime();
+#if MYRIAD_FILL_ID != 0
+            highlightDepth(f, p, id);
+#else
+            f.hasDepth = false;
+            f.depth = 0.0;
+            f.position = vec3(0.0);
+            f.normal = vec3(0.0, 0.0, 1.0);
+            f.objectPosition = vec3(0.0);
+            f.objectNormal = vec3(0.0, 1.0, 0.0);
+            f.objectView = vec3(0.0, 0.0, -1.0);
+            f.objectSize = vec3(0.0);
+            f.cavity = 0.0;
+            f.pixelSize = 0.0;
+            f.scene = vec4(0.0);
+            f.inView = false;
+#endif
             vec4 c = customFill(f);
             fillColor = vec4(c.rgb, 1.0);
             fillAlpha = clamp(c.a, 0.0, 1.0);

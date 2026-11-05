@@ -2,6 +2,7 @@ package dev.myriadclient.api.render;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.HighlightEvent;
+import dev.myriadclient.api.setting.SettingGroup;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
@@ -229,10 +230,15 @@ public final class HighlightStyle {
 		private static final List<Fill> ALL = new ArrayList<>(List.of(NONE, SOLID, DOTS));
 		/** Addons' fills are numbered from here (the shaders tell them apart by number). */
 		private static final int FIRST_CUSTOM = 16;
+		/** How many options a fill's shader can read ({@link #options(SettingGroup)}). */
+		@ApiStatus.AvailableSince("1.5.0")
+		public static final int MAX_OPTIONS = 16;
 
 		private final String id;
 		private final String name;
 		private final int shaderId;
+		private volatile @Nullable SettingGroup options;
+		private volatile boolean readsScene;
 
 		private Fill(String id, String name, int shaderId) {
 			this.id = id;
@@ -262,11 +268,17 @@ public final class HighlightStyle {
 		 * vec4 customFill(HighlightFill f) {
 		 *     // f.pixel, f.local (from the highlight's bottom-left), f.size, f.color (gradient applied), f.opacity,
 		 *     // f.spacing and f.dotSize (the style's dot settings, in pixels: use them as the pattern's scale),
-		 *     // f.scale (pixels per GUI pixel), f.time (seconds)
+		 *     // f.scale (pixels per GUI pixel), f.time (seconds); since 1.5.0 the surface under the pixel: f.hasDepth,
+		 *     // f.depth (blocks from the camera), f.position and f.normal (view space: x right, y up, towards you z > 0)
 		 *     float stripe = step(0.5, fract((f.local.x + f.local.y) / f.spacing));
 		 *     return vec4(f.color.rgb, f.color.a * f.opacity * stripe);
 		 * }
 		 * }</pre>
+		 * Since 1.5.0 the shader also gets the surface under each pixel (its depth, facing and place on the highlighted
+		 * thing, how it bends) and helpers that measure from it (distance to the face's or silhouette's edge, wider
+		 * cavity); {@code myriad:highlight_fill.glsl} lists them. A fill can have options ({@link #options(SettingGroup)})
+		 * and read the scene under it ({@link #readsScene(boolean)}).
+		 * <p>
 		 * Create fills while your addon initialises (the shader is compiled with the game's own); the same
 		 * {@code shader} always gives the same fill. Each fill in use adds one pass over its highlights' insides.
 		 */
@@ -298,6 +310,58 @@ public final class HighlightStyle {
 		/** A stable name, for saving and commands: "none", "solid", "dots", or a custom fill's shader id. */
 		public String id() {
 			return id;
+		}
+
+		/**
+		 * Gives an addon's fill options of its own: the settings of {@code options}, a group of your addon's settings
+		 * ({@code ctx.settings("Fills").group("My Fill")}), which the shader reads in order with {@code highlightOption(0)},
+		 * {@code highlightOption(1)} and so on, each a {@code vec4}: a number in x, a switch as 1 or 0, a colour as RGBA
+		 * from 0 to 1, a choice or enum as its index. Up to {@value #MAX_OPTIONS}. They're the fill's, the same in every
+		 * module using it: shown in the Render window, where a module's Render options lead when it's picked. Reading them
+		 * costs the shader nothing worth counting. Set them while your addon initialises.
+		 * <pre>{@code
+		 * SettingGroup sg = ctx.settings("Fills").group("Stripes");
+		 * sg.decimal("Width").defaultValue(4).range(1, 16).build();
+		 * sg.color("Edge").defaultValue(SettingColor.of(0xFFFFFFFF)).build();
+		 * HighlightStyle.Fill.custom(Identifier.fromNamespaceAndPath("my-addon", "fill/stripes")).options(sg);
+		 * // in the shader: float width = highlightOption(0).x; vec4 edge = highlightOption(1);
+		 * }</pre>
+		 *
+		 * @return this fill
+		 */
+		@ApiStatus.AvailableSince("1.5.0")
+		public Fill options(SettingGroup options) {
+			if (!isCustom()) throw new IllegalStateException("Only an addon's fill has options: " + name);
+			this.options = options;
+			return this;
+		}
+
+		/**
+		 * Whether an addon's fill reads what's on screen under it, as drawn before the highlights: the shader's
+		 * {@code f.scene}, {@code f.inView} and {@code highlightScene}. Where the highlighted thing is in view, that's its
+		 * own look (a mob's face and clothes), for a fill that recolours it or traces its details; where something stands
+		 * in front, it's that. The screen is copied for it only where the fill draws, so leave it off unless the shader
+		 * reads it. Set it while your addon initialises.
+		 *
+		 * @return this fill
+		 */
+		@ApiStatus.AvailableSince("1.5.0")
+		public Fill readsScene(boolean reads) {
+			if (!isCustom()) throw new IllegalStateException("Only an addon's fill reads the scene: " + name);
+			readsScene = reads;
+			return this;
+		}
+
+		/** Whether the fill reads the scene under it ({@link #readsScene(boolean)}). */
+		@ApiStatus.AvailableSince("1.5.0")
+		public boolean readsScene() {
+			return readsScene;
+		}
+
+		/** The fill's own options ({@link #options(SettingGroup)}), or null for none. */
+		@ApiStatus.AvailableSince("1.5.0")
+		public @Nullable SettingGroup options() {
+			return options;
 		}
 
 		/** Whether this is an addon's fill ({@link #custom}). */

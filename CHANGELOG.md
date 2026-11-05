@@ -16,6 +16,36 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.5.0
+
+Addons' highlight fills see the shape they fill, have options of their own, and can read the scene under them, for
+fills that follow a mob's faces, edges and depth. Added to the API: `HighlightStyle.Fill.options`, `Fill.MAX_OPTIONS`,
+`Fill.readsScene` and `RenderSettings.fillOptions`; in `myriad:highlight_fill.glsl`, `HighlightFill`'s surface fields,
+`highlightOption`, `highlightEdgeDistance`, `highlightFaceEdgeDistance`, `highlightCavity`, `highlightSurface`,
+`highlightScene` and `highlightInView`.
+
+- **Fills see the shape they fill.** An addon's fill shader (`HighlightStyle.Fill.custom`) gets the surface under each
+  pixel: `depth` (from the camera, in blocks), `position` and `normal` in view space; `objectPosition` and
+  `objectNormal` in the highlighted thing's own space (from the bottom middle of its box, turned with a mob's body), so a
+  pattern laid on its faces stays put as it and the camera move; `cavity`, how the surface bends there (ridges above 0,
+  valleys below, as Blender's cavity); and `pixelSize`, the blocks a pixel spans there, for sizing lines. Helpers measure
+  on request: `highlightCavity` for wider ridges and valleys, `highlightEdgeDistance` for the distance to the
+  silhouette's edge, `highlightFaceEdgeDistance` for the distance to the edge of the face a pixel's on (for gradients
+  towards each face's middle), `highlightSurface` for any pixel's surface. `objectView` looks into the surface in the
+  thing's own space, for depth and refraction within it, and `objectSize` is its box's size (fire from the feet up, say).
+- **A fill can read what's on screen under it.** `HighlightStyle.Fill.readsScene(true)` gives the shader the screen as drawn
+  before the highlights (`scene`, `highlightScene`) and whether that's the highlighted thing itself (`inView`), so a
+  fill can recolour a mob or trace its own details (face, clothes, patterns). The screen is copied for it only where
+  that fill draws.
+- **Fills have options of their own.** `HighlightStyle.Fill.options(group)` gives an addon's fill a group of its
+  addon's settings, which the shader reads in order with `highlightOption(i)`: numbers, switches, colours and choices, up to
+  16. They're the fill's, the same in every module using it, shown in the Render window under the fill's name; a
+  module's Render options get a Fill Options button there when the fill picked has any.
+- **It costs only the fills that use it.** It's the depth each highlight's mask already had (in the world, on your
+  hands, in previews), so nothing more is drawn; the main highlight pass doesn't read it, a fill reads five depth values
+  a pixel for it, a helper costs only when it's called, and its options are one small buffer written as its pass runs. Checked with and without Iris, and with Complementary on.
+  Fill shaders written for 1.4.0 build unchanged.
+
 ## 1.4.0
 
 Windows hold up in any size, and read as one UI. Added to the API: `Widget.minWidth`, `Heading`, `Note`, `EmptyState`,

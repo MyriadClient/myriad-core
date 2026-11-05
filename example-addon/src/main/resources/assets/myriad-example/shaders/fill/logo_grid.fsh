@@ -37,8 +37,8 @@ vec4 customFill(HighlightFill f) {
     // One mark per cell; the style's dot spacing sets the cell size, so the Fill Spacing setting scales the pattern.
     float cell = max(f.spacing * 6.0, 8.0 * f.scale);
     vec2 grid = f.local / cell;
-    // Every other row shifted half a cell, and the whole grid drifting slowly upwards.
-    grid.y += f.time * 0.05;
+    // Every other row shifted half a cell, and the whole grid drifting upwards at the fill's Drift option (ExampleAddon).
+    grid.y += f.time * highlightOption(0).x;
     grid.x += mod(floor(grid.y), 2.0) * 0.5;
     vec2 inCell = fract(grid);
     // The mark spans the middle of its cell (the 512 grid's 80..432), y flipped: the framebuffer's y grows upwards.

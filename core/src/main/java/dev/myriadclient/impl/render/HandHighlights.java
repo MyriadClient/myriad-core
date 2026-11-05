@@ -46,6 +46,7 @@ public final class HandHighlights {
 	private int handBase = -1;
 	private final Matrix4f handProjection = new Matrix4f();
 	private final Matrix4f handTransform = new Matrix4f();
+	private final Matrix4f handToView = new Matrix4f();
 	private final Vector4f handCorner = new Vector4f();
 	/** The hand's screen area while its parts come in (min x, min y, max x, max y), and one part's. */
 	private final float[] handArea = new float[4], partArea = new float[4];
@@ -182,7 +183,8 @@ public final class HandHighlights {
 		int radius = Math.min(HighlightRenderer.MAX_RADIUS, (int) Math.ceil(widths[0]) + 1);
 		int boundary = Math.min(radius, (int) Math.ceil(widths[1]) + 1);
 		handBuffer = HighlightPasses.ring(handBuffer, "Myriad hand highlights", table.count - handBase);
-		GpuBuffer gpuData = HighlightPasses.write(handBuffer, radius, boundary, table.data, handBase, table.count);
+		// The hand's own field of view.
+		GpuBuffer gpuData = HighlightPasses.write(handBuffer, radius, boundary, table.data, handBase, table.count, handProjection.invert(handToView), null);
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
 		GpuTimings.begin(GpuTimings.Pass.HAND);
 		HighlightPasses.prepare(encoder, layer, mask, main, gpuData, radius, boundary, w, h);
