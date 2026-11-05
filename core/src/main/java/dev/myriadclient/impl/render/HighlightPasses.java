@@ -17,6 +17,7 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import dev.myriadclient.api.render.HighlightStyle;
 import dev.myriadclient.api.render.WorldMesh;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntRBTreeSet;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MappableRingBuffer;
@@ -26,6 +27,8 @@ import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
@@ -62,6 +65,9 @@ final class HighlightPasses {
 
 	/** Addons' fills: shader id number to its composite pass. */
 	private static final Int2ObjectOpenHashMap<RenderPipeline> FILLS = new Int2ObjectOpenHashMap<>();
+	/** Fills whose shader didn't compile, said once each until they do. */
+	private static final IntOpenHashSet BROKEN_FILLS = new IntOpenHashSet();
+	private static final Logger LOG = LoggerFactory.getLogger("Myriad/Highlights");
 	private static final long START = System.nanoTime();
 	private static @Nullable TextureTarget noDepth, sceneCopy;
 
@@ -232,11 +238,28 @@ final class HighlightPasses {
 		composite(encoder, MyriadPipelines.HIGHLIGHT_COMPOSITE, layer, target, gpuData, null, null);
 		for (int fill : layer.customFills) {
 			RenderPipeline pipeline = FILLS.get(fill);
-			if (pipeline == null) continue;
+			if (pipeline == null || !compiles(fill, pipeline)) continue;
 			// A fill reading the scene gets a copy of what's under it, as it is before its own pass.
 			GpuTextureView scene = readsScene(fill) ? copyScene(encoder, layer, target, gpuData) : null;
 			composite(encoder, pipeline, layer, target, gpuData, FillOptions.buffer(encoder, fill), scene);
 		}
+	}
+
+	/**
+	 * Whether fill {@code shaderId}'s pipeline compiled: compiled now if it hasn't been since the last resource reload
+	 * (the device keeps the result, good or bad, until then). One that doesn't is said once in the log and drawn as no
+	 * fill, rather than stopping the game's resources loading as one of its own pipelines would.
+	 */
+	private static boolean compiles(int shaderId, RenderPipeline pipeline) {
+		if (RenderSystem.getDevice().precompilePipeline(pipeline).isValid()) {
+			BROKEN_FILLS.remove(shaderId);
+			return true;
+		}
+		if (BROKEN_FILLS.add(shaderId)) {
+			LOG.error("The fill shader {} didn't compile (its errors are above); its highlights are drawn with no fill",
+				pipeline.getFragmentShader());
+		}
+		return false;
 	}
 
 	private static boolean readsScene(int shaderId) {

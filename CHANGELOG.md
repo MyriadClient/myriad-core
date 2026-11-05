@@ -16,6 +16,15 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.5.1
+
+A patch: the API is unchanged.
+
+- **An addon's fill whose shader doesn't compile turns itself off, not the game.** Fills were compiled with the game's
+  own shaders, which must all compile for resources to load, so one broken fill (or one built for a newer Myriad) left a
+  black screen. A fill now compiles the first time it's drawn; one that doesn't says so once in the log, with its
+  errors, and its highlights are drawn with no fill.
+
 ## 1.5.0
 
 Addons' highlight fills see the shape they fill, have options of their own, and can read the scene under them, for

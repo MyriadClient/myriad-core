@@ -184,9 +184,13 @@ public final class MyriadPipelines {
 			.build();
 	}
 
-	/** An addon's fill: the composite pass with its fragment shader, for highlights whose fill is {@code shaderId}. */
+	/**
+	 * An addon's fill: the composite pass with its fragment shader, for highlights whose fill is {@code shaderId}. Not
+	 * registered with the game's own pipelines, which must all compile for a resource reload to finish: a fill compiles
+	 * the first time it's drawn instead (see HighlightPasses), so a broken one turns itself off rather than the game.
+	 */
 	public static RenderPipeline highlightFill(int shaderId, Identifier shader) {
-		return RenderPipelines.register(RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
+		return RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
 			.withLocation(id("pipeline/highlight_fill_" + shaderId))
 			.withVertexShader(id("core/blur"))
 			.withFragmentShader(shader)
@@ -196,7 +200,7 @@ public final class MyriadPipelines {
 			.withBindGroupLayout(HIGHLIGHT_DATA)
 			.withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
 			.withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
-			.build());
+			.build();
 	}
 
 	/** A full-screen pass over a highlight mask (scissored to the highlights by the caller). */
