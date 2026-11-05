@@ -22,7 +22,12 @@ abstract class CardEntry extends Widget {
 	/** Inner padding of the unfolded card. */
 	private static final float PAD_X = 7, PAD_TOP = 5, PAD_BOTTOM = 5;
 
+	/** What a title keeps of its width, however many pills want the room. */
+	private static final float MIN_TITLE = 48;
+
 	private final Animated on, open;
+	/** While the header's pills are drawn: how far left one may reach. */
+	private float badgeFloor = Float.NEGATIVE_INFINITY;
 	private VBox body;
 	private Object bodyKey;
 
@@ -34,6 +39,16 @@ abstract class CardEntry extends Widget {
 	// ---- what the entry is ----------------------------------------------------------------------------------------
 
 	protected abstract String title();
+
+	/** A glyph before the title, in a column of its own so the titles of a list line up, or null. */
+	protected String icon() {
+		return null;
+	}
+
+	/** How far along it is, 0 to 1, as a thin line along the header's foot; NaN for none. */
+	protected double progress() {
+		return Double.NaN;
+	}
 
 	/** Tints the header (a module is enabled, a HUD element is shown, an addon loaded). */
 	protected abstract boolean isOn();
@@ -128,8 +143,25 @@ abstract class CardEntry extends Widget {
 		}
 		float ty = y + (rowH - c.textHeight()) / 2;
 		float rx = x + width - 10;
+		float tx = x + 6;
+		String icon = icon();
+		if (icon != null && !icon.isEmpty()) {
+			float is = c.defaultFontSize();
+			c.text(FontFamily.MONO, is, icon, tx + (9 - c.textWidth(FontFamily.MONO, is, icon)) / 2, y + (rowH - c.textHeight(FontFamily.MONO, is)) / 2, t > 0.5f ? accent : theme().textDim.argb());
+			tx += 12;
+		}
+		// The title comes first: pills only take what it leaves, the last asked for going first.
+		String title = title();
+		badgeFloor = tx + Math.min(c.textWidth(title), MIN_TITLE);
 		float right = drawBadges(c, rx - 6, y + rowH / 2);
-		c.text(c.ellipsize(c.defaultFont(), c.defaultFontSize(), title(), right - x - 6), x + 6, ty, ColorUtil.lerp(theme().textDim.argb(), theme().text.argb(), t));
+		badgeFloor = Float.NEGATIVE_INFINITY;
+		c.text(c.ellipsize(c.defaultFont(), c.defaultFontSize(), title, right - tx), tx, ty, ColorUtil.lerp(theme().textDim.argb(), theme().text.argb(), t));
+		double progress = progress();
+		if (!Double.isNaN(progress)) {
+			float pw = (width - 4) * (float) Math.clamp(progress, 0, 1);
+			c.roundRect(x + 2, y + rowH - 1.5f, width - 4, 1, 0.5f, ColorUtil.withAlpha(accent, 50));
+			c.roundRect(x + 2, y + rowH - 1.5f, pw, 1, 0.5f, accent);
+		}
 		float iconSize = c.defaultFontSize() * 0.75f;
 		String chevron = isExpanded() ? "" : "";
 		c.text(FontFamily.MONO, iconSize, chevron, rx, y + (rowH - c.textHeight(FontFamily.MONO, iconSize)) / 2,
@@ -156,6 +188,8 @@ abstract class CardEntry extends Widget {
 		float tw = badgeWidth(c, text, tinted);
 		float th = c.textHeight(FontFamily.SANS, s) + 3;
 		float bx = right - tw, by = cy - th / 2;
+		// No room left beside the title: this one isn't shown, and the "- 4" the caller takes off cancels out.
+		if (bx < badgeFloor) return right + 4;
 		if (tinted) {
 			c.roundRect(bx, by, tw, th, th / 2, ColorUtil.withAlpha(color, 50));
 			c.outline(bx, by, tw, th, th / 2, 1, ColorUtil.withAlpha(color, 110));

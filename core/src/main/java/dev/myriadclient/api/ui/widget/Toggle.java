@@ -26,6 +26,11 @@ public class Toggle extends Widget {
 	}
 
 	@Override
+	public float minWidth(Canvas canvas) {
+		return 20;
+	}
+
+	@Override
 	public void render(Canvas c, float mx, float my) {
 		boolean on = getter.get();
 		knob.animateTo(on ? 1 : 0, 160, Bezier.EASE_OUT_QUINT);

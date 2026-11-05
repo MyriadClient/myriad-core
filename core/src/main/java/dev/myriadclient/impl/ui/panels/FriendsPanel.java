@@ -1,8 +1,10 @@
 package dev.myriadclient.impl.ui.panels;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Button;
+import dev.myriadclient.api.ui.widget.EmptyState;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.TextField;
@@ -27,7 +29,7 @@ public final class FriendsPanel extends WidgetPanel {
 		add.addWeighted(new TextField(() -> name).placeholder("Player name").onChange(s -> name = s).onSubmit(s -> addFriend()), 1);
 		add.addFixed(new Button("Add", this::addFriend).accent(), 36);
 		content.add(add);
-		if (Myriad.friends().all().isEmpty()) content.add(new Label("No friends yet. Modules like Kill Aura skip friends.").dim());
+		if (Myriad.friends().all().isEmpty()) content.add(new EmptyState(Icons.USERS, "No friends yet", "Modules like Kill Aura skip friends."));
 		for (String f : Myriad.friends().all()) {
 			HBox row = new HBox(4);
 			row.addWeighted(new Label(f), 1);

@@ -6,6 +6,7 @@ import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Button;
+import dev.myriadclient.api.ui.widget.EmptyState;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.TextField;
@@ -22,7 +23,7 @@ import java.util.Set;
 
 /**
  * Every wheel of the profile, as cards: click one to open its window, unfold it for what's on it. A name field at the
- * bottom makes a new one.
+ * top makes a new one.
  */
 final class WheelsPanel extends WidgetPanel {
 	static final String ICON = Icons.DOT_CIRCLE;
@@ -50,18 +51,17 @@ final class WheelsPanel extends WidgetPanel {
 	protected void build(VBox content) {
 		WheelManager wheels = MyriadImpl.get().wheelManager();
 		built = wheels.all();
-		for (WheelImpl w : built) content.add(new Card(w));
-		if (built.isEmpty()) {
-			content.add(new Label("Hold a bind to pick from a wheel of modules, macros, control panels, actions or commands: name one below.").dim());
-		}
-		HBox create = new HBox(4);
-		create.addWeighted(new TextField(() -> newName).placeholder(wheels.freshName()).onChange(s -> newName = s), 1);
-		create.addFixed(new Button("New", () -> {
+		Runnable make = () -> {
 			WheelImpl w = wheels.create(newName);
 			newName = "";
 			open(w);
-		}).accent(), 36);
+		};
+		HBox create = new HBox(4);
+		create.addWeighted(new TextField(() -> newName).placeholder(wheels.freshName()).onChange(s -> newName = s).onSubmit(s -> make.run()), 1);
+		create.addFixed(new Button("New", make).accent(), 36);
 		content.add(create);
+		if (built.isEmpty()) content.add(new EmptyState(ICON, "No wheels yet", "Hold a bind to pick from a wheel of modules, macros, control panels, actions or commands."));
+		for (WheelImpl w : built) content.add(new Card(w));
 	}
 
 	static void open(WheelImpl wheel) {
@@ -81,7 +81,12 @@ final class WheelsPanel extends WidgetPanel {
 
 		@Override
 		protected String title() {
-			return wheel.icon() + "  " + wheel.name();
+			return wheel.name();
+		}
+
+		@Override
+		protected String icon() {
+			return wheel.icon();
 		}
 
 		@Override

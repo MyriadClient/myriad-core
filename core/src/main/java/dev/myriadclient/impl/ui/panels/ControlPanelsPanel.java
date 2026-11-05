@@ -5,10 +5,12 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.control.ControlPanel;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.TitleControl;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
+import dev.myriadclient.api.ui.widget.EmptyState;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.VBox;
@@ -23,7 +25,7 @@ import java.util.Set;
 
 /**
  * Every control panel of the profile, as cards: click one to switch it, unfold it for what it switches, open its window
- * from there. A name field at the bottom makes a new one.
+ * from there. A name field at the top makes a new one.
  */
 final class ControlPanelsPanel extends WidgetPanel {
 	private String newName = "";
@@ -61,16 +63,17 @@ final class ControlPanelsPanel extends WidgetPanel {
 	protected void build(VBox content) {
 		ControlManager controls = MyriadImpl.get().controlManager();
 		built = Myriad.controls().all();
-		for (ControlPanel c : built) content.add(new Card(c));
-		if (built.isEmpty()) content.add(new Label("Switch several modules with one bind, each with its own settings for it: name one below.").dim());
-		HBox create = new HBox(4);
-		create.addWeighted(new TextField(() -> newName).placeholder(controls.freshName()).onChange(s -> newName = s), 1);
-		create.addFixed(new Button("New", () -> {
+		Runnable make = () -> {
 			ControlPanel c = Myriad.controls().create(newName.isBlank() ? controls.freshName() : newName);
 			newName = "";
 			open(c);
-		}).accent(), 36);
+		};
+		HBox create = new HBox(4);
+		create.addWeighted(new TextField(() -> newName).placeholder(controls.freshName()).onChange(s -> newName = s).onSubmit(s -> make.run()), 1);
+		create.addFixed(new Button("New", make).accent(), 36);
 		content.add(create);
+		if (built.isEmpty()) content.add(new EmptyState(Icons.SLIDERS, "No control panels yet", "Switch several modules with one bind, each with its own settings for it."));
+		for (ControlPanel c : built) content.add(new Card(c));
 	}
 
 	static void open(ControlPanel c) {
@@ -92,6 +95,11 @@ final class ControlPanelsPanel extends WidgetPanel {
 		@Override
 		protected String title() {
 			return control.name();
+		}
+
+		@Override
+		protected String icon() {
+			return control.icon();
 		}
 
 		@Override

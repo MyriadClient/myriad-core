@@ -57,7 +57,7 @@ public final class HudElementsPanel extends WidgetPanel {
 
 	@Override
 	protected void build(VBox content) {
-		content.add(new TextField(() -> filter).placeholder("  Filter HUD elements…").onChange(s -> filter = s));
+		content.add(new TextField(() -> filter).search().placeholder("Filter HUD elements…").onChange(s -> filter = s));
 		boolean any = false;
 		for (PanelType type : Myriad.panels()) {
 			if (!type.isHud()) continue;

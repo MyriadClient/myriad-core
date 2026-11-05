@@ -9,7 +9,9 @@ import dev.myriadclient.api.ui.TitleControl;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
+import dev.myriadclient.api.ui.widget.Heading;
 import dev.myriadclient.api.ui.widget.Label;
+import dev.myriadclient.api.ui.widget.Note;
 import dev.myriadclient.api.ui.widget.SettingsView;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.impl.MyriadImpl;
@@ -102,16 +104,16 @@ public final class AddonsPanel extends WidgetPanel {
 		@Override
 		protected float drawBadges(Canvas c, float right, float cy) {
 			if (failed()) right = badge(c, " Failed", right, cy, theme().red.argb(), true) - 4;
-			right = badge(c, addon.version(), right, cy, theme().textDim.argb(), false) - 4;
 			UpdateManager.State u = updates.state(addon.id());
-			if (u == null) return right;
-			return switch (u.kind()) {
+			if (u != null) right = switch (u.kind()) {
 				case AVAILABLE -> badge(c, " " + u.version(), right, cy, theme().accent.argb(), true) - 4;
 				case DOWNLOADING -> badge(c, " " + u.version(), right, cy, theme().textDim.argb(), false) - 4;
 				case STAGED -> badge(c, " Restart to apply", right, cy, theme().green.argb(), true) - 4;
 				case FAILED -> badge(c, " Update failed", right, cy, theme().red.argb(), true) - 4;
 				default -> right;
 			};
+			right = badge(c, addon.version(), right, cy, theme().textDim.argb(), false) - 4;
+			return right;
 		}
 
 		@Override
@@ -141,7 +143,7 @@ public final class AddonsPanel extends WidgetPanel {
 
 		@Override
 		protected void buildBody(VBox body) {
-			if (failed()) body.add(new Label("Failed to load: " + addon.failure()).color(() -> theme().red.argb()));
+			if (failed()) body.add(new Note("Failed to load: " + addon.failure()).error());
 			if (addon.description() != null && !addon.description().isEmpty()) body.add(new Label(addon.description()).dim());
 			if (!addon.authors().isEmpty()) body.add(new Label("By " + String.join(", ", addon.authors())).dim());
 			String id = addon.id();
@@ -156,7 +158,7 @@ public final class AddonsPanel extends WidgetPanel {
 			if (!links.children().isEmpty()) body.add(links);
 			buildUpdate(body, updates.state(id));
 			for (AddonSettings s : Myriad.addonSettings().ownedBy(id)) {
-				body.add(new Label(s.name()).bold());
+				body.add(new Heading(s.name()));
 				body.add(SettingsView.build(s.settings()));
 			}
 		}
@@ -166,7 +168,7 @@ public final class AddonsPanel extends WidgetPanel {
 			String id = addon.id();
 			switch (u.kind()) {
 				case AVAILABLE, FAILED -> {
-					if (u.kind() == UpdateManager.Kind.FAILED) body.add(new Label("Updating to " + u.version() + " failed: " + u.message()).color(() -> theme().red.argb()));
+					if (u.kind() == UpdateManager.Kind.FAILED) body.add(new Note("Updating to " + u.version() + " failed: " + u.message()).error());
 					HBox row = new HBox(4);
 					row.add(new Button(" Update to " + u.version(), () -> updates.update(id)).accent()).tooltip("Downloads it now; it installs when you quit");
 					if (u.releaseUrl() != null) row.add(new Button(" Release notes", () -> Util.getPlatform().openUri(u.releaseUrl()))).tooltip(u.releaseUrl());
@@ -174,7 +176,7 @@ public final class AddonsPanel extends WidgetPanel {
 				}
 				case CHECKING -> body.add(new Label("Checking for updates…").dim());
 				case DOWNLOADING -> body.add(new Label("Downloading " + u.version() + "…").dim());
-				case STAGED -> body.add(new Label(u.version() + " is downloaded and installs when you quit."
+				case STAGED -> body.add(new Note(u.version() + " is downloaded and installs when you quit."
 					+ (u.message() != null ? " " + u.message() + "." : "")).color(() -> theme().green.argb()));
 				case UP_TO_DATE -> body.add(new Label("Up to date.").dim());
 				case UNKNOWN, DEV_BUILD, NO_SOURCE -> body.add(new Label(u.message() + ".").dim());

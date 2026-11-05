@@ -7,7 +7,9 @@ import dev.myriadclient.api.event.events.InputEvent;
 import dev.myriadclient.api.event.events.MouseButtonEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WindowResizeEvent;
+import dev.myriadclient.api.job.Progress;
 import dev.myriadclient.api.job.Step;
+import dev.myriadclient.api.job.Why;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.MyriadImpl;
@@ -16,6 +18,7 @@ import dev.myriadclient.impl.service.InventoryManager;
 import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.ui.panels.CorePanels;
 import dev.myriadclient.impl.util.Clock;
+import dev.myriadclient.impl.wheel.WheelSlot;
 import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.Minecraft;
@@ -50,6 +53,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -259,6 +263,13 @@ public final class DevConsole {
 							mc.getWindow().handle(), new CharacterEvent(cp));
 					}
 				}
+				// Drags the held left button to x y in window pixels, on the open screen: real drags only arrive in a focused
+				// window, which a test client's usually isn't. "mouse 0 press", "drag 400 220", "mouse 0 release".
+				case "drag" -> {
+					double scale = mc.getWindow().getGuiScale();
+					if (mc.gui.screen() != null) mc.gui.screen().mouseDragged(new net.minecraft.client.input.MouseButtonEvent(Double.parseDouble(a[1]) / scale, Double.parseDouble(a[2]) / scale,
+						new MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_LEFT, 0)), 0, 0);
+				}
 				// Moves the cursor to x y in window pixels, as screenshots show them: "cursor 400 220"; or over slot n of the
 				// open container screen, wherever it is: "cursor slot 10".
 				case "cursor" -> {
@@ -349,6 +360,30 @@ public final class DevConsole {
 				case "hud" -> Myriad.panels().get(MyriadId.parse(a[1])).ifPresent(((WindowManager) Myriad.ui())::addHudElement);
 				case "launcher" -> ((WindowManager) Myriad.ui()).showLauncher(line.length() > 8 ? line.substring(8).strip() : "");
 				case "wm" -> ((WindowManager) Myriad.ui()).runBind(a[1]);
+				// Starts a long job with steps under it, to see the Jobs window: "jobdemo Scaffold".
+				case "jobdemo" -> {
+					Object owner = Myriad.modules().byName(a[1]).map(m -> (Object) m).orElse(this);
+					Step<Void> walking = Step.of("Walking to the next column", () -> ctx -> {
+						ctx.status("12 blocks away");
+						return Progress.running();
+					});
+					Step<Void> taking = Step.of("Taking from the chest", () -> ctx -> Progress.stuck(Why.of(Why.NO_ITEM, "cobblestone")));
+					Myriad.jobs().start(owner, Step.sequence("Building wall from a very long schematic name", Step.all("Restocking and walking", List.of(walking, taking))));
+				}
+				// Opens the named wheel's window, making it first with a slot for each search given (wheelwin Name recast kill).
+				case "wheelwin" -> {
+					var wheels = MyriadImpl.get().wheelManager();
+					var wheel = wheels.all().stream().filter(w -> w.name().equals(a[1])).findFirst().orElseGet(() -> wheels.create(a[1]));
+					for (int i = 2; i < a.length; i++) WheelSlot.candidates(a[i]).stream().findFirst().ifPresent(wheel::add);
+					CorePanels.openWheel(wheel);
+				}
+				// Opens the named control panel's window.
+				case "controlwin" -> Myriad.controls().all().stream().filter(c -> c.name().equals(a[1])).findFirst().ifPresent(CorePanels::openControl);
+				// Floats the focused window at this size, to see how a panel takes a small one.
+				case "winsize" -> ((WindowManager) Myriad.ui()).floatFocused(Float.parseFloat(a[1]), Float.parseFloat(a[2]), Float.parseFloat(a[3]), Float.parseFloat(a[4]));
+				case "titlescene" -> {
+					if (mc.gui.screen() instanceof dev.myriadclient.impl.ui.MyriadTitleScreen t) t.scene(dev.myriadclient.impl.render.title.TitleScene.valueOf(a[1]));
+				}
 				case "settings" -> Myriad.modules().byName(a[1]).ifPresentOrElse(m -> CorePanels.openModuleSettings(m, true),
 					() -> LOG.warn("[dev] no module {}", a[1]));
 				default -> LOG.warn("[dev] unknown: {}", line);

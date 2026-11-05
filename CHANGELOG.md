@@ -16,6 +16,42 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.4.0
+
+Windows hold up in any size, and read as one UI. Added to the API: `Widget.minWidth`, `Heading`, `Note`, `EmptyState`,
+`TextField.search`/`icon`/`hasFocus`/`releaseFocus`, `Label.oneLine`, `Button.danger`, `IconPicker.fallback`/`named`,
+`IconSetting.fallback`, `SettingsView.rows` and `ScrollView.gutter`.
+
+- **You're on the title screen.** Myriad's title screen, with the width for it, moves its buttons to the left and stands
+  you beside them in a small scene, one of a tavern, a campfire or a mine picked each time, under a soft light in the
+  theme's accent with motes rising past: your own skin, skin layers and cape, drawn with no world loaded. The scene carries
+  on behind the buttons, which frost over it. Your head follows the mouse, a drag turns you and you settle back, a click
+  makes you swing. A narrow window keeps the centred column on its own.
+- **Rows and text give way in a narrow window.** `HBox` shrinks its fixed children towards their least width so the
+  shared ones keep theirs, then wraps onto more lines, each filling the width. Text beside a button is centred on it.
+  Addons get this without changing anything. `Label` breaks a word wider than its line instead of drawing past it;
+  a setting's editor goes under its name once the two don't fit, and a switch's name has the whole row. Section titles,
+  dropdown options, picker labels, key names and placeholders cut short instead of overflowing; a card's pills give
+  way to its title, the title bar's controls and subtitle to the window's name. The console wraps long lines and scrolls
+  a long command.
+- **Wheels and control panels have a search at the top of their list.** It lists what can go on as soon as it's
+  focused and narrows as you type; click or Enter adds and leaves it ready for the next, clicking something already on
+  takes it off. It replaces the control panel's module picker. Their settings are one flat fold now, not Settings
+  inside Settings, and Delete asks first.
+- **A wheel's window shows the wheel.** A small picture of it as it will show in game, lit together with the card you
+  point at, and there from the start so adding the first slot doesn't move the window about. Slots are cards like modules are: drag one to move it, unfold it for its own name and icon.
+- **The icon picker is new.** It opens like a dropdown, beside its name, with icons by section in a grid that fills the
+  width and scrolls smoothly, a line naming the one you point at, and the icon you'd get by default. Enter in its search
+  picks the first match.
+- **Profiler, Jobs and Hooks read alike.** Section headings, cards, and counts in the title bar. Profiler has totals on
+  top and a bar per owner, with columns when wide and a second line of numbers when narrow; every number now comes
+  from the same second (rows used to show a newer one than the order and total). Jobs are cards with their state, time
+  and progress, unfolding to their steps; Cancel all moved to the title bar. Hooks folds what nothing handles.
+- **A scrollbar coming or going no longer moves anything.** A scroll view keeps its bar's room whether it's showing or
+  not, so unfolding enough settings to need the bar leaves every row where it was, and a window that rebuilds (the
+  Profiler, every second) stops jumping sideways. A window's bar sits in its right padding, so both sides stay even.
+- Search boxes look the same everywhere, with a magnifier and a cross to empty them. Empty lists say what would fill them.
+
 ## 1.3.1
 
 - **The creative inventory's Inventory tab shows your hotbar and armour where they are.** It showed hotbar items in

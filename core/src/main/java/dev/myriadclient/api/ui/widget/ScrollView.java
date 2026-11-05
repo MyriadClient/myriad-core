@@ -4,22 +4,31 @@ import dev.myriadclient.api.render.Animated;
 import dev.myriadclient.api.render.Bezier;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.util.ColorUtil;
+import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
 
 /**
  * Shows a child clipped to a viewport with smooth scrolling. With {@code fill} the viewport is the height it is
- * given by {@link #setViewportHeight}; otherwise it sizes to its content up to {@code maxHeight}.
+ * given by {@link #setViewportHeight}; otherwise it sizes to its content up to {@code maxHeight}. The child's width
+ * leaves room for the bar whether it's showing or not, so nothing moves when the content outgrows the view.
  */
 public class ScrollView extends Widget {
 	private final Widget child;
 	private final float maxHeight;
 	private final Animated offset = new Animated(0);
-	private float target, contentHeight, viewport = -1;
+	private float target, contentHeight, viewport = -1, gutter = 4;
 
 	public ScrollView(Widget child, float maxHeight) {
 		this.child = child;
 		this.maxHeight = maxHeight;
+	}
+
+	/** The width kept free for the bar, 4 unless given: less if the child's own padding already leaves the room. */
+	@ApiStatus.AvailableSince("1.4.0")
+	public ScrollView gutter(float width) {
+		gutter = width;
+		return this;
 	}
 
 	/** Fixed viewport height (used by panels to fill their area). */
@@ -42,10 +51,8 @@ public class ScrollView extends Widget {
 		// place) waits for the first layout instead of going back to the top.
 		if (h0 > 0) target = Math.clamp(target, 0, max);
 		if (offset.target() != target) offset.animateTo(target, 180, Bezier.EASE_OUT_QUINT);
-		float scrollbar = max > 0 ? 4 : 0;
-		contentHeight = child.layout(canvas, x, y - offset.get(), width - scrollbar);
-		view = viewport >= 0 ? viewport : Math.min(maxHeight, contentHeight);
-		return view;
+		contentHeight = child.layout(canvas, x, y - offset.get(), width - gutter);
+		return viewport >= 0 ? viewport : Math.min(maxHeight, contentHeight);
 	}
 
 	@Override

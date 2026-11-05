@@ -6,6 +6,8 @@ import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.ui.WidgetPanel;
+import dev.myriadclient.api.ui.widget.Collapsible;
+import dev.myriadclient.api.ui.widget.Heading;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.util.MyriadId;
@@ -25,10 +27,18 @@ import java.util.Set;
 final class HooksPanel extends WidgetPanel {
 	private final Set<MyriadId> unfolded = new HashSet<>();
 	private String built = "";
+	private boolean showUnused;
 
 	@Override
 	public String title() {
 		return "Hooks";
+	}
+
+	/** How many addons' changes are in use. */
+	@Override
+	public String subtitle() {
+		long on = Myriad.hooks().contributions().stream().filter(c -> c.enabled() && !c.failed()).count();
+		return on == 0 ? null : on + " on";
 	}
 
 	@Override
@@ -54,7 +64,7 @@ final class HooksPanel extends WidgetPanel {
 		built = signature();
 		HookManager hooks = MyriadImpl.get().hookManager();
 
-		content.add(new Label("Services").bold());
+		content.add(new Heading("Services"));
 		boolean anyReplaced = false;
 		for (Service<?> s : Service.all()) {
 			List<Contribution> list = hooks.contributions(s.id());
@@ -67,7 +77,7 @@ final class HooksPanel extends WidgetPanel {
 		}
 		if (!anyReplaced) content.add(new Label("Rotations, inventory, placement and breaking are all core's own.").dim());
 
-		content.add(new Label("Hooks").bold());
+		content.add(new Heading("Hooks"));
 		List<String> unused = new ArrayList<>();
 		Set<MyriadId> seen = new HashSet<>();
 		for (Hook<?, ?> h : Hook.all()) {
@@ -81,7 +91,12 @@ final class HooksPanel extends WidgetPanel {
 			for (Contribution c : list) content.add(new Card(c, hooks, false));
 		}
 		if (unused.size() == seen.size()) content.add(new Label("No addon handles any hook.").dim());
-		if (!unused.isEmpty()) content.add(new Label("Not handled: " + String.join(", ", unused)).dim());
+		if (!unused.isEmpty()) {
+			// For addon developers looking for where they can step in: out of the player's way until opened.
+			VBox names = new VBox(2, 0);
+			names.add(new Label(String.join(", ", unused)).dim());
+			content.add(new Collapsible(() -> "Not handled", names, () -> showUnused, v -> showUnused = v).hint(() -> String.valueOf(unused.size())));
+		}
 	}
 
 	/** A contribution: click switches it on or off; unfolding says who made it and when it applies. */

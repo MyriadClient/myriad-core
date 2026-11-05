@@ -1,9 +1,12 @@
 package dev.myriadclient.api.ui.widget;
 
 import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.util.ColorUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.InputQuirks;
+import org.jetbrains.annotations.ApiStatus;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
@@ -14,12 +17,17 @@ import java.util.function.Supplier;
  * {@code getter}'s value.
  */
 public class TextField extends Widget {
+	/** The room a search box's cross takes at its right. */
+	private static final float CLEAR = 11;
+
 	private final Supplier<String> getter;
 	private Consumer<String> onChange = s -> {
 	};
 	private Consumer<String> onSubmit = s -> {
 	};
 	private String placeholder = "";
+	private String icon;
+	private boolean clearable;
 	private String text = "";
 	private int cursor;
 	private boolean selectAll;
@@ -45,8 +53,34 @@ public class TextField extends Widget {
 		return this;
 	}
 
+	/** A glyph at the left of the field: a search box's magnifier. */
+	@ApiStatus.AvailableSince("1.4.0")
+	public TextField icon(String glyph) {
+		this.icon = glyph;
+		return this;
+	}
+
+	/** A search box: the magnifier at its left, and a cross at its right that empties it once it holds something. */
+	@ApiStatus.AvailableSince("1.4.0")
+	public TextField search() {
+		this.clearable = true;
+		return icon(Icons.SEARCH);
+	}
+
 	public String text() {
 		return isFocused() ? text : getter.get();
+	}
+
+	/** Whether the keyboard is typing here. */
+	@ApiStatus.AvailableSince("1.4.0")
+	public boolean hasFocus() {
+		return isFocused();
+	}
+
+	/** Lets go of the keyboard, as Escape does. */
+	@ApiStatus.AvailableSince("1.4.0")
+	public void releaseFocus() {
+		blur();
 	}
 
 	/** Focuses the field programmatically (e.g. a launcher's search box). */
@@ -70,6 +104,23 @@ public class TextField extends Widget {
 	}
 
 	@Override
+	public float minWidth(Canvas canvas) {
+		return 40;
+	}
+
+	private float textLeft() {
+		return icon == null ? 4 : 13;
+	}
+
+	private boolean showsClear() {
+		return clearable && !text().isEmpty();
+	}
+
+	private boolean overClear(float mx, float my) {
+		return showsClear() && mx >= x + width - CLEAR && mx < x + width && my >= y && my < y + height;
+	}
+
+	@Override
 	public void render(Canvas c, float mx, float my) {
 		boolean focused = isFocused();
 		boolean hover = isHovered(mx, my);
@@ -77,15 +128,25 @@ public class TextField extends Widget {
 		if (focused) c.outline(x, y, width, height, 4, 1, ColorUtil.withAlpha(theme().accent.argb(), 180));
 
 		String shown = focused ? text : getter.get();
-		float tx = x + 4, ty = y + (height - c.textHeight()) / 2;
+		float tx = x + textLeft(), ty = y + (height - c.textHeight()) / 2;
+		float right = showsClear() ? CLEAR : 4;
+		if (icon != null) {
+			float s = c.defaultFontSize() * 0.85f;
+			c.text(FontFamily.MONO, s, icon, x + 3.5f, y + (height - c.textHeight(FontFamily.MONO, s)) / 2, focused ? theme().accent.argb() : theme().textDim.argb());
+		}
+		if (showsClear()) {
+			float s = c.defaultFontSize() * 0.75f;
+			c.text(FontFamily.MONO, s, Icons.TIMES, x + width - CLEAR + 3, y + (height - c.textHeight(FontFamily.MONO, s)) / 2,
+				overClear(mx, my) ? theme().text.argb() : theme().textDim.argb());
+		}
 		c.push();
-		c.clip(x + 2, y, width - 4, height);
+		c.clip(tx - 1, y, Math.max(0, x + width - right - tx + 1), height);
 		if (shown.isEmpty() && !focused) {
-			c.text(placeholder, tx, ty, theme().textDim.argb());
+			c.text(c.ellipsize(c.defaultFont(), c.defaultFontSize(), placeholder, x + width - right - tx), tx, ty, theme().textDim.argb());
 		} else {
 			float cursorX = c.textWidth(shown.substring(0, Math.min(cursor, shown.length())));
 			if (focused) {
-				float visible = width - 8;
+				float visible = x + width - right - tx;
 				if (cursorX - scrollX > visible) scrollX = cursorX - visible;
 				if (cursorX - scrollX < 0) scrollX = cursorX;
 			} else {
@@ -110,7 +171,7 @@ public class TextField extends Widget {
 			text = getter.get();
 			focus();
 		}
-		if (button == 1) {
+		if (button == 1 || overClear(mx, my)) {
 			setText("");
 		}
 		cursor = text.length();

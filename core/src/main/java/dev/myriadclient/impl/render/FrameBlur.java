@@ -13,6 +13,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
 
 import java.nio.ByteBuffer;
@@ -36,6 +37,15 @@ public final class FrameBlur {
 	private boolean requested;
 	private int passes = 3;
 	private float offset = 2.5f;
+	private @Nullable GpuTextureView source;
+	private int sourceWidth, sourceHeight;
+
+	/** This frame's blur is of {@code view}, a picture covering the screen, as the screen itself has nothing in it yet. */
+	public void from(GpuTextureView view, int width, int height) {
+		source = view;
+		sourceWidth = width;
+		sourceHeight = height;
+	}
 
 	/** The texture windows sample; valid for this frame once the blur has been requested. */
 	public GpuTextureView output() {
@@ -58,13 +68,16 @@ public final class FrameBlur {
 
 	/** Blurs the main target into {@link #output()} if a window asked for it this frame. Called before the GUI draws. */
 	public void runIfRequested() {
+		GpuTextureView picture = source;
+		source = null;
 		if (!requested) return;
 		requested = false;
 		RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
 		resize(main.width, main.height);
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
 		// Level 0 starts as the scene at half resolution; a down pass from the main target does that.
-		pass(encoder, MyriadPipelines.BLUR_DOWN, main.getColorTextureView(), main.width, main.height, levels[0], 0);
+		if (picture != null) pass(encoder, MyriadPipelines.BLUR_DOWN, picture, sourceWidth, sourceHeight, levels[0], 0);
+		else pass(encoder, MyriadPipelines.BLUR_DOWN, main.getColorTextureView(), main.width, main.height, levels[0], 0);
 		int ubo = 1;
 		for (int i = 0; i < passes; i++) pass(encoder, MyriadPipelines.BLUR_DOWN, levels[i].getColorTextureView(), levels[i].width, levels[i].height, levels[i + 1], ubo++);
 		for (int i = passes; i > 0; i--) pass(encoder, MyriadPipelines.BLUR_UP, levels[i].getColorTextureView(), levels[i].width, levels[i].height, levels[i - 1], ubo++);

@@ -4,9 +4,13 @@ import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.job.Job;
 import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.ui.Icons;
+import dev.myriadclient.api.ui.TitleControl;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Button;
+import dev.myriadclient.api.ui.widget.EmptyState;
 import dev.myriadclient.api.ui.widget.HBox;
+import dev.myriadclient.api.ui.widget.Heading;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.ui.widget.Widget;
@@ -22,8 +26,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * What the modules are doing at length: every running job by the module that started it, with the step it's on, why
- * it's waiting, its progress and how long it has run, and the steps under it; each can be paused or cancelled. A job
+ * What the modules are doing at length: every running job by the module that started it, as a card with its state, how
+ * long it has run and its progress; unfolded, what it's doing, the steps under it, and pausing or cancelling it. A job
  * that ended stays listed for a few seconds with how it ended, until dismissed.
  */
 final class JobsPanel extends WidgetPanel {
@@ -32,6 +36,10 @@ final class JobsPanel extends WidgetPanel {
 	/** The job the launcher opened the window for, drawn in the accent colour. */
 	private static int focused = -1;
 	private final Set<Integer> dismissed = new HashSet<>();
+	/** Jobs start unfolded, what they're doing being what this window is for. */
+	private final Set<Integer> folded = new HashSet<>();
+	private final List<TitleControl> titleControls = List.of(
+		TitleControl.button(() -> Icons.BAN, () -> Myriad.jobs().running().forEach(Job::cancel), () -> "Cancel every job").visible(() -> !Myriad.jobs().running().isEmpty()));
 	private String built = "";
 
 	@Override
@@ -40,8 +48,19 @@ final class JobsPanel extends WidgetPanel {
 	}
 
 	@Override
+	public String subtitle() {
+		int n = Myriad.jobs().running().size();
+		return n == 0 ? null : n + " running";
+	}
+
+	@Override
 	public String icon() {
 		return "";
+	}
+
+	@Override
+	public List<TitleControl> titleControls() {
+		return titleControls;
 	}
 
 	/** Opens the Jobs window with {@code job} picked out. */
@@ -77,83 +96,151 @@ final class JobsPanel extends WidgetPanel {
 	protected void build(VBox content) {
 		built = signature();
 		List<Job<?>> running = Myriad.jobs().running();
-		HBox head = new HBox(4);
-		head.addWeighted(new Label(running.isEmpty() ? "Nothing running" : running.size() + " running").dim(), 1);
-		if (!running.isEmpty()) head.addFixed(new Button("Cancel all", () -> Myriad.jobs().running().forEach(Job::cancel)), 80);
-		content.add(head);
-		if (running.isEmpty()) {
-			content.add(new Label("Modules that work at length (building, restocking, searching) list their jobs here while they run.").dim());
+		List<JobRunner.Ended> ended = runner().ended().stream().filter(e -> !dismissed.contains(e.job().id())).toList();
+		if (running.isEmpty() && ended.isEmpty()) {
+			content.add(new EmptyState(Icons.CHECK, "Nothing running", "Modules that work at length (building, restocking, searching) list their jobs here while they run."));
 		}
 		Map<String, List<Job<?>>> byOwner = new LinkedHashMap<>();
 		for (Job<?> j : running) byOwner.computeIfAbsent(JobText.owner(j), k -> new ArrayList<>()).add(j);
 		byOwner.forEach((owner, jobs) -> {
-			content.add(new Label(owner).bold());
-			for (Job<?> j : jobs) job(content, j);
+			content.add(new Heading(owner));
+			for (Job<?> j : jobs) content.add(new JobCard(j));
 		});
-		List<JobRunner.Ended> ended = runner().ended().stream().filter(e -> !dismissed.contains(e.job().id())).toList();
-		if (!ended.isEmpty()) content.add(new Label("Ended").bold());
+		if (!ended.isEmpty()) content.add(new Heading("Ended"));
 		for (JobRunner.Ended e : ended) {
 			Job<?> j = e.job();
 			HBox row = new HBox(4);
 			row.addWeighted(new Label(JobText.owner(j) + " · " + JobText.line(j) + (j.state() == Job.State.DONE ? " · done" : "")).dim(), 1);
-			row.addFixed(new Button("×", () -> {
+			row.addFixed(new Button(Icons.TIMES, () -> {
 				dismissed.add(j.id());
 				rebuild();
-			}).tooltip("Dismiss"), 22);
+			}).tooltip("Dismiss"), ROW_BUTTON);
 			content.add(row);
 		}
 	}
 
-	/** A running root: its name, state and time, pause and cancel, what it's doing, its progress, and its steps. */
-	private void job(VBox content, Job<?> j) {
-		HBox head = new HBox(4);
-		Label name = new Label(() -> j.name() + "  ·  " + JobText.state(j.state()) + "  ·  " + JobText.elapsed(j.ticks()));
-		if (j.id() == focused) name.color(() -> Myriad.ui().theme().accent.argb());
-		head.addWeighted(name.tooltip("Job " + j.id() + " · .job cancel " + j.id()), 1);
-		head.addFixed(new Button(() -> j.state() == Job.State.PAUSED ? "Resume" : "Pause", () -> {
-			if (j.state() == Job.State.PAUSED) j.resume();
-			else j.pause();
-		}), 64);
-		head.addFixed(new Button("Cancel", j::cancel), 64);
-		content.add(head);
-		content.add(new Label(() -> JobText.detail(j)).dim()).visible(() -> !JobText.detail(j).isEmpty());
-		content.add(new Bar(j)).visible(() -> !Double.isNaN(j.progress()));
-		for (Job<?> c : j.children()) step(content, c, 1);
-	}
+	private static final float ROW_BUTTON = 14;
 
-	private static void step(VBox content, Job<?> j, int depth) {
-		String indent = "    ".repeat(depth);
-		content.add(new Label(() -> {
-			StringBuilder s = new StringBuilder(indent).append(j.name());
-			if (j.state() != Job.State.RUNNING) s.append(" · ").append(JobText.state(j.state()));
-			if (j.state() == Job.State.STUCK && j.why() != null) s.append(": ").append(j.why());
-			else if (j.status() != null && !j.status().isEmpty()) s.append(" · ").append(j.status());
-			List<String> pills = j.pills();
-			if (!pills.isEmpty()) s.append("  [").append(String.join(", ", pills)).append(']');
-			return s.toString();
-		}).dim());
-		if (depth < DEPTH) for (Job<?> c : j.children()) step(content, c, depth + 1);
-	}
-
-	/** A job's progress, as a thin bar. */
-	private static final class Bar extends Widget {
+	/** A running root: its name, state and time; unfolded, what it's doing, its steps, pause and cancel. */
+	private final class JobCard extends CardEntry {
 		private final Job<?> job;
 
-		Bar(Job<?> job) {
+		JobCard(Job<?> job) {
+			super(true, !folded.contains(job.id()));
 			this.job = job;
+			this.tooltip = null;
 		}
 
 		@Override
-		protected float measure(Canvas canvas, float width) {
-			return 4;
+		protected String title() {
+			return job.name();
+		}
+
+		@Override
+		protected boolean isOn() {
+			return job.state() != Job.State.PAUSED;
+		}
+
+		@Override
+		protected int accent() {
+			return JobsPanel.stateColor(job.state());
+		}
+
+		@Override
+		protected double progress() {
+			return job.progress();
+		}
+
+		@Override
+		protected boolean isExpanded() {
+			return !folded.contains(job.id());
+		}
+
+		@Override
+		protected void setExpanded(boolean expanded) {
+			if (expanded) folded.remove(job.id());
+			else folded.add(job.id());
+		}
+
+		@Override
+		protected String tooltipText() {
+			return "Job " + job.id() + " · .job cancel " + job.id();
+		}
+
+		@Override
+		protected float drawBadges(Canvas c, float right, float cy) {
+			if (job.state() != Job.State.RUNNING) right = badge(c, JobText.state(job.state()), right, cy, JobsPanel.stateColor(job.state()), true) - 4;
+			return badge(c, JobText.elapsed(job.ticks()), right, cy, job.id() == focused ? theme().accent.argb() : theme().textDim.argb(), job.id() == focused) - 4;
+		}
+
+		@Override
+		protected void buildBody(VBox body) {
+			body.add(new Label(() -> JobText.detail(job)).dim()).visible(() -> !JobText.detail(job).isEmpty());
+			for (Job<?> c : job.children()) step(body, c, 0);
+			HBox actions = new HBox(4);
+			actions.add(new Button(() -> job.state() == Job.State.PAUSED ? "Resume" : "Pause", () -> {
+				if (job.state() == Job.State.PAUSED) job.resume();
+				else job.pause();
+			}));
+			actions.add(new Button("Cancel", job::cancel));
+			body.add(actions);
+		}
+	}
+
+	private static int stateColor(Job.State state) {
+		var theme = Myriad.ui().theme();
+		return switch (state) {
+			case STUCK -> theme.yellow.argb();
+			case PAUSED -> theme.textDim.argb();
+			case FAILED, CANCELLED -> theme.red.argb();
+			default -> theme.accent.argb();
+		};
+	}
+
+	private static void step(VBox body, Job<?> j, int depth) {
+		body.add(new StepRow(j, depth));
+		if (depth + 1 < DEPTH) for (Job<?> c : j.children()) step(body, c, depth + 1);
+	}
+
+	/** A step under a job: indented by how deep it is, a dot for its state, and its text wrapped beside that. */
+	private static final class StepRow extends Widget {
+		private static final float INDENT = 7, DOT = 3, TEXT = 7;
+		private final Job<?> job;
+		private final int depth;
+		private final Label text;
+
+		StepRow(Job<?> job, int depth) {
+			this.job = job;
+			this.depth = depth;
+			this.text = new Label(() -> {
+				StringBuilder s = new StringBuilder(job.name());
+				if (job.state() != Job.State.RUNNING) s.append(" · ").append(JobText.state(job.state()));
+				if (job.state() == Job.State.STUCK && job.why() != null) s.append(": ").append(job.why());
+				else if (job.status() != null && !job.status().isEmpty()) s.append(" · ").append(job.status());
+				List<String> pills = job.pills();
+				if (!pills.isEmpty()) s.append("  [").append(String.join(", ", pills)).append(']');
+				return s.toString();
+			}).dim();
+			attachChild(text);
+		}
+
+		/** Deep steps stop indenting once there'd be little left for their text. */
+		private float indent(float width) {
+			return Math.min(depth * INDENT, Math.max(0, width - 60));
+		}
+
+		@Override
+		protected float measure(Canvas c, float width) {
+			float left = indent(width) + TEXT;
+			return text.layout(c, x + left, y, width - left);
 		}
 
 		@Override
 		public void render(Canvas c, float mx, float my) {
-			double p = job.progress();
-			if (Double.isNaN(p)) return;
-			c.roundRect(x, y, width, height, 2, theme().surface.argb());
-			c.roundRect(x, y, (float) (width * Math.clamp(p, 0, 1)), height, 2, theme().accent.argb());
+			float ly = y + (c.textHeight() + 1) / 2;
+			float dx = x + indent(width) + DOT / 2;
+			c.circle(dx, ly, DOT / 2, stateColor(job.state()));
+			text.render(c, mx, my);
 		}
 	}
 }

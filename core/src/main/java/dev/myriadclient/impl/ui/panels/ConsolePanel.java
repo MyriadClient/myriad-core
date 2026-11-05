@@ -6,6 +6,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.ui.Panel;
+import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.ui.Shortcuts;
@@ -42,9 +43,14 @@ public final class ConsolePanel extends Panel {
 		c.push();
 		c.clip(0, 0, w, h - promptH);
 		float y = h - promptH - 4 - lh + scroll;
+		float room = Math.max(1, w - 12);
 		for (int i = lines.size() - 1; i >= 0 && y > -lh; i--) {
-			c.text(FontFamily.MONO, size, lines.get(i), 6, y, Myriad.ui().theme().text.argb());
-			y -= lh;
+			// Bottom up, so a wrapped line's last piece first.
+			List<String> pieces = Label.wrap(c, FontFamily.MONO, size, lines.get(i), room);
+			for (int p = pieces.size() - 1; p >= 0 && y > -lh; p--) {
+				c.text(FontFamily.MONO, size, pieces.get(p), 6, y, Myriad.ui().theme().text.argb());
+				y -= lh;
+			}
 		}
 		c.pop();
 		var theme = Myriad.ui().theme();
@@ -52,13 +58,21 @@ public final class ConsolePanel extends Panel {
 		float py = h - promptH + 4;
 		String prompt = Myriad.config().commandPrefix();
 		c.text(FontFamily.MONO, size, "", 6, py, theme.accent.argb());
-		float tx = 16;
-		float iw = c.text(FontFamily.MONO, size, input, tx, py, theme.text.argb());
-		if (!suggestion.isEmpty()) c.text(FontFamily.MONO, size, suggestion, tx + iw, py, theme.textDim.argb());
-		if ((System.nanoTime() / 500_000_000L) % 2 == 0) c.rect(tx + iw, py, 0.75f, lh - 1, theme.text.argb());
+		String prefixHint = "prefix " + prompt;
+		float pw = c.textWidth(FontFamily.SANS, size * 0.85f, prefixHint);
+		// The hint goes when the window's too narrow for it beside a command; a long line scrolls so its end shows.
+		boolean showHint = w >= 150;
+		float tx = 16, right = showHint ? w - pw - 10 : w - 4;
+		float iw = c.textWidth(FontFamily.MONO, size, input);
+		float shift = Math.max(0, tx + iw + 2 - right);
+		c.push();
+		c.clip(tx - 1, h - promptH, Math.max(0, right - tx + 1), promptH);
+		c.text(FontFamily.MONO, size, input, tx - shift, py, theme.text.argb());
+		if (!suggestion.isEmpty()) c.text(FontFamily.MONO, size, suggestion, tx - shift + iw, py, theme.textDim.argb());
+		if ((System.nanoTime() / 500_000_000L) % 2 == 0) c.rect(tx - shift + iw, py, 0.75f, lh - 1, theme.text.argb());
 		if (input.isEmpty()) c.text(FontFamily.MONO, size, "help", tx + 2, py, ColorUtil.withAlpha(theme.textDim.argb(), 100));
-		float pw = c.textWidth(FontFamily.SANS, size * 0.85f, "prefix " + prompt);
-		c.text(FontFamily.SANS, size * 0.85f, "prefix " + prompt, w - pw - 6, py + 1, theme.textDim.argb());
+		c.pop();
+		if (showHint) c.text(FontFamily.SANS, size * 0.85f, prefixHint, w - pw - 6, py + 1, theme.textDim.argb());
 	}
 
 	@Override

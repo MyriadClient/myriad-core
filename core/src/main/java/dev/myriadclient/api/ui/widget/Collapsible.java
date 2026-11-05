@@ -70,16 +70,24 @@ public class Collapsible extends Widget {
 		String chevron = expanded ? "\uf078" : "\uf054";
 		c.text(FontFamily.MONO, iconSize, chevron, x + 1, y + (ROW - c.textHeight(FontFamily.MONO, iconSize)) / 2,
 			expanded ? theme().accent.argb() : theme().textDim.argb());
-		c.text(FontFamily.SANS_BOLD, c.defaultFontSize(), title.get(), x + 11, y + (ROW - c.textHeight()) / 2,
-			hover || expanded ? theme().text.argb() : theme().textDim.argb());
+		// The hint is what gives way: the name keeps at least enough to tell which section this is.
+		float room = width - 13;
+		float titleW = c.textWidth(FontFamily.SANS_BOLD, c.defaultFontSize(), title.get());
 		if (hint != null) {
 			String h = hint.get();
 			if (h != null && !h.isEmpty()) {
 				float hs = c.defaultFontSize() * 0.8f;
-				c.text(FontFamily.SANS, hs, h, x + width - 2 - c.textWidth(FontFamily.SANS, hs, h), y + (ROW - c.textHeight(FontFamily.SANS, hs)) / 2,
-					theme().textDim.argb());
+				float hintRoom = room - 4 - Math.min(titleW, 44);
+				String shown = c.ellipsize(FontFamily.SANS, hs, h, hintRoom);
+				if (hintRoom > 12) {
+					float hw = c.textWidth(FontFamily.SANS, hs, shown);
+					c.text(FontFamily.SANS, hs, shown, x + width - 2 - hw, y + (ROW - c.textHeight(FontFamily.SANS, hs)) / 2, theme().textDim.argb());
+					room -= hw + 4;
+				}
 			}
 		}
+		c.text(FontFamily.SANS_BOLD, c.defaultFontSize(), c.ellipsize(FontFamily.SANS_BOLD, c.defaultFontSize(), title.get(), room), x + 11, y + (ROW - c.textHeight()) / 2,
+			hover || expanded ? theme().text.argb() : theme().textDim.argb());
 		float t = open.get();
 		if (t > 0.01f) {
 			c.push();

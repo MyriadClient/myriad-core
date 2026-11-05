@@ -33,6 +33,11 @@ public class Dropdown<T> extends Widget {
 	}
 
 	@Override
+	public float minWidth(Canvas canvas) {
+		return 44;
+	}
+
+	@Override
 	public void render(Canvas c, float mx, float my) {
 		boolean hover = mx >= x && my >= y && mx < x + width && my < y + ROW;
 		// The header lights up on hover; an open list under it keeps the header's own colour.
@@ -57,7 +62,7 @@ public class Dropdown<T> extends Widget {
 				boolean h = mx >= x && my >= oy && mx < x + width && my < oy + ROW - 2 && my < y + height;
 				if (option.equals(current)) c.roundRect(x + 2, oy, width - 4, ROW - 2, 3, ColorUtil.withAlpha(theme().accent.argb(), 90));
 				else if (h) c.roundRect(x + 2, oy, width - 4, ROW - 2, 3, theme().surfaceHover.argb());
-				c.text(names.apply(option), x + 6, oy + (ROW - 2 - c.textHeight()) / 2, theme().text.argb());
+				c.text(c.ellipsize(c.defaultFont(), c.defaultFontSize(), names.apply(option), width - 10), x + 6, oy + (ROW - 2 - c.textHeight()) / 2, theme().text.argb());
 				oy += ROW - 2;
 			}
 			c.pop();

@@ -11,6 +11,7 @@ import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
+import dev.myriadclient.api.ui.widget.Note;
 import dev.myriadclient.api.ui.widget.SettingsView;
 import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.VBox;
@@ -60,7 +61,7 @@ public final class ThemePanel extends WidgetPanel {
 			String notice = t.notice();
 			if (notice == null || notice.isBlank()) continue;
 			String[] lines = notice.split("\n");
-			content.add(new Label(t.name() + ": " + lines[0]).color(() -> wm.theme().yellow.argb()));
+			content.add(new Note(t.name() + ": " + lines[0]).warn());
 			for (int i = 1; i < lines.length; i++) content.add(new Label(lines[i]).font(FontFamily.MONO, 0).dim());
 		}
 
@@ -149,11 +150,13 @@ public final class ThemePanel extends WidgetPanel {
 			c.roundRect(x, y, width, height, 4, active ? ColorUtil.withAlpha(sw[1], 45) : hover ? theme().surfaceHover.argb() : theme().surface.argb());
 			if (active) c.outline(x, y, width, height, 4, 1, ColorUtil.withAlpha(sw[1], 140));
 			// Background chip with the accent and palette dots on it.
-			float chipW = 44, chipH = height - 6, cx = x + 3, cy = y + 3;
+			// Narrow, the chip gives way to the name, showing the accent and one colour more.
+			float chipW = width < 120 ? 18 : 44, chipH = height - 6, cx = x + 3, cy = y + 3;
 			c.roundRect(cx, cy, chipW, chipH, chipH / 2, sw[0]);
 			c.outline(cx, cy, chipW, chipH, chipH / 2, 1, ColorUtil.withAlpha(0xFFFFFFFF, 30));
 			float dot = chipH - 4;
-			for (int i = 1; i < sw.length && i <= 7; i++) c.circle(cx + 2 + dot / 2 + (i - 1) * (chipW - 4 - dot) / 6f, cy + chipH / 2, dot / 2 - 0.5f, sw[i]);
+			int dots = chipW < 44 ? 2 : 7;
+			for (int i = 1; i < sw.length && i <= dots; i++) c.circle(cx + 2 + dot / 2 + (i - 1) * (chipW - 4 - dot) / (dots - 1f), cy + chipH / 2, dot / 2 - 0.5f, sw[i]);
 			float tx = cx + chipW + 6;
 			float right = x + width - 6;
 			if (active) {
@@ -163,7 +166,8 @@ public final class ThemePanel extends WidgetPanel {
 				right -= 5;
 			}
 			String badge = entry.isUser() ? "Custom" : entry.isModified() ? "Edited" : null;
-			if (badge != null) {
+			// The name comes first.
+			if (badge != null && right - tx > 80) {
 				float s = c.defaultFontSize() * 0.7f;
 				float bw = c.textWidth(FontFamily.SANS_BOLD, s, badge) + 8, bh = c.textHeight(FontFamily.SANS, s) + 3;
 				right -= bw;

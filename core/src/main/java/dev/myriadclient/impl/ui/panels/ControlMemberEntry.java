@@ -47,5 +47,6 @@ final class ControlMemberEntry extends ModuleEntry {
 			.visible(() -> control.rememberedCount(module) > 0);
 		body.add(saved);
 		super.buildBody(body);
+		body.add(new Button("Remove from " + control.name(), () -> control.members.toggle(module)).danger());
 	}
 }

@@ -9,6 +9,7 @@ import dev.myriadclient.api.addon.Addon;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.setting.Setting;
+import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.api.ui.widget.HBox;
@@ -59,12 +60,12 @@ public final class KeybindsPanel extends WidgetPanel {
 
 	@Override
 	public String icon() {
-		return "";
+		return Icons.KEYBOARD;
 	}
 
 	@Override
 	protected void build(VBox content) {
-		content.add(new TextField(() -> query).placeholder("Search binds or keys…").onChange(s -> query = s.trim().toLowerCase(Locale.ROOT)));
+		content.add(new TextField(() -> query).search().placeholder("Search binds or keys…").onChange(s -> query = s.trim().toLowerCase(Locale.ROOT)));
 		content.add(global().widget());
 		content.add(myriad().widget());
 		for (Addon addon : Myriad.addons()) {

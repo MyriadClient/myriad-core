@@ -21,7 +21,7 @@ public final class WheelImpl {
 	private final SettingGroup sg = settings.group("Wheel");
 	public final StringSetting name = sg.string("Name").build();
 	public final KeybindSetting keybind = sg.keybind("Keybind").description("Hold it in game to show the wheel; let go over a slot to run it.").build();
-	public final IconSetting icon = sg.icon("Icon").description("Its icon: in the middle of the wheel, on its window and in the launcher.").build();
+	public final IconSetting icon = sg.icon("Icon").description("Its icon: in the middle of the wheel, on its window and in the launcher.").fallback(Icons.DOT_CIRCLE).build();
 	private final List<WheelSlot> slots = new CopyOnWriteArrayList<>();
 
 	WheelImpl(String id, String name) {

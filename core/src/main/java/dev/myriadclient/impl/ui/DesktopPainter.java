@@ -331,12 +331,15 @@ final class DesktopPainter {
 		for (var e : controls) buttons += e.getKey().width() + 3;
 		float room = r.right() - buttons - x - 4;
 		String title = c.ellipsize(FontFamily.SANS_BOLD, c.defaultFontSize(), safeTitle(w), room);
-		c.text(FontFamily.SANS_BOLD, c.defaultFontSize(), title, x, ty, focused ? theme.text.argb() : theme.textDim.argb());
+		if (room > 6) c.text(FontFamily.SANS_BOLD, c.defaultFontSize(), title, x, ty, focused ? theme.text.argb() : theme.textDim.argb());
 		String sub = safeSubtitle(w);
 		if (sub != null && !sub.isEmpty()) {
 			float sx = x + c.textWidth(FontFamily.SANS_BOLD, c.defaultFontSize(), title) + 5;
-			String s = c.ellipsize(FontFamily.SANS, c.defaultFontSize(), sub, x + room - sx);
-			c.text(FontFamily.SANS, c.defaultFontSize(), s, sx, ty, ColorUtil.withAlpha(theme.textDim.argb(), focused ? 220 : 150));
+			// A subtitle cut down to a word or less says nothing: it goes instead.
+			if (x + room - sx >= Math.min(c.textWidth(FontFamily.SANS, c.defaultFontSize(), sub), 32)) {
+				String s = c.ellipsize(FontFamily.SANS, c.defaultFontSize(), sub, x + room - sx);
+				c.text(FontFamily.SANS, c.defaultFontSize(), s, sx, ty, ColorUtil.withAlpha(theme.textDim.argb(), focused ? 220 : 150));
+			}
 		}
 		if (wm.mergeTarget() == w) {
 			// Dropping here merges the dragged category window into this one.
@@ -384,8 +387,11 @@ final class DesktopPainter {
 		}
 		List<Map.Entry<TitleControl, Float>> out = new ArrayList<>();
 		float x = r.right() - theme.borderSize.get() - 24 - 3 - wm.titleInset(w);
+		// The window's name keeps some of the bar: in a narrow window the controls that would crowd it go.
+		float floor = r.x() + theme.borderSize.get() + 6 + 11 + 28;
 		for (TitleControl tc : all) {
 			if (!tc.isVisible()) continue;
+			if (x - tc.width() < floor) break;
 			x -= tc.width();
 			out.add(Map.entry(tc, x));
 			x -= 3;

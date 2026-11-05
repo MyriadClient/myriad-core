@@ -11,8 +11,9 @@ import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.api.ui.widget.HBox;
+import dev.myriadclient.api.ui.widget.Heading;
 import dev.myriadclient.api.ui.widget.Label;
-import dev.myriadclient.api.ui.widget.Spacer;
+import dev.myriadclient.api.ui.widget.Note;
 import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.Toggle;
 import dev.myriadclient.api.ui.widget.VBox;
@@ -63,7 +64,7 @@ final class SharePanel extends WidgetPanel {
 
 	@Override
 	protected void build(VBox content) {
-		content.add(new Label("Share").bold());
+		content.add(new Heading("New share"));
 
 		VBox groups = new VBox(3, 0);
 		for (ModuleGroup g : MenuGroups.all()) groups.add(new GroupCard(g));
@@ -91,8 +92,7 @@ final class SharePanel extends WidgetPanel {
 		content.add(share);
 		content.add(new Label(() -> status).color(() -> Myriad.ui().theme().accent.argb()).visible(() -> !status.isEmpty()));
 
-		content.add(Spacer.divider());
-		content.add(new Label("Take one in").bold());
+		content.add(new Heading("Take one in"));
 		HBox take = new HBox(4);
 		take.addWeighted(new TextField(() -> code).placeholder("myriad_…  or its link").onChange(s -> code = s).onSubmit(s -> fetch()), 1);
 		take.addFixed(new Button("Look", this::fetch), 36);
@@ -101,7 +101,7 @@ final class SharePanel extends WidgetPanel {
 			content.add(new Label(fetched.title()).bold());
 			content.add(new Label(contents(fetched)).dim());
 			String needs = needs(fetched);
-			if (!needs.isEmpty()) content.add(new Label("Needs " + needs + " for some of it.").color(() -> Myriad.ui().theme().yellow.argb()));
+			if (!needs.isEmpty()) content.add(new Note("Needs " + needs + " for some of it.").warn());
 			HBox apply = new HBox(4);
 			if (fetched.modules().isEmpty()) {
 				// Nothing to try out: its control panels, wheels or theme are only ever added.
@@ -115,7 +115,6 @@ final class SharePanel extends WidgetPanel {
 
 		List<ConfigShares.Published> mine = Myriad.shares().published();
 		if (!mine.isEmpty()) {
-			content.add(Spacer.divider());
 			VBox body = new VBox(3, 0);
 			for (ConfigShares.Published p : mine) {
 				HBox r = new HBox(4);

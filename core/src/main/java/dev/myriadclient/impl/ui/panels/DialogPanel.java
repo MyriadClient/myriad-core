@@ -89,7 +89,9 @@ public final class DialogPanel extends WidgetPanel {
 
 	@Override
 	public Rect preferredSize(Canvas c) {
-		return new Rect(0, 0, Math.clamp(c.textWidth(message.get()) + 16, 180, 320), 64);
+		float w = Math.clamp(c.textWidth(message.get()) + 16, 180, 320);
+		int lines = Label.wrap(c, c.defaultFont(), c.defaultFontSize(), message.get(), w - 22).size();
+		return new Rect(0, 0, w, 50 + (lines - 1) * (c.textHeight() + 1) + 14);
 	}
 
 	@Override

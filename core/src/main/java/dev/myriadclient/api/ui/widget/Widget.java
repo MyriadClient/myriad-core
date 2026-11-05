@@ -3,6 +3,7 @@ package dev.myriadclient.api.ui.widget;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.ui.ThemeSettings;
+import org.jetbrains.annotations.ApiStatus;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +37,15 @@ public abstract class Widget {
 	protected abstract float measure(Canvas canvas, float width);
 
 	public abstract void render(Canvas canvas, float mouseX, float mouseY);
+
+	/**
+	 * The narrowest this is still usable at, for a row deciding whether to shrink it or wrap ({@link HBox}), or -1 if it
+	 * has no opinion: a row then keeps a fixed child at its width and gives a shared one a small default.
+	 */
+	@ApiStatus.AvailableSince("1.4.0")
+	public float minWidth(Canvas canvas) {
+		return -1;
+	}
 
 	public boolean mouseClicked(float mouseX, float mouseY, int button) {
 		return false;

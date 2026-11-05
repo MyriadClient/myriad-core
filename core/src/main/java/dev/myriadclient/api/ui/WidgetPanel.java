@@ -28,7 +28,8 @@ public abstract class WidgetPanel extends Panel {
 		float keep = scroll == null ? 0 : scroll.scroll();
 		VBox content = new VBox(4, padding);
 		build(content);
-		scroll = new ScrollView(content, Float.MAX_VALUE);
+		// The bar sits in the content's right padding, leaving both sides even with or without it.
+		scroll = new ScrollView(content, Float.MAX_VALUE).gutter(Math.max(0, 4 - padding));
 		scroll.setScroll(keep);
 		root = new WidgetRoot(scroll);
 		root.setScroller(scroll);

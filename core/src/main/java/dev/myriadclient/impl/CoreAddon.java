@@ -113,7 +113,7 @@ public final class CoreAddon implements MyriadAddon {
 			: new Slider(s::get, s::edit, s.sliderMin(), s.sliderMax(), s.decimals()), false);
 		w.register(EnumSetting.class, s -> enumDropdown((EnumSetting) s), false);
 		w.register(StringSetting.class, s -> new TextField(s::get).onSubmit(s::edit), false);
-		w.register(IconSetting.class, s -> new IconPicker(s::get, s::edit), true);
+		w.register(IconSetting.class, s -> new IconPicker(s::get, s::edit).fallback(s::fallback), false);
 		w.register(StringListSetting.class, StringListEditor::new, true);
 		w.register(IntListSetting.class, s -> new TextField(s::valueString).onSubmit(s::parse).placeholder("1, 2, 3"), false);
 		w.register(EnumSetSetting.class, s -> new RegistryPicker<>(enumSetSource((EnumSetSetting) s)), true);

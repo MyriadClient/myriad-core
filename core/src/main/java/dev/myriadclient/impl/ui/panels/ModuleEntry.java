@@ -106,11 +106,17 @@ class ModuleEntry extends CardEntry {
 	private final class Info extends Widget {
 		private final Label description = new Label(module.description()).dim();
 
+		/** Whether the two pills don't fit side by side, so the tags go under the source. */
+		private boolean pillsWrap(Canvas c, float width) {
+			return badgeWidth(c, sourceTag(), true) + 4 + badgeWidth(c, tagNames(), false) > width;
+		}
+
 		@Override
 		protected float measure(Canvas c, float width) {
 			float h = 0;
 			if (!module.description().isEmpty()) h += description.layout(c, x, y, width) + 3;
-			return h + c.textHeight(FontFamily.SANS, c.defaultFontSize() * 0.7f) + 3;
+			float pill = c.textHeight(FontFamily.SANS, c.defaultFontSize() * 0.7f) + 3;
+			return h + (pillsWrap(c, width) ? pill * 2 + 2 : pill);
 		}
 
 		@Override
@@ -120,11 +126,22 @@ class ModuleEntry extends CardEntry {
 			float th = c.textHeight(FontFamily.SANS, s) + 3;
 			float cy = y + height - th / 2;
 			int accent = module.tag().color();
-			String tag = " " + source;
+			String tag = sourceTag(), tags = tagNames();
+			if (pillsWrap(c, width)) {
+				// Each on a line of its own, cut short if it still doesn't fit.
+				String shown = c.ellipsize(FontFamily.SANS_BOLD, s, tag, width - 8);
+				badge(c, shown, x + badgeWidth(c, shown, true), cy - th - 2, accent, true);
+				shown = c.ellipsize(FontFamily.SANS, s, tags, width - 8);
+				badge(c, shown, x + badgeWidth(c, shown, false), cy, theme().textDim.argb(), false);
+				return;
+			}
 			float bx = x + badgeWidth(c, tag, true);
 			badge(c, tag, bx, cy, accent, true);
-			String tags = tagNames();
 			badge(c, tags, bx + 4 + badgeWidth(c, tags, false), cy, theme().textDim.argb(), false);
+		}
+
+		private String sourceTag() {
+			return " " + source;
 		}
 	}
 }

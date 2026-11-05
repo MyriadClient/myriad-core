@@ -151,7 +151,7 @@ public class RegistryPicker<T> extends Widget {
 
 	public RegistryPicker(Source<T> setting) {
 		this.setting = setting;
-		this.search = new TextField(() -> query).placeholder("Search…").onChange(s -> {
+		this.search = new TextField(() -> query).search().placeholder("Search…").onChange(s -> {
 			query = s;
 			refilter();
 		});
@@ -188,6 +188,11 @@ public class RegistryPicker<T> extends Widget {
 	}
 
 	@Override
+	public float minWidth(Canvas canvas) {
+		return 44;
+	}
+
+	@Override
 	protected float measure(Canvas canvas, float width) {
 		if (!expanded) return ROW;
 		search.layout(canvas, x, y + ROW + 3, width);
@@ -205,7 +210,7 @@ public class RegistryPicker<T> extends Widget {
 		} else {
 			c.roundRect(x, y, width, ROW, 4, header);
 		}
-		String label = setting.label();
+		String label = c.ellipsize(c.defaultFont(), c.defaultFontSize(), setting.label(), width - 16);
 		c.text(label, x + 4, y + (ROW - c.textHeight()) / 2, theme().textDim.argb());
 		c.text(expanded ? "" : "", x + width - 10, y + (ROW - c.textHeight()) / 2, theme().textDim.argb());
 		if (!expanded) return;

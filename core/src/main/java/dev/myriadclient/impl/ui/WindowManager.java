@@ -366,6 +366,14 @@ public final class WindowManager implements Desktop {
 		else if (!w.floating) ws.tiling.reveal(w);
 	}
 
+	/** Dev console: floats the focused window at this place and size. */
+	public void floatFocused(float x, float y, float w, float h) {
+		WindowImpl focused = workspaces[active].focused;
+		if (focused == null) return;
+		setFloating(focused, true);
+		focused.floatRect = new Rect(x, y, w, h);
+	}
+
 	void setFloating(WindowImpl w, boolean floating) {
 		if (w.floating == floating || w.workspace == HUD_WORKSPACE) return;
 		Workspace ws = workspaces[w.workspace];

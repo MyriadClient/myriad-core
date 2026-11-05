@@ -127,7 +127,7 @@ public final class ModulesPanel extends WidgetPanel {
 
 	/** The Modules panel: a filter box, then every module by group, as in the menu. */
 	private void buildAll(VBox content) {
-		content.add(new TextField(() -> filter).placeholder("  Filter modules…").onChange(s -> filter = s));
+		content.add(new TextField(() -> filter).search().placeholder("Filter modules…").onChange(s -> filter = s));
 		if (Myriad.modules().size() == 0) {
 			content.add(new Label("No modules installed. Drop Myriad addons (like myriad-essentials) into your mods folder.").dim());
 			return;

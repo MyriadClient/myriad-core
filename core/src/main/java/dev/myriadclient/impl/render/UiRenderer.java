@@ -13,6 +13,7 @@ import dev.myriadclient.impl.render.font.FontManager;
 import dev.myriadclient.impl.render.font.Glyph;
 import dev.myriadclient.impl.render.font.SizedFont;
 import dev.myriadclient.impl.render.preview.PreviewRenderer;
+import dev.myriadclient.impl.render.title.TitleSceneState;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -97,6 +98,11 @@ public final class UiRenderer implements Canvas {
 	public void beforeGuiDraw() {
 		blur.runIfRequested();
 		GpuGarbage.tick();
+	}
+
+	/** This frame's blur is of {@code view}, a picture covering the screen ({@link FrameBlur#from}). */
+	public void blurFrom(GpuTextureView view, int width, int height) {
+		blur.from(view, width, height);
 	}
 
 	public void setDefaults(FontFamily font, float size) {
@@ -261,6 +267,15 @@ public final class UiRenderer implements Canvas {
 			if (scissor == null) return;
 		}
 		context.guiRenderState.addPicturesInPictureState(PreviewRenderer.state(preview, x0, y0, x1, y1, state.scale / guiScale, scissor));
+	}
+
+	/** The title screen's scene, filling (x, y, w, h). */
+	public void titleScene(TitleSceneState.View view, float x, float y, float w, float h) {
+		flush();
+		int x0 = Math.round(px(x) / guiScale), y0 = Math.round(py(y) / guiScale);
+		int x1 = Math.round(px(x + w) / guiScale), y1 = Math.round(py(y + h) / guiScale);
+		if (x1 <= x0 || y1 <= y0) return;
+		context.guiRenderState.addPicturesInPictureState(TitleSceneState.of(view, x0, y0, x1, y1, context.scissorStack.peek()));
 	}
 
 	@Override

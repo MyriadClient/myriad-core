@@ -40,9 +40,15 @@ public class KeybindButton extends Widget {
 		}
 		boolean hover = isHovered(mx, my);
 		c.roundRect(x, y, width, height, 4, listening ? ColorUtil.withAlpha(theme().accent.argb(), 120) : hover ? theme().surfaceHover.argb() : theme().surface.argb());
-		String text = listening ? "Press a key…" : getter.get().displayName();
+		String text = c.ellipsize(c.defaultFont(), c.defaultFontSize(), listening ? "Press a key…" : getter.get().displayName(), width - 6);
 		c.text(text, x + (width - c.textWidth(text)) / 2, y + (height - c.textHeight()) / 2, theme().text.argb());
 		offerTooltip(mx, my);
+	}
+
+	/** The key's name, and enough for "Press a key…" not to lose too much. */
+	@Override
+	public float minWidth(Canvas canvas) {
+		return Math.max(44, canvas.textWidth(getter.get().displayName()) + 8);
 	}
 
 	@Override

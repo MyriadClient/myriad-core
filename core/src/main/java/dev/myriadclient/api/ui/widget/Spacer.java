@@ -27,6 +27,11 @@ public class Spacer extends Widget {
 	}
 
 	@Override
+	public float minWidth(Canvas canvas) {
+		return 0;
+	}
+
+	@Override
 	public void render(Canvas canvas, float mx, float my) {
 		if (line) canvas.rect(x, y + size / 2, width, 1, ColorUtil.withAlpha(theme().textDim.argb(), 40));
 	}

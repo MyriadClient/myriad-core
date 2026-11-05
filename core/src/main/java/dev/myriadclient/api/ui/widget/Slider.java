@@ -45,6 +45,11 @@ public class Slider extends Widget {
 	}
 
 	@Override
+	public float minWidth(Canvas canvas) {
+		return 40;
+	}
+
+	@Override
 	public void render(Canvas c, float mx, float my) {
 		if (editor != null) {
 			if (!editor.isFocused()) editor = null;
