@@ -16,6 +16,15 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.5.2
+
+A patch: the API is unchanged.
+
+- **Watching for deadly blocks no longer reads thousands of blocks a tick.** `Threats` (which Offhand and other totem
+  modules ask every tick) looked for beds and charged respawn anchors by reading every block within 8 of you, about
+  5,000 a tick. It now checks each 16-block section's palette first and reads only sections that could hold one, usually
+  none. Offhand: 3.6–4.4 ms/s and 93,000 block reads a second before, 0.75–1.2 ms/s and none after, same scene.
+
 ## 1.5.1
 
 A patch: the API is unchanged.

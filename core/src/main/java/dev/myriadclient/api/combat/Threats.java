@@ -1,7 +1,6 @@
 package dev.myriadclient.api.combat;
 
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.combat.Damage;
 import dev.myriadclient.api.util.Ticks;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -13,6 +12,11 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.RespawnAnchorBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+
+import java.util.function.Predicate;
+import java.util.function.ToDoubleFunction;
 
 /**
  * How much damage nearby dangers could do to you right now, after your armour and effects: end crystals, beds (which
@@ -79,21 +83,49 @@ public final class Threats {
 	public static float beds(int range) {
 		LocalPlayer p = player();
 		if (p.level().dimension() == Level.OVERWORLD) return 0;
-		float max = 0;
-		for (BlockPos pos : BlockPos.betweenClosed(p.blockPosition().offset(-range, -range, -range), p.blockPosition().offset(range, range, range))) {
-			if (p.level().getBlockState(pos).getBlock() instanceof BedBlock) max = Math.max(max, Damage.bed(p, pos));
-		}
-		return max;
+		return worstBlock(p, range, s -> s.getBlock() instanceof BedBlock, pos -> Damage.bed(p, pos));
 	}
 
 	/** The worst charged respawn anchor within {@code range} blocks; 0 in the Nether, where anchors work. */
 	public static float anchors(int range) {
 		LocalPlayer p = player();
 		if (p.level().dimension() == Level.NETHER) return 0;
+		return worstBlock(p, range, s -> s.getBlock() instanceof RespawnAnchorBlock && s.getValue(RespawnAnchorBlock.CHARGE) > 0,
+			pos -> Damage.anchor(p, pos));
+	}
+
+	/**
+	 * The most {@code damage} from a block within {@code range} of {@code p} that matches {@code filter}. Each 16-block
+	 * section's palette says whether it could hold one, so the cube's ~5,000 blocks are read only in a section that might
+	 * (usually none): asked every tick, reading them all was ~100,000 block reads a second.
+	 */
+	private static float worstBlock(LocalPlayer p, int range, Predicate<BlockState> filter, ToDoubleFunction<BlockPos> damage) {
+		Level level = p.level();
+		BlockPos at = p.blockPosition();
+		int minX = at.getX() - range, maxX = at.getX() + range, minZ = at.getZ() - range, maxZ = at.getZ() + range;
+		int minY = Math.max(at.getY() - range, level.getMinY()), maxY = Math.min(at.getY() + range, level.getMaxY());
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 		float max = 0;
-		for (BlockPos pos : BlockPos.betweenClosed(p.blockPosition().offset(-range, -range, -range), p.blockPosition().offset(range, range, range))) {
-			BlockState s = p.level().getBlockState(pos);
-			if (s.getBlock() instanceof RespawnAnchorBlock && s.getValue(RespawnAnchorBlock.CHARGE) > 0) max = Math.max(max, Damage.anchor(p, pos));
+		for (int cx = minX >> 4; cx <= maxX >> 4; cx++) {
+			for (int cz = minZ >> 4; cz <= maxZ >> 4; cz++) {
+				LevelChunk chunk = level.getChunkSource().getChunk(cx, cz, false);
+				if (chunk == null) continue;
+				LevelChunkSection[] sections = chunk.getSections();
+				for (int sy = minY >> 4; sy <= maxY >> 4; sy++) {
+					int index = chunk.getSectionIndexFromSectionY(sy);
+					if (index < 0 || index >= sections.length) continue;
+					LevelChunkSection section = sections[index];
+					if (section == null || !section.maybeHas(filter)) continue;
+					for (int y = Math.max(minY, sy << 4); y <= Math.min(maxY, sy << 4 | 15); y++) {
+						for (int z = Math.max(minZ, cz << 4); z <= Math.min(maxZ, cz << 4 | 15); z++) {
+							for (int x = Math.max(minX, cx << 4); x <= Math.min(maxX, cx << 4 | 15); x++) {
+								if (!filter.test(section.getBlockState(x & 15, y & 15, z & 15))) continue;
+								max = Math.max(max, (float) damage.applyAsDouble(pos.set(x, y, z).immutable()));
+							}
+						}
+					}
+				}
+			}
 		}
 		return max;
 	}
