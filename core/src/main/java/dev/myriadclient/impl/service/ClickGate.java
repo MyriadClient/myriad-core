@@ -64,11 +64,25 @@ final class ClickGate {
 		}
 	}
 
-	/** A respawn starts with no keys and no sprint. */
+	/**
+	 * A respawn starts with no keys and no sprint, and a new player whose ticks count from 0: the stamps were the old
+	 * one's (see {@link #recent}).
+	 */
 	@Subscribe(packets = {ClientboundRespawnPacket.class, ClientboundLoginPacket.class})
 	private void onReceive(PacketEvent.Receive e) {
 		sentInput = Input.EMPTY;
 		sentSprinting = false;
+		stillWantedAt = placedAt = Integer.MIN_VALUE / 2;
+	}
+
+	/**
+	 * Whether the player tick {@code stamp} was at most {@code ticks} ago. Only this player's: each respawn, dimension
+	 * change or rejoin brings a new one counting from 0, and an older player's stamp ahead of it held every sprint
+	 * start back (see {@link #beforeTravel}) until it caught up, minutes after a placement late in its life.
+	 */
+	private boolean recent(int stamp, int ticks) {
+		int since = mc.player.tickCount - stamp;
+		return since >= 0 && since <= ticks;
 	}
 
 	boolean safeToClick() {
@@ -139,7 +153,7 @@ final class ClickGate {
 
 	/** Whether a still tick was asked for lately (only clicks that need one: sprint alone is got past in the tick). */
 	boolean stillWanted() {
-		return mc.player != null && mc.player.tickCount - stillWantedAt <= 2;
+		return mc.player != null && recent(stillWantedAt, 2);
 	}
 
 	void keepKeys() {
@@ -193,7 +207,7 @@ final class ClickGate {
 	 * Every such start flagged in the printer's sprinting and jumping passes, and none did once it waited the tick.
 	 */
 	void beforeTravel() {
-		if (!sprintBlocked && !sentSprinting && mc.player.isSprinting() && mc.player.tickCount - placedAt <= 1) sprintBlocked = true;
+		if (!sprintBlocked && !sentSprinting && mc.player.isSprinting() && recent(placedAt, 1)) sprintBlocked = true;
 		if (!sprintBlocked) return;
 		sprintBlocked = false;
 		if (mc.player.isSprinting()) {

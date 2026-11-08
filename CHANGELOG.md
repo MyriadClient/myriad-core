@@ -16,6 +16,17 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.5.3
+
+A patch: the API is unchanged.
+
+- **Sprint works straight after a rejoin, respawn or portal.** After a block placement (by hand, Baritone, Scaffold,
+  Printer), core holds a sprint start back for one tick, so Grim doesn't flag it. It stamped the placement with the
+  player's own tick count, which starts again from 0 for each new player. A placement late in one player's life
+  then held every sprint start back for the next player until its count caught up: minutes of walking with sprint
+  held after a rejoin or a portal. Stamps now only count for the player that made them, and a respawn or login clears
+  them. A harness test places at tick 5,000 and then sprints as a new player.
+
 ## 1.5.2
 
 A patch: the API is unchanged.

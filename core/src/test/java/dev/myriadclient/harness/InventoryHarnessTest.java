@@ -3,13 +3,19 @@ package dev.myriadclient.harness;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.service.AntiCheat;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
+import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
+import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -110,6 +116,23 @@ class InventoryHarnessTest {
 			assertTrue(last != null && !last.forward() && !last.backward() && !last.left() && !last.right() && !last.jump(), "clicked with keys down: " + last);
 			// And walking resumes after.
 			assertTrue(h.sent(ServerboundPlayerInputPacket.class).getLast().input().forward());
+		}
+	}
+
+	@Test
+	void aPlacementBeforeARespawnDoesNotHoldTheNewPlayersSprintBack() {
+		try (Harness h = withItems()) {
+			for (int x = -1; x <= 1; x++) for (int z = -1; z <= 30; z++) h.level.set(new BlockPos(x, 0, z), Blocks.STONE.defaultBlockState());
+			Myriad.antiCheat().choose(AntiCheat.Profile.GRIM);
+			// A placement late in one player's life, then a new one (a rejoin or a portal) counting its ticks from 0.
+			h.player.tickCount = 5000;
+			BlockPos above = new BlockPos(1, 1, 0);
+			h.player.connection.send(new ServerboundUseItemOnPacket(InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(above), Direction.UP, above, false), 1));
+			h.player.tickCount = 0;
+			h.clearSent().keys("forward", "sprint").ticks(5);
+			assertTrue(h.player.isSprinting(), "not sprinting");
+			assertTrue(h.sent(ServerboundPlayerCommandPacket.class).stream().anyMatch(p -> p.getAction() == ServerboundPlayerCommandPacket.Action.START_SPRINTING),
+				"no sprint start sent");
 		}
 	}
 
