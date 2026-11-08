@@ -588,7 +588,7 @@ final class NoDurabilityEngine implements NoDurability {
 		// Chunks you'd reach that haven't come in: the client stops you there until they do, which shouldn't happen
 		// while the server isn't gliding you.
 		for (double t = 0; t <= ticks; t += 4) {
-			if (!mc.level.hasChunk(Mth.floor(p.getX() + v.x * t) >> 4, Mth.floor(p.getZ() + v.z * t) >> 4)) return false;
+			if (!mc.level.getChunkSource().hasChunk(Mth.floor(p.getX() + v.x * t) >> 4, Mth.floor(p.getZ() + v.z * t) >> 4)) return false;
 		}
 		if (!mc.level.noBlockCollision(p, box.expandTowards(0, -need, 0))) return false;
 		// Along the way: the whole hitbox swept to where you'll be, and a couple of blocks under that path.

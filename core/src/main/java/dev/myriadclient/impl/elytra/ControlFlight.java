@@ -113,7 +113,7 @@ final class ControlFlight extends FlightEngine {
 		flown = wanted.length() > most ? wanted.normalize().scale(most) : wanted;
 		// Not into chunks that haven't loaded: wait at their edge.
 		Vec3 next = p.position().add(flown.scale(4));
-		atEdge = !p.level().hasChunk(Mth.floor(next.x) >> 4, Mth.floor(next.z) >> 4);
+		atEdge = !p.level().getChunkSource().hasChunk(Mth.floor(next.x) >> 4, Mth.floor(next.z) >> 4);
 		if (atEdge) flown = Vec3.ZERO;
 
 		double y;

@@ -16,6 +16,14 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.5.4
+
+A patch: the API is unchanged.
+
+- **The elytra engines see unloaded chunks.** Minecraft's `ClientLevel.hasChunk` always answers yes on the client, so
+  every check for a chunk that hasn't arrived passed: Elytra Control flew on at the edge of what's loaded, and No
+  Durability and the flight planning counted chunks that weren't there as clear. They ask the chunk source now.
+
 ## 1.5.3
 
 A patch: the API is unchanged.

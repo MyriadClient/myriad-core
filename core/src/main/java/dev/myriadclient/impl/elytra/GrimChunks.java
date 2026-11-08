@@ -59,7 +59,7 @@ final class GrimChunks {
 	public static String why(double x, double z) {
 		int cx = (int) Math.floor(x) >> 4, cz = (int) Math.floor(z) >> 4;
 		var level = Minecraft.getInstance().level;
-		if (level == null || !level.hasChunk(cx, cz)) return "missing";
+		if (level == null || !level.getChunkSource().hasChunk(cx, cz)) return "missing";
 		Integer after = INSTANCE.chunkAfter.get(ChunkPos.pack(cx, cz));
 		return after == null || INSTANCE.answered > after ? null : "unanswered";
 	}

@@ -390,7 +390,7 @@ abstract class FlightEngine implements Flight, Elytra.Pilot, NoDurability.Owner 
 	protected boolean loadedAhead(Vec3 dir, double distance) {
 		var p = mc.player;
 		for (double d = 0; d <= distance; d += 8) {
-			if (!mc.level.hasChunk(Mth.floor(p.getX() + dir.x * d) >> 4, Mth.floor(p.getZ() + dir.z * d) >> 4)) return false;
+			if (!mc.level.getChunkSource().hasChunk(Mth.floor(p.getX() + dir.x * d) >> 4, Mth.floor(p.getZ() + dir.z * d) >> 4)) return false;
 		}
 		return true;
 	}
@@ -405,7 +405,7 @@ abstract class FlightEngine implements Flight, Elytra.Pilot, NoDurability.Owner 
 		for (double d = 0; d <= distance; d += 4) {
 			for (int side = -4; side <= 4; side += 4) {
 				int x = Mth.floor(p.getX() + dir.x * d - dir.z * side), z = Mth.floor(p.getZ() + dir.z * d + dir.x * side);
-				if (!mc.level.hasChunk(x >> 4, z >> 4)) continue;
+				if (!mc.level.getChunkSource().hasChunk(x >> 4, z >> 4)) continue;
 				best = Math.max(best, mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z));
 			}
 		}
