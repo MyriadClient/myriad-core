@@ -162,6 +162,8 @@ final class DesktopPainter {
 		}
 	}
 
+	private static final int EDITING_BAR_ALPHA = 0x38;
+
 	/** The logo, white on transparent, tinted with the accent. */
 	private static final Identifier TITLE_LOGO = Identifier.fromNamespaceAndPath("myriad", "textures/logo.png");
 
@@ -227,7 +229,7 @@ final class DesktopPainter {
 				drawHudElement(c, w, wm.hud.rect(w), true);
 				continue;
 			}
-			drawWindow(c, w, w.current(), w == ws.focused, interactive);
+			drawWindow(c, w, w.current(), w == ws.focused || w.isHudEditor(), interactive);
 		}
 		c.pop();
 	}
@@ -273,7 +275,7 @@ final class DesktopPainter {
 			c.roundRect(r.x(), r.y(), r.w(), r.h(), rad, theme.windowBackground.argb());
 
 			Rect content = wm.contentRect(w, r);
-			if (theme.titleBars.get() && !w.fullscreen) drawTitleBar(c, w, r, rad, focused, interactive);
+			if (theme.titleBars.get() && !w.titleless()) drawTitleBar(c, w, r, rad, focused, interactive);
 
 			c.push();
 			c.clip(content.x(), content.y(), content.w(), content.h());
@@ -415,12 +417,25 @@ final class DesktopPainter {
 		}
 	}
 
+	private void drawSidebarHandle(UiRenderer c, WindowImpl editor) {
+		Rect h = wm.hud.handle(editor);
+		boolean hover = h.contains(wm.mouseX, wm.mouseY);
+		c.roundRect(h.x(), h.y(), h.w(), h.h(), 4, 0, 0, 4, hover ? theme.surfaceHover.argb() : theme.windowBackground.argb());
+		float size = c.defaultFontSize();
+		String chevron = wm.hud.collapsed ? "\uf053" : "\uf054";
+		c.text(FontFamily.MONO, size, chevron, h.centerX() - c.textWidth(FontFamily.MONO, size, chevron) / 2, h.centerY() - c.textHeight(FontFamily.MONO, size) / 2,
+			hover ? theme.accent.argb() : theme.textDim.argb());
+	}
+
 	private void drawHudEditorOverlay(UiRenderer c) {
 		int guide = ColorUtil.withAlpha(theme.accent.argb(), 90);
 		c.rect(wm.screenW / 3, 0, 0.5f, wm.screenH, ColorUtil.withAlpha(theme.textDim.argb(), 25));
 		c.rect(wm.screenW * 2 / 3, 0, 0.5f, wm.screenH, ColorUtil.withAlpha(theme.textDim.argb(), 25));
 		c.rect(0, wm.screenH / 3, wm.screenW, 0.5f, ColorUtil.withAlpha(theme.textDim.argb(), 25));
 		c.rect(0, wm.screenH * 2 / 3, wm.screenW, 0.5f, ColorUtil.withAlpha(theme.textDim.argb(), 25));
+		c.push();
+		// What's behind the sidebar stays behind it.
+		c.clip(0, 0, wm.hud.editor().map(e -> e.current().x()).orElse(wm.screenW), wm.screenH);
 		for (WindowImpl w : wm.workspaces[Desktop.HUD_WORKSPACE].floating) {
 			if (!w.isHudElement()) continue;
 			Rect r = wm.hud.rect(w);
@@ -437,9 +452,8 @@ final class DesktopPainter {
 				if (wm.hud.snappedY) c.rect(0, r.centerY(), wm.screenW, 0.5f, guide);
 			}
 		}
-		String hint = "HUD · drag to move · right-click for settings · Alt+Space to add elements";
-		c.text(FontFamily.SANS, c.defaultFontSize() * 0.85f, hint, (wm.screenW - c.textWidth(FontFamily.SANS, c.defaultFontSize() * 0.85f, hint)) / 2,
-			wm.barAtTop() ? wm.barHeight() + 6 : 6, theme.textDim.argb());
+		c.pop();
+		wm.hud.editor().ifPresent(e -> drawSidebarHandle(c, e));
 	}
 
 	private void drawEmptyHint(UiRenderer c) {
@@ -584,8 +598,10 @@ final class DesktopPainter {
 	private void drawBar(UiRenderer c) {
 		float h = wm.barHeight();
 		float y = wm.barAtTop() ? 0 : wm.screenH - h;
-		c.backdrop(0, y, wm.screenW, h, 0, 1);
-		c.rect(0, y, wm.screenW, h, theme.barBackground.argb());
+		// Editing the HUD, what's placed behind the bar has to show.
+		boolean editing = wm.active == Desktop.HUD_WORKSPACE;
+		if (!editing) c.backdrop(0, y, wm.screenW, h, 0, 1);
+		c.rect(0, y, wm.screenW, h, editing ? ColorUtil.withAlpha(theme.barBackground.argb(), EDITING_BAR_ALPHA) : theme.barBackground.argb());
 		for (BarSlot s : barLayout(c)) {
 			int depth = c.depth();
 			try {

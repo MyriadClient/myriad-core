@@ -71,6 +71,28 @@ final class ConfigCommands {
 		};
 	}
 
+	static Command enemy() {
+		return new Command("enemy", "Manages enemies.") {
+			@Override
+			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
+				b.then(literal("add").then(argument("name", player()).executes(c -> {
+					String n = c.getArgument("name", String.class);
+					info(Myriad.enemies().add(n) ? "Added " + n : n + " is already an enemy");
+					return SINGLE_SUCCESS;
+				})));
+				b.then(literal("remove").then(argument("name", player()).executes(c -> {
+					String n = c.getArgument("name", String.class);
+					info(Myriad.enemies().remove(n) ? "Removed " + n : n + " isn't an enemy");
+					return SINGLE_SUCCESS;
+				})));
+				b.then(literal("list").executes(c -> {
+					info("Enemies: " + (Myriad.enemies().all().isEmpty() ? "none" : String.join(", ", Myriad.enemies().all())));
+					return SINGLE_SUCCESS;
+				}));
+			}
+		};
+	}
+
 	static Command prefix() {
 		return new Command("prefix", "Changes the command prefix.") {
 			@Override

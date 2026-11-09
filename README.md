@@ -133,9 +133,9 @@ single key, like Right Shift, bind **Open Menu** there or under Keybindings → 
 - The bar shows workspaces 1–4, and 5–9 only while they have windows (or you're on one). The **HUD workspace** (the icon after
   the numbers) holds the in-game HUD. Its windows are drawn in game without
   window decorations. Drag them to move them; they snap to edges and to the centre, and anchor to the nearest screen
-  third. Right-click one for its settings. The **HUD** window there lists every element like a group window lists
-  modules: click one to add or remove it, unfold it for its options. Delete removes the hovered element, and the
-  launcher can also add and remove them.
+  third. Right-click one for its settings. The **sidebar** there lists every element like a group window lists
+  modules: click one to add or remove it, unfold it for its options; the tab on its edge collapses it, to place
+  things behind it. Delete removes the hovered element, and the launcher can also add and remove them.
 - The **launcher** (`Alt+Space`) fuzzy-searches modules (Enter toggles, Shift+Enter or right-click opens settings),
   control panels, macros, wheels, panels, group windows, themes, profiles and workspaces. Narrow it with `@addon`
   (part of an addon's id or name: `@ess`, `@stash`) and `#kind`, `#tag` or `#group` (`#panel`, `#control`, `#macro`,
@@ -224,7 +224,7 @@ FPS, HP, Player Count, Speed, Totems, TPS. Baritone options do nothing when Bari
 
 Prefix `.` (change with `.prefix`). Commands autocomplete in chat and in the console panel.
 `.toggle <module> [on|off]`, `.bind <module> <key|none>` (any modifiers: `ctrl+alt+t`, `ctrl+alt+pgdown`), `.set <module> [setting] [value]`, `.reset <module>`,
-`.profile [load|delete|save]`, `.friend add|remove|list`, `.theme <preset>`, `.addons`, `.update [check|all|<addon>]`, `.diagnostics` (copies versions,
+`.profile [load|delete|save]`, `.friend add|remove|list`, `.enemy add|remove|list`, `.theme <preset>`, `.addons`, `.update [check|all|<addon>]`, `.diagnostics` (copies versions,
 addons, mods and enabled modules' changed settings for a bug report), `.panic`, `.help`, `.menu`,
 `.modules` (click one to toggle it), `.binds`, `.say <message>` (sends text starting with the prefix as chat),
 `.reload` (re-read the profile from disk), `.anticheat [auto|grim|vanilla]` and `.anticheat known add|remove <host>` (what the

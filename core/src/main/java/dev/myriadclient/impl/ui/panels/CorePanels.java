@@ -66,7 +66,7 @@ public final class CorePanels {
 		ctx.registerPanel(PanelType.builder(ADDONS, "Addons").icon("").factory(AddonsPanel::new).build());
 		ctx.registerPanel(PanelType.builder(FRIENDS, "Friends").icon("").factory(FriendsPanel::new).build());
 		ctx.registerPanel(PanelType.builder(THEME, "Theme").icon("").factory(ThemePanel::new).build());
-		ctx.registerPanel(PanelType.builder(HUD_ELEMENTS, "HUD").icon("\uf2d2").factory(() -> new HudElementsPanel(wm)).build());
+		ctx.registerPanel(PanelType.builder(HUD_ELEMENTS, "HUD").icon("\uf2d2").listed(false).factory(() -> new HudElementsPanel(wm)).build());
 		ctx.registerPanel(PanelType.builder(KEYBINDS, "Keybinds").icon("").factory(() -> new KeybindsPanel(wm)).build());
 		ctx.registerPanel(PanelType.builder(PROFILER, "Profiler").icon("\uf0e4").factory(ProfilerPanel::new).build());
 		ctx.registerPanel(PanelType.builder(JOBS, "Jobs").icon("\uf0ae").factory(JobsPanel::new).build());

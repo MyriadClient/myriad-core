@@ -146,11 +146,11 @@ final class Launcher {
 						else wm.addHudElement(t);
 					}, null, Kind.OTHER, true, t.id().namespace(), tags("hud", "panel")));
 			}
-			if (!t.isListed()) continue;
-			list.add(new Entry(t.icon() == null ? "" : t.icon(), t.name(), t.isHud() ? "HUD element" : "Panel",
+			if (!t.isListed() || t.isHud()) continue;
+			list.add(new Entry(t.icon() == null ? "" : t.icon(), t.name(), "Panel",
 				() -> wm.openPanel(t.id(), new JsonObject()),
 				() -> wm.openPanel(t.id(), new JsonObject(), wm.activeWorkspace(), true), Kind.OTHER, false, t.id().namespace(),
-				t.isHud() ? tags("hud", "panel") : t.id().equals(CorePanels.JOBS) ? tags("panel", "job") : tags("panel")));
+				t.id().equals(CorePanels.JOBS) ? tags("panel", "job") : tags("panel")));
 		}
 		for (ModuleGroup g : MenuGroups.all()) {
 			String title = g.isAddonWindow() ? g.name() : g.name() + " · " + AddonNames.of(g.addon());

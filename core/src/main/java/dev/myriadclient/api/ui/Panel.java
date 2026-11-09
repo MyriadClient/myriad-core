@@ -12,8 +12,8 @@ import java.util.List;
  * The content of a window. Panels draw in local coordinates: (0,0) is the top-left of the content area and
  * {@code width}/{@code height} is its size, in UI units. For widget-based panels extend {@link WidgetPanel}.
  * <p>
- * The same panel can live as a tiled window on the desktop or as a pinned HUD element on the {@code HUD} workspace
- * (if its type allows it). Panels may expose {@link #settings} (shown in the panel's settings window and saved with
+ * A panel lives in a window on the desktop or, if its type is a HUD element, on the {@code HUD} workspace and nowhere
+ * else. Panels may expose {@link #settings} (shown in the panel's settings window and saved with
  * the layout).
  */
 public abstract class Panel {

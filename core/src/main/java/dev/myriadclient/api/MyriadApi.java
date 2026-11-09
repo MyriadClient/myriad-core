@@ -19,6 +19,7 @@ import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Building;
 import dev.myriadclient.api.service.Containers;
+import dev.myriadclient.api.service.Enemies;
 import dev.myriadclient.api.service.Friends;
 import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.service.KeyAction;
@@ -82,6 +83,9 @@ public interface MyriadApi {
 	Building building();
 
 	Friends friends();
+
+	@ApiStatus.AvailableSince("1.6")
+	Enemies enemies();
 
 	ServerStats server();
 

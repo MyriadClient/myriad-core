@@ -20,6 +20,7 @@ import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Building;
 import dev.myriadclient.api.service.Containers;
+import dev.myriadclient.api.service.Enemies;
 import dev.myriadclient.api.service.Friends;
 import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.service.KeyAction;
@@ -59,7 +60,7 @@ import java.util.List;
  * {@link #hooks()}, {@link #jobs()}, and {@link #version()}, {@link #isReady()}.</li>
  * <li><b>Systems</b>, each arbitrating something shared: {@link #rotations()}, {@link #inventory()},
  * {@link #placement()}, {@link #breaking()}, {@link #building()}, {@link #containers()}, {@link #elytra()},
- * {@link #limits()}, {@link #tickSpeed()}, {@link #antiCheat()}, {@link #server()}, {@link #friends()},
+ * {@link #limits()}, {@link #tickSpeed()}, {@link #antiCheat()}, {@link #server()}, {@link #friends()}, {@link #enemies()},
  * {@link #controls()}, {@link #shares()}, {@link #notifications()}.</li>
  * <li><b>UI</b>: {@link #ui()}, {@link #panels()}, {@link #layouts()}, {@link #themes()}, {@link #barWidgets()}.</li>
  * <li><b>Libraries</b>: {@link #maps()}; the rest are static helpers in their packages.</li>
@@ -192,6 +193,11 @@ public final class Myriad {
 
 	public static Friends friends() {
 		return api().friends();
+	}
+
+	@ApiStatus.AvailableSince("1.6")
+	public static Enemies enemies() {
+		return api().enemies();
 	}
 
 	/** Server TPS and totem pops, tracked once for every addon. */

@@ -53,7 +53,7 @@ public final class PanelType implements Identified {
 		return factory.apply(args == null ? new JsonObject() : args);
 	}
 
-	/** Whether this panel can be placed on the HUD workspace (drawn in game, without window chrome). */
+	/** Whether this panel is a HUD element: it lives on the HUD workspace only, drawn in game without window chrome. */
 	public boolean isHud() {
 		return hud;
 	}

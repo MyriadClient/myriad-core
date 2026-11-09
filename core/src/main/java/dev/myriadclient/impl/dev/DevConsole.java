@@ -5,6 +5,7 @@ import dev.myriadclient.api.event.Priority;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.InputEvent;
 import dev.myriadclient.api.event.events.MouseButtonEvent;
+import dev.myriadclient.api.event.events.Render2DEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WindowResizeEvent;
 import dev.myriadclient.api.job.Progress;
@@ -50,6 +51,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -86,6 +88,8 @@ import java.util.concurrent.CompletableFuture;
  * hud myriad-essentials:fps     puts a HUD element on the HUD (at its default spot)
  * launcher [query]             the launcher with the query typed; wm launcher|layout|close|... runs a desktop binding
  * settings kill_aura           a module's settings in a window of its own
+ * faketab 200                  that many made-up players in the player list (0: none), with skins of their own
+ * frametime 5                  frame times for that many seconds, logged as [dev] frametime; the script waits for it
  * </pre>
  */
 public final class DevConsole {
@@ -104,6 +108,10 @@ public final class DevConsole {
 	private int waitTicks, holdTicks, devTicks;
 	private boolean sprintKeyDown;
 	private SelfTest selfTest;
+	private final FakeTabList fakeTab = new FakeTabList();
+	private long[] frameTimes;
+	private int frames;
+	private long lastFrame;
 
 	public DevConsole(Path inbox, CommandManager commands) {
 		this.inbox = inbox;
@@ -141,6 +149,7 @@ public final class DevConsole {
 			waitTicks--;
 			return;
 		}
+		if (frameTimes != null) logFrameTimes();
 		while (!pending.isEmpty() && waitTicks == 0 && selfTest == null) run(pending.poll());
 	}
 
@@ -154,6 +163,34 @@ public final class DevConsole {
 		e.jump |= held.contains(Key.JUMP);
 		e.sneak |= held.contains(Key.SNEAK);
 		e.sprint |= held.contains(Key.SPRINT);
+	}
+
+	@Subscribe
+	private void onRender2D(Render2DEvent e) {
+		if (frameTimes == null) return;
+		long now = System.nanoTime();
+		if (lastFrame != 0 && frames < frameTimes.length) frameTimes[frames++] = now - lastFrame;
+		lastFrame = now;
+	}
+
+	private void startFrameTimes(int seconds) {
+		frameTimes = new long[seconds * 2000];
+		frames = 0;
+		lastFrame = 0;
+		waitTicks = seconds * 20;
+	}
+
+	private void logFrameTimes() {
+		long[] sorted = Arrays.copyOf(frameTimes, frames);
+		frameTimes = null;
+		if (sorted.length == 0) {
+			LOG.info("[dev] frametime: no frames");
+			return;
+		}
+		Arrays.sort(sorted);
+		double mean = Arrays.stream(sorted).average().orElse(0) / 1e6;
+		LOG.info("[dev] frametime: {} frames, mean {} ms ({} fps), p50 {} ms, p99 {} ms", sorted.length, fmt(mean), Math.round(1000 / mean),
+			fmt(sorted[sorted.length / 2] / 1e6), fmt(sorted[sorted.length * 99 / 100] / 1e6));
 	}
 
 	/** Reads whole lines appended since last time. */
@@ -384,6 +421,8 @@ public final class DevConsole {
 				case "titlescene" -> {
 					if (mc.gui.screen() instanceof dev.myriadclient.impl.ui.MyriadTitleScreen t) t.scene(dev.myriadclient.impl.render.title.TitleScene.valueOf(a[1]));
 				}
+				case "faketab" -> fakeTab.set(Integer.parseInt(a[1]));
+				case "frametime" -> startFrameTimes(Integer.parseInt(a[1]));
 				case "settings" -> Myriad.modules().byName(a[1]).ifPresentOrElse(m -> CorePanels.openModuleSettings(m, true),
 					() -> LOG.warn("[dev] no module {}", a[1]));
 				default -> LOG.warn("[dev] unknown: {}", line);

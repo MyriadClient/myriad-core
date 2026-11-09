@@ -9,6 +9,7 @@ import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Rect;
 import dev.myriadclient.api.ui.Window;
+import dev.myriadclient.impl.ui.panels.CorePanels;
 
 /** A window: a panel plus its placement and animation state. */
 public final class WindowImpl implements Window {
@@ -108,6 +109,16 @@ public final class WindowImpl implements Window {
 		return workspace == Desktop.HUD_WORKSPACE && type.isHud();
 	}
 
+	/** The HUD workspace's sidebar: it's placed by the screen edge, and can't be moved, closed or made fullscreen. */
+	boolean isHudEditor() {
+		return type.id().equals(CorePanels.HUD_ELEMENTS);
+	}
+
+	/** Drawn with no title bar. */
+	boolean titleless() {
+		return fullscreen || isHudEditor();
+	}
+
 	/** Sets where the window should be; animates there unless it is being placed for the first time. */
 	void setTarget(Rect r, float durationMs, Bezier curve, boolean animate) {
 		target = r;
@@ -166,6 +177,7 @@ public final class WindowImpl implements Window {
 
 	@Override
 	public void setFullscreen(boolean fullscreen) {
+		if (isHudEditor()) return;
 		this.fullscreen = fullscreen;
 		wm.markDirty();
 	}
@@ -182,6 +194,7 @@ public final class WindowImpl implements Window {
 
 	@Override
 	public void close() {
+		if (isHudEditor()) return;
 		wm.closeWindow(this);
 	}
 

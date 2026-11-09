@@ -89,6 +89,7 @@ final class DesktopStore {
 			}
 			for (WindowImpl w : byUid.values()) if (!placed.contains(w)) ws.tiling.add(w, null);
 		}
+		wm.hud.adoptStrays();
 		wm.markDirty();
 	}
 
@@ -160,6 +161,7 @@ final class DesktopStore {
 		}
 		wm.groups.tidy();
 		wm.groups.placeNewGroups(true);
+		wm.hud.adoptStrays();
 		wm.modulesChanged = false;
 	}
 

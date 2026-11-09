@@ -77,7 +77,7 @@ public final class CoreCommands {
 		// In this order: .help lists them as registered.
 		for (Command c : List.of(
 			ModuleCommands.toggle(), ModuleCommands.bind(), ModuleCommands.set(), ModuleCommands.reset(),
-			ConfigCommands.profile(), ConfigCommands.friend(), addons(), update(), diagnostics(), help(),
+			ConfigCommands.profile(), ConfigCommands.friend(), ConfigCommands.enemy(), addons(), update(), diagnostics(), help(),
 			ModuleCommands.panic(), baritone(), ConfigCommands.prefix(), antiCheat(), profiler(),
 			ConfigCommands.control(), hooks(), ConfigCommands.macro(), ConfigCommands.cape(), ConfigCommands.theme(),
 			JobCommands.jobs(), JobCommands.job(), packets(),

@@ -179,6 +179,15 @@ public final class WindowManager implements Desktop {
 		hud.remove(type);
 	}
 
+	/** The HUD sidebar is collapsed (its panel saves this). */
+	public boolean hudCollapsed() {
+		return hud.collapsed;
+	}
+
+	public void setHudCollapsed(boolean collapsed) {
+		hud.collapsed = collapsed;
+	}
+
 	@Override
 	public void confirm(String title, String message, String confirmLabel, Runnable onConfirm, Runnable onCancel) {
 		if (!isOpen()) open();
@@ -196,6 +205,12 @@ public final class WindowManager implements Desktop {
 
 	@Override
 	public Optional<Window> openPanel(MyriadId type, JsonObject args, int workspace, boolean floating) {
+		// HUD elements are on-screen information: asked for anywhere, they go on the HUD.
+		Optional<PanelType> hudType = Myriad.panels().get(type).filter(PanelType::isHud);
+		if (hudType.isPresent()) {
+			hud.add(hudType.get());
+			return hud.element(hudType.get()).map(Window.class::cast);
+		}
 		JsonObject a = args == null ? new JsonObject() : args;
 		Optional<Window> existing = find(type, a);
 		if (existing.isPresent()) {
@@ -397,16 +412,23 @@ public final class WindowManager implements Desktop {
 	void moveToWorkspace(WindowImpl w, int workspace) {
 		workspace = Math.clamp(workspace, 0, WORKSPACES);
 		if (w.workspace == workspace) return;
-		if (workspace == HUD_WORKSPACE && !w.type.isHud()) {
+		if (workspace == HUD_WORKSPACE && !w.type.isHud() && !w.isHudEditor()) {
 			Myriad.notifications().warn("Menu", w.panel.title() + " can't be placed on the HUD");
+			return;
+		}
+		if (workspace != HUD_WORKSPACE && w.isHudEditor()) return;
+		if (workspace != HUD_WORKSPACE && w.isHudElement()) {
+			Myriad.notifications().warn("Menu", w.type.name() + " stays on the HUD");
 			return;
 		}
 		detach(w);
 		w.workspace = workspace;
 		if (workspace == HUD_WORKSPACE) {
 			w.floating = true;
-			Rect cur = w.current();
-			hud.setPosition(w, cur.x(), cur.y(), safePreferred(w.panel));
+			if (w.type.isHud()) {
+				Rect cur = w.current();
+				hud.setPosition(w, cur.x(), cur.y(), safePreferred(w.panel));
+			}
 		}
 		Workspace ws = workspaces[workspace];
 		if (w.floating) {
@@ -526,6 +548,10 @@ public final class WindowManager implements Desktop {
 		ws.tiling.arrange(area.inset(out), theme.gapsIn.get(), (w, r) -> w.setTarget(r, duration, theme.bezier(), animate));
 		for (WindowImpl w : ws.floating) {
 			if (ws.index == HUD_WORKSPACE && w.isHudElement()) continue;
+			if (w.isHudEditor()) {
+				w.setTarget(hud.sidebar(), duration, theme.bezier(), animate);
+				continue;
+			}
 			if (w.floatRect == null) w.floatRect = defaultFloatRect(w.panel);
 			w.setTarget(w.floatRect, duration, theme.bezier(), animate);
 		}
@@ -542,7 +568,7 @@ public final class WindowManager implements Desktop {
 
 	Rect contentRect(WindowImpl w, Rect r) {
 		float b = theme.borderSize.get();
-		float title = theme.titleBars.get() && !w.fullscreen ? TITLE_H : 0;
+		float title = theme.titleBars.get() && !w.titleless() ? TITLE_H : 0;
 		// Clear of the rounded corners: a rectangle inside a corner of radius r keeps r(1 - 1/sqrt 2) from its edges, or
 		// content draws past the curve (a few pixels at most roundings, enough to see at the highest).
 		float corner = w.fullscreen ? 0 : Math.max(0, theme.rounding.get() - b) * (1 - (float) Math.sqrt(0.5));

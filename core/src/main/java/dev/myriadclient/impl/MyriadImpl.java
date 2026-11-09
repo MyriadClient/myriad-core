@@ -24,6 +24,7 @@ import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Building;
 import dev.myriadclient.api.service.Containers;
+import dev.myriadclient.api.service.Enemies;
 import dev.myriadclient.api.service.Friends;
 import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.service.KeyAction;
@@ -64,6 +65,7 @@ import dev.myriadclient.impl.service.BreakManager;
 import dev.myriadclient.impl.service.BuildManager;
 import dev.myriadclient.impl.service.ContainerTabs;
 import dev.myriadclient.impl.service.ContainerTracker;
+import dev.myriadclient.impl.service.EnemiesManager;
 import dev.myriadclient.impl.service.FriendsManager;
 import dev.myriadclient.impl.service.InventoryManager;
 import dev.myriadclient.impl.service.JobRunner;
@@ -129,6 +131,7 @@ public final class MyriadImpl implements MyriadApi {
 	private final WheelManager wheels = new WheelManager();
 	private final BuildManager building = new BuildManager(placement);
 	private final FriendsManager friends = new FriendsManager(config.root());
+	private final EnemiesManager enemies = new EnemiesManager(config.root());
 	private final ServerStatsTracker serverStats = new ServerStatsTracker();
 	private final MenuSync menuSync = new MenuSync();
 	private final ContainerTracker containers = new ContainerTracker(menuSync);
@@ -393,6 +396,11 @@ public final class MyriadImpl implements MyriadApi {
 	@Override
 	public Friends friends() {
 		return friends;
+	}
+
+	@Override
+	public Enemies enemies() {
+		return enemies;
 	}
 
 	@Override

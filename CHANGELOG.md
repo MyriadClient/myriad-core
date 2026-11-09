@@ -16,6 +16,18 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.6.0
+
+- **An enemy list.** `Myriad.enemies()` and `.enemy add|remove|list`, kept like friends (`myriad/enemies.json`, not per
+  profile). Essentials' Extra Tab is the first to read it.
+- **The HUD editor is a sidebar.** It sits just in from the right edge and follows the screen, so resizing the window or
+  changing UI Scale can't leave it out of reach, as it could when it was a floating window. A tab on its edge collapses it,
+  to place things where it was; that's remembered. The top bar is see-through while editing, and clicks on its empty part
+  reach what's under it, so the top of the screen can be arranged too.
+- **HUD elements stay on the HUD.** They can't be opened on a workspace or moved to one any more (they stopped showing in
+  game there). `Desktop.openPanel` with a HUD element's type adds it to the HUD and returns it. Profiles that had one on a
+  workspace get it back on the HUD when they load.
+
 ## 1.5.4
 
 A patch: the API is unchanged.

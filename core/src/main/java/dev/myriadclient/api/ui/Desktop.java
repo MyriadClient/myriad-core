@@ -40,8 +40,8 @@ public interface Desktop {
 	void switchWorkspace(int workspace);
 
 	/**
-	 * Opens a panel on the active workspace (or focuses it if already open). Panels marked HUD-only open on the HUD
-	 * workspace. Returns empty if the type is unknown or the args don't resolve.
+	 * Opens a panel on the active workspace (or focuses it if already open). A HUD element is put on the HUD instead
+	 * (see {@link PanelType#isHud}). Returns empty if the type is unknown or the args don't resolve.
 	 */
 	Optional<Window> openPanel(MyriadId type, JsonObject args);
 

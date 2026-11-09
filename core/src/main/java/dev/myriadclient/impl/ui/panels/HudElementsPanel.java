@@ -19,8 +19,8 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The HUD window, laid out like a category window: every HUD element is an entry. Click one to put it on the HUD
- * or take it off; unfold it for its options.
+ * The HUD workspace's sidebar, laid out like a category window: every HUD element is an entry. Click one to put it on
+ * the HUD or take it off; unfold it for its options.
  */
 public final class HudElementsPanel extends WidgetPanel {
 	private final WindowManager wm;
@@ -46,10 +46,12 @@ public final class HudElementsPanel extends WidgetPanel {
 		JsonArray a = new JsonArray();
 		for (MyriadId id : unfolded) a.add(id.toString());
 		out.add("unfolded", a);
+		out.addProperty("collapsed", wm.hudCollapsed());
 	}
 
 	@Override
 	public void load(JsonObject in) {
+		if (in.has("collapsed")) wm.setHudCollapsed(in.get("collapsed").getAsBoolean());
 		if (!in.has("unfolded")) return;
 		for (var e : in.getAsJsonArray("unfolded")) unfolded.add(MyriadId.parse(e.getAsString()));
 		rebuild();
@@ -65,7 +67,7 @@ public final class HudElementsPanel extends WidgetPanel {
 			content.add(new HudEntry(type)).visible(() -> filter.isBlank() || FuzzyMatch.matches(type.name(), filter));
 		}
 		if (!any) content.add(new Label("No HUD elements installed. Addons such as myriad-essentials provide them.").dim());
-		else content.add(new Label("Drag elements on the HUD workspace to move them; they snap to edges and the centre.").dim());
+		else content.add(new Label("Drag elements to move them; they snap to edges and the centre. Right-click one for its options. The tab on this sidebar's edge puts it away, to place things behind it.").dim());
 	}
 
 	private final class HudEntry extends CardEntry {

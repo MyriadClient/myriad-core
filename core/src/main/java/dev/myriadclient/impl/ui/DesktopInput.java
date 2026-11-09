@@ -106,6 +106,10 @@ final class DesktopInput {
 		wm.mouseY = my;
 		if (wm.launcher.mouseClicked(mx, my, button, shift, wm.screenW, wm.screenH)) return true;
 		if (theme.bar.get() && clickBar(mx, my, button)) return true;
+		if (wm.active == Desktop.HUD_WORKSPACE && button == 0 && wm.hud.handleAt(mx, my)) {
+			wm.hud.toggleCollapsed();
+			return true;
+		}
 
 		WindowImpl w = wm.topWindowAt(mx, my);
 		if (w == null) return grabSplitter(mx, my);
@@ -116,17 +120,17 @@ final class DesktopInput {
 		}
 
 		Rect r = w.current();
-		if (wm.modHeld() && (button == 0 || button == 1)) {
+		if (wm.modHeld() && (button == 0 || button == 1) && !w.isHudEditor()) {
 			grabWithMod(w, r, mx, my, button);
 			return true;
 		}
-		if (theme.titleBars.get() && !w.fullscreen && my < r.y() + theme.borderSize.get() + WindowManager.TITLE_H) {
+		if (theme.titleBars.get() && !w.titleless() && my < r.y() + theme.borderSize.get() + WindowManager.TITLE_H) {
 			clickTitle(w, r, mx, my, button);
 			return true;
 		}
 
 		// Floating windows can be resized from their bottom-right corner.
-		if (w.floating && mx > r.right() - 8 && my > r.bottom() - 8) {
+		if (w.floating && !w.isHudEditor() && mx > r.right() - 8 && my > r.bottom() - 8) {
 			wm.drag = new Drag();
 			wm.drag.kind = DragKind.RESIZE;
 			wm.drag.window = w;
@@ -165,7 +169,8 @@ final class DesktopInput {
 				return true;
 			}
 		}
-		return true;
+		// Editing the HUD, the empty part of the bar lets clicks through to what's placed under it.
+		return wm.active != Desktop.HUD_WORKSPACE;
 	}
 
 	/** Between windows: grabs the divider under the cursor, if there is one. */
