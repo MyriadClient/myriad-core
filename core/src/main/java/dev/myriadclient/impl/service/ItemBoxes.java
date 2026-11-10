@@ -408,8 +408,10 @@ final class ItemBoxes {
 		// ---- putting it back --------------------------------------------------------------------------------------
 
 		Step<Void> putBack() {
-			// A held ender chest stays open as its block is broken (Containers.hold frees it from its block).
-			boolean kept = Myriad.containers().held().map(h -> spot.pos().equals(h.pos())).orElse(false);
+			// A held container stays open as the box is broken: this one, held (Containers.hold frees it from its block), or
+			// the one open now (Remote Ender Chest's), its screen still up, which the box goes back into as it is (intoOrigin).
+			var held = Myriad.containers().held().orElse(null);
+			boolean kept = held != null && (spot.pos().equals(held.pos()) || Myriad.containers().current().orElse(null) == held);
 			Step<Void> close = kept ? Step.nothing() : Steps.closeContainer().recover(why -> Step.nothing());
 			// The container it came from, again: to go back into it, or for one from your inventory to be where you were
 			// (unless the swap bar closes it all anyway).
@@ -613,12 +615,19 @@ final class ItemBoxes {
 
 	/**
 	 * The container {@code boxes} came from opened again (or, for an ender chest, another in reach: see wayBack), and
-	 * each put back into it. With no screen up (you closed it all), it opens only for the server, its screen not shown.
+	 * each put back into it; one held open is used as it is. With no screen up (you closed it all), it opens only for the
+	 * server, its screen not shown.
 	 * With none to open they stay in your inventory, unless noWayBack says to put down an ender chest from it for them.
 	 */
 	private static Step<Void> intoOrigin(List<Session> boxes) {
 		Session first = boxes.getFirst();
 		return Step.choose("Back to the container", () -> {
+			// The container held open (never closed meanwhile, see putBack), from anywhere, if it's where they came from, or
+			// for ones from an ender chest an ender chest: the same inventory.
+			Containers.View held = Myriad.containers().held().filter(h -> Myriad.containers().current().orElse(null) == h).orElse(null);
+			if (held != null && first.origin != null && (held == first.origin || first.enderOrigin && MyriadImpl.get().containerTracker().isEnderChest(held))) {
+				return into(held, boxes);
+			}
 			BlockPos pos = first.wayBack();
 			if (pos != null) return openAndInto(pos, boxes);
 			// Out of reach after picking them up (stepping to where they fell): back towards it first.

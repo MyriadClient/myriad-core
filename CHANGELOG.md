@@ -16,6 +16,13 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.7.2
+
+- **Putting a box back no longer closes a held ender chest.** With an ender chest held open (Essentials' Remote Ender
+  Chest), right-clicking a box's tab on the shelf closed the ender chest and its screen, whether it was showing or behind
+  your inventory. A held container now stays open while the box is broken, and a box from an ender chest goes straight
+  back into the held one, from any distance, as you watch.
+
 ## 1.7.1
 
 - **Fixed a crash on the menus before you'd joined a world.** Starting the game and opening a menu with the title screen's
