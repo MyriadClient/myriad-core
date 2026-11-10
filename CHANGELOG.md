@@ -16,6 +16,12 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.7.1
+
+- **Fixed a crash on the menus before you'd joined a world.** Starting the game and opening a menu with the title screen's
+  background (the server list, say) could crash as soon as you came into view holding something: the game can't make an
+  item until a world has been joined. Until then you come empty-handed.
+
 ## 1.7.0
 
 - **Minecraft's own screens in the theme.** Themed Screens now covers the rest of them too: the pause menu, options,

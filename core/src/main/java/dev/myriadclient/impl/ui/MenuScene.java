@@ -287,8 +287,14 @@ final class MenuScene {
 			stops && r.nextFloat() < 0.6f, held(r));
 	}
 
+	/**
+	 * Something for your hand, or nothing. Nothing too before the game has its items' components, which come with the
+	 * first world (or server) joined: an item stack can't be made without them.
+	 */
 	private static ItemStack held(ThreadLocalRandom r) {
-		return r.nextFloat() < HOLDING ? new ItemStack(HELD[r.nextInt(HELD.length)]) : ItemStack.EMPTY;
+		if (r.nextFloat() >= HOLDING) return ItemStack.EMPTY;
+		Item item = HELD[r.nextInt(HELD.length)];
+		return item.builtInRegistryHolder().areComponentsBound() ? new ItemStack(item) : ItemStack.EMPTY;
 	}
 
 	private static long seconds(float min, float max) {
