@@ -65,7 +65,7 @@ public final class Steps {
 	 * slot, or not in a world).
 	 */
 	public static Step<Void> place(BlockPos pos, int slot, Placement.Options options) {
-		return Step.of("Place at " + pos.toShortString(), () -> new Attempting(pos) {
+		return Step.of("Place", () -> new Attempting(pos) {
 			@Override
 			boolean already() {
 				return holds(pos, slot);
@@ -81,7 +81,7 @@ public final class Steps {
 	/** Places with this exact click (the face matters: stairs, logs, slabs); as {@link #place(BlockPos, int, Placement.Options)}. */
 	public static Step<Void> place(BlockHitResult hit, int slot, Placement.Options options) {
 		BlockPos at = hit.getBlockPos().relative(hit.getDirection());
-		return Step.of("Place at " + at.toShortString(), () -> new Attempting(at) {
+		return Step.of("Place", () -> new Attempting(at) {
 			@Override
 			boolean already() {
 				return holds(at, slot) || holds(hit.getBlockPos(), slot) && !Client.level().getBlockState(hit.getBlockPos()).canBeReplaced();
@@ -105,7 +105,7 @@ public final class Steps {
 	 * Failed: {@code SERVER_REFUSED}, {@code UNSUPPORTED} (a block no click makes, or no block in the slot).
 	 */
 	public static Step<Void> placeState(BlockPos pos, BlockState wanted, int slot, Placement.Options options) {
-		return Step.of("Place " + wanted.getBlock().getName().getString() + " at " + pos.toShortString(), () -> new Step.Run<>() {
+		return Step.of("Place " + wanted.getBlock().getName().getString(), () -> new Step.Run<>() {
 			private @Nullable CompletableFuture<Boolean> sent;
 
 			@Override
@@ -115,29 +115,29 @@ public final class Steps {
 					if (!sent.isDone()) return Progress.running();
 					boolean ok = sent.join();
 					sent = null;
-					if (!ok && !BlockRules.matches(current, wanted, true)) return Progress.failed(Why.of(Why.SERVER_REFUSED, pos.toShortString(), pos));
+					if (!ok && !BlockRules.matches(current, wanted, true)) return Progress.failed(Why.of(Why.SERVER_REFUSED, "", pos));
 				}
 				if (BlockRules.matches(current, wanted, true)) return Progress.done();
 				// The top half of a door, the head of a bed: placed with the other half.
 				if (BlockRules.placedWithNeighbour(wanted))
-					return current.is(wanted.getBlock()) ? Progress.done() : Progress.stuck(Why.of(Why.NO_SUPPORT, pos.toShortString(), pos));
+					return current.is(wanted.getBlock()) ? Progress.done() : Progress.stuck(Why.of(Why.NO_SUPPORT, "", pos));
 				Placement.Attempt a;
 				if (current.is(wanted.getBlock())) {
 					if (!BlockRules.placedMatches(current, wanted) || BlockRules.count(current) > BlockRules.count(wanted))
-						return Progress.stuck(Why.of(Why.BLOCKED, pos.toShortString(), pos));
+						return Progress.stuck(Why.of(Why.BLOCKED, "", pos));
 					if (BlockRules.count(current) < BlockRules.count(wanted)) a = solved(ctx);
 					else {
-						if (BlockRules.clicksToMatch(current, wanted) < 0) return Progress.failed(Why.of(Why.UNSUPPORTED, pos.toShortString(), pos));
+						if (BlockRules.clicksToMatch(current, wanted) < 0) return Progress.failed(Why.of(Why.UNSUPPORTED, "", pos));
 						BlockHitResult hit = handHit(current);
 						if (hit == null) {
-							if (Reach.hitFor(pos, options.visibleFaces(), options.range()) != null) return Progress.stuck(Why.of(Why.WRONG_ANGLE, pos.toShortString(), pos));
-							return Progress.stuck(Why.of(Reach.canReach(pos, options.range()) ? Why.NOT_VISIBLE : Why.OUT_OF_REACH, pos.toShortString(), pos));
+							if (Reach.hitFor(pos, options.visibleFaces(), options.range()) != null) return Progress.stuck(Why.of(Why.WRONG_ANGLE, "", pos));
+							return Progress.stuck(Why.of(Reach.canReach(pos, options.range()) ? Why.NOT_VISIBLE : Why.OUT_OF_REACH, "", pos));
 						}
 						a = Myriad.placement().use(ctx.job(), hit, -1, options.withSneak(false));
 					}
-				} else if (!current.canBeReplaced()) return Progress.stuck(Why.of(Why.BLOCKED, pos.toShortString(), pos));
+				} else if (!current.canBeReplaced()) return Progress.stuck(Why.of(Why.BLOCKED, "", pos));
 				else a = solved(ctx);
-				if (a == null) return Progress.failed(Why.of(Why.UNSUPPORTED, pos.toShortString(), pos));
+				if (a == null) return Progress.failed(Why.of(Why.UNSUPPORTED, "", pos));
 				if (a.sent()) {
 					sent = a.result();
 					return Progress.running();
@@ -187,7 +187,7 @@ public final class Steps {
 	 * checks; done once the server answered. As {@link #place(BlockPos, int, Placement.Options)} for what it's stuck on.
 	 */
 	public static Step<Void> use(BlockHitResult hit, int slot, Placement.Options options) {
-		return Step.of("Use " + hit.getBlockPos().toShortString(), () -> new Attempting(hit.getBlockPos()) {
+		return Step.of("Use", () -> new Attempting(hit.getBlockPos()) {
 			@Override
 			boolean already() {
 				return false;
@@ -207,7 +207,7 @@ public final class Steps {
 	 * {@code options.withAutoTool(false)}.
 	 */
 	public static Step<Void> breakBlock(BlockPos pos, int priority, Breaking.Options options) {
-		return Step.of("Break " + pos.toShortString(), () -> new Step.Run<>() {
+		return Step.of("Break", () -> new Step.Run<>() {
 			private @Nullable CompletableFuture<Boolean> breaking;
 
 			@Override
@@ -215,7 +215,7 @@ public final class Steps {
 				if (breaking != null) {
 					if (!breaking.isDone()) return Progress.running();
 					if (breaking.join()) return Progress.done();
-					return Progress.failed(Why.of(Why.SERVER_REFUSED, pos.toShortString(), pos));
+					return Progress.failed(Why.of(Why.SERVER_REFUSED, "", pos));
 				}
 				Breaking.Attempt a = Myriad.breaking().breakBlock(ctx.job(), pos, priority, options);
 				return switch (a.check()) {
@@ -225,8 +225,8 @@ public final class Steps {
 					}
 					case NOTHING_THERE -> Progress.done();
 					case PENDING -> Progress.running();
-					case UNBREAKABLE -> Progress.stuck(Why.of(Why.UNBREAKABLE, pos.toShortString(), pos));
-					case OUT_OF_RANGE -> Progress.stuck(Why.of(Why.OUT_OF_REACH, pos.toShortString(), pos));
+					case UNBREAKABLE -> Progress.stuck(Why.of(Why.UNBREAKABLE, "", pos));
+					case OUT_OF_RANGE -> Progress.stuck(Why.of(Why.OUT_OF_REACH, "", pos));
 					case UNAVAILABLE -> Progress.failed(Why.of(Why.UNSUPPORTED, "not in a world"));
 				};
 			}
@@ -304,7 +304,7 @@ public final class Steps {
 	 * {@code NO_CONTAINER}.
 	 */
 	public static Step<Containers.View> openContainer(BlockPos pos, int ticks, Placement.Options options) {
-		return Step.of("Open " + pos.toShortString(), () -> new Step.Run<>() {
+		return Step.of("Open the container", () -> new Step.Run<>() {
 			private @Nullable CompletableFuture<Containers.View> opening;
 
 			@Override
@@ -316,9 +316,9 @@ public final class Steps {
 				} catch (RuntimeException e) {
 					opening = null;
 					Throwable cause = e.getCause() == null ? e : e.getCause();
-					if (cause instanceof IllegalStateException) return Progress.stuck(Why.of(Why.OUT_OF_REACH, pos.toShortString(), pos));
-					if (cause instanceof TimeoutException) return Progress.failed(Why.of(Why.TIMEOUT, "the container at " + pos.toShortString() + " didn't open", pos));
-					return Progress.failed(Why.of(Why.NO_CONTAINER, pos.toShortString(), pos));
+					if (cause instanceof IllegalStateException) return Progress.stuck(Why.of(Why.OUT_OF_REACH, "", pos));
+					if (cause instanceof TimeoutException) return Progress.failed(Why.of(Why.TIMEOUT, "the container didn't open", pos));
+					return Progress.failed(Why.of(Why.NO_CONTAINER, "", pos));
 				}
 			}
 		});
@@ -457,14 +457,14 @@ public final class Steps {
 	 * Pausing the job pauses Baritone; cancelling it stops Baritone.
 	 */
 	public static Step<Void> walkTo(BlockPos pos) {
-		return Step.of("Walk to " + pos.toShortString(), () -> new Walk(() -> Baritone.pathTo(pos.getX(), pos.getY(), pos.getZ()),
-			p -> p.blockPosition().equals(pos), pos.toShortString()));
+		return Step.of("Walk there", () -> new Walk(() -> Baritone.pathTo(pos.getX(), pos.getY(), pos.getZ()),
+			p -> p.blockPosition().equals(pos), "there"));
 	}
 
 	/** Walks to within {@code radius} blocks of {@code pos} with Baritone; as {@link #walkTo}. */
 	public static Step<Void> walkNear(BlockPos pos, int radius) {
-		return Step.of("Walk near " + pos.toShortString(), () -> new Walk(() -> Baritone.pathNear(pos, radius),
-			p -> p.blockPosition().distSqr(pos) <= (double) radius * radius, "within " + radius + " of " + pos.toShortString()));
+		return Step.of("Walk near", () -> new Walk(() -> Baritone.pathNear(pos, radius),
+			p -> p.blockPosition().distSqr(pos) <= (double) radius * radius, "within " + radius + " blocks"));
 	}
 
 	/**
@@ -563,7 +563,7 @@ public final class Steps {
 			if (sent != null) {
 				if (!sent.isDone()) return Progress.running();
 				if (sent.join() || already()) return Progress.done();
-				return Progress.failed(Why.of(Why.SERVER_REFUSED, pos.toShortString(), pos));
+				return Progress.failed(Why.of(Why.SERVER_REFUSED, "", pos));
 			}
 			if (already()) return Progress.done();
 			Placement.Attempt a = attempt(ctx);

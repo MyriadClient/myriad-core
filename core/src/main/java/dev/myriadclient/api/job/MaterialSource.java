@@ -35,7 +35,7 @@ public interface MaterialSource {
 		return (what, count) -> Steps.openContainer(pos, OPEN_TICKS, Placement.Options.forServer())
 			.then(view -> Steps.take(view, what, Containers.Transfer.upTo(count)))
 			.then(moved -> Steps.closeContainer().then(Step.supply("Taken", () -> moved)))
-			.named("From " + pos.toShortString());
+			.named("From a container");
 	}
 
 	/**

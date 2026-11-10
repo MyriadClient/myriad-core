@@ -3,7 +3,9 @@ package dev.myriadclient.api.service;
 import dev.myriadclient.api.util.AnyThread;
 import org.jetbrains.annotations.ApiStatus;
 /**
- * Toast notifications, drawn by the window manager overlay both in game and on the desktop.
+ * Toast notifications, drawn by the window manager overlay both in game and on the desktop. A toast never shows
+ * coordinates: three numbers in a row are shown as "(location hidden)", as a stream or a screenshot would give a place
+ * away. Say where something is in words ("beside you", "where it fell"), if at all.
  *
  * <pre>{@code
  * Myriad.notifications().info("Waypoints", "Added Home");

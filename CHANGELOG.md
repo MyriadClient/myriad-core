@@ -16,6 +16,27 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.7.0
+
+- **Minecraft's own screens in the theme.** Themed Screens now covers the rest of them too: the pause menu, options,
+  the world and server lists, the disconnect screen and other mods' screens, as far as they're made of Minecraft's
+  buttons, sliders, checkboxes, text boxes, lists and tabs; their layouts stay their own. Their text is in the theme's
+  font at its Font Size, without Minecraft's drop shadow, and always over its button.
+- **The title screen's background behind the menus.** In place of the panorama (and over the world, except for the pause
+  menu): the theme's colours, motes rising, and now and then you, popping in at an edge to look round, or strolling along
+  the bottom, sometimes with something in hand. Lists fade into the bars above and below them instead of ending at a
+  line. The pause menu shows the world, frosted under the theme's window colour as a panel does.
+- **One switch.** Myriad's title screen comes with Themed Screens; the separate Title Screen preference is gone
+  (`ThemeSettings.titleScreen` is deprecated and no longer read).
+- **Right-click a box on the shelf to put it back**: it's broken and picked up while you stay in the screen you're in,
+  freeing the spot for another. Closing a box on the shelf goes back to the container it came from rather than your
+  inventory. With Baritone installed, a box that landed out of reach is fetched by Baritone, which then walks you back to
+  where you stood.
+- **No coordinates in notifications.** Nothing of Myriad's puts a position in a toast, a job's step names or a failure's
+  reason any more (a stream or a screenshot would give the place away), and any coordinates an addon's toast carries
+  show as "(location hidden)".
+- Confirmation dialogs are only as tall as what's in them.
+
 ## 1.6.0
 
 - **An enemy list.** `Myriad.enemies()` and `.enemy add|remove|list`, kept like friends (`myriad/enemies.json`, not per

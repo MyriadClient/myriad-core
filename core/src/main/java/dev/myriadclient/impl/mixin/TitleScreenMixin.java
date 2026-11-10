@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
 /**
- * Minecraft's title screen (Myriad's own off: Theme → Preferences → Title Screen) with a Myriad button under its
+ * Minecraft's title screen (Myriad's own off: Theme → Preferences → Themed Screens) with a Myriad button under its
  * Realms one, as wide as it: what comes after (the icon buttons, Options and Quit) moves down a row to make room.
  */
 @Mixin(TitleScreen.class)

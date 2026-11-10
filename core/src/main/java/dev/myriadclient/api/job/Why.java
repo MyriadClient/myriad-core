@@ -146,7 +146,7 @@ public final class Why {
 			case OCCUPIED -> BLOCKED;
 			case UNAVAILABLE -> UNSUPPORTED;
 		};
-		return c == null ? null : of(c, pos.toShortString(), pos);
+		return c == null ? null : of(c, "", pos);
 	}
 
 	/**
@@ -170,7 +170,7 @@ public final class Why {
 			case REFUSED -> SERVER_REFUSED;
 			case UNSUPPORTED -> UNSUPPORTED;
 		};
-		return c == null ? null : of(c, pos.toShortString(), pos);
+		return c == null ? null : of(c, "", pos);
 	}
 
 	public Code code() {

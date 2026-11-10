@@ -8,6 +8,7 @@ import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.VBox;
+import dev.myriadclient.api.ui.widget.Widget;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -20,6 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * after a while unless it's confirmed (a change you have to say you keep). Never saved with the layout.
  */
 public final class DialogPanel extends WidgetPanel {
+	/** A widget panel's padding and the gap between its rows (WidgetPanel). */
+	private static final float PADDING = 6, GAP = 4;
 	private static final AtomicInteger IDS = new AtomicInteger();
 	private static final Map<Integer, DialogPanel> PENDING = new HashMap<>();
 
@@ -87,11 +90,12 @@ public final class DialogPanel extends WidgetPanel {
 		return "";
 	}
 
+	/** As tall as what's in it: the panel's padding, the message's lines, the gap, the buttons' row and the padding again. */
 	@Override
 	public Rect preferredSize(Canvas c) {
 		float w = Math.clamp(c.textWidth(message.get()) + 16, 180, 320);
-		int lines = Label.wrap(c, c.defaultFont(), c.defaultFontSize(), message.get(), w - 22).size();
-		return new Rect(0, 0, w, 50 + (lines - 1) * (c.textHeight() + 1) + 14);
+		int lines = Label.wrap(c, c.defaultFont(), c.defaultFontSize(), message.get(), w - 12).size();
+		return new Rect(0, 0, w, PADDING * 2 + lines * (c.textHeight() + 1) + GAP + Widget.ROW);
 	}
 
 	@Override

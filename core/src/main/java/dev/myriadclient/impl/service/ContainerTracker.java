@@ -104,7 +104,7 @@ public final class ContainerTracker implements Containers {
 		AbstractContainerMenu menu = mc.player.containerMenu;
 		// Something else opened instead of what open() asked for (a server plugin's menu, say): it isn't that container.
 		if (pending != null && pendingPos != null && mc.level != null && !ContainerKinds.opens(mc.level.getBlockState(pendingPos), menu)) {
-			fail(new IllegalStateException("Something else opened instead of the container at " + pendingPos.toShortString()));
+			fail(new IllegalStateException("Something else opened instead of the container"));
 		}
 		boolean byCode = pending != null;
 		current = new ViewImpl(menu, pos, byCode ? pendingOwner : null, !byCode);
@@ -288,7 +288,7 @@ public final class ContainerTracker implements Containers {
 		BlockHitResult hit = Reach.hitFor(pos, false, range);
 		// One out of reach leaves an open under way alone: asked again each tick while it's stuck, it would end every other.
 		if (mc.player == null || hit == null) {
-			f.completeExceptionally(new IllegalStateException("Can't reach " + pos));
+			f.completeExceptionally(new IllegalStateException("Can't reach the container"));
 			return f;
 		}
 		if (pending != null) fail(new IllegalStateException("Replaced by another open()"));
@@ -315,12 +315,12 @@ public final class ContainerTracker implements Containers {
 		pendingTicks = Integer.MAX_VALUE;
 		Placement.Attempt a = Myriad.placement().use(owner, hit, -1, options.withSneak(false));
 		if (!a.sent()) {
-			fail(new IllegalStateException("Can't click " + pos.toShortString() + ": " + a.check()));
+			fail(new IllegalStateException("Can't click the container: " + a.check()));
 			return f;
 		}
 		a.result().whenComplete((answered, t) -> {
 			if (pending != f) return;
-			if (t != null || !answered) fail(new IllegalStateException("The click on " + pos.toShortString() + " didn't go"));
+			if (t != null || !answered) fail(new IllegalStateException("The click on the container didn't go"));
 			// The server answers the click before it opens the screen; the wait starts now.
 			else if (current == null || !pos.equals(current.pos)) pendingTicks = Math.max(1, timeoutTicks);
 		});

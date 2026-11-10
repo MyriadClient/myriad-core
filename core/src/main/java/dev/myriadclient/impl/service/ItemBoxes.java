@@ -16,6 +16,7 @@ import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.util.BlockInfo;
 import dev.myriadclient.api.util.Client;
 import dev.myriadclient.api.util.ItemInfo;
+import dev.myriadclient.api.util.Baritone;
 import dev.myriadclient.api.util.Reach;
 import dev.myriadclient.impl.MyriadImpl;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -54,6 +55,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /**
  * Shulker boxes and ender chests from the inventory or an open container ({@link Containers#openItem}): put down above
@@ -80,6 +82,8 @@ final class ItemBoxes {
 	private static final double WALK_BACK = 10;
 	/** Ticks a dropped block can't be picked up for (vanilla's default pick-up delay). */
 	private static final int PICKUP_DELAY = 10;
+	/** How near (blocks, sideways) to where you stood counts as back there. */
+	private static final double STOOD = 0.6;
 	/** Owns the put-back jobs: they finish whatever happens to whoever opened the box. */
 	private static final Object PUT_BACK = new Object() {
 		@Override
@@ -89,6 +93,11 @@ final class ItemBoxes {
 	};
 
 	private ItemBoxes() {
+	}
+
+	/** Where the container {@code box} came from stands (to go back into it), or null for one from your inventory or another kind of session. */
+	static @Nullable BlockPos origin(Containers.ItemSession box) {
+		return box instanceof Session s && s.origin != null ? s.origin.pos() : null;
 	}
 
 	static CompletableFuture<Containers.ItemSession> open(Object owner, int index, int ticks, Placement.Options options) {
@@ -158,6 +167,8 @@ final class ItemBoxes {
 		private int countBack;
 		private int landed = -1;
 		private boolean broken;
+		/** Where you stood as it was put back, to be walked back to after picking it up. */
+		private @Nullable BlockPos stood;
 		/** Put back with others (finishAll), which set what the inventory held before them all. */
 		private @Nullable Together together;
 		/** Opened once it's down (openItem), or only put down (putDownItem), the screen up staying up; and whether that's done. */
@@ -376,7 +387,7 @@ final class ItemBoxes {
 				}
 				if (placing.isDone() && !placing.join() && !Client.level().getBlockState(pos).is(Block.byItem(box.getItem()))) {
 					placed = false;
-					return Progress.failed(Why.of(Why.SERVER_REFUSED, pos.toShortString(), pos));
+					return Progress.failed(Why.of(Why.SERVER_REFUSED, "", pos));
 				}
 				// Only put down: done once the server has it.
 				if (!opens) return placing.isDone() ? Progress.done(null) : Progress.running();
@@ -389,7 +400,7 @@ final class ItemBoxes {
 					Throwable cause = e.getCause() == null ? e : e.getCause();
 					if (cause instanceof TimeoutException) return Progress.failed(Why.of(Why.TIMEOUT, "it didn't open", pos));
 					// The click didn't go (no look onto the box in time): again, now that the box is there.
-					return ++tries < OPEN_TRIES ? Progress.running() : Progress.failed(Why.of(Why.NO_CONTAINER, pos.toShortString(), pos));
+					return ++tries < OPEN_TRIES ? Progress.running() : Progress.failed(Why.of(Why.NO_CONTAINER, "", pos));
 				}
 			}
 		}
@@ -403,14 +414,16 @@ final class ItemBoxes {
 			// The container it came from, again: to go back into it, or for one from your inventory to be where you were
 			// (unless the swap bar closes it all anyway).
 			Step<Void> reopen = origin == null || own < 0 && handedOver ? Step.nothing() : intoOrigin(List.of(this));
-			return close.then(breakIt()).then(pickUp()).then(landing()).then(reopen).named(() -> ender ? "Putting the ender chest back" : "Putting the shulker box back");
+			Step<Void> stand = Step.run("Where you stand", () -> stood = Client.player().blockPosition());
+			return close.then(stand).then(breakIt()).then(pickUp()).then(landing()).then(backToStand(() -> stood)).then(reopen)
+				.named(() -> ender ? "Putting the ender chest back" : "Putting the shulker box back");
 		}
 
 		/** Broken (with Silk Touch for an ender chest), what the inventory held before noted to know it by when it lands. */
 		Step<Void> breakIt() {
 			// An ender chest broken without Silk Touch is obsidian: rather left standing, saying where.
 			Step<Void> silk = Step.of("Silk Touch", () -> ctx -> !ender || Myriad.inventory().count(ItemBoxes::silkTouch) > 0 ? Progress.done()
-				: Progress.failed(Why.of(Why.NO_ITEM, "no Silk Touch pickaxe to pick the ender chest back up: it's left at " + spot.pos().toShortString(), spot.pos())));
+				: Progress.failed(Why.of(Why.NO_ITEM, "no Silk Touch pickaxe to pick the ender chest back up: it's left standing", spot.pos())));
 			return silk.then(Step.run("Before", () -> {
 				LocalPlayer p = Client.player();
 				if (together == null) {
@@ -574,12 +587,28 @@ final class ItemBoxes {
 	/** One round of finishAll: all broken, then picked up as they fall, then into their containers. */
 	private static Step<Void> round(List<Session> round) {
 		Together together = new Together(round);
-		Step<Void> s = Step.run("Before", together::start).then(Step.of("Breaking them", () -> new BreakAll(round)));
+		BlockPos[] stood = new BlockPos[1];
+		Step<Void> s = Step.run("Before", () -> {
+			together.start();
+			stood[0] = Client.player().blockPosition();
+		}).then(Step.of("Breaking them", () -> new BreakAll(round)));
 		for (Session b : round) s = s.then(b.pickUp().then(b.landing()).recover(why -> Step.nothing()));
+		s = s.then(backToStand(() -> stood[0]));
 		Map<BlockPos, List<Session>> byOrigin = new LinkedHashMap<>();
 		for (Session b : round) if (b.origin != null && b.own >= 0) byOrigin.computeIfAbsent(b.origin.pos(), k -> new ArrayList<>()).add(b);
 		for (List<Session> group : byOrigin.values()) s = s.then(intoOrigin(group));
 		return s;
+	}
+
+	/**
+	 * Back to where you stood as the boxes were put back, once picking them up has taken you away from it (with Baritone
+	 * where it's installed and not busy, else stepping there); left as it is if that doesn't get there in time.
+	 */
+	private static Step<Void> backToStand(Supplier<@Nullable BlockPos> stood) {
+		return Step.of("Back where you stood", () -> {
+			BlockPos to = stood.get();
+			return to == null ? ctx -> Progress.done() : new BackTo(to);
+		}).recover(why -> Step.nothing());
 	}
 
 	/**
@@ -720,9 +749,9 @@ final class ItemBoxes {
 		private final BlockPos spot;
 		/** How many of its item the inventory holds once it's back. */
 		private final int back;
-		/** What's stepped to: its own drop, or any of the boxes' put back with it. */
+		/** What's walked to: its own drop, or any of the boxes' put back with it. */
 		private final Predicate<ItemStack> drops;
-		private final Steering steering = new Steering();
+		private final Walker walker = new Walker();
 
 		PickUp(ItemStack box, BlockPos spot, int back, Predicate<ItemStack> drops) {
 			this.box = box;
@@ -734,10 +763,9 @@ final class ItemBoxes {
 		@Override
 		public Progress<Void> tick(JobContext ctx) {
 			if (count(box) >= back) return done();
-			steering.to(null);
 			if (ctx.ticks() > PICKUP_TICKS) {
 				done();
-				return Progress.failed(Why.of(Why.TIMEOUT, "couldn't pick it back up: it's on the ground at " + spot.toShortString(), spot));
+				return Progress.failed(Why.of(Why.TIMEOUT, "couldn't pick it back up: it's on the ground nearby", spot));
 			}
 			LocalPlayer p = Client.player();
 			List<ItemEntity> lying = Client.level().getEntitiesOfClass(ItemEntity.class, new AABB(spot).inflate(4), i -> drops.test(i.getItem()));
@@ -747,7 +775,7 @@ final class ItemBoxes {
 			// ticks, falling meanwhile), or the nearest once it's taken this long anyway.
 			ItemEntity to = lying.stream().filter(i -> i.getAge() >= PICKUP_DELAY && !pickUp.intersects(i.getBoundingBox())).min(nearest).orElse(null);
 			if (to == null && ctx.ticks() > WALK_AFTER_TICKS) to = lying.stream().min(nearest).orElse(null);
-			if (to != null) steering.to(to.position());
+			walker.to(to == null ? null : to.position());
 			return Progress.running();
 		}
 
@@ -757,8 +785,87 @@ final class ItemBoxes {
 		}
 
 		private Progress<Void> done() {
-			steering.stop();
+			walker.stop();
 			return Progress.done();
+		}
+	}
+
+	/** Walks back to where you stood (see backToStand), till you're on that block or BACK_TICKS have gone. */
+	private static final class BackTo implements Step.Run<Void> {
+		private final BlockPos pos;
+		private final Walker walker = new Walker();
+
+		BackTo(BlockPos pos) {
+			this.pos = pos;
+		}
+
+		@Override
+		public Progress<Void> tick(JobContext ctx) {
+			Vec3 at = Client.player().position();
+			if (Math.hypot(at.x - (pos.getX() + 0.5), at.z - (pos.getZ() + 0.5)) < STOOD && Math.abs(at.y - pos.getY()) < 1.5 || ctx.ticks() > BACK_TICKS) {
+				return done();
+			}
+			walker.to(Vec3.atBottomCenterOf(pos));
+			return Progress.running();
+		}
+
+		@Override
+		public void cancel(JobContext ctx) {
+			done();
+		}
+
+		private Progress<Void> done() {
+			walker.stop();
+			return Progress.done();
+		}
+	}
+
+	/**
+	 * Walks to a point: with Baritone where it's installed and wasn't busy when the walk began (breaking and placing off
+	 * for the walk, as it's only to pick boxes up and get back), else with {@link Steering}'s steps.
+	 */
+	private static final class Walker {
+		private final Steering steering = new Steering();
+		private @Nullable BlockPos goal;
+		private boolean baritone, decided;
+		private @Nullable Object allowBreak, allowPlace;
+
+		void to(@Nullable Vec3 target) {
+			if (!decided && target != null) {
+				decided = true;
+				baritone = Baritone.isAvailable() && !Baritone.isPathing();
+			}
+			if (!baritone) {
+				steering.to(target);
+				return;
+			}
+			if (target == null) {
+				halt();
+				return;
+			}
+			BlockPos pos = BlockPos.containing(target);
+			if (pos.equals(goal)) return;
+			if (goal == null) {
+				allowBreak = Baritone.setSetting("allowBreak", false);
+				allowPlace = Baritone.setSetting("allowPlace", false);
+			}
+			goal = pos;
+			Baritone.pathTo(pos.getX(), pos.getY(), pos.getZ());
+		}
+
+		void stop() {
+			steering.stop();
+			halt();
+		}
+
+		/** Baritone stopped, its settings put back. */
+		private void halt() {
+			if (goal == null) return;
+			goal = null;
+			Baritone.stop();
+			if (allowBreak != null) Baritone.setSetting("allowBreak", allowBreak);
+			if (allowPlace != null) Baritone.setSetting("allowPlace", allowPlace);
+			allowBreak = allowPlace = null;
 		}
 	}
 
@@ -781,7 +888,7 @@ final class ItemBoxes {
 			if (Reach.hitFor(pos, false, range) != null) return done();
 			if (ctx.ticks() > BACK_TICKS) {
 				steering.stop();
-				return Progress.failed(Why.of(Why.OUT_OF_REACH, "couldn't get back in reach of " + pos.toShortString(), pos));
+				return Progress.failed(Why.of(Why.OUT_OF_REACH, "couldn't get back in reach of the container", pos));
 			}
 			steering.to(Vec3.atCenterOf(pos));
 			return Progress.running();

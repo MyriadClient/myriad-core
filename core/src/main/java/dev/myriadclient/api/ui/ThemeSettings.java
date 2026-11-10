@@ -126,8 +126,9 @@ public final class ThemeSettings {
 
 	private final SettingGroup spGeneral = preferences.group("General");
 	public final DoubleSetting uiScale = spGeneral.decimal("UI Scale").description("Multiplier on the automatic UI scale.").defaultValue(1.0).range(0.5, 3).decimals(2).build();
-	public final BoolSetting titleScreen = spGeneral.bool("Title Screen")
-		.description("Myriad's own title screen, in the theme's colours, and the pause menu in them too. Off: Minecraft's, with Myriad's logo and keys in a corner, and its own pause menu.").defaultValue(true).build();
+	/** @deprecated Myriad's title screen is part of {@link #themedScreens} since 1.7; this isn't shown or read any more. */
+	@Deprecated(since = "1.7")
+	public final BoolSetting titleScreen = spGeneral.bool("Title Screen").description("Part of Themed Screens now.").defaultValue(true).visible(() -> false).build();
 	public final BoolSetting pauseGame = spGeneral.bool("Pause Game").description("Pause singleplayer while the menu is open.").defaultValue(false).build();
 
 	private final SettingGroup sgGeneral = settings.group("General");
@@ -197,13 +198,21 @@ public final class ThemeSettings {
 			var mc = Minecraft.getInstance();
 			if (mc.player != null) mc.options.broadcastOptions();
 		}).build();
+	/**
+	 * Screens in the theme: Myriad's own title screen, your inventory and the storage screens, and since 1.7 Minecraft's
+	 * other screens too (menus, settings, the disconnect screen, other mods' screens), as far as they're made of
+	 * Minecraft's widgets (buttons, sliders, checkboxes, text boxes, lists, scrollbars, tabs) and backgrounds; their
+	 * layouts stay their own.
+	 */
 	@ApiStatus.AvailableSince("1.2")
 	public final BoolSetting themedScreens = spCosmetics.bool("Themed Screens")
-		.description("Draw your inventory, chests, shulker boxes and the other storage screens in the theme. Off: Minecraft's own look.")
+		.description("Draw Minecraft's screens in the theme: Myriad's own title screen, your inventory, chests and the other storage screens, "
+			+ "the menus and settings, and other mods' screens (their buttons, sliders, lists and backgrounds; their layouts stay theirs). "
+			+ "Off: Minecraft's own look, with Myriad's logo and keys in a corner of its title screen.")
 		.defaultValue(true).build();
 	@ApiStatus.AvailableSince("1.2")
 	public final BoolSetting themeFont = spCosmetics.bool("Theme Font")
-		.description("Item counts in the theme's font. Off: Minecraft's own.")
+		.description("Item counts in the theme's font, and with Themed Screens the menus' text too (not chat, books or signs). Off: Minecraft's own.")
 		.defaultValue(true).build();
 	/** The hotbar and the off hand's slot in the theme (the status bars and experience bar have their own, since 1.3). */
 	@ApiStatus.AvailableSince("1.2")

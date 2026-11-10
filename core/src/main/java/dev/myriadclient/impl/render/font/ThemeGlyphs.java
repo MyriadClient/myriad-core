@@ -33,22 +33,28 @@ import java.awt.image.BufferedImage;
  * scale and kept, so going back to a scale only rasterises again what's drawn.
  */
 public final class ThemeGlyphs implements GlyphProvider {
-	/** The em in GUI pixels, and how far below Minecraft's baseline the glyphs sit, as ui.json had them for the ttf provider. */
-	private static final float SIZE = 9.5f, SHIFT = 1f;
+	/** Where Minecraft's own capitals are centred, down its line (they stand on its baseline, 7 down, and are 7 high). */
+	private static final float CAPS_MIDDLE = 3.5f;
 	/** Transparent pixels around each glyph's measured ink, for antialiasing that strays past it. */
 	private static final int PAD = 1;
 
 	private final Font font;
 	private final IntSet supported;
+	/** How far below Minecraft's baseline the glyphs sit; NaN for wherever centres the capitals as Minecraft's are. */
+	private final float shift;
 	private final Int2ObjectMap<Scaled> scales = new Int2ObjectOpenHashMap<>();
+	/** The em in GUI pixels. */
+	private float size;
 	private volatile Scaled current;
 
-	public ThemeGlyphs(String file, int scale) {
+	public ThemeGlyphs(String file, int scale, float size, float shift) {
 		font = FontManager.load(file);
 		IntSet cps = new IntOpenHashSet();
 		for (int cp = 0; cp <= 0xFFFF; cp++)
 			if (!Character.isISOControl(cp) && !Character.isSurrogate((char) cp) && font.canDisplay(cp)) cps.add(cp);
 		supported = IntSets.unmodifiable(cps);
+		this.size = size;
+		this.shift = shift;
 		current = new Scaled(scale);
 		scales.put(scale, current);
 	}
@@ -60,6 +66,19 @@ public final class ThemeGlyphs implements GlyphProvider {
 
 	public int scale() {
 		return current.scale;
+	}
+
+	/** The em (GUI pixels) glyphs are given at from now on; as with {@link #scale(int)}, the font set has to drop its baked ones. */
+	public void size(float size) {
+		if (size == this.size) return;
+		this.size = size;
+		scales.clear();
+		current = new Scaled(current.scale);
+		scales.put(current.scale, current);
+	}
+
+	public float size() {
+		return size;
 	}
 
 	@Override
@@ -77,15 +96,19 @@ public final class ThemeGlyphs implements GlyphProvider {
 		final int scale;
 		final Font sized;
 		final FontRenderContext frc;
+		/** The shift, in whole pixels at this scale. */
+		final float down;
 		private final Int2ObjectMap<UnbakedGlyph> glyphs = new Int2ObjectOpenHashMap<>();
 
 		Scaled(int scale) {
 			this.scale = scale;
-			sized = font.deriveFont((float) Math.round(SIZE * scale));
+			sized = font.deriveFont((float) Math.round(size * scale));
 			Graphics2D measure = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics();
 			GlyphPage.hints(measure);
 			frc = measure.getFontRenderContext();
 			measure.dispose();
+			float caps = sized.createGlyphVector(frc, "H").getGlyphPixelBounds(0, frc, 0, 0).height / (float) scale;
+			down = Math.round((Float.isNaN(shift) ? CAPS_MIDDLE + caps / 2 - 7 : shift) * scale) / (float) scale;
 		}
 
 		synchronized @Nullable UnbakedGlyph glyph(int cp) {
@@ -144,7 +167,7 @@ public final class ThemeGlyphs implements GlyphProvider {
 
 			@Override
 			public float getBearingTop() {
-				return (float) (PAD - ink.y) / scale - SHIFT;
+				return (float) (PAD - ink.y) / scale - down;
 			}
 
 			@Override

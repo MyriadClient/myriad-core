@@ -20,6 +20,7 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.DoubleSupplier;
 
 /**
  * The theme's font as one of Minecraft's ({@link ThemeFont}), and item counts in it while Theme → Preferences → Theme
@@ -27,27 +28,58 @@ import java.util.List;
  * FontManagerMixin), then what assets/myriad/font/ui.json lists (Minecraft's own, for anything they lack). Text is
  * given it as its style's font, so Minecraft measures, wraps and finds clicks in it with the widths it's drawn at.
  * <p>
- * The glyphs are rasterised at the GUI scale they're drawn at, as Myriad's own text is. When the scale changes, they're
- * given the new one and only this font is reloaded (FontSet.reload, as Force Unicode does), not the resources.
+ * Themed menus' text (ThemedMenus.withText) is in {@code myriad:menu}, the title screen's font: the regular weight at
+ * the theme's Font Size, so it sits in Minecraft's buttons as the title screen's text does in its own. Chat, tooltips and
+ * counts keep Minecraft's size.
+ * <p>
+ * The glyphs are rasterised at the GUI scale they're drawn at, as Myriad's own text is. When the scale changes (or the
+ * Font Size, for the menus'), they're given the new one and only that font is reloaded (FontSet.reload, as Force Unicode
+ * does), not the resources.
  */
 public final class ThemedText {
 	public static final Identifier FONT_ID = ((FontDescription.Resource) ThemeFont.FONT).id();
+	public static final FontDescription MENU_FONT = new FontDescription.Resource(Identifier.fromNamespaceAndPath("myriad", "menu"));
 	public static final ThemedText INSTANCE = new ThemedText();
 
-	private static @Nullable ThemeGlyphs glyphs;
-	/** The font set Minecraft made for {@code myriad:ui} at its last resource reload. */
-	private static @Nullable FontSet set;
+	/** One of the two: its font's id and file, the em (GUI pixels) and how far below Minecraft's baseline it sits (NaN: centred as Minecraft's text is). */
+	private static final class Face {
+		final Identifier id;
+		final String file;
+		final DoubleSupplier size;
+		final float shift;
+		@Nullable ThemeGlyphs glyphs;
+		/** The font set Minecraft made for it at its last resource reload. */
+		@Nullable FontSet set;
+
+		Face(Identifier id, String file, DoubleSupplier size, float shift) {
+			this.id = id;
+			this.file = file;
+			this.size = size;
+			this.shift = shift;
+		}
+	}
+
+	/** As ui.json had it for the ttf provider: semibold, as Minecraft's text is heavy, at its size, a pixel below its baseline. */
+	private static final Face UI = new Face(FONT_ID, "ui-semibold.ttf", () -> 9.5, 1);
+	/** As the title screen's text: regular, at the theme's Font Size. */
+	private static final Face MENU = new Face(((FontDescription.Resource) MENU_FONT).id(), "ui-regular.ttf",
+		() -> Myriad.isReady() ? MyriadImpl.get().windowManager().theme().fontSize.get() : 7.5, Float.NaN);
 
 	private ThemedText() {
 	}
 
-	/** {@code myriad:ui}'s providers, Myriad's glyphs first, as {@code set} is loaded with them. */
-	public static List<GlyphProvider.Conditional> providers(FontSet set, List<GlyphProvider.Conditional> providers) {
-		ThemedText.set = set;
-		if (glyphs == null) glyphs = new ThemeGlyphs("ui-semibold.ttf", guiScale());
-		else glyphs.scale(guiScale());
+	/** {@code id}'s providers, Myriad's glyphs first where it's one of the theme's fonts, as {@code set} is loaded with them. */
+	public static List<GlyphProvider.Conditional> providers(Identifier id, FontSet set, List<GlyphProvider.Conditional> providers) {
+		Face face = UI.id.equals(id) ? UI : MENU.id.equals(id) ? MENU : null;
+		if (face == null) return providers;
+		face.set = set;
+		if (face.glyphs == null) face.glyphs = new ThemeGlyphs(face.file, guiScale(), (float) face.size.getAsDouble(), face.shift);
+		else {
+			face.glyphs.scale(guiScale());
+			face.glyphs.size((float) face.size.getAsDouble());
+		}
 		List<GlyphProvider.Conditional> all = new ArrayList<>(providers.size() + 1);
-		all.add(new GlyphProvider.Conditional(glyphs, FontOption.Filter.ALWAYS_PASS));
+		all.add(new GlyphProvider.Conditional(face.glyphs, FontOption.Filter.ALWAYS_PASS));
 		all.addAll(providers);
 		return all;
 	}
@@ -61,23 +93,32 @@ public final class ThemedText {
 		rescale();
 	}
 
-	/** A scale set before Myriad was up to hear of it (the window resized while the game loaded). */
+	/** A scale set before Myriad was up to hear of it (the window resized while the game loaded), or a new Font Size. */
 	@Subscribe
 	private void onTick(TickEvent.Post e) {
 		rescale();
 	}
 
 	private static void rescale() {
+		// Chat split in it (an addon's chat in the theme's font) is split again: the widths change a little with the scale.
+		if (rescale(UI)) {
+			var mc = Minecraft.getInstance();
+			if (mc.gui != null) mc.gui.hud.getChat().rescaleChat();
+		}
+		rescale(MENU);
+	}
+
+	private static boolean rescale(Face face) {
 		int scale = guiScale();
-		if (glyphs == null || set == null || glyphs.scale() == scale) return;
-		glyphs.scale(scale);
-		var fonts = (FontSetAccessor) set;
+		float size = (float) face.size.getAsDouble();
+		if (face.glyphs == null || face.set == null || face.glyphs.scale() == scale && face.glyphs.size() == size) return false;
+		face.glyphs.scale(scale);
+		face.glyphs.size(size);
+		var fonts = (FontSetAccessor) face.set;
 		var widths = new Int2ObjectOpenHashMap<>(fonts.myriad$glyphsByWidth());
 		fonts.myriad$resetTextures();
 		fonts.myriad$glyphsByWidth().putAll(widths);
-		// Chat split in it (an addon's chat in the theme's font) is split again: the widths change a little with the scale.
-		var mc = Minecraft.getInstance();
-		if (mc.gui != null) mc.gui.hud.getChat().rescaleChat();
+		return true;
 	}
 
 	private static int guiScale() {

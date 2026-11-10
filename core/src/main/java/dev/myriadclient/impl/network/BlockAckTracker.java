@@ -104,7 +104,7 @@ public final class BlockAckTracker {
 		for (Pending p : expired) last = Math.max(last, p.sequence);
 		if (mc.level instanceof PredictionAccess access) access.myriad$endPredictionsUpTo(last);
 		for (Pending p : dropped) p.future.complete(mc.level.getBlockState(p.pos));
-		for (Pending p : expired) p.future.completeExceptionally(new TimeoutException("No answer from the server for the action at " + p.pos.toShortString()));
+		for (Pending p : expired) p.future.completeExceptionally(new TimeoutException("No answer from the server for a block action"));
 	}
 
 	@Subscribe

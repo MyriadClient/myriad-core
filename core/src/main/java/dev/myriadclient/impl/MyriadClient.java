@@ -73,11 +73,11 @@ public class MyriadClient implements ClientModInitializer {
 			myriad.windowManager().renderHud(ctx);
 		});
 
-		// Myriad's own title screen in place of Minecraft's (Theme → Preferences → Title Screen).
+		// Myriad's own title screen in place of Minecraft's (Theme → Preferences → Themed Screens).
 		bus.listen(ScreenOpenEvent.class, e -> {
 			// Closing a screen with no world open is Minecraft's way back to its title screen too: it makes one after this.
 			boolean title = e.screen() == null ? Minecraft.getInstance().level == null : e.screen().getClass() == TitleScreen.class;
-			if (title && myriad.windowManager().theme().titleScreen.get()) {
+			if (title && myriad.windowManager().theme().themedScreens.get()) {
 				e.setScreen(new MyriadTitleScreen(myriad.windowManager()));
 			}
 		});

@@ -28,7 +28,11 @@ import net.minecraft.client.renderer.state.gui.BlitRenderState;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.util.ARGB;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.entity.player.PlayerModelPart;
 import net.minecraft.world.entity.player.PlayerSkin;
@@ -39,6 +43,7 @@ import org.joml.Matrix4f;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.function.Supplier;
 
 /**
@@ -52,8 +57,8 @@ final class TitleScenePicture extends PictureInPictureRenderer<TitleSceneState> 
 	private static final BlockDisplayContext BLOCK_CONTEXT = BlockDisplayContext.create();
 	/** A long lens, so what's near the camera doesn't loom over you. */
 	private static final float FOV = 18;
-	/** How many blocks fit up the picture, the height it's centred on, and how big the scene's blocks are next to you. */
-	private static final float SHOW_HIGH = 4.2f, LOOK_AT = 1.9f, BLOCK_SIZE = 0.7f;
+	/** How big the scene's blocks are next to you. */
+	private static final float BLOCK_SIZE = 0.7f;
 	/** The picture's longest side in pixels: past this it's less than doubled, down to the screen's own resolution. */
 	private static final int MAX_SIDE = 4096;
 
@@ -80,9 +85,9 @@ final class TitleScenePicture extends PictureInPictureRenderer<TitleSceneState> 
 	@Override
 	protected void renderToTexture(TitleSceneState state, PoseStack unused, SubmitNodeCollector collector) {
 		target = RenderSystem.outputColorTextureOverride;
-		// The buttons' frosted backgrounds show this rather than the screen, which holds nothing yet.
+		// Frosted buttons over it show this rather than the screen, which holds nothing yet.
 		UiRenderer ui = UiRenderer.peek();
-		if (ui != null && target != null) ui.blurFrom(target, width, height);
+		if (ui != null && target != null && state.frosted()) ui.blurFrom(target, width, height);
 		try {
 			draw(state, collector);
 		} catch (RuntimeException e) {
@@ -94,24 +99,25 @@ final class TitleScenePicture extends PictureInPictureRenderer<TitleSceneState> 
 	private void draw(TitleSceneState state, SubmitNodeCollector collector) {
 		Minecraft mc = Minecraft.getInstance();
 		perspective.setupPerspective(0.5F, 300F, FOV, width, height);
-		// Moved across the picture as it's drawn, so you're seen straight on wherever you stand on it.
-		Matrix4f moved = new Matrix4f().translation(state.across(), 0, 0).mul(perspective.getMatrix(new Matrix4f()));
+		// Moved across the picture as it's drawn, so you're seen straight on wherever you are on it.
+		Matrix4f moved = new Matrix4f().translation(state.across(), state.up(), 0).mul(perspective.getMatrix(new Matrix4f()));
 		RenderSystem.setProjectionMatrix(perspectiveBuffer.getBuffer(moved), ProjectionType.PERSPECTIVE);
 		// Lit from above, as the world is; nothing has set this up yet on the title screen.
 		Lighting lighting = mc.gameRenderer.lighting();
 		lighting.updateLevel(CardinalLighting.Type.DEFAULT);
 		lighting.setupFor(Lighting.Entry.LEVEL);
 
-		float distance = SHOW_HIGH / (2 * (float) Math.tan(Math.toRadians(FOV / 2)));
+		float distance = state.showHigh() / (2 * (float) Math.tan(Math.toRadians(FOV / 2)));
 
 		PoseStack pose = new PoseStack();
 		pose.translate(0, 0, -distance);
+		pose.mulPose(Axis.ZP.rotationDegrees(state.roll()));
 		pose.mulPose(Axis.XP.rotationDegrees(state.pitch()));
 		pose.mulPose(Axis.YP.rotationDegrees(state.yaw()));
-		pose.translate(0, -LOOK_AT, 0);
+		pose.translate(0, -state.lookAt(), 0);
 
 		if (blockResolver == null) blockResolver = new BlockModelResolver(mc.getModelManager());
-		for (TitleScene.Placed b : state.scene().blocks()) {
+		for (TitleScene.Placed b : state.scene() == null ? List.<TitleScene.Placed>of() : state.scene().blocks()) {
 			blockResolver.update(block, b.state(), BLOCK_CONTEXT);
 			if (b.tinted()) {
 				block.tintLayers().clear();
@@ -152,6 +158,20 @@ final class TitleScenePicture extends PictureInPictureRenderer<TitleSceneState> 
 		avatar.yRot = state.headYaw();
 		avatar.xRot = state.headPitch();
 		avatar.attackTime = state.swing();
+		avatar.attackArm = avatar.mainArm;
+		avatar.walkAnimationPos = state.walk();
+		avatar.walkAnimationSpeed = state.walkSpeed();
+		// What's in your hand, held as an item is (no entity to ask what its arm's doing with it).
+		boolean right = avatar.mainArm == HumanoidArm.RIGHT;
+		ItemStack held = state.held();
+		mc.getItemModelResolver().updateForTopItem(right ? avatar.rightHandItemState : avatar.leftHandItemState, held,
+			right ? ItemDisplayContext.THIRD_PERSON_RIGHT_HAND : ItemDisplayContext.THIRD_PERSON_LEFT_HAND, mc.level, null, 0);
+		(right ? avatar.leftHandItemState : avatar.rightHandItemState).clear();
+		avatar.rightHandItemStack = right ? held : ItemStack.EMPTY;
+		avatar.leftHandItemStack = right ? ItemStack.EMPTY : held;
+		HumanoidModel.ArmPose armPose = held.isEmpty() ? HumanoidModel.ArmPose.EMPTY : HumanoidModel.ArmPose.ITEM;
+		avatar.rightArmPose = right ? armPose : HumanoidModel.ArmPose.EMPTY;
+		avatar.leftArmPose = right ? HumanoidModel.ArmPose.EMPTY : armPose;
 		// A little wind in the cape.
 		float t = state.time();
 		avatar.capeFlap = 2 + (float) Math.sin(t * 1.3) * 2;

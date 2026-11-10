@@ -484,15 +484,13 @@ public final class ThemedScreens {
 	}
 
 	/**
-	 * A button on a screen drawn in the theme (a villager's offers) or the pause menu, as a theme button, its label Minecraft's; {@code argb}
-	 * is the tint Minecraft gives it (its fade). False elsewhere, or for another sprite.
+	 * A button on a screen drawn in the theme (a villager's offers), as a theme button, its label Minecraft's; {@code argb}
+	 * is the tint Minecraft gives it (its fade). False elsewhere, or for another sprite (other screens' buttons, the pause
+	 * menu's among them, are ThemedMenus').
 	 */
 	public static boolean button(GuiGraphicsExtractor ctx, Identifier sprite, int x, int y, int w, int h, int argb) {
 		String path = sprite.getPath();
-		// The pause menu's too: its buttons are the theme's while Themed Screens is on, and Myriad's own title screen (with
-		// Minecraft's title screen, its pause menu is Minecraft's too).
-		boolean pause = Myriad.isReady() && theme().themedScreens.get() && theme().titleScreen.get() && Minecraft.getInstance().gui.screen() instanceof PauseScreen;
-		if (!path.startsWith("widget/button") || !screenThemed() && !pause) return false;
+		if (!path.startsWith("widget/button") || !screenThemed()) return false;
 		return posed(ctx, c -> {
 			ThemeSettings t = theme();
 			boolean off = path.endsWith("disabled"), hover = path.endsWith("highlighted");
@@ -547,7 +545,7 @@ public final class ThemedScreens {
 	}
 
 	/** A window as the desktop draws one: shadow (if {@code shadow} and the theme has one), backdrop, surface and border. */
-	private static void window(UiRenderer c, ThemeSettings t, float x, float y, float w, float h, boolean shadow) {
+	static void window(UiRenderer c, ThemeSettings t, float x, float y, float w, float h, boolean shadow) {
 		float r = Math.min(t.rounding.get(), h / 2), b = t.borderSize.get();
 		if (shadow && t.shadow.get()) c.shadow(x, y, w, h, r, t.shadowRange.get(), t.shadowColor.argb());
 		c.backdrop(x, y, w, h, r, 1);
@@ -556,7 +554,7 @@ public final class ThemedScreens {
 	}
 
 	/** Paints where Minecraft's drawing is moved and scaled to (a tab's wiggle, a widget's place), which the renderer doesn't follow by itself. */
-	private static boolean posed(GuiGraphicsExtractor ctx, java.util.function.Consumer<UiRenderer> draw) {
+	static boolean posed(GuiGraphicsExtractor ctx, java.util.function.Consumer<UiRenderer> draw) {
 		var pose = ctx.pose();
 		float dx = pose.m20(), dy = pose.m21(), scale = pose.m00();
 		MyriadImpl.get().windowManager().painter().paintGui(ctx, c -> {
@@ -684,14 +682,17 @@ public final class ThemedScreens {
 		return Myriad.isReady() && theme().themedScreens.get() ? top ? -4 : 4 : 0;
 	}
 
-	/** A click at {@code mx, my} on {@code screen}'s swap bar switches to that tab; true if it was on the bar (it goes no further). */
+	/**
+	 * A click at {@code mx, my} on {@code screen}'s swap bar: a left click switches to that tab, a right click puts a
+	 * box's back (or lets the held container go); true if it was on the bar (it goes no further).
+	 */
 	public static boolean tabClicked(AbstractContainerScreen<?> screen, double mx, double my, int button) {
 		if (!Myriad.isReady() || screen != tabScreen || tabList == null) return false;
 		for (int i = 0; i < tabRects.size() && i < tabList.size(); i++) {
 			float[] rr = tabRects.get(i);
 			if (mx < rr[0] || mx >= rr[0] + rr[2] || my < rr[1] || my >= rr[1] + rr[3]) continue;
 			if (button == 0) MyriadImpl.get().containerTabs().switchTo(tabList.get(i));
-			else if (button == 1) MyriadImpl.get().containerTabs().letGo(tabList.get(i));
+			else if (button == 1) MyriadImpl.get().containerTabs().rightClicked(tabList.get(i));
 			return true;
 		}
 		return false;

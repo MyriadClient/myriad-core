@@ -12,6 +12,7 @@ import dev.myriadclient.api.util.ColorUtil;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /** Toasts, stacked bottom-right, sliding in like mako/dunst notifications. */
 public final class NotificationManager implements Notifications {
@@ -20,8 +21,21 @@ public final class NotificationManager implements Notifications {
 
 	private final List<Entry> entries = new ArrayList<>();
 
+	/**
+	 * Three numbers in a row (x y z, or x, y, z): a place in the world. A toast never shows one, whoever sent it, as a
+	 * stream or a screenshot would give it away (a base, a stash).
+	 */
+	private static final Pattern COORDS = Pattern.compile("(?<![\\w.])-?\\d+(?:\\.\\d+)?(?:,\\s*|\\s+)-?\\d+(?:\\.\\d+)?(?:,\\s*|\\s+)-?\\d+(?:\\.\\d+)?(?![\\w.])");
+
+	/** {@code text} with any coordinates in it hidden (see COORDS). */
+	static String withoutCoords(String text) {
+		return text == null ? "" : COORDS.matcher(text).replaceAll("(location hidden)");
+	}
+
 	@Override
 	public synchronized void send(String title, String message, Level level, long durationMs, String key) {
+		title = withoutCoords(title);
+		message = withoutCoords(message);
 		long now = System.currentTimeMillis();
 		for (Entry e : entries) {
 			// The same key replaces; the same notification again while it's still up is counted on it ("×3"), not stacked.

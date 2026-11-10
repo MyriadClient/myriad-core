@@ -15,13 +15,13 @@ import org.spongepowered.asm.mixin.injection.At;
 import java.util.List;
 import java.util.Set;
 
-/** The theme's font ({@code myriad:ui}) given Myriad's own glyphs first, before what ui.json lists (see ThemedText). */
+/** The theme's fonts ({@code myriad:ui}, {@code myriad:menu}) given Myriad's own glyphs first, before what their json lists (see ThemedText). */
 @Mixin(FontManager.class)
 public abstract class FontManagerMixin {
 	@WrapOperation(method = "createFontSet", at = @At(value = "INVOKE",
 		target = "Lnet/minecraft/client/gui/font/FontSet;reload(Ljava/util/List;Ljava/util/Set;)V"))
 	private void myriad$themeGlyphs(FontSet set, List<GlyphProvider.Conditional> providers, Set<FontOption> options, Operation<Void> original,
 									@Local(argsOnly = true) Identifier id) {
-		original.call(set, ThemedText.FONT_ID.equals(id) ? ThemedText.providers(set, providers) : providers, options);
+		original.call(set, ThemedText.providers(id, set, providers), options);
 	}
 }

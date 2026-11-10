@@ -71,7 +71,9 @@ void main() {
     } else if (type == BACKDROP) {
         float d = sdRoundBox(p, halfSize, vRadii);
         coverage = clamp(0.5 - d, 0.0, 1.0);
-        color = vec4(texture(Sampler1, vScreenUv).rgb, vColor1.a);
+        // The blur is premultiplied; where it's of a picture's see-through part, what's under the window shows.
+        vec4 b = texture(Sampler1, vScreenUv);
+        color = vec4(b.rgb / max(b.a, 0.0001), b.a * vColor1.a);
     } else {
         float d = sdRoundBox(p, halfSize, vRadii);
         coverage = clamp(0.5 - d, 0.0, 1.0);

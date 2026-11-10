@@ -23,7 +23,7 @@ import java.util.concurrent.CompletableFuture;
  * <pre>{@code
  * Placement.Attempt a = Myriad.placement().place(this, pos, slot, Placement.Options.forServer());
  * if (!a.sent()) return; // a.check() says why: OUT_OF_RANGE, ENTITY_IN_WAY, PENDING, ...
- * a.result().thenAccept(placed -> { if (!placed) warn("The server refused the block at " + pos.toShortString()); });
+ * a.result().thenAccept(placed -> { if (!placed) warn("The server refused the block"); });
  * }</pre>
  */
 @ApiStatus.NonExtendable

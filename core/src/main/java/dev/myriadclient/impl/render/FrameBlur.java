@@ -29,7 +29,7 @@ import java.util.OptionalDouble;
  */
 public final class FrameBlur {
 	private static final int MAX_LEVELS = 6;
-	private static final int UBO_SIZE = new Std140SizeCalculator().putVec2().putFloat().get();
+	private static final int UBO_SIZE = new Std140SizeCalculator().putVec2().putFloat().putFloat().get();
 
 	private final TextureTarget[] levels = new TextureTarget[MAX_LEVELS + 1];
 	private final GpuBuffer[] info = new GpuBuffer[MAX_LEVELS * 2 + 1];
@@ -76,17 +76,18 @@ public final class FrameBlur {
 		resize(main.width, main.height);
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
 		// Level 0 starts as the scene at half resolution; a down pass from the main target does that.
-		if (picture != null) pass(encoder, MyriadPipelines.BLUR_DOWN, picture, sourceWidth, sourceHeight, levels[0], 0);
-		else pass(encoder, MyriadPipelines.BLUR_DOWN, main.getColorTextureView(), main.width, main.height, levels[0], 0);
+		// A picture's see-through parts stay so (what's under a frosted window shows there); the world's alpha means nothing.
+		if (picture != null) pass(encoder, MyriadPipelines.BLUR_DOWN, picture, sourceWidth, sourceHeight, levels[0], 0, false);
+		else pass(encoder, MyriadPipelines.BLUR_DOWN, main.getColorTextureView(), main.width, main.height, levels[0], 0, true);
 		int ubo = 1;
-		for (int i = 0; i < passes; i++) pass(encoder, MyriadPipelines.BLUR_DOWN, levels[i].getColorTextureView(), levels[i].width, levels[i].height, levels[i + 1], ubo++);
-		for (int i = passes; i > 0; i--) pass(encoder, MyriadPipelines.BLUR_UP, levels[i].getColorTextureView(), levels[i].width, levels[i].height, levels[i - 1], ubo++);
+		for (int i = 0; i < passes; i++) pass(encoder, MyriadPipelines.BLUR_DOWN, levels[i].getColorTextureView(), levels[i].width, levels[i].height, levels[i + 1], ubo++, false);
+		for (int i = passes; i > 0; i--) pass(encoder, MyriadPipelines.BLUR_UP, levels[i].getColorTextureView(), levels[i].width, levels[i].height, levels[i - 1], ubo++, false);
 	}
 
-	private void pass(CommandEncoder encoder, RenderPipeline pipeline, GpuTextureView from, int fromW, int fromH, TextureTarget to, int uboIndex) {
+	private void pass(CommandEncoder encoder, RenderPipeline pipeline, GpuTextureView from, int fromW, int fromH, TextureTarget to, int uboIndex, boolean opaque) {
 		GpuBuffer ubo = info[uboIndex % info.length];
 		try (MemoryStack stack = MemoryStack.stackPush()) {
-			ByteBuffer data = Std140Builder.onStack(stack, UBO_SIZE).putVec2(0.5f / fromW, 0.5f / fromH).putFloat(offset).get();
+			ByteBuffer data = Std140Builder.onStack(stack, UBO_SIZE).putVec2(0.5f / fromW, 0.5f / fromH).putFloat(offset).putFloat(opaque ? 1 : 0).get();
 			encoder.writeToBuffer(ubo.slice(), data);
 		}
 		try (RenderPass pass = encoder.createRenderPass(() -> "Myriad blur", to.getColorTextureView(), Optional.empty(), null, OptionalDouble.empty())) {

@@ -68,6 +68,8 @@ public final class ContainerTabs {
 	private final Set<Object> wanted = Collections.newSetFromMap(new IdentityHashMap<>());
 	/** Putting them all back, once you closed a screen yourself. */
 	private @Nullable CompletableFuture<Void> finishing;
+	/** A box whose container is being opened again to put it back from there (putBack). */
+	private Containers.@Nullable ItemSession putting;
 	/** The nearest ender chest in reach that would open, looked for each tick a container screen is up: a tab for it. */
 	private @Nullable BlockPos nearEnderChest;
 
@@ -174,6 +176,51 @@ public final class ContainerTabs {
 		boolean showing = !(mc.gui.screen() instanceof InventoryScreen);
 		tracker.closeUnderScreen();
 		if (showing) tracker.showInventory();
+	}
+
+	/**
+	 * A right click on {@code tab}: the held container's let go (see letGo); a box's put back on its own, freeing the
+	 * spot it stood in for another (see putBack).
+	 */
+	public void rightClicked(Tab tab) {
+		if (isHeld(tab)) letGo(tab);
+		else putBack(tab);
+	}
+
+	/**
+	 * Puts {@code tab}'s box back: broken, picked up and into the container it came from, and you stay in the screens. That
+	 * container's screen shows all along: you're switched to it first if you're elsewhere (in another box), it's closed
+	 * under its screen while the box is broken and picked up, and opened again for it. One from your inventory goes back
+	 * with your inventory's screen up. False if it isn't a box's tab, or not now (another going back, or a click would
+	 * have to wait).
+	 */
+	public boolean putBack(Tab tab) {
+		Containers.ItemSession box = tab.box();
+		if (mc.player == null || box == null || finishing != null || putting != null || !boxes.contains(box)) return false;
+		BlockPos origin = ItemBoxes.origin(box);
+		boolean there = origin != null && Myriad.containers().current().map(v -> origin.equals(v.pos())).orElse(false);
+		if (origin == null || there || Reach.hitFor(origin, false, Reach.blockRange()) == null) return putBackHere(box);
+		// The container it came from first, as its tab would open it; the box goes back from there.
+		putting = box;
+		Myriad.containers().open(TABS, origin, OPEN_TICKS, Placement.Options.forServer()).whenComplete((v, t) -> {
+			putting = null;
+			if (t == null && boxes.contains(box)) putBackHere(box);
+		});
+		return true;
+	}
+
+	/** {@code box} put back from the screen up now, the open container closed under it meanwhile (your inventory's if none is up). */
+	private boolean putBackHere(Containers.ItemSession box) {
+		ContainerTracker tracker = MyriadImpl.get().containerTracker();
+		// A held one stays open, its screen hidden (as switching to your inventory leaves it).
+		if (mc.player.containerMenu != mc.player.inventoryMenu && tracker.heldMenu() == null) {
+			if (!Myriad.inventory().prepareClick()) return false;
+			tracker.closeUnderScreen();
+		}
+		if (!(mc.gui.screen() instanceof AbstractContainerScreen<?>)) tracker.showInventory();
+		boxes.remove(box);
+		box.finish();
+		return true;
 	}
 
 	/**

@@ -174,7 +174,9 @@ single key, like Right Shift, bind **Open Menu** there or under Keybindings → 
     modules use as defaults, so ESP, tracers, tags, notifications and the module list follow the theme. A
     colour you change on a module is saved with that module's settings as an override.
   - **Preferences** (UI scale, pausing singleplayer, mod key, vim keys) are yours, not the theme's, and stay put when
-    you switch.
+    you switch. **Themed Screens** (on by default) draws Myriad's title screen, your inventory and the storage screens,
+    and Minecraft's other menus and settings (other mods' too, as far as they use Minecraft's buttons and lists) in the
+    theme, on the title screen's background; off, they're Minecraft's own.
 - **Profiler** (a window from the launcher): milliseconds per second spent by every module, service and listener in
   tick, render and other handlers, so a slow addon is a glance away. Timing runs only while it's open.
 

@@ -12,6 +12,7 @@ import dev.myriadclient.impl.render.title.TitleSceneRenderer;
 import dev.myriadclient.impl.render.title.TitleSceneState;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.SharedConstants;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.CreditsAndAttributionScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -32,7 +33,7 @@ import java.util.List;
 import java.util.function.BooleanSupplier;
 
 /**
- * Myriad's title screen, in place of Minecraft's while Theme → Preferences → Title Screen is on: the logo over the
+ * Myriad's title screen, in place of Minecraft's while Theme → Preferences → Themed Screens is on: the logo over the
  * theme's own colours, the usual destinations as a column of buttons (plus the Myriad menu), and the keys that open the
  * menu. Drawn by Myriad's renderer, so it follows the theme like the desktop does. Arrow keys and Enter work too.
  * <p>
@@ -293,8 +294,8 @@ public final class MyriadTitleScreen extends Screen {
 		c.pop();
 
 		int green = ColorUtil.lerp(0xFF6FAE4D, accent, 0.45f);
-		c.titleScene(new TitleSceneState.View(scene, seconds, REST_YAW + tiltX + sway + dragTurn + (1 - t) * -45, REST_PITCH + tiltY,
-			headYaw, headPitch, swing, green, t, cx / (w / 2) - 1), 0, 0, w, h);
+		c.titleScene(new TitleSceneState.View(scene, seconds, REST_YAW + tiltX + sway + dragTurn + (1 - t) * -45, REST_PITCH + tiltY, 0,
+			headYaw, headPitch, swing, green, t, cx / (w / 2) - 1, 0, TitleSceneState.LOOK_AT, TitleSceneState.SHOW_HIGH, 0, 0, ItemStack.EMPTY, true), 0, 0, w, h);
 
 		// Motes, each on its own slow way up; the same ones every time.
 		c.push();
@@ -311,7 +312,7 @@ public final class MyriadTitleScreen extends Screen {
 		c.pop();
 	}
 
-	private static float hash(int i, int salt) {
+	static float hash(int i, int salt) {
 		int h = i * 73_856_093 ^ salt * 19_349_663;
 		h = (h ^ h >>> 13) * 1_274_126_177;
 		return ((h ^ h >>> 16) & 0xFFFF) / 65_535f;
