@@ -236,6 +236,15 @@ public interface Inventory {
 	/** Shift-clicks {@code inventoryIndex}: armour goes onto you, other items between the hotbar and main inventory. */
 	boolean quickMove(int inventoryIndex);
 
+	/**
+	 * Fills the stack at {@code inventoryIndex} (hotbar or main inventory) from the main inventory's stacks of the same
+	 * item with a double click: picked up, gathered, put back, three clicks for any number of stacks. False (and nothing
+	 * done) unless the main inventory holds enough to fill it and nothing else would be gathered too: no other stack of it
+	 * short of full in the hotbar or the off hand (a double click takes those first).
+	 */
+	@ApiStatus.AvailableSince("1.8")
+	boolean gather(int inventoryIndex);
+
 	/** Throws out the stack at {@code inventoryIndex} (or one item). */
 	boolean drop(int inventoryIndex, boolean wholeStack);
 
@@ -460,6 +469,11 @@ public interface Inventory {
 		@Override
 		public boolean quickMove(int inventoryIndex) {
 			return core.quickMove(inventoryIndex);
+		}
+
+		@Override
+		public boolean gather(int inventoryIndex) {
+			return core.gather(inventoryIndex);
 		}
 
 		@Override

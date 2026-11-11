@@ -250,6 +250,9 @@ final class Arranger implements Containers.Planner {
 			if (hotbar >= 0 && !inPlayer(slot)) return new Click(slot, hotbar, ContainerInput.SWAP);
 			return pickup(src, 0);
 		}
+		// Less than it needs, and more lies about: picked up whole, the rest gathered with a double click (see gather).
+		if (free == from.getCount() && from.getCount() < need && (here.isEmpty() || ItemStack.isSameItemSameComponents(here, from))
+			&& gatherable(from, from.getCount(), slot, src)) return pickup(src, 0);
 		return startPlan(src, slot, from, from.getCount(), here.getCount(), here.getCount() + Math.min(need, free), false);
 	}
 
@@ -286,6 +289,10 @@ final class Arranger implements Containers.Planner {
 	/** Where to put down what the cursor holds, working on area slot {@code i} (or past the end: anywhere). */
 	private @Nullable Click putDown(ItemStack cursor, int i) {
 		int c = cursor.getCount();
+		if (i < area.length) {
+			Click gather = gather(cursor, i);
+			if (gather != null) return gather;
+		}
 		// Slot i first: swapped in if something else is there (fixed up after), else put down as much as it needs.
 		if (i < area.length) {
 			Click click = putInto(cursor, i, true);
@@ -315,6 +322,49 @@ final class Arranger implements Containers.Planner {
 		if (partial >= 0) return putInto(cursor, partial, false);
 		stuck = "No room to put down " + c + " " + cursor.getHoverName().getString();
 		return null;
+	}
+
+	/**
+	 * The cursor holds part of what area slot {@code i} still needs and more of it lies about: a double click on an
+	 * empty slot picks up every stack of it, up to a full one, in one click (the game's own gathering), where taking
+	 * them one by one is two clicks a stack. Only when each stack it would take from is this arranger's to take whole:
+	 * else it would pull in your own items, or undo slots already done. Null otherwise.
+	 */
+	private @Nullable Click gather(ItemStack cursor, int i) {
+		Want w = wants[i];
+		if (w == null || w.count == 0 || !same(cursor, w.like)) return null;
+		int slot = area[i], c = cursor.getCount();
+		ItemStack here = stack(slot);
+		if (!here.isEmpty() && !ItemStack.isSameItemSameComponents(here, cursor)) return null;
+		if (w.count - here.getCount() - c <= 0 || c >= cursor.getMaxStackSize()) return null;
+		// The game gathers only when the clicked slot holds nothing.
+		int at = vacated >= 0 && stack(vacated).isEmpty() ? vacated : -1;
+		if (at < 0 || !gatherable(cursor, c, slot, -1)) return null;
+		return new Click(at, 0, ContainerInput.PICKUP_ALL);
+	}
+
+	/**
+	 * Whether a double click with {@code carried} of {@code item} on the cursor would take only what's this arranger's
+	 * to take whole, and find something: other than {@code slot} (where it all goes) and {@code except}. It takes
+	 * stacks that aren't full first, then full ones if it still has room.
+	 */
+	private boolean gatherable(ItemStack item, int carried, int slot, int except) {
+		int partial = 0, stacks = 0, room = item.getMaxStackSize() - carried;
+		for (int s = 0; s < menu.slots.size(); s++) {
+			ItemStack st = stack(s);
+			if (s == slot || s == except || st.isEmpty() || !ItemStack.isSameItemSameComponents(st, item) || st.getCount() >= st.getMaxStackSize()) continue;
+			if (!pickable(s) || free(s) < st.getCount()) return false;
+			partial += st.getCount();
+			stacks++;
+		}
+		if (stacks == 0) return false;
+		if (partial >= room) return true;
+		for (int s = 0; s < menu.slots.size(); s++) {
+			ItemStack st = stack(s);
+			if (s == slot || s == except || st.isEmpty() || !ItemStack.isSameItemSameComponents(st, item) || st.getCount() < st.getMaxStackSize()) continue;
+			if (!pickable(s) || free(s) < st.getCount()) return false;
+		}
+		return true;
 	}
 
 	/** Puts the cursor into area slot {@code j} towards its want; {@code swap}: also swapping out something else there. */

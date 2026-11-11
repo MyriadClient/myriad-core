@@ -201,6 +201,8 @@ class ContainersHarnessTest {
 				area[i] = i;
 				sorted.add(i == 0 ? new ItemStack(Items.DIRT, dirt) : i == 1 ? new ItemStack(Items.STONE, stone) : ItemStack.EMPTY);
 			}
+			// A small budget (a sort fits in one tick otherwise), so a tick can end mid-sort.
+			dev.myriadclient.impl.MyriadImpl.get().packetLimiter().inventoryLimitForTests(8, 500);
 			CompletableFuture<Boolean> done = view.arrange(Containers.Arrangement.of(area, sorted).dumpTo(new int[]{27, 28, 29}));
 			// Ticks until a click of the sort leaves something on the cursor (it swaps stacks through it).
 			for (int t = 0; t < 40 && menu.getCarried().isEmpty() && !done.isDone(); t++) h.tick();

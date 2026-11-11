@@ -120,6 +120,7 @@ public final class ContainerTracker implements Containers {
 
 	public void onContents(int syncId) {
 		sync.onContents(syncId);
+		MyriadImpl.get().handClicks().contents(syncId);
 		if (current == null || current.syncId() != syncId || current.loaded) return;
 		current.loaded = true;
 		Myriad.events().post(new ContainerEvent.Loaded(current));
@@ -131,6 +132,7 @@ public final class ContainerTracker implements Containers {
 	}
 
 	public void onSlot(int syncId, int slot) {
+		MyriadImpl.get().handClicks().slot(syncId, slot);
 		if (current == null || current.syncId() != syncId || slot < 0) return;
 		Myriad.events().post(new ContainerEvent.SlotUpdated(current, slot));
 	}
@@ -192,6 +194,12 @@ public final class ContainerTracker implements Containers {
 	/** Whether {@code menu} shows a sort's result while it runs: the cursor shows nothing then. */
 	public boolean showsFinished(AbstractContainerMenu menu) {
 		return transfers.peek() instanceof PlannerJob job && job.showsFinished(menu);
+	}
+
+	/** Whether a job of core's (a sort, a transfer) is working in {@code menu}. */
+	public boolean working(AbstractContainerMenu menu) {
+		MenuJob job = transfers.peek();
+		return job != null && (mc.player == null || mc.player.containerMenu == menu);
 	}
 
 	/**
@@ -278,6 +286,11 @@ public final class ContainerTracker implements Containers {
 	@Override
 	public CompletableFuture<ItemSession> putDownItem(Object owner, View from, int screenSlot, int ticks, Placement.Options options) {
 		return ItemBoxes.putDown(owner, from, screenSlot, ticks, options);
+	}
+
+	@Override
+	public CompletableFuture<Void> finishAll(List<ItemSession> boxes) {
+		return ItemBoxes.finishAll(boxes);
 	}
 
 	@Override
@@ -577,8 +590,11 @@ public final class ContainerTracker implements Containers {
 			return current == this;
 		}
 
+		/** The container's own slots: those before your inventory's. */
 		@Override
 		public int size() {
+			var inventory = mc.player == null ? null : mc.player.getInventory();
+			for (int i = 0; i < handler.slots.size(); i++) if (handler.slots.get(i).container == inventory) return i;
 			return Math.max(0, handler.slots.size() - 36);
 		}
 

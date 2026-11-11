@@ -32,12 +32,12 @@ public final class BuildManager implements Building {
 	/** Each item's hotbar slot this tick (or why there's none), asked once however many positions want it. */
 	private final Reference2IntOpenHashMap<Item> slots = new Reference2IntOpenHashMap<>();
 	/**
-	 * Inventory moves for builds this tick, and the most: each block moved in is placed in the same tick, so a few a tick
-	 * keep a build of more kinds than the hotbar holds going at about the pace of one whose blocks are all there, well
-	 * inside the inventory click budget.
+	 * Inventory moves for builds this tick, and the most: each block moved in is placed in the same tick, so a build of
+	 * more kinds than the hotbar holds goes at the pace of one whose blocks are all there (the placement budget, 9 in
+	 * 300 ms, holds it back before this does), well inside the inventory click budget.
 	 */
 	private int materialMoves;
-	private static final int MATERIAL_MOVES = 3;
+	private static final int MATERIAL_MOVES = 8;
 
 	public BuildManager(PlacementManager placement) {
 		this.placement = placement;

@@ -130,19 +130,32 @@ final class PlacementAim {
 	 * pointing towards those eyes. Null if it lands nowhere that counts.
 	 */
 	Aim lookHit(float yaw, float pitch, BlockPos pos, Direction face, double range) {
+		return lookHit(yaw, pitch, pos, face, range, false);
+	}
+
+	/**
+	 * {@link #lookHit(float, float, BlockPos, Direction, double)}, or with {@code anyFace} on a face you can't see: where
+	 * the look leaves the block through it, for a server that takes such a click (an air placement facing away from you).
+	 */
+	Aim lookHit(float yaw, float pitch, BlockPos pos, Direction face, double range, boolean anyFace) {
 		Vec3 direction = MathUtil.direction(yaw, pitch).scale(range);
-		Aim own = lookHitFrom(mc.player.getEyeHeight(), direction, pos, face);
+		Aim own = lookHitFrom(mc.player.getEyeHeight(), direction, pos, face, anyFace);
 		if (own != null) return own;
 		for (double h : eyeHeights()) {
-			Aim aim = lookHitFrom(h, direction, pos, face);
+			Aim aim = lookHitFrom(h, direction, pos, face, anyFace);
 			if (aim != null && serverReaches(aim.hit.getLocation(), range)) return aim;
 		}
 		return null;
 	}
 
-	private Aim lookHitFrom(double eyeHeight, Vec3 direction, BlockPos pos, Direction face) {
+	private Aim lookHitFrom(double eyeHeight, Vec3 direction, BlockPos pos, Direction face, boolean anyFace) {
 		Vec3 from = eyes(eyeHeight);
 		BlockHitResult hit = AABB.clip(FULL_BLOCK, from, from.add(direction), pos);
+		if (hit != null && anyFace && face != null && hit.getDirection() != face) {
+			// Through the block: where the look comes out (the same line, clipped from its far end back).
+			BlockHitResult out = AABB.clip(FULL_BLOCK, from.add(direction), from, pos);
+			return out != null && out.getDirection() == face ? new Aim(new BlockHitResult(out.getLocation(), face, pos, false), eyeHeight) : null;
+		}
 		if (hit == null || face != null && hit.getDirection() != face || !exposed(pos, hit.getDirection(), eyeHeight)) return null;
 		return new Aim(new BlockHitResult(hit.getLocation(), hit.getDirection(), pos, false), eyeHeight);
 	}

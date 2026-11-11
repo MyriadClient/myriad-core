@@ -10,6 +10,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
+import net.minecraft.network.protocol.game.ClientboundSetCursorItemPacket;
 import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ClientboundSetHealthPacket;
@@ -44,6 +45,11 @@ public abstract class ClientPlayNetworkHandlerMixin {
 	@Inject(method = "handleContainerContent", at = @At("TAIL"))
 	private void myriad$containerContents(ClientboundContainerSetContentPacket packet, CallbackInfo ci) {
 		if (Myriad.isReady() && MyriadImpl.get() != null) MyriadImpl.get().containerTracker().onContents(packet.containerId());
+	}
+
+	@Inject(method = "handleSetCursorItem", at = @At("TAIL"))
+	private void myriad$cursor(ClientboundSetCursorItemPacket packet, CallbackInfo ci) {
+		if (Myriad.isReady() && MyriadImpl.get() != null) MyriadImpl.get().handClicks().cursor();
 	}
 
 	@Inject(method = "handleContainerSetSlot", at = @At("TAIL"))

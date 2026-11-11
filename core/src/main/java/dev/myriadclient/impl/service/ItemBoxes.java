@@ -66,6 +66,10 @@ import java.util.function.Supplier;
  */
 final class ItemBoxes {
 	private static final int PLACE_TICKS = 60, GIVE_BACK_TICKS = 10, BREAK_TICKS = 20 * 10, PICKUP_TICKS = 60, RETURN_TICKS = 20;
+	/** How long the hotbar slot a box was placed from may take to show empty (the server's word, for one placed through the off hand). */
+	private static final int EMPTIED_TICKS = 40;
+	/** How long the mask over what made room for a box lasts at most, should it never be given back. */
+	private static final long MASK_MS = 3000;
 	/** Times the opening click is made again when it didn't go (no look onto the box in time), the box being there. */
 	private static final int OPEN_TRIES = 3;
 	/** Ticks putting it back waits for the container it came from to be in reach again. */
@@ -152,7 +156,8 @@ final class ItemBoxes {
 		private int from = -1;
 		/**
 		 * With the hotbar full, the empty inventory slot what made room for a box from a container waits in, or -1; with
-		 * the inventory full too, it waits in the box's own slot in the container ({@code inPlace}).
+		 * the inventory full too, it waits in the box's own slot in the container ({@code inPlace}). Either only till the
+		 * box is down (givenBack); if that couldn't go, till it's back.
 		 */
 		private int parked = -1;
 		private boolean inPlace;
@@ -279,6 +284,20 @@ final class ItemBoxes {
 			Step<Void> givenBack = Step.of("Giving back", () -> ctx -> {
 				var inv = Client.player().getInventory();
 				Containers.View through = view != null ? view : origin;
+				// One from a container: what made room for it in the hotbar goes straight back, the box being out of that
+				// slot now, rather than waiting in your inventory (or the box's place) until the box is back.
+				if (own >= 0) {
+					boolean waits = parked >= 0 ? !inv.getItem(parked).isEmpty() : inPlace && through == origin;
+					if (!waits || from < 0 || through == null || !through.isOpen()) return unmasked();
+					// Placed through the off hand (air place), the hotbar slot shows empty only once the server says so.
+					if (!inv.getItem(from).isEmpty()) return ctx.ticks() > EMPTIED_TICKS ? unmasked() : Progress.running();
+					if (!Myriad.inventory().prepareClick()) return ctx.ticks() > GIVE_BACK_TICKS ? unmasked() : Progress.running();
+					if (parked >= 0) through.click(through.playerSlot(parked), from, ContainerInput.SWAP);
+					else through.swapWithHotbar(own, from);
+					parked = -1;
+					inPlace = false;
+					return unmasked();
+				}
 				if (index < 9 || through != null && !through.isOpen() || inv.getItem(index).isEmpty() && inv.getItem(from).isEmpty()) return Progress.done();
 				if (!Myriad.inventory().prepareClick()) return ctx.ticks() > GIVE_BACK_TICKS ? Progress.done() : Progress.running();
 				if (through != null) through.swapWithHotbar(through.playerSlot(index), from);
@@ -294,6 +313,12 @@ final class ItemBoxes {
 				.finallyDo(() -> {
 					if (placed && !out) finish();
 				});
+		}
+
+		/** Given back (or not to be): the hotbar slot shows what it holds again. */
+		private Progress<Void> unmasked() {
+			Myriad.inventory().unmask(this);
+			return Progress.done();
 		}
 
 		/** Whether it can go back somehow, its container out of reach: as noWayBack allows, or through another ender chest. */
@@ -351,6 +376,8 @@ final class ItemBoxes {
 			if (to >= 0 && Myriad.inventory().prepareClick()) {
 				int spare = inv.getItem(to).isEmpty() ? -1 : Myriad.inventory().findInInventory(ItemStack::isEmpty);
 				inPlace = spare < 0 && !inv.getItem(to).isEmpty();
+				// What makes room keeps showing in its hotbar slot while it waits (only a moment: see givenBack).
+				if (spare >= 0) Myriad.inventory().mask(this, MASK_MS, to, spare);
 				if (spare >= 0) origin.click(origin.playerSlot(spare), to, ContainerInput.SWAP);
 				origin.swapWithHotbar(own, to);
 				if (inv.getItem(to).is(box.getItem())) {
@@ -376,7 +403,8 @@ final class ItemBoxes {
 			public Progress<Containers.View> tick(JobContext ctx) {
 				BlockPos pos = spot.pos();
 				if (placing == null) {
-					Placement.Attempt a = Myriad.placement().place(ctx.job(), spot.click(), from, options.withSneak(spot.sneak()));
+					Placement.Attempt a = Myriad.placement().place(ctx.job(), spot.click(), from,
+						options.withSneak(spot.sneak()).withVisibleFaces(options.visibleFaces() && !spot.blind()));
 					if (!a.sent()) {
 						if (ctx.ticks() > PLACE_TICKS) return Progress.failed(Why.of(Why.TIMEOUT, "couldn't put it down", pos));
 						Why why = Why.of(a.check(), pos);
@@ -670,7 +698,8 @@ final class ItemBoxes {
 		private boolean spared;
 
 		BreakAll(List<Session> boxes) {
-			this.boxes = boxes;
+			// Lowest first: what an upper one drops then falls past where a lower one stood, not onto it.
+			this.boxes = boxes.stream().sorted(Comparator.comparingInt(b -> b.spot.pos().getY())).toList();
 		}
 
 		@Override
@@ -781,9 +810,11 @@ final class ItemBoxes {
 			AABB pickUp = p.getBoundingBox().inflate(1, 0.5, 1);
 			Comparator<ItemEntity> nearest = Comparator.comparingDouble(i -> i.distanceToSqr(p));
 			// Stepped to as soon as one can be picked up and you're not near enough to (a dropped block waits PICKUP_DELAY
-			// ticks, falling meanwhile), or the nearest once it's taken this long anyway.
-			ItemEntity to = lying.stream().filter(i -> i.getAge() >= PICKUP_DELAY && !pickUp.intersects(i.getBoundingBox())).min(nearest).orElse(null);
-			if (to == null && ctx.ticks() > WALK_AFTER_TICKS) to = lying.stream().min(nearest).orElse(null);
+			// ticks), or the nearest once it's taken this long anyway. Only once it's landed (or afloat): where a box still
+			// falling is, up in the air, is a goal Baritone searches itself out on till the time's up.
+			Predicate<ItemEntity> landed = i -> i.onGround() || i.isInWater();
+			ItemEntity to = lying.stream().filter(landed).filter(i -> i.getAge() >= PICKUP_DELAY && !pickUp.intersects(i.getBoundingBox())).min(nearest).orElse(null);
+			if (to == null && ctx.ticks() > WALK_AFTER_TICKS) to = lying.stream().filter(landed).min(nearest).orElse(null);
 			walker.to(to == null ? null : to.position());
 			return Progress.running();
 		}
@@ -969,8 +1000,11 @@ final class ItemBoxes {
 		return n;
 	}
 
-	/** Where a box goes and the click that puts it there, sneaking where the clicked block would open instead. */
-	private record Spot(BlockPos pos, BlockHitResult click, boolean sneak) {
+	/**
+	 * Where a box goes and the click that puts it there, sneaking where the clicked block would open instead; {@code blind}:
+	 * clicked on a face you can't see (one facing away from you, which a server that takes air placement takes too).
+	 */
+	private record Spot(BlockPos pos, BlockHitResult click, boolean sneak, boolean blind) {
 	}
 
 	private static @Nullable Spot spot(Placement.Options options, boolean ender) {
@@ -1003,55 +1037,111 @@ final class ItemBoxes {
 		// Straight above your eyes, so the look is straight up.
 		Vec3 eyes = p.getEyePosition();
 		double x = Math.clamp(eyes.x, pos.getX() + 0.05, pos.getX() + 0.95), z = Math.clamp(eyes.z, pos.getZ() + 0.05, pos.getZ() + 0.95);
-		if (options.airPlace() && level.getBlockState(pos).isAir()) return new Spot(pos, new BlockHitResult(new Vec3(x, pos.getY(), z), Direction.DOWN, pos, false), false);
+		if (options.airPlace() && level.getBlockState(pos).isAir()) return new Spot(pos, new BlockHitResult(new Vec3(x, pos.getY(), z), Direction.DOWN, pos, false), false, false);
 		if (ender || !overState.isFaceSturdy(level, over, Direction.DOWN) || BlockInfo.isClickable(overState)) return null;
-		return new Spot(pos, new BlockHitResult(new Vec3(x, over.getY(), z), Direction.DOWN, over, false), false);
+		return new Spot(pos, new BlockHitResult(new Vec3(x, over.getY(), z), Direction.DOWN, over, false), false, false);
 	}
 
 	/**
-	 * Around you, a free block clear of you, in reach and placeable, nearest the way you face first: beside your feet on
-	 * a floor (placed on its top, so a shulker box faces up and its lid opens into the block above), or with air
-	 * placement into the empty space itself, clicked on the face you see: beside your feet its top (facing up, as on a
-	 * floor), a block over your head its underside (facing down, its lid opening into the block below). Each ring is the eight blocks around you, so a box broken there falls within a block of you. An
-	 * ender chest opens under nothing solid.
+	 * Whether what a box at {@code pos} drops lands where you pick it up: down from it, onto something no lower than your
+	 * feet (not off a ledge, down a hole). Broken, its items pop out sideways, up to a block at your feet and a block and
+	 * a half as they fall from a ring above you, so the columns around it count too, one out or two: each walled off at
+	 * the box's height, or with a floor that high (a box at the edge of a mushroom cap would lose its drop over it).
+	 */
+	private static boolean landsNear(BlockPos pos) {
+		int out = pos.getY() > Client.player().getY() ? 2 : 1;
+		for (int dx = -out; dx <= out; dx++) {
+			for (int dz = -out; dz <= out; dz++) {
+				if (!landsOn(pos.offset(dx, 0, dz), dx == 0 && dz == 0)) return false;
+			}
+		}
+		return true;
+	}
+
+	/** Whether a drop drifting into the column at {@code at} (the box's own: from under it) stops no lower than your feet. */
+	private static boolean landsOn(BlockPos at, boolean own) {
+		Level level = Client.level();
+		double feet = Client.player().getY();
+		for (at = own ? at.below() : at; at.getY() >= feet - 2; at = at.below()) {
+			var shape = level.getBlockState(at).getCollisionShape(level, at);
+			if (!shape.isEmpty()) return at.getY() + shape.max(Direction.Axis.Y) >= feet - 0.5;
+		}
+		return false;
+	}
+
+	/**
+	 * Around you, a free block clear of you, in reach and placeable, nearest the way you face first. Without air
+	 * placement, beside your feet on a floor (placed on its top, so a shulker box faces up and its lid opens into the block
+	 * above). With it, see {@link #rings}. Only where what it drops lands within reach (landsNear).
 	 */
 	private static @Nullable Spot beside(Placement.Options options, boolean ender) {
+		if (options.airPlace()) return rings(options, ender);
 		LocalPlayer p = Client.player();
 		Level level = Client.level();
 		BlockPos feet = p.blockPosition();
 		Direction facing = p.getDirection();
 		Spot best = null;
 		double bestScore = Double.MAX_VALUE;
-		for (int dy : options.airPlace() ? new int[]{0, 2} : new int[]{0}) {
+		for (int dx = -1; dx <= 1; dx++) {
+			for (int dz = -1; dz <= 1; dz++) {
+				if (dx == 0 && dz == 0) continue;
+				BlockPos pos = feet.offset(dx, 0, dz), floor = pos.below(), above = pos.above();
+				if (!free(pos, options, ender)) continue;
+				if (!level.getBlockState(floor).isFaceSturdy(level, floor, Direction.UP)) continue;
+				if (!ender && !level.getBlockState(above).getCollisionShape(level, above).isEmpty()) continue;
+				double score = 2 * (dx * dx + dz * dz) - 0.5 * (dx * facing.getStepX() + dz * facing.getStepZ());
+				if (score >= bestScore) continue;
+				bestScore = score;
+				// Sneaking only where the floor would open or be used instead (a chest under it).
+				best = new Spot(pos, new BlockHitResult(Vec3.atCenterOf(floor).add(0, 0.5, 0), Direction.UP, floor, false), BlockInfo.isClickable(level.getBlockState(floor)), false);
+			}
+		}
+		return best;
+	}
+
+	/**
+	 * With air placement, the four rings of eight around you, at your feet and one, two and three blocks up, each box
+	 * facing out, its lid opening into the block beyond it (a corner's along x): 32 spots, with the one over your head 33,
+	 * an ender chest's worth of boxes. A server that takes air placement (2b2t) takes a face you can't see too, so each is
+	 * clicked on its outer face, looking through the box at it. The ring two up first, then three up, one up, and your
+	 * feet last: you're walled in only once the upper rings are full. Broken lowest first, what each drops falls down its
+	 * column beside you.
+	 */
+	private static @Nullable Spot rings(Placement.Options options, boolean ender) {
+		LocalPlayer p = Client.player();
+		Level level = Client.level();
+		BlockPos feet = p.blockPosition();
+		Direction facing = p.getDirection();
+		Spot best = null;
+		double bestScore = Double.MAX_VALUE;
+		for (int dy = 0; dy <= 3; dy++) {
 			for (int dx = -1; dx <= 1; dx++) {
 				for (int dz = -1; dz <= 1; dz++) {
 					if (dx == 0 && dz == 0) continue;
-					BlockPos pos = feet.offset(dx, dy, dz), floor = pos.below(), above = pos.above();
-					if (!level.getBlockState(pos).canBeReplaced() || p.getBoundingBox().intersects(new AABB(pos)) || !Reach.canReach(pos)) continue;
-					if (ender && level.getBlockState(above).isRedstoneConductor(level, above)) continue;
-					if (!Myriad.placement().check(pos, options).ok()) continue;
-					Spot spot = null;
-					boolean onFloor = dy == 0 && level.getBlockState(floor).isFaceSturdy(level, floor, Direction.UP);
-					if (onFloor && (ender || level.getBlockState(above).getCollisionShape(level, above).isEmpty())) {
-						// Sneaking only where the floor would open or be used instead (a chest under it).
-						spot = new Spot(pos, new BlockHitResult(Vec3.atCenterOf(floor).add(0, 0.5, 0), Direction.UP, floor, false), BlockInfo.isClickable(level.getBlockState(floor)));
-					} else if (options.airPlace() && level.getBlockState(pos).isAir()) {
-						// The face you see: its top beside your feet, its underside over your head; the lid opens away from it.
-						Direction face = dy == 0 ? Direction.UP : Direction.DOWN;
-						BlockPos lid = pos.relative(face);
-						if (ender || level.getBlockState(lid).getCollisionShape(level, lid).isEmpty())
-							spot = new Spot(pos, new BlockHitResult(Vec3.atCenterOf(pos).relative(face, 0.5), face, pos, false), false);
-					}
-					if (spot == null) continue;
-					// The ring at your feet first, a floor before air placement.
-					double score = (dx * dx + dz * dz) - 0.5 * (dx * facing.getStepX() + dz * facing.getStepZ()) + (dy > 0 ? 2 : 0) + (onFloor ? 0 : 0.5);
-					if (score < bestScore) {
-						bestScore = score;
-						best = spot;
-					}
+					BlockPos pos = feet.offset(dx, dy, dz);
+					if (!level.getBlockState(pos).isAir() || !free(pos, options, ender)) continue;
+					Direction face = dx > 0 ? Direction.EAST : dx < 0 ? Direction.WEST : dz > 0 ? Direction.SOUTH : Direction.NORTH;
+					BlockPos lid = pos.relative(face);
+					if (!ender && !level.getBlockState(lid).getCollisionShape(level, lid).isEmpty()) continue;
+					double score = 2 * (dx * dx + dz * dz) - 0.5 * (dx * facing.getStepX() + dz * facing.getStepZ()) + RING_ORDER[dy];
+					if (score >= bestScore) continue;
+					bestScore = score;
+					best = new Spot(pos, new BlockHitResult(Vec3.atCenterOf(pos).relative(face, 0.5), face, pos, false), false, true);
 				}
 			}
 		}
 		return best;
+	}
+
+	/** How far back each ring (by height above your feet) comes: two up first, your feet last. */
+	private static final double[] RING_ORDER = {12, 8, 0, 4};
+
+	/** Whether {@code pos} can take a box: replaceable, clear of you, in reach, placeable, and its drops land within reach. */
+	private static boolean free(BlockPos pos, Placement.Options options, boolean ender) {
+		Level level = Client.level();
+		if (!level.getBlockState(pos).canBeReplaced() || Client.player().getBoundingBox().intersects(new AABB(pos)) || !Reach.canReach(pos)) return false;
+		BlockPos above = pos.above();
+		if (ender && level.getBlockState(above).isRedstoneConductor(level, above)) return false;
+		return Myriad.placement().check(pos, options).ok() && landsNear(pos);
 	}
 }

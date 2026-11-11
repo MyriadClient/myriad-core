@@ -26,8 +26,18 @@ public interface PacketLimits {
 		INVENTORY
 	}
 
-	/** Whether {@code packets} more of {@code kind} fit in the budget right now (always true inside {@link #urgent}). */
+	/**
+	 * Whether {@code packets} more of {@code kind} fit in the budget right now. Inside {@link #urgent} always, except
+	 * inventory clicks past what gets you disconnected (2b2t drops you on the 80th click in about 4 seconds).
+	 */
 	boolean canSend(Kind kind, int packets);
+
+	/**
+	 * Counts {@code packets} of {@code kind} you sent past where core counts them: inventory clicks are counted in the
+	 * game's click handler, so clicks you send as packets yourself need this, or the budget doesn't know about them.
+	 */
+	@ApiStatus.AvailableSince("1.8")
+	void count(Kind kind, int packets);
 
 	/** Packets of {@code kind} sent in the current window. */
 	int used(Kind kind);
@@ -38,6 +48,9 @@ public interface PacketLimits {
 	/** The length of the window {@code kind}'s budget counts over, in milliseconds. */
 	int windowMs(Kind kind);
 
-	/** Runs {@code action} with the budget ignored, for actions that matter more than the risk. Packets still count. */
+	/**
+	 * Runs {@code action} with the budget ignored, for actions that matter more than the risk. Packets still count, and
+	 * inventory clicks still stop short of a disconnect (see {@link #canSend}).
+	 */
 	void urgent(Runnable action);
 }

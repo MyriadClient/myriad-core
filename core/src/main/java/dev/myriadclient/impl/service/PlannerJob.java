@@ -21,7 +21,8 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * After each tick's clicks it waits a round trip before the next: a server that answers every click (2b2t) sends the
  * whole menu back after each one of a burst, a few clicks behind, and a click planned on that view would act on slots
- * that aren't what it shows. The click budget spaces bursts about that far apart anyway, so it costs no speed.
+ * that aren't what it shows. A plan within the click budget goes in one tick, so this only spaces the bursts of longer
+ * ones, which the budget holds back anyway.
  */
 final class PlannerJob implements MenuJob {
 	private static final int ROUNDS = 3;

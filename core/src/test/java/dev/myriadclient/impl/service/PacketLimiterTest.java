@@ -38,6 +38,24 @@ class PacketLimiterTest {
 	}
 
 	@Test
+	void clicksBurstUnder2b2tsLimit() {
+		// 2b2t drops you on the 80th click within about 4 s: a whole sort goes at once, over a longer window than 2b2t's.
+		PacketLimiter l = new PacketLimiter();
+		assertTrue(l.limit(Kind.INVENTORY) >= 64 && l.limit(Kind.INVENTORY) < 80);
+		assertTrue(l.windowMs(Kind.INVENTORY) > 4000);
+		assertTrue(l.canSend(Kind.INVENTORY, l.limit(Kind.INVENTORY)));
+	}
+
+	@Test
+	void urgentClicksStopShortOfADisconnect() {
+		PacketLimiter l = new PacketLimiter();
+		for (int i = 0; i < 78; i++) l.record(Kind.INVENTORY);
+		AtomicBoolean allowed = new AtomicBoolean(true);
+		l.urgent(() -> allowed.set(l.canSend(Kind.INVENTORY, 1)));
+		assertFalse(allowed.get());
+	}
+
+	@Test
 	void urgentActionsIgnoreTheBudgetButStillCount() {
 		PacketLimiter l = new PacketLimiter();
 		for (int i = 0; i < l.limit(Kind.INVENTORY); i++) l.record(Kind.INVENTORY);

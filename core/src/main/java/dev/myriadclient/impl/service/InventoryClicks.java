@@ -14,6 +14,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.IdentityHashMap;
@@ -161,11 +162,14 @@ final class InventoryClicks {
 	boolean move(int from, int to) {
 		if (!valid(from) || !valid(to)) return false;
 		if (from == to) return true;
-		if (!answered(from, to) || !canClick(3)) return false;
+		if (!answered(from, to)) return false;
+		// One click for a swap with the hotbar or a shift click into an empty armour slot; three otherwise.
+		boolean armour = to >= Slots.FEET && to <= Slots.HEAD && from < Slots.MAIN_END && quickMovesTo(from, to);
+		if (!canClick(Slots.isHotbar(to) || Slots.isHotbar(from) || armour ? 1 : 3)) return false;
 		if (Slots.isHotbar(to)) return clickSwap(from, to);
 		if (Slots.isHotbar(from)) return clickSwap(to, from);
 		// Armour into its own empty slot: a shift click puts it there.
-		if (to >= Slots.FEET && to <= Slots.HEAD && from < Slots.MAIN_END && quickMovesTo(from, to)) {
+		if (armour) {
 			click(from, 0, ContainerInput.QUICK_MOVE);
 			return true;
 		}
@@ -214,7 +218,11 @@ final class InventoryClicks {
 	}
 
 	boolean swapWithOffhand(int inventoryIndex) {
-		if (mc.player == null || !valid(inventoryIndex) || inventoryIndex == Slots.OFF_HAND || !answered(inventoryIndex, Slots.OFF_HAND)) return false;
+		if (mc.player == null || !valid(inventoryIndex) || inventoryIndex == Slots.OFF_HAND || !answered(inventoryIndex)) return false;
+		// A totem going in needn't wait for the off hand's last click to be answered (a second pop right after the first):
+		// what the server has there that the client doesn't show yet can only be the totem put in, or nothing, so the swap
+		// at worst trades a totem for a totem. Anything else waits.
+		if (!mc.player.getInventory().getItem(inventoryIndex).is(Items.TOTEM_OF_UNDYING) && !answered(Slots.OFF_HAND)) return false;
 		// From the hotbar while a click would have to wait: the swap-hands key with that slot held, which isn't a click.
 		// Not after an attack or use this tick, which Grim (PacketOrderG) cancels it after.
 		if (Slots.isHotbar(inventoryIndex) && !gate.safeToClick() && !inventory.actedThisTick() && mc.getConnection() != null && !mc.player.isSpectator()) {
@@ -249,6 +257,39 @@ final class InventoryClicks {
 	boolean quickMove(int inventoryIndex) {
 		if (!valid(inventoryIndex) || !answered(inventoryIndex) || !canClick(1)) return false;
 		click(inventoryIndex, 0, ContainerInput.QUICK_MOVE);
+		return true;
+	}
+
+	/**
+	 * Fills the stack at {@code index} with a double click: picked up, gathered (PICKUP_ALL on the slot it left), put
+	 * back. The double click takes every stack of the item short of full first, in the menu's order (main inventory,
+	 * hotbar, off hand), then from full ones: so only with none short of full in the hotbar or the off hand, and enough in
+	 * the main inventory to fill it before it would reach them. Not in a held container's menu, whose own slots it would
+	 * gather from.
+	 */
+	boolean gather(int index) {
+		if (mc.player == null || index < 0 || index >= Slots.MAIN_END || heldMenu() != null) return false;
+		var inv = mc.player.getInventory();
+		ItemStack stack = inv.getItem(index);
+		int max = stack.getMaxStackSize();
+		if (stack.isEmpty() || !stack.isStackable() || stack.getCount() >= max) return false;
+		int main = 0;
+		for (int i = 0; i < Slots.MAIN_END; i++) {
+			ItemStack s = inv.getItem(i);
+			if (i == index || !ItemStack.isSameItemSameComponents(s, stack)) continue;
+			if (Slots.isHotbar(i)) {
+				if (s.getCount() < max) return false;
+				continue;
+			}
+			if (!inventory.settled(i)) return false;
+			main += s.getCount();
+		}
+		ItemStack off = inv.getItem(Slots.OFF_HAND);
+		if (ItemStack.isSameItemSameComponents(off, stack) && off.getCount() < max) return false;
+		if (main < max - stack.getCount() || !answered(index) || !canClick(3)) return false;
+		click(index, 0, ContainerInput.PICKUP);
+		click(index, 0, ContainerInput.PICKUP_ALL);
+		click(index, 0, ContainerInput.PICKUP);
 		return true;
 	}
 

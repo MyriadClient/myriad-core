@@ -386,11 +386,18 @@ abstract class FlightEngine implements Flight, Elytra.Pilot, NoDurability.Owner 
 		return p.getY() - mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, p.getBlockX(), p.getBlockZ());
 	}
 
-	/** Whether every chunk within {@code distance} blocks along {@code dir} has loaded. */
+	/**
+	 * Whether every chunk within {@code distance} blocks along {@code dir} has loaded, as far as the server sends them:
+	 * nothing past its view distance can have (less a chunk, the edge it's sending as you fly), so asking further would
+	 * never be true. 2b2t's is shorter than four seconds of Altitude's cruise, and it slowed down for that forever.
+	 */
 	protected boolean loadedAhead(Vec3 dir, double distance) {
 		var p = mc.player;
+		int cx0 = p.getBlockX() >> 4, cz0 = p.getBlockZ() >> 4, reach = Math.max(1, mc.options.getEffectiveRenderDistance() - 1);
 		for (double d = 0; d <= distance; d += 8) {
-			if (!mc.level.getChunkSource().hasChunk(Mth.floor(p.getX() + dir.x * d) >> 4, Mth.floor(p.getZ() + dir.z * d) >> 4)) return false;
+			int cx = Mth.floor(p.getX() + dir.x * d) >> 4, cz = Mth.floor(p.getZ() + dir.z * d) >> 4;
+			if (Math.max(Math.abs(cx - cx0), Math.abs(cz - cz0)) > reach) break;
+			if (!mc.level.getChunkSource().hasChunk(cx, cz)) return false;
 		}
 		return true;
 	}

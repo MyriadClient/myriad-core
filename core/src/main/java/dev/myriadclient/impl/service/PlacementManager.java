@@ -555,7 +555,8 @@ public final class PlacementManager implements Placement {
 				continue;
 			}
 			if (!handsFree(q.slot) || airClick(q.target(), q.pos) && !airReady(q.slot)) continue;
-			PlacementAim.Aim look = aims.lookHit(yaw, pitch, q.target().getBlockPos(), q.target().getDirection(), q.options.range());
+			PlacementAim.Aim look = aims.lookHit(yaw, pitch, q.target().getBlockPos(), q.target().getDirection(), q.options.range(),
+				!q.options.visibleFaces());
 			if (look == null) continue;
 			it.remove();
 			// The world may have changed while it waited: the click still has to put the block where it was meant to go.

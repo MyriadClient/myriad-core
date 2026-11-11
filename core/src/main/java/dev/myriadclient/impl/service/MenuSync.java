@@ -26,8 +26,8 @@ import java.util.concurrent.TimeoutException;
  * <p>
  * The ask is one click that changes nothing (outside the window with an empty cursor), carrying a state id the server
  * doesn't have; it answers any such click with the whole menu. Its packets arrive in the order it sent them, so once
- * that answer is in, and a tick has passed with nothing newer, the client holds what the server has after every click
- * made before it. Like any click it waits for a tick the server takes one on.
+ * that answer is in, and a tick has passed with nothing newer (two while whole menus stream in, see {@link #STREAM_QUIET}),
+ * the client holds what the server has after every click made before it. Like any click it waits for a tick the server takes one on.
  */
 public final class MenuSync {
 	/** Servers before 1.17 (through ViaFabricPlus) have no state ids to ask with. */
@@ -37,12 +37,19 @@ public final class MenuSync {
 	/** Ticks the cursor may hold something before giving up: the ask would throw it out. */
 	private static final int WAIT_FOR_CURSOR = 100;
 	private static final int ATTEMPTS = 2;
+	/**
+	 * Extra quiet ticks before trusting the answer when whole menus are streaming in (a server answering every click,
+	 * as 2b2t does): a burst's dozens of answers can arrive over more than a tick, and the first lot isn't the last.
+	 */
+	private static final int STREAM_QUIET = 1;
 
 	private static final class Request {
 		final AbstractContainerMenu menu;
 		final CompletableFuture<Void> done = new CompletableFuture<>();
 		boolean sent;
 		int waited, attempts;
+		/** Whole menus received since the ask went out: more than one, the server is answering every click. */
+		int answers;
 		long sentAt, answeredAt = -1;
 
 		Request(AbstractContainerMenu menu) {
@@ -67,9 +74,19 @@ public final class MenuSync {
 		return r.done;
 	}
 
+	/** Whether an ask for {@code menu}'s contents is waiting to go out or for its answer. */
+	public boolean asking(AbstractContainerMenu menu) {
+		for (Request r : requests) if (r.menu == menu) return true;
+		return false;
+	}
+
 	/** The server sent a menu's whole contents (from ClientPlayNetworkHandlerMixin, after vanilla applied them). */
 	public void onContents(int containerId) {
-		for (Request r : requests) if (r.sent && r.menu.containerId == containerId) r.answeredAt = Ticks.current();
+		for (Request r : requests) {
+			if (!r.sent || r.menu.containerId != containerId) continue;
+			r.answeredAt = Ticks.current();
+			r.answers++;
+		}
 	}
 
 	/** Early, with the other inventory work, before modules click. */
@@ -80,7 +97,7 @@ public final class MenuSync {
 			if (mc.player == null || mc.gameMode == null || mc.player.containerMenu != r.menu) {
 				finish(r, new IllegalStateException("The menu closed"));
 			} else if (r.sent) {
-				if (r.answeredAt >= 0 && Ticks.current() > r.answeredAt) finish(r, null);
+				if (r.answeredAt >= 0 && Ticks.current() > r.answeredAt + (r.answers > 1 ? STREAM_QUIET : 0)) finish(r, null);
 				else if (r.answeredAt < 0 && Ticks.since(r.sentAt) > timeoutTicks()) {
 					if (r.attempts < ATTEMPTS) r.sent = false;
 					else finish(r, new TimeoutException("The server didn't send the menu"));
@@ -114,6 +131,7 @@ public final class MenuSync {
 		r.attempts++;
 		r.sentAt = Ticks.current();
 		r.answeredAt = -1;
+		r.answers = 0;
 	}
 
 	private void finish(Request r, Throwable failure) {

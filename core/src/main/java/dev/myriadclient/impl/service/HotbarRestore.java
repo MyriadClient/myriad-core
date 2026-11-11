@@ -13,13 +13,13 @@ import java.util.BitSet;
 /**
  * Puts the hotbar back the way it was before a build moved materials in: the build remembers what every inventory slot
  * held when it first moved something ({@link #begin}), and once it ends ({@link #finish}) each hotbar slot it used gets
- * its item back, one click a tick at moments the server takes clicks, and what it brought in goes back to the slot it
+ * its item back, one click each, all in one tick at a moment the server takes clicks, and what it brought in goes back to the slot it
  * came from where that's free. Worked out from where things are at the end rather than by undoing each move, since a
  * block moved aside is often brought back into another slot later, which an undo list can't follow.
  */
 final class HotbarRestore {
 	/** Ticks a restore waits for a moment you aren't moving before releasing your keys for one. */
-	private static final int WAIT_FOR_STILL = 40;
+	private static final int WAIT_FOR_STILL = 10;
 	/** Ticks a restore keeps trying before giving up (a slot whose item is gone is skipped at once). */
 	private static final int GIVE_UP_TICKS = 600;
 
@@ -74,8 +74,11 @@ final class HotbarRestore {
 			done();
 			return;
 		}
+		// Only from your own inventory screen (or none), within the click budget, at a moment the server takes clicks. Not
+		// while an air placement's block is in the off hand: the slot the hotbar shows isn't what it holds until it's back.
+		if (mc.player.containerMenu != mc.player.inventoryMenu || inventory.undoPending() || inventory.restorePending()) return;
 		var inv = mc.player.getInventory();
-		int slot = -1, from = -1;
+		boolean left = false, clicked = false;
 		for (int s = used.nextSetBit(0); s >= 0; s = used.nextSetBit(s + 1)) {
 			if (same(inv.getItem(s), before[s])) {
 				used.clear(s);
@@ -89,23 +92,16 @@ final class HotbarRestore {
 				used.clear(s);
 				continue;
 			}
-			slot = s;
-			from = m;
-			break;
+			left = true;
+			// Every slot whose pair is free in this tick: both slots' last change (and the hotbar slot's last use)
+			// answered, so a slot swapped just now waits (a click on an old view would disagree with the server).
+			if (!inFlight.swappable(s) || !inFlight.settled(m)) continue;
+			if (!clicked && !gate.safeToClick() && !(++waited > WAIT_FOR_STILL && gate.prepareClick())) return;
+			if (!clicks.canClick(1)) return;
+			clicks.clickSwap(m, s);
+			clicked = true;
 		}
-		if (slot < 0) {
-			done();
-			return;
-		}
-		// Only from your own inventory screen (or none), within the click budget, at a moment the server takes clicks.
-		// Both slots' last change (and the hotbar slot's last use) answered first: a click on an old view would disagree
-		// with the server. Not while
-		// an air placement's block is in the off hand: the slot the hotbar shows isn't what it holds until it's back.
-		if (mc.player.containerMenu != mc.player.inventoryMenu || !inFlight.swappable(slot) || !inFlight.settled(from) || inventory.undoPending()
-			|| inventory.restorePending()) return;
-		if (!gate.safeToClick() && !(++waited > WAIT_FOR_STILL && gate.prepareClick())) return;
-		if (!clicks.canClick(1)) return;
-		clicks.clickSwap(from, slot);
+		if (!left) done();
 	}
 
 	/**

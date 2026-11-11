@@ -712,6 +712,11 @@ public final class InventoryManager implements Inventory {
 	}
 
 	@Override
+	public boolean gather(int inventoryIndex) {
+		return clicks.gather(inventoryIndex);
+	}
+
+	@Override
 	public boolean drop(int inventoryIndex, boolean wholeStack) {
 		return clicks.drop(inventoryIndex, wholeStack);
 	}

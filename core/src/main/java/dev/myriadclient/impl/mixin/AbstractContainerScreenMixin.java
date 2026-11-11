@@ -146,4 +146,10 @@ public abstract class AbstractContainerScreenMixin {
 		if (MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory
 			&& inventory.holdScreenClick(((AbstractContainerScreen<?>) (Object) this).getMenu().containerId, id, button, input)) ci.cancel();
 	}
+
+	/** Your click went to the server: what it made stays on screen while answers to older ones arrive (HandClicks). */
+	@Inject(method = "slotClicked", at = @At("TAIL"))
+	private void myriad$clicked(Slot slot, int slotId, int button, ContainerInput input, CallbackInfo ci) {
+		if (Myriad.isReady() && MyriadImpl.get() != null) MyriadImpl.get().handClicks().clicked(((AbstractContainerScreen<?>) (Object) this).getMenu());
+	}
 }

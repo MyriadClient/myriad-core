@@ -17,7 +17,7 @@ import java.util.function.Predicate;
 
 /**
  * Items borrowed from the inventory into the hotbar ({@link InventoryManager#borrow}), and put back once nothing wants
- * them: one click a tick, at a moment the server takes it.
+ * them: one click each, all in one tick, at a moment the server takes it.
  */
 final class Borrows {
 	/** An item borrowed from {@code home} (9-35) into hotbar slot {@code slot}, to go back once it's no longer wanted. */
@@ -43,7 +43,7 @@ final class Borrows {
 	/** A borrowed item goes back once nothing has wanted it for this long. */
 	private static final int KEEP_TICKS = 10;
 	/** Ticks a return waits for a moment you aren't moving before releasing your keys for one. */
-	private static final int WAIT_FOR_STILL = 40;
+	private static final int WAIT_FOR_STILL = 10;
 	/**
 	 * Ticks the items may look out of place before a borrow is forgotten: an inventory update the server sent before it
 	 * had the borrowing click can arrive after it, showing the old places until the next one.
@@ -122,8 +122,8 @@ final class Borrows {
 	}
 
 	/**
-	 * Puts back borrowed items nothing wants any more, one click a tick. A borrow stays while the server holds its slot
-	 * (a hold, or a silent swap) or you're using it; one whose items have moved is forgotten where it is.
+	 * Puts back borrowed items nothing wants any more, one click each, all in one tick. A borrow stays while the server
+	 * holds its slot (a hold, or a silent swap) or you're using it; one whose items have moved is forgotten where it is.
 	 */
 	@Subscribe(priority = 940)
 	private void tick(TickEvent.Pre e) {
@@ -154,8 +154,8 @@ final class Borrows {
 			if (selected == b.slot && b.selectedBefore != b.slot) inventory.select(b.selectedBefore);
 			if (inContainer && !clicks.swapIn(menu, b.home, b.slot)) continue;
 			if (!inContainer) clicks.clickSwap(b.home, b.slot);
+			// The rest in this tick too: a borrow sharing a slot with this one waits (its slot isn't settled now).
 			borrows.remove(b);
-			return;
 		}
 	}
 

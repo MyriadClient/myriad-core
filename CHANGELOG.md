@@ -16,6 +16,32 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.8.0
+
+- **Inventory work goes at the speed the server really allows.** The click budget now follows what 2b2t was measured to
+  do: it drops you on the 80th click within about 4 seconds, and 79 pass. Core allows 72 in any 5 seconds, so a sort, a
+  refill or a move of up to 72 clicks goes in one tick, and a long run settles at about 14 a second. Urgent clicks may go
+  past the 72 but never to the 80th.
+- **Your own clicks stay on screen.** A server that answers every click with the whole menu (2b2t) sent, with lag, menus
+  older than your latest click, so a stack jumped back onto the cursor or seemed not to move. Answers now wait a round
+  trip behind what you did, and if they still disagree after that the server is asked for the whole menu.
+- **Fewer clicks, less waiting.** The sort gathers with a double click where that's safe. Putting things back in the
+  hotbar and returning borrowed items is done for every free slot in one tick, after a shorter wait. Builds of more kinds
+  than the hotbar holds bring in several stacks a tick.
+- **Boxes with Air Place: 33 spots.** Four rings of eight around you and one over your head, each box facing outward so
+  it still opens. Without Air Place nothing changes.
+- **Boxes come back.** Boxes go back lowest first, so what an upper one drops doesn't land on a lower one. A spot is only
+  used if what it drops will stay within reach, so a box near the edge of a mushroom cap or a ledge isn't put where its
+  drop goes over the side. A drop that lands a couple of blocks away is now walked to; the walk used to aim at it while it
+  was still in the air and run out of time.
+- **The hotbar stays put while a box goes down.** What made room for a box keeps showing in its slot, and goes back only
+  once the box is really out of that slot.
+- **A second totem pop right after the first** no longer waits for the off hand's last click to be answered.
+- **Altitude's cruise no longer slows for chunks that can't arrive.** It only asks for chunks within the server's view
+  distance.
+- New API: `Containers.finishAll` puts several boxes back together, `Inventory.gather` fills a stack with a double click,
+  and `PacketLimits.count` counts clicks you sent as packets yourself.
+
 ## 1.7.2
 
 - **Putting a box back no longer closes a held ender chest.** With an ender chest held open (Essentials' Remote Ender

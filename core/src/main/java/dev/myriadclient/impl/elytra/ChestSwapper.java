@@ -231,8 +231,8 @@ final class ChestSwapper {
 		if (to < 0) return ChestSwap.Need.NO_ROOM;
 		if (now - lastFetchMs < FETCH_GAP_MS) return ChestSwap.Need.WAITING;
 		if (mayStop ? !Myriad.inventory().prepareClick() : !Myriad.inventory().safeToClick() || p.isSprinting()) return ChestSwap.Need.WAITING;
-		Myriad.inventory().move(from, to);
-		lastFetchMs = now;
+		// The gap only after a fetch that went (one refused, its slots unanswered or the budget spent, tries next tick).
+		if (Myriad.inventory().move(from, to)) lastFetchMs = now;
 		return ChestSwap.Need.WAITING;
 	}
 

@@ -265,6 +265,11 @@ final class ServiceRouters {
 		}
 
 		@Override
+		public boolean gather(int inventoryIndex) {
+			return all().gather(inventoryIndex);
+		}
+
+		@Override
 		public boolean drop(int inventoryIndex, boolean wholeStack) {
 			return all().drop(inventoryIndex, wholeStack);
 		}

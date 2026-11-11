@@ -116,6 +116,14 @@ public interface Containers {
 	CompletableFuture<ItemSession> putDownItem(Object owner, View from, int screenSlot, int ticks, Placement.Options options);
 
 	/**
+	 * Puts {@code boxes} back together, as the swap bar does once you close a screen: broken one after another (the
+	 * lowest first), picked up as they fall, then each container they came from opened once for all of its own. Completes
+	 * once they're back (each as {@link ItemSession#finish()} would leave it).
+	 */
+	@ApiStatus.AvailableSince("1.8")
+	CompletableFuture<Void> finishAll(List<ItemSession> boxes);
+
+	/**
 	 * A shulker box or ender chest from your inventory, placed and open ({@link #openItem}). Put it back with
 	 * {@link #finish()} when you're done, whatever happened.
 	 */
