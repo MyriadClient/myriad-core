@@ -9,6 +9,7 @@ import dev.myriadclient.api.addon.Addon;
 import dev.myriadclient.api.input.KeyAction;
 import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.setting.KeybindSetting;
 import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.WidgetPanel;
@@ -40,7 +41,7 @@ import java.util.function.Supplier;
 /**
  * Every binding in one place, to set them all from here: Global (Minecraft's own controls, other mods' included, saved
  * to its options), Myriad (its actions, the menu's shortcuts, core's modules and the wheels) and one section per addon
- * (its actions and modules). The search at the top filters by name; a section's name shows all of it, and a key's name
+ * (its actions and modules, each module's other binds after its own). The search at the top filters by name; a section's name shows all of it, and a key's name
  * shows what's bound to it.
  */
 public final class KeybindsPanel extends WidgetPanel {
@@ -146,6 +147,12 @@ public final class KeybindsPanel extends WidgetPanel {
 			if (!addon.equals(Myriad.modules().ownerOf(m))) continue;
 			if (modules == null) modules = into.child("Modules");
 			modules.row(m.name(), m.keybind::get, m.keybind::set);
+			// Its other binds (a swap, a hold-for), named for it, shown while its settings show them.
+			for (Setting<?> setting : m.settings.all()) {
+				if (setting instanceof KeybindSetting bind && bind != m.keybind) {
+					modules.row(m.name() + " · " + bind.name(), bind::get, bind::set, bind::isVisible);
+				}
+			}
 		}
 	}
 
@@ -189,9 +196,14 @@ public final class KeybindsPanel extends WidgetPanel {
 		}
 
 		void row(String name, Supplier<Keybind> get, Consumer<Keybind> set) {
+			row(name, get, set, () -> true);
+		}
+
+		/** A bind's row, shown only while {@code available} says (a module's bind for an option that's off isn't). */
+		void row(String name, Supplier<Keybind> get, Consumer<Keybind> set, Supplier<Boolean> available) {
 			String lower = name.toLowerCase(Locale.ROOT);
-			Supplier<Boolean> visible = () -> query.isEmpty() || titleMatches() || lower.contains(query)
-				|| get.get().displayName().toLowerCase(Locale.ROOT).equals(query);
+			Supplier<Boolean> visible = () -> available.get() && (query.isEmpty() || titleMatches() || lower.contains(query)
+				|| get.get().displayName().toLowerCase(Locale.ROOT).equals(query));
 			HBox row = new HBox(4);
 			row.addWeighted(new Label(name), 1);
 			row.addFixed(new KeybindButton(get, set), 90);

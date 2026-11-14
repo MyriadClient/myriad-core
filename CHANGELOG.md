@@ -17,12 +17,25 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
-## Unreleased
+## 2.1.0
+
+### Fixes
+
+- **A block placed with a turned look shows the right way at once.** The game guessed how a block comes out (a piston's
+  facing, a stair's) from your own look, while the server places it by the rotation it was sent: a block a module placed
+  facing elsewhere (Essentials' Placement Tweaks, Printer, Scaffold) showed your way first and turned when the answer came.
+
+### Keybinds
+
+- The Keybinds window lists each module's other binds under its own (Auto Armor's Swap Bind, a hold-for bind), named for
+  the module, so they can be set from there too. A bind shows while the option it belongs to is on.
 
 ### For addon developers
 
 - The addon plugin fills in `${version}` in the in-game tests' `fabric.mod.json` (`src/gametest/resources`) as it does
   in the addon's: it stayed as written.
+
+No API changes.
 
 ## 2.0.1
 

@@ -23,6 +23,7 @@ import dev.myriadclient.impl.network.BlockAckTracker;
 import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPunchPacket;
@@ -413,8 +414,36 @@ public final class PlacementManager implements Placement {
 	 * clicked block would act on a plain click; other clicks need no sneak, so they don't send its input packets.
 	 */
 	private void sneaking(Options o, BlockHitResult target, Runnable click) {
-		if (o.sneak() && mc.level != null && BlockInfo.isClickable(mc.level.getBlockState(target.getBlockPos()))) SneakClick.during(click);
-		else click.run();
+		Runnable seen = () -> asServerSees(click);
+		if (o.sneak() && mc.level != null && BlockInfo.isClickable(mc.level.getBlockState(target.getBlockPos()))) SneakClick.during(seen);
+		else seen.run();
+	}
+
+	/**
+	 * Runs {@code click} with your look set to the one the server has for you, then puts yours back. The game guesses
+	 * how the block comes out from your look (a piston's facing, a stair's) and the server places it by the rotation it
+	 * was sent: with a turned look the block showed your way first and then turned when the server's answer came.
+	 */
+	private void asServerSees(Runnable click) {
+		LocalPlayer p = mc.player;
+		float yaw = p.getYRot(), pitch = p.getXRot(), yawO = p.yRotO, pitchO = p.xRotO;
+		float serverYaw = Myriad.rotations().serverYaw(), serverPitch = Myriad.rotations().serverPitch();
+		if (yaw == serverYaw && pitch == serverPitch) {
+			click.run();
+			return;
+		}
+		p.setYRot(serverYaw);
+		p.setXRot(serverPitch);
+		p.yRotO = serverYaw;
+		p.xRotO = serverPitch;
+		try {
+			click.run();
+		} finally {
+			p.setYRot(yaw);
+			p.setXRot(pitch);
+			p.yRotO = yawO;
+			p.xRotO = pitchO;
+		}
 	}
 
 	/** When a module last placed a sign: the editor the server opens for it is kept closed for a moment. */
