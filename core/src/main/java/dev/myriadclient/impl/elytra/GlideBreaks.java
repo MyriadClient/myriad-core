@@ -94,9 +94,8 @@ final class GlideBreaks {
 	/** Network thread: the server says it isn't gliding you, which a break that took shows. */
 	@Subscribe(packets = ClientboundSetEntityDataPacket.class)
 	private void onEntityData(PacketEvent.Receive e) {
-		var p = mc.player;
 		var data = (ClientboundSetEntityDataPacket) e.packet();
-		if (p == null || data.id() != p.getId()) return;
+		if (!GlideHolder.aboutOwnPlayer(data)) return;
 		for (var value : data.packedItems()) {
 			if (value.id() == 0 && value.value() instanceof Byte flags && (flags & GLIDING_BIT) == 0) stopSeen = true;
 		}

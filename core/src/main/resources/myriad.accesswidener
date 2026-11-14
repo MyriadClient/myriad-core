@@ -32,3 +32,5 @@ accessible class net/minecraft/client/renderer/rendertype/RenderSetup$TextureBin
 accessible method net/minecraft/client/renderer/rendertype/RenderSetup$TextureBinding location ()Lnet/minecraft/resources/Identifier;
 accessible field net/minecraft/client/gui/render/pip/PictureInPictureRenderer textureView Lcom/mojang/renderpearl/api/textures/GpuTextureView;
 accessible field net/minecraft/client/renderer/GameRenderer gameRenderState Lnet/minecraft/client/renderer/state/GameRenderState;
+accessible field net/minecraft/client/renderer/RenderPipelines OUTLINE_SNIPPET Lcom/mojang/renderpearl/api/pipeline/RenderPipeline$Snippet;
+accessible field net/minecraft/world/entity/Entity id I

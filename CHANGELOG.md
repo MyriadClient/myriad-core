@@ -17,6 +17,22 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.0.1
+
+### Fixes
+
+- **No crash beside another mod's entity outlines.** 2.0.0 gave vanilla's entity outline pipelines a depth test for
+  highlights, so a mod that draws with them in a pass of its own without a depth buffer crashed the game ("wants a depth
+  texture but none was provided"). Vanilla's pipelines are left as they are; highlights use depth-tested copies in
+  Myriad's own outline passes and look the same. Thanks to a user report, which came with the fix.
+- **Options and Quit fit on Minecraft's title screen again** (Themed Screens off) in a small window, such as the one a
+  Mac opens: Myriad's button is an icon beside the friends, language and accessibility ones instead of a row of its
+  own that pushed them off the bottom.
+- Joining or respawning no longer logs an error from the glide check, which asked the player for an id the server
+  hadn't given it yet.
+
+No API changes.
+
 ## 2.0.0
 
 **For Minecraft 26.3, with the API put in order.** 2.0 runs on Minecraft 26.3; 1.8.1 stays for 26.2 (the update check

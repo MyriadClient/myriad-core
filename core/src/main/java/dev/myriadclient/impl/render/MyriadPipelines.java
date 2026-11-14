@@ -49,6 +49,42 @@ public final class MyriadPipelines {
 		.withCull(false)
 		.build());
 
+	/**
+	 * Vanilla's entity outline pipelines with the standard depth test, for the outline passes Myriad gives a depth buffer:
+	 * highlights need the nearest silhouette per pixel and its depth (to tell what the world hides). Vanilla's own are left
+	 * as vanilla builds them, without depth: another mod draws with them into a pass that has no depth attachment, and a
+	 * depth-testing pipeline there crashes the Vulkan backend.
+	 */
+	public static final RenderPipeline OUTLINE_CULL_DEPTH = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.OUTLINE_SNIPPET)
+		.withLocation(id("pipeline/outline_cull_depth"))
+		.withDepthStencilState(DepthStencilState.DEFAULT)
+		.build());
+	public static final RenderPipeline OUTLINE_NO_CULL_DEPTH = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.OUTLINE_SNIPPET)
+		.withLocation(id("pipeline/outline_no_cull_depth"))
+		.withCull(false)
+		.withDepthStencilState(DepthStencilState.DEFAULT)
+		.build());
+	/** How many of Myriad's depth-buffered outline passes are being drawn (render thread only). */
+	private static int outlineDepthPasses;
+
+	/** Runs {@code draw}, an outline pass into a target with a depth buffer, with the outline pipelines depth-tested. */
+	public static void withOutlineDepth(Runnable draw) {
+		outlineDepthPasses++;
+		try {
+			draw.run();
+		} finally {
+			outlineDepthPasses--;
+		}
+	}
+
+	/** The pipeline to draw with in place of {@code pipeline}: the depth-tested outline one inside {@link #withOutlineDepth}. */
+	public static RenderPipeline inPass(RenderPipeline pipeline) {
+		if (outlineDepthPasses == 0) return pipeline;
+		if (pipeline == RenderPipelines.OUTLINE_CULL) return OUTLINE_CULL_DEPTH;
+		if (pipeline == RenderPipelines.OUTLINE_NO_CULL) return OUTLINE_NO_CULL_DEPTH;
+		return pipeline;
+	}
+
 	private static final BindGroupLayout BLUR_LAYOUT = BindGroupLayout.builder()
 		.withUniform("InSampler", UniformType.COMBINED_IMAGE_SAMPLER)
 		.withUniform("BlurInfo", UniformType.UNIFORM_BUFFER)

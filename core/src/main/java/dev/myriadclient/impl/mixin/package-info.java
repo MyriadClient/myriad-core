@@ -20,7 +20,7 @@
  *       ClientPacketListenerMixin (setbacks), ClientCommonPacketListenerImplMixin (held ping answers),
  *       ConnectionMixin (LeavingGlide).</li>
  *   <li><b>Rendering and highlights:</b> GameRendererMixin, LevelRendererMixin, LevelExtractorMixin,
- *       RenderPipelinesMixin, ShaderManagerMixin, EntityRendererMixin, EntityRenderStateMixin,
+ *       PreparedRenderTypeMixin, ShaderManagerMixin, EntityRendererMixin, EntityRenderStateMixin,
  *       EntityRenderDispatcherMixin, LivingEntityRendererMixin, FeatureRenderDispatcherMixin, AvatarRendererMixin,
  *       FirstPersonHandsAndItemsRendererMixin, WalkAnimationStateAccessor (previews), BlockStateBaseMixin
  *       (BlockRenderEvent), compat.iris.IrisHandRendererMixin,

@@ -5,6 +5,7 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import dev.myriadclient.impl.render.HandHighlights;
+import dev.myriadclient.impl.render.MyriadPipelines;
 import dev.myriadclient.impl.render.PreviewHighlights;
 import net.minecraft.client.renderer.SubmitNodeStorage;
 import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
@@ -29,7 +30,7 @@ public abstract class FeatureRenderDispatcherMixin {
 		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder()
 			.createRenderPass(() -> "Myriad highlight outlines", mask.getColorTextureView(), Optional.empty(), mask.getDepthTextureView(), OptionalDouble.empty())) {
 			RenderSystem.bindDefaultUniforms(pass);
-			frame.executeOutline(pass);
+			MyriadPipelines.withOutlineDepth(() -> frame.executeOutline(pass));
 		}
 		return frame;
 	}

@@ -164,13 +164,21 @@ final class GlideHolder {
 
 	/** The gliding bit {@code data} sets on the local player: 1, 0, or -1 if it isn't the local player's flags. */
 	private static int ownGlideBit(ClientboundSetEntityDataPacket data) {
-		LocalPlayer p = Minecraft.getInstance().player;
-		if (p == null || data.id() != p.getId()) return -1;
+		if (!aboutOwnPlayer(data)) return -1;
 		int flagsId = Entity.DATA_SHARED_FLAGS_ID.id();
 		for (var v : data.packedItems()) {
 			if (v.id() == flagsId && v.value() instanceof Byte flags) return (flags & GLIDING_BIT) != 0 ? 1 : 0;
 		}
 		return -1;
+	}
+
+	/**
+	 * Whether {@code data} is about the local player. Network thread: a player the server hasn't given its id yet (just
+	 * after joining or respawning) can't be asked for it, so it isn't.
+	 */
+	static boolean aboutOwnPlayer(ClientboundSetEntityDataPacket data) {
+		LocalPlayer p = Minecraft.getInstance().player;
+		return p != null && p.id != 0 && data.id() == p.id;
 	}
 
 	/** Whether the server has said it glides you since {@code ms} ({@code Clock.millis()}), while armed. */
@@ -203,7 +211,7 @@ final class GlideHolder {
 	/** Whether {@code data} is the server turning the local player's glide off while the client still glides. */
 	private static boolean endsOwnGlide(ClientboundSetEntityDataPacket data) {
 		LocalPlayer p = Minecraft.getInstance().player;
-		if (p == null || data.id() != p.getId() || !p.isFallFlying()) return false;
+		if (p == null || !aboutOwnPlayer(data) || !p.isFallFlying()) return false;
 		int flagsId = Entity.DATA_SHARED_FLAGS_ID.id();
 		return data.packedItems().stream().anyMatch(v -> v.id() == flagsId && v.value() instanceof Byte flags && (flags & GLIDING_BIT) == 0);
 	}

@@ -13,9 +13,11 @@ import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.myriadclient.impl.render.GpuTimings;
 import dev.myriadclient.impl.render.HighlightRenderer;
 import dev.myriadclient.impl.render.MeshRenderer;
+import dev.myriadclient.impl.render.MyriadPipelines;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.PostChain;
 import net.minecraft.client.renderer.ShaderManager;
+import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.resources.Identifier;
@@ -99,6 +101,12 @@ public abstract class LevelRendererMixin {
 	private RenderPass myriad$outlinePassDepth(CommandEncoder encoder, Supplier<String> label, GpuTextureView color, Optional<Vector4fc> clearColor, GpuTextureView depth,
 											   OptionalDouble clearDepth, Operation<RenderPass> original) {
 		return original.call(encoder, label, color, clearColor, entityOutlineTarget.getDepthTextureView(), OptionalDouble.of(0.0));
+	}
+
+	/** The silhouettes go into that depth buffer with the depth-tested outline pipelines; vanilla's own stay without depth. */
+	@WrapOperation(method = "executeOutline", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/feature/FeatureRenderDispatcher$PreparedFrame;executeOutline(Lcom/mojang/renderpearl/api/commands/RenderPass;)V"))
+	private void myriad$outlinePipelines(FeatureRenderDispatcher.PreparedFrame frame, RenderPass pass, Operation<Void> original) {
+		MyriadPipelines.withOutlineDepth(() -> original.call(frame, pass));
 	}
 
 	/** Vanilla blits its processed glow onto the screen here; highlights draw themselves instead. */

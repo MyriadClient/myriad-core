@@ -81,7 +81,7 @@
 		"RecipeBookComponentMixin",
 		"RecipeBookTabButtonMixin",
 		"RecipeButtonMixin",
-		"RenderPipelinesMixin",
+		"PreparedRenderTypeMixin",
 		"ScreenMixin",
 		"ShaderManagerMixin",
 		"SmithingScreenMixin",
