@@ -1,14 +1,13 @@
 package dev.myriadclient.impl.ui.panels;
 
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.Bezier;
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
+import com.mojang.blaze3d.platform.InputConstants;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.Bezier;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.ui.widget.Widget;
 import dev.myriadclient.api.util.ColorUtil;
-import net.minecraft.client.Minecraft;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.List;
 import java.util.Objects;
@@ -212,13 +211,13 @@ abstract class CardEntry extends Widget {
 		float rowH = ROW + 2;
 		if (mx >= x && my >= y && mx < x + width && my < y + rowH) {
 			boolean chevron = mx >= x + width - 14;
-			if (button == 1 && GLFW.glfwGetKey(Minecraft.getInstance().getWindow().handle(), GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS) {
+			if (button == InputConstants.MOUSE_BUTTON_RIGHT && InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)) {
 				shiftSecondary();
-			} else if (button == 1 || chevron) {
+			} else if (button == InputConstants.MOUSE_BUTTON_RIGHT || chevron) {
 				setExpanded(!isExpanded());
-			} else if (button == 0) {
+			} else if (button == InputConstants.MOUSE_BUTTON_LEFT) {
 				primary();
-			} else if (button == 2) {
+			} else if (button == InputConstants.MOUSE_BUTTON_MIDDLE) {
 				middle();
 			}
 			return true;

@@ -32,6 +32,7 @@ public final class Client {
 		return mc != null && mc.player != null && mc.level != null;
 	}
 
+	/** The local player ({@code mc.player}); throws {@link IllegalStateException} outside a world. */
 	public static LocalPlayer player() {
 		Minecraft mc = Minecraft.getInstance();
 		LocalPlayer p = mc == null ? null : mc.player;
@@ -39,6 +40,7 @@ public final class Client {
 		return p;
 	}
 
+	/** The world you're in ({@code mc.level}); throws {@link IllegalStateException} outside a world. */
 	public static ClientLevel level() {
 		Minecraft mc = Minecraft.getInstance();
 		ClientLevel l = mc == null ? null : mc.level;
@@ -46,6 +48,10 @@ public final class Client {
 		return l;
 	}
 
+	/**
+	 * The connection to the server, for sending packets and reading the tab list; throws {@link IllegalStateException}
+	 * when not connected. Prefer {@code Packets} for sending, which goes through Myriad's packet events.
+	 */
 	public static ClientPacketListener connection() {
 		Minecraft mc = Minecraft.getInstance();
 		ClientPacketListener c = mc == null ? null : mc.getConnection();
@@ -53,7 +59,10 @@ public final class Client {
 		return c;
 	}
 
-	/** The interaction manager ({@code mc.gameMode}): what clicks blocks and entities and moves items. */
+	/**
+	 * The interaction manager ({@code mc.gameMode}): what clicks blocks and entities and moves items; throws
+	 * {@link IllegalStateException} outside a world.
+	 */
 	public static MultiPlayerGameMode interaction() {
 		Minecraft mc = Minecraft.getInstance();
 		MultiPlayerGameMode g = mc == null ? null : mc.gameMode;

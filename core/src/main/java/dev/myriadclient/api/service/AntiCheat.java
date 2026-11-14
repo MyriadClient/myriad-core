@@ -3,10 +3,10 @@ package dev.myriadclient.api.service;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.registry.Identified;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.registry.Registry;
-import dev.myriadclient.api.util.MyriadId;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.Set;
@@ -40,14 +40,20 @@ public interface AntiCheat {
 	 * fallback: {@link Profile#GRIM_2B2T} on 2b2t, {@link Profile#GRIM} on a host known to run it or once the server
 	 * sends the steady pings anti-cheats that simulate the player use, {@link Profile#NCP} on 6b6t,
 	 * {@link Profile#VANILLA} otherwise. Answer with your own profile for your server; return null to leave core's.
+	 * Asked on the render thread when you join or leave and every tick while it has a handler, with no caller.
 	 */
-	Hook<ServerSeen, Profile> DETECT = Hook.of("myriad:detect_anticheat", "Detect anti-cheat",
+	Hook<ServerSeen, @Nullable Profile> DETECT = Hook.of("myriad:detect_anticheat", "Detect anti-cheat",
 		"What the server checks, worked out from the server you joined and how it behaves.");
 
 	/**
 	 * What detection sees: the host you joined (lower case, no port; null in singleplayer), how many of the steady
 	 * pings ("transactions") the server has sent since you joined (counted up to 100; the vanilla server never sends
 	 * them in game), and the protocol number of the version the server sees you as ({@link #joinedProtocol()}).
+	 *
+	 * @param host the host joined, lower case without the port; null in singleplayer and the menus
+	 * @param singleplayer whether this is a singleplayer world
+	 * @param pings the steady pings counted since joining, at most 100
+	 * @param protocol the protocol number the server sees you as; -1 in the menus or if it can't be told
 	 */
 	record ServerSeen(@Nullable String host, boolean singleplayer, int pings, int protocol) {
 	}
@@ -98,16 +104,17 @@ public interface AntiCheat {
 			true, true);
 		/**
 		 * 2b2t's Grim: Grim's answers, but it lets placements and item uses go without a swing, and a slot swapped in for
-		 * one go back in the same tick, so your hand never shows the item (live captures, 2026-10-24: no setback, nothing
-		 * refused); and its break timing is fooled by a decoy start ({@link BreakTiming#DECOYABLE}). Picked for 2b2t.org.
+		 * one go back in the same tick, so your hand never shows the item (checked against live captures: no setback,
+		 * nothing refused); and its break timing is fooled by a decoy start ({@link BreakTiming#DECOYABLE}). Picked for
+		 * 2b2t.org.
 		 */
 		@ApiStatus.AvailableSince("1.2")
 		public static final Profile GRIM_2B2T = GRIM.named("myriad:2b2t", "2b2t").withChecksSwings(false).withChecksPacketOrder(false)
 			.withBreakTiming(BreakTiming.DECOYABLE);
 		/**
 		 * NoCheatPlus (6b6t runs a fork of it). It checks the glide only against loose limits rather than simulating it,
-		 * which is what lets Elytra Fly's Control work there; everything else is treated as on a vanilla server, as it
-		 * was before this profile existed.
+		 * which is what lets Elytra Fly's Control work there; everything else is treated as on a vanilla server. Picked
+		 * for 6b6t.
 		 */
 		public static final Profile NCP = new Profile(MyriadId.of("myriad", "ncp"), "NoCheatPlus", false, false, false, false, false, BreakTiming.SERVER, 9,
 			true, true);
@@ -135,12 +142,18 @@ public interface AntiCheat {
 			this.checksPacketOrder = checksPacketOrder;
 		}
 
-		/** This profile's answers under another id ({@code "my-addon:my_server"}) and name, to register as a profile of its own. */
+		/**
+		 * This profile's answers under another id ({@code "my-addon:my_server"}) and name, to register as a profile of its
+		 * own.
+		 *
+		 * @throws IllegalArgumentException if {@code id} isn't a valid {@code namespace:path} id
+		 */
 		public Profile named(String id, String name) {
 			return new Profile(MyriadId.parse(id), name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill,
 				simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
+		/** The id it's registered and saved under ({@code myriad:grim}); profiles with the same id are equal. */
 		@Override
 		public MyriadId id() {
 			return id;
@@ -196,7 +209,7 @@ public interface AntiCheat {
 		}
 
 		/**
-		 * How many uses, placements and attacks fit in 300 ms ({@link PacketLimits.Kind#INTERACT}). Paper drops the
+		 * How many uses and placements fit in 300 ms ({@link PacketLimits.Kind#INTERACT}). Paper drops the
 		 * tenth inside its spam limiter's window, without a flag, so the presets allow 9.
 		 */
 		public int interactionBudget() {
@@ -226,46 +239,55 @@ public interface AntiCheat {
 			return checksPacketOrder;
 		}
 
+		/** These answers, same id and name, with {@link #checksSwings()} set. */
 		@ApiStatus.AvailableSince("1.2")
 		public Profile withChecksSwings(boolean checksSwings) {
 			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
+		/** These answers, same id and name, with {@link #checksPacketOrder()} set. */
 		@ApiStatus.AvailableSince("1.2")
 		public Profile withChecksPacketOrder(boolean checksPacketOrder) {
 			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
+		/** These answers, same id and name, with {@link #simulatesMovement()} set. */
 		public Profile withSimulatesMovement(boolean simulatesMovement) {
 			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
+		/** These answers, same id and name, with {@link #checksLookOnActions()} set. */
 		public Profile withChecksLookOnActions(boolean checksLookOnActions) {
 			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
+		/** These answers, same id and name, with {@link #visibleFacesOnly()} set. */
 		public Profile withVisibleFacesOnly(boolean visibleFacesOnly) {
 			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
+		/** These answers, same id and name, with {@link #clicksOnlyWhileStill()} set. */
 		public Profile withClicksOnlyWhileStill(boolean clicksOnlyWhileStill) {
 			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
+		/** These answers, same id and name, with {@link #simulatesGlide()} set. */
 		public Profile withSimulatesGlide(boolean simulatesGlide) {
 			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
+		/** These answers, same id and name, with {@link #breakTiming()} set. */
 		public Profile withBreakTiming(BreakTiming breakTiming) {
 			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
+		/** These answers, same id and name, with {@link #interactionBudget()} (at least 1) set. */
 		public Profile withInteractionBudget(int interactionBudget) {
 			return new Profile(id, name, simulatesMovement, checksLookOnActions, visibleFacesOnly, clicksOnlyWhileStill, simulatesGlide, breakTiming, interactionBudget, checksSwings, checksPacketOrder);
 		}
 
 		@Override
-		public boolean equals(Object o) {
+		public boolean equals(@Nullable Object o) {
 			return o instanceof Profile p && p.id.equals(id);
 		}
 
@@ -294,18 +316,32 @@ public interface AntiCheat {
 	/** The profile the player chose, or null for Auto ({@link #detected()}). */
 	@Nullable Profile choice();
 
-	/** Chooses the profile, or null for Auto. Saved globally. */
+	/**
+	 * Chooses the profile, or null for Auto ({@link #detected()}). Saved globally, not per config profile.
+	 *
+	 * @throws IllegalArgumentException if {@code profile} isn't registered in {@link #profiles()}
+	 */
 	void choose(@Nullable Profile profile);
 
 	/** Every profile there is: Myriad's and the ones addons registered. */
 	Registry<Profile> profiles();
 
-	/** Hosts known to run Grim, for detection to take as {@link Profile#GRIM} from the moment you join (subdomains included). */
+	/**
+	 * Hosts known to run Grim, for detection to take as {@link Profile#GRIM} from the moment you join (subdomains
+	 * included), lower case without ports. An unmodifiable snapshot: later changes don't show in it.
+	 */
 	Set<String> knownServers();
 
-	/** Adds a host ("2b2t.org") to {@link #knownServers()}; saved globally. */
+	/**
+	 * Adds a host ("2b2t.org"; lower-cased, any port dropped) to {@link #knownServers()} and works the profile out
+	 * again; saved globally. False if it was there already or is empty.
+	 */
 	boolean addKnownServer(String host);
 
+	/**
+	 * Removes a host from {@link #knownServers()} and works the profile out again; saved globally. False if it wasn't
+	 * there.
+	 */
 	boolean removeKnownServer(String host);
 
 	/**

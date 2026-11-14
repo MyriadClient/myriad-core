@@ -1,8 +1,9 @@
 package dev.myriadclient.impl.ui.panels;
 
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.ui.Icons;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.ScrollView;
 import dev.myriadclient.api.ui.widget.TextField;
@@ -151,7 +152,7 @@ final class AddSearch<T> extends VBox {
 
 		@Override
 		public boolean mouseClicked(float mx, float my, int button) {
-			if (button != 0 || !isHovered(mx, my)) return false;
+			if (button != InputConstants.MOUSE_BUTTON_LEFT || !isHovered(mx, my)) return false;
 			take(result.value);
 			return true;
 		}

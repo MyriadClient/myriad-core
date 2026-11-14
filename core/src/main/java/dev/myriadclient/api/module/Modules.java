@@ -1,11 +1,11 @@
 package dev.myriadclient.api.module;
 
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.util.AnyThread;
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.annotation.AnyThread;
+import dev.myriadclient.api.registry.MyriadId;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,6 +53,7 @@ public final class Modules {
 		return m != null && m.isEnabled() ? m : null;
 	}
 
+	/** Whether the module of exactly {@code type} is registered and on: {@code active(type) != null}. */
 	public static boolean isActive(Class<? extends Module> type) {
 		return active(type) != null;
 	}
@@ -113,8 +114,11 @@ public final class Modules {
 		}
 	}
 
-	/** {@link #guard(Module, Runnable)} for code that answers: {@code fallback} if it throws, or for a null module. */
-	public static <T> T guard(@Nullable Module module, Supplier<T> body, T fallback) {
+	/**
+	 * {@link #guard(Module, Runnable)} for code that answers: what {@code body} returns, or {@code fallback} if it throws
+	 * or for a null module. {@code T} may be nullable, for a fallback of null.
+	 */
+	public static <T extends @Nullable Object> T guard(@Nullable Module module, Supplier<T> body, T fallback) {
 		if (module == null) return fallback;
 		try {
 			return body.get();

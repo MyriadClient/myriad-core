@@ -1,6 +1,6 @@
 package dev.myriadclient.impl.render.font;
 
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 
 /**
  * A rasterised glyph inside a {@link GlyphPage} texture. Sizes are in pixels. The quad is drawn at

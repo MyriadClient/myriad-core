@@ -1,7 +1,7 @@
 package dev.myriadclient.api.module;
 
 import dev.myriadclient.api.registry.Identified;
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.registry.MyriadId;
 
 /**
  * Some of one addon's modules, together in one window of the menu, as the addon's author thinks best: one group for a
@@ -11,7 +11,8 @@ import dev.myriadclient.api.util.MyriadId;
  * Where windows go is up to the player: each group is a window of its own, placed and merged like any other.
  *
  * @param id   {@code <addon id>:<name in snake_case>}; the namespace is the addon the group belongs to
- * @param icon a short glyph for the window's title (see {@link dev.myriadclient.api.ui.Icons})
+ * @param name the window's title ("Travel"); for an addon's own window, the addon's name
+ * @param icon a short glyph for the window's title (see {@link dev.myriadclient.api.ui.Icons}); empty for none
  */
 public record ModuleGroup(MyriadId id, String name, String icon) implements Identified {
 	/** The path of an addon's own window: the group of the modules it registers without one. */
@@ -34,6 +35,7 @@ public record ModuleGroup(MyriadId id, String name, String icon) implements Iden
 		return ADDON_WINDOW.equals(id.path());
 	}
 
+	/** The window's title. */
 	@Override
 	public String toString() {
 		return name;

@@ -1,12 +1,12 @@
 package dev.myriadclient.impl.render;
 
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import dev.myriadclient.api.render.WorldMesh;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ReferenceLinkedOpenHashSet;
@@ -22,8 +22,8 @@ import java.util.Optional;
 import java.util.OptionalDouble;
 
 /**
- * Draws every live {@link WorldMesh} once per frame, in one render pass right after vanilla's translucent features
- * (where per-frame shapes are drawn too). Meshes outside the view frustum are skipped. Each mesh is one draw per layer
+ * Draws every live {@link WorldMesh} once per frame, right after vanilla's translucent features (where per-frame
+ * shapes are drawn too). Meshes outside the view frustum are skipped. Each mesh is one draw per layer
  * with its own offset from the camera, so nothing is rebuilt or re-uploaded.
  */
 public final class MeshRenderer {
@@ -37,6 +37,9 @@ public final class MeshRenderer {
 	private static final ReferenceLinkedOpenHashSet<WorldMesh> live = new ReferenceLinkedOpenHashSet<>();
 	private static final ObjectArrayList<WorldMesh> visible = new ObjectArrayList<>();
 	private static final ObjectArrayList<GpuBufferSlice> transforms = new ObjectArrayList<>();
+	private static final RenderSystem.AutoStorageIndexBuffer QUAD_INDICES = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
+	private static final RenderSystem.AutoStorageIndexBuffer LINE_INDICES = RenderSystem.getSequentialBuffer(PrimitiveTopology.LINES);
+	private static GpuBuffer quadIndexBuffer, lineIndexBuffer;
 
 	private MeshRenderer() {
 	}
@@ -49,12 +52,14 @@ public final class MeshRenderer {
 		live.remove(mesh);
 	}
 
-	public static void draw(CameraRenderState camera) {
+	/** Gets this frame's visible meshes ready to draw; before any pass opens, since it writes to the GPU. */
+	public static void prepare(CameraRenderState camera) {
+		visible.clear();
+		transforms.clear();
+		quadIndexBuffer = lineIndexBuffer = null;
 		if (live.isEmpty()) return;
 		Frustum frustum = camera.cullFrustum;
 		Vec3 cam = camera.pos;
-		visible.clear();
-		transforms.clear();
 		int maxQuadIndices = 0, maxLineIndices = 0;
 		Matrix4f modelView = RenderSystem.getModelViewMatrixCopy();
 		for (WorldMesh mesh : live) {
@@ -67,36 +72,40 @@ public final class MeshRenderer {
 			maxQuadIndices = Math.max(maxQuadIndices, Math.max(mesh.indexCount(0), mesh.indexCount(2)));
 			maxLineIndices = Math.max(maxLineIndices, Math.max(mesh.indexCount(1), mesh.indexCount(3)));
 		}
+		if (maxQuadIndices > 0) quadIndexBuffer = QUAD_INDICES.getBuffer(maxQuadIndices);
+		if (maxLineIndices > 0) lineIndexBuffer = LINE_INDICES.getBuffer(maxLineIndices);
+	}
+
+	/** Draws what {@link #prepare} found in a pass of its own, onto the main target. */
+	public static void drawAlone() {
 		if (visible.isEmpty()) return;
-
-		// Index buffers are shared and grow on demand; size them before the pass opens, since growing writes to the GPU.
-		RenderSystem.AutoStorageIndexBuffer quadIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
-		RenderSystem.AutoStorageIndexBuffer lineIndices = RenderSystem.getSequentialBuffer(PrimitiveTopology.LINES);
-		GpuBuffer quadIndexBuffer = maxQuadIndices > 0 ? quadIndices.getBuffer(maxQuadIndices) : null;
-		GpuBuffer lineIndexBuffer = maxLineIndices > 0 ? lineIndices.getBuffer(maxLineIndices) : null;
-
 		RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
 		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder()
 			.createRenderPass(() -> "Myriad meshes", main.getColorTextureView(), Optional.empty(), main.getDepthTextureView(), OptionalDouble.empty())) {
-			for (int layer = 0; layer < PIPELINES.length; layer++) {
-				boolean lines = (layer & 1) == 1;
-				boolean bound = false;
-				for (int i = 0; i < visible.size(); i++) {
-					WorldMesh mesh = visible.get(i);
-					int count = mesh.indexCount(layer);
-					GpuBuffer vertices = mesh.buffer(layer);
-					if (count == 0 || vertices == null) continue;
-					if (!bound) {
-						pass.setPipeline(PIPELINES[layer]);
-						RenderSystem.bindDefaultUniforms(pass);
-						if (lines) pass.setIndexBuffer(lineIndexBuffer, lineIndices.type());
-						else pass.setIndexBuffer(quadIndexBuffer, quadIndices.type());
-						bound = true;
-					}
-					pass.setUniform("DynamicTransforms", transforms.get(i));
-					pass.setVertexBuffer(0, vertices.slice());
-					pass.drawIndexed(count, 1, 0, 0, 0);
+			draw(pass);
+		}
+	}
+
+	/** Draws what {@link #prepare} found into {@code pass}, which targets the main color and depth. */
+	public static void draw(RenderPass pass) {
+		for (int layer = 0; layer < PIPELINES.length; layer++) {
+			boolean lines = (layer & 1) == 1;
+			boolean bound = false;
+			for (int i = 0; i < visible.size(); i++) {
+				WorldMesh mesh = visible.get(i);
+				int count = mesh.indexCount(layer);
+				GpuBuffer vertices = mesh.buffer(layer);
+				if (count == 0 || vertices == null) continue;
+				if (!bound) {
+					pass.setPipeline(RenderSystem.getCompiledPipeline(PIPELINES[layer]));
+					RenderSystem.bindDefaultUniforms(pass);
+					if (lines) pass.setIndexBuffer(lineIndexBuffer, LINE_INDICES.type());
+					else pass.setIndexBuffer(quadIndexBuffer, QUAD_INDICES.type());
+					bound = true;
 				}
+				pass.setUniform("DynamicTransforms", transforms.get(i));
+				pass.setVertexBuffer(0, vertices.slice());
+				pass.drawIndexed(count, 1, 0, 0, 0);
 			}
 		}
 	}

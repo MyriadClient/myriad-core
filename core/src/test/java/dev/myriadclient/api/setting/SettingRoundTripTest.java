@@ -5,8 +5,9 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import dev.myriadclient.api.util.Keybind;
-import dev.myriadclient.api.util.MyriadId;
+import com.mojang.blaze3d.platform.InputConstants;
+import dev.myriadclient.api.input.Keybind;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.harness.Harness;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -19,7 +20,6 @@ import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -66,8 +66,8 @@ class SettingRoundTripTest {
 			new Row("intList", g -> g.intList("Slots").build(), new ArrayList<>(List.of(1, 5, 9)), null),
 			new Row("color", g -> g.color("Fill").build(), SettingColor.of(0x80FF3366), null),
 			new Row("color role", g -> g.color("Fill").build(), SettingColor.role(SettingColor.Mode.RAINBOW), null),
-			new Row("keybind", g -> g.keybind("Bind").build(), new Keybind(GLFW.GLFW_MOUSE_BUTTON_5, true, GLFW.GLFW_MOD_CONTROL), null),
-			new Row("keybind none", g -> g.keybind("Bind").defaultValue(new Keybind(GLFW.GLFW_MOUSE_BUTTON_5, true, 0)).build(), Keybind.NONE, null),
+			new Row("keybind", g -> g.keybind("Bind").build(), new Keybind(InputConstants.MOUSE_BUTTON_5, true, InputConstants.MOD_CONTROL), null),
+			new Row("keybind none", g -> g.keybind("Bind").defaultValue(new Keybind(InputConstants.MOUSE_BUTTON_5, true, 0)).build(), Keybind.NONE, null),
 			new Row("item", g -> g.item("Food", Items.BREAD).build(), Items.GOLDEN_CARROT, null),
 			new Row("block", g -> g.block("Fill", Blocks.STONE).build(), Blocks.OBSIDIAN, null),
 			new Row("sound", g -> g.sound("Ping", SoundEvents.EXPERIENCE_ORB_PICKUP).build(), SoundEvents.NOTE_BLOCK_PLING.value(), null),

@@ -1,8 +1,8 @@
 package dev.myriadclient.impl.ui;
 
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.ui.ThemeSettings;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.render.UiRenderer;
@@ -26,7 +26,7 @@ public final class ThemedHud {
 	private static final float ICON_SIZE = 10;
 	/** GUI pixels between the hotbar and the bottom of the screen. */
 	public static final int MARGIN = 3;
-	/** The experience bar drawn thinner than Minecraft's, as the desktop's progress bars are: this far in from its top and bottom. */
+	/** The experience bar drawn thinner than Minecraft's, as the UI's progress bars are: this far in from its top and bottom. */
 	private static final float BAR_INSET = 1;
 
 	private ThemedHud() {
@@ -160,7 +160,7 @@ public final class ThemedHud {
 		});
 	}
 
-	/** A small window's surface and border, as the desktop draws its windows. */
+	/** A small window's surface and border, as the UI draws its windows. */
 	private static void window(UiRenderer c, ThemeSettings t, float x, float y, float w, float h) {
 		float r = Math.min(t.rounding.get(), h / 2), b = t.borderSize.get();
 		c.roundRect(x, y, w, h, r, ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xC0, ColorUtil.alpha(t.windowBackground.argb()))));

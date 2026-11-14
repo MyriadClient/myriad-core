@@ -1,16 +1,24 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.ui.draw.Canvas;
 
-/** Stacks children vertically, each at full width. */
+/**
+ * Stacks children vertically, each at full width (less the padding). Hidden children take no room and no spacing.
+ * Its height is the children's plus the spacing between them and the padding above and below.
+ */
 public class VBox extends Container {
 	private final float spacing;
 	private final float padding;
 
+	/** A column with 2 units between children and no padding. */
 	public VBox() {
 		this(2, 0);
 	}
 
+	/**
+	 * @param spacing the gap between children, in UI units
+	 * @param padding the room left on every side, in UI units
+	 */
 	public VBox(float spacing, float padding) {
 		this.spacing = spacing;
 		this.padding = padding;

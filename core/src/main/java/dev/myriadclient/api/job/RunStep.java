@@ -2,7 +2,7 @@ package dev.myriadclient.api.job;
 
 import dev.myriadclient.api.event.Subscription;
 import dev.myriadclient.api.util.TickBudget;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -127,7 +127,7 @@ final class RunStep<T> extends Step<T> {
 		}
 
 		@Override
-		public void status(String text) {
+		public void status(@Nullable String text) {
 			node.setStatus(text);
 		}
 

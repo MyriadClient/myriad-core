@@ -1,49 +1,55 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
 import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
-/** A short message set apart from what's around it, on a tinted strip: a warning, a failure, something worth reading. */
-@ApiStatus.AvailableSince("1.4.0")
+/**
+ * A short message set apart from what's around it, on a tinted strip: a warning, a failure, something worth reading.
+ * The text wraps; it's tinted with the accent unless told otherwise.
+ */
+@ApiStatus.AvailableSince("1.4")
 public class Note extends Widget {
 	private static final float PAD = 4;
 
 	private final Supplier<String> text;
 	private IntSupplier color = () -> theme().accent.argb();
-	private String icon;
+	private @Nullable String icon;
 	private List<String> lines = List.of();
 
+	/** A note saying {@code text}. */
 	public Note(String text) {
 		this(() -> text);
 	}
 
+	/** A note saying what {@code text} returns, asked every frame. */
 	public Note(Supplier<String> text) {
 		this.text = text;
 	}
 
-	/** Its tint. */
+	/** Its tint, an ARGB colour asked every frame (the accent by default). Returns this note. */
 	public Note color(IntSupplier color) {
 		this.color = color;
 		return this;
 	}
 
-	/** A warning: yellow. */
+	/** A warning: tinted with the theme's yellow. Returns this note. */
 	public Note warn() {
 		return color(() -> theme().yellow.argb());
 	}
 
-	/** A failure: red. */
+	/** A failure: tinted with the theme's red. Returns this note. */
 	public Note error() {
 		return color(() -> theme().red.argb());
 	}
 
-	/** A glyph before the text. */
+	/** A glyph ({@link dev.myriadclient.api.ui.Icons}) before the text, in the tint. Returns this note. */
 	public Note icon(String glyph) {
 		this.icon = glyph;
 		return this;

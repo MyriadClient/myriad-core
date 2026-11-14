@@ -3,10 +3,10 @@ package dev.myriadclient.impl.wheel;
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.control.ControlPanel;
+import dev.myriadclient.api.input.KeyAction;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.service.KeyAction;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.ui.PanelType;
-import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.macro.MacroManager;
 import dev.myriadclient.impl.macro.MacroModule;
 import dev.myriadclient.impl.ui.WindowManager;
@@ -30,7 +30,7 @@ public record WheelSlot(Kind kind, String target, String customIcon, String cust
 		CONTROL,
 		/** Runs an addon's key action. */
 		KEY_ACTION,
-		/** Opens a panel on the desktop. */
+		/** Opens a panel in the UI. */
 		PANEL,
 		/** Runs a command line as a macro does: {@code .myriad}, {@code /server}, or chat. */
 		COMMAND

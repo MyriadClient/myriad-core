@@ -6,16 +6,17 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
-import dev.myriadclient.api.registry.Registry;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.service.AntiCheat;
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.service.ServerStats;
 import dev.myriadclient.impl.network.JoinedVersion;
+import dev.myriadclient.impl.network.KnownServers;
+import dev.myriadclient.impl.registry.RegistryImpl;
 import net.minecraft.network.protocol.common.ClientboundPingPacket;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
@@ -35,14 +36,14 @@ public final class AntiCheatTracker implements AntiCheat {
 	/** Pings counted at most, for {@link ServerSeen#pings()}. */
 	private static final int MAX_PINGS = 100;
 	/** Servers known to run Grim, by host (and their subdomains); the defaults plus the player's. */
-	public static final Set<String> DEFAULT_KNOWN = Set.of("2b2t.org");
+	public static final Set<String> DEFAULT_KNOWN = Set.of(KnownServers.TWO_B2T);
 	/** 2b2t, whose Grim lets placements go without a swing and swaps back in the same tick ({@link Profile#GRIM_2B2T}). */
-	static final Set<String> TWO_B2T_HOSTS = Set.of("2b2t.org");
-	/** Servers known to run NoCheatPlus: 6b6t's fork has been live there since 2026-10-10. */
-	static final Set<String> NCP_HOSTS = Set.of("6b6t.org");
+	static final Set<String> TWO_B2T_HOSTS = Set.of(KnownServers.TWO_B2T);
+	/** Servers known to run NoCheatPlus (6b6t's fork). */
+	static final Set<String> NCP_HOSTS = Set.of(KnownServers.SIX_B6T);
 	private volatile Set<String> known = DEFAULT_KNOWN;
 
-	private final Registry<Profile> profiles = new Registry<>("anti-cheat profile");
+	private final RegistryImpl<Profile> profiles = new RegistryImpl<>("anti-cheat profile");
 	/** The chosen profile's id, kept while the addon that registers it hasn't yet (config loads first), or null for Auto. */
 	private volatile @Nullable MyriadId chosenId;
 	private volatile @Nullable Profile chosen;
@@ -97,7 +98,7 @@ public final class AntiCheatTracker implements AntiCheat {
 	}
 
 	@Override
-	public Registry<Profile> profiles() {
+	public RegistryImpl<Profile> profiles() {
 		return profiles;
 	}
 
@@ -192,13 +193,11 @@ public final class AntiCheatTracker implements AntiCheat {
 	}
 
 	private static String normalize(String host) {
-		String h = host.trim().toLowerCase(Locale.ROOT);
-		int colon = h.lastIndexOf(':');
-		return colon > 0 ? h.substring(0, colon) : h;
+		return ServerStats.hostOf(host);
 	}
 
 	private static boolean matches(String host, Set<String> hosts) {
-		for (String k : hosts) if (host.equals(k) || host.endsWith("." + k)) return true;
+		for (String k : hosts) if (ServerStats.isHost(host, k)) return true;
 		return false;
 	}
 

@@ -1,5 +1,7 @@
 package dev.myriadclient.api.util;
 
+import dev.myriadclient.api.annotation.AnyThread;
+import dev.myriadclient.api.annotation.RenderThread;
 import net.minecraft.client.Minecraft;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -12,12 +12,12 @@ class HighlightStyleTest {
 	@Test
 	void withersChangeOnlyTheirOption() {
 		HighlightStyle s = HighlightStyle.OUTLINE.withGlow(6).withFill(HighlightStyle.Fill.DOTS).withThroughWalls(false);
-		assertEquals(2, s.outlineWidth());
+		assertEquals(1, s.outlineWidth());
 		assertEquals(6, s.glow());
 		assertEquals(HighlightStyle.Fill.DOTS, s.fill());
 		assertFalse(s.throughWalls());
 		assertFalse(s.hasGradient());
-		assertEquals(8, s.reach());
+		assertEquals(7, s.reach());
 		assertEquals(HighlightStyle.OUTLINE, HighlightStyle.OUTLINE.withGlow(6).withGlow(0));
 		assertNotEquals(HighlightStyle.OUTLINE, s);
 	}

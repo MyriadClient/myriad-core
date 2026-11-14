@@ -1,11 +1,11 @@
 package dev.myriadclient.api.hook;
 
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.service.AntiCheat;
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.service.ServerStats;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
-import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -77,22 +77,27 @@ public final class Match {
 		return new Match(callerId, callerType, addon, profile, normalize(Objects.requireNonNull(host)));
 	}
 
+	/** The caller's id it requires ({@link #caller(MyriadId)}), or null. */
 	public @Nullable MyriadId callerId() {
 		return callerId;
 	}
 
+	/** The class a caller must be an instance of ({@link #caller(Class)}), or null. */
 	public @Nullable Class<?> callerType() {
 		return callerType;
 	}
 
+	/** The addon a caller must belong to ({@link #addon}), or null. */
 	public @Nullable String addonId() {
 		return addon;
 	}
 
+	/** The anti-cheat profile it requires ({@link #on}), or null for any. */
 	public AntiCheat.@Nullable Profile profile() {
 		return profile;
 	}
 
+	/** The server host it requires ({@link #server}), lower case without a port, or null for any. */
 	public @Nullable String serverHost() {
 		return server;
 	}
@@ -120,18 +125,13 @@ public final class Match {
 	@ApiStatus.Internal
 	public boolean testWhere(AntiCheat.Profile profile, @Nullable String host) {
 		if (this.profile != null && !this.profile.equals(profile)) return false;
-		return server == null || host != null && (host.equals(server) || host.endsWith("." + server));
+		return server == null || ServerStats.isHost(host, server);
 	}
 
-	/** The host part of an address, lower case, without a port: what {@link #server} compares. */
+	/** The host part of an address, lower case, without a port: what {@link #server} compares (see {@link ServerStats#hostOf}). */
 	@ApiStatus.Internal
 	public static @Nullable String normalize(@Nullable String address) {
-		if (address == null) return null;
-		String host = address.trim().toLowerCase(Locale.ROOT);
-		int colon = host.lastIndexOf(':');
-		if (colon > 0 && host.indexOf(':') == colon) host = host.substring(0, colon);
-		if (host.endsWith(".")) host = host.substring(0, host.length() - 1);
-		return host;
+		return ServerStats.hostOf(address);
 	}
 
 	/** "for Recast · on Grim · at 2b2t.org", or "always". */
@@ -147,7 +147,7 @@ public final class Match {
 	}
 
 	@Override
-	public boolean equals(Object o) {
+	public boolean equals(@Nullable Object o) {
 		return o instanceof Match m && Objects.equals(callerId, m.callerId) && callerType == m.callerType && Objects.equals(addon, m.addon)
 			&& Objects.equals(profile, m.profile) && Objects.equals(server, m.server);
 	}

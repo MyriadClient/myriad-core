@@ -1,11 +1,10 @@
 package dev.myriadclient.impl.render;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.ListenerFlag;
 import dev.myriadclient.api.event.events.HighlightEvent;
@@ -118,10 +117,7 @@ public final class HandHighlights {
 			handBase = table.count;
 			handArea[0] = handArea[1] = Float.MAX_VALUE;
 			handArea[2] = handArea[3] = -Float.MAX_VALUE;
-			TextureTarget mask = this.mask;
-			if (mask == null) mask = this.mask = new TextureTarget("Myriad highlight hand", w, h, true, GpuFormat.RGBA8_UNORM);
-			else if (mask.width != w || mask.height != h) mask.resize(w, h);
-			RenderSystem.getDevice().createCommandEncoder().clearColorAndDepthTextures(mask.getColorTexture(), new Vector4f(0), mask.getDepthTexture(), 0.0);
+			mask = HighlightPasses.clearedMask(mask, "Myriad highlight hand", w, h);
 		}
 		AABB none = new AABB(table.camX, table.camY, table.camZ, table.camX, table.camY, table.camZ);
 		int id = HighlightRenderer.INSTANCE.add(HighlightRenderer.HAND, e.style(), e.color(), none, none);
@@ -154,7 +150,7 @@ public final class HandHighlights {
 		return HighlightRenderer.encode(id - handBase, table.groupOf[id]);
 	}
 
-	/** The hand's mask: the outline target while the hand is drawn with highlights ({@link #handHighlighted}). */
+	/** The hand's mask, which its outline pass draws into while the hand is drawn with highlights ({@link #handHighlighted}). */
 	public RenderTarget handMask() {
 		return mask;
 	}

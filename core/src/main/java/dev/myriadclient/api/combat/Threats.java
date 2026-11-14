@@ -67,7 +67,10 @@ public final class Threats {
 		return worst > 0 && worst + margin >= health();
 	}
 
-	/** The worst crystal within {@code range}, or all of them added up when {@code sum}. */
+	/**
+	 * Damage from the worst end crystal whose entity is within {@code range} blocks of your box, or all of them added
+	 * up when {@code sum}.
+	 */
 	public static float crystals(double range, boolean sum) {
 		float max = 0, total = 0;
 		LocalPlayer p = player();
@@ -130,7 +133,10 @@ public final class Threats {
 		return max;
 	}
 
-	/** The hardest hit a non-friend within {@code range} could land. */
+	/**
+	 * The hardest hit a player who isn't a friend, within {@code range} blocks of your box, could land now
+	 * ({@link Damage#melee}).
+	 */
 	public static float players(double range) {
 		LocalPlayer p = player();
 		float max = 0;
@@ -140,7 +146,7 @@ public final class Threats {
 		return max;
 	}
 
-	/** Damage from the fall you're in, if you landed now. */
+	/** Damage from the fall you're in if you landed now; 0 under 3 blocks fallen. */
 	public static float fall() {
 		LocalPlayer p = player();
 		return p.fallDistance > 3 ? Damage.fall(p, (float) p.fallDistance) : 0;

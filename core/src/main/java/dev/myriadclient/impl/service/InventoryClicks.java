@@ -1,8 +1,8 @@
 package dev.myriadclient.impl.service;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.item.Slots;
 import dev.myriadclient.api.service.PacketLimits;
-import dev.myriadclient.api.util.Slots;
 import dev.myriadclient.impl.MyriadImpl;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;

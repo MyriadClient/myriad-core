@@ -38,7 +38,7 @@ numbered steps.
 | `modules/Trajectories.java` | `Trajectory.launch`/`simulate` for the held item and projectiles in flight; `TickCached` so paths cost once per tick, not per frame |
 | `modules/HoleEsp.java` | `Holes.scan` through a `ChunkCache` with `neighbours()` and no mesher; `Holes.holeOf` for the module list |
 | `modules/Tunnel.java` | the planner: a `Blueprint` of `Target.air()` handed to `Myriad.building()`, drawing `Build.steps()`, `Building.Options.forServer()` instead of a "Strict" option |
-| `modules/ChatTimestamps.java` + `mixin/ChatHudMixin.java` | the standard mixin-driven module: a static hook using `Modules.active(...)` |
+| `modules/ChatTimestamps.java` + `mixin/ChatComponentMixin.java` | the standard mixin-driven module: a static hook using `Modules.active(...)` |
 | `modules/SettingsShowcase.java` | every setting type, `visible`, `onChanged`, `sliderRange`, keybinds, action buttons |
 | `settings/RangeSetting.java` | a custom setting type (its widget is registered in `ExampleAddon`) |
 | `commands/WaypointCommand.java` | Brigadier sub-commands, `Arguments.blockPos()` (with `~`), and clickable chat from `Texts` |
@@ -48,5 +48,5 @@ numbered steps.
 | `stats/SessionStats.java` | an always-on `@Subscribe` listener that isn't a module |
 | `bar/TpsBarWidget.java` | a top-bar widget using `Myriad.server()` and the theme palette |
 
-Run it from the repository root with `./gradlew :example-addon:runClient -PopenDesktop`. That starts the game with
+Run it from the repository root with `./gradlew :example-addon:runClient -PopenUi`. That starts the game with
 Myriad, Essentials and this addon.

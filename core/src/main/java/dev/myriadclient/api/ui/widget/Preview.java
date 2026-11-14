@@ -1,15 +1,15 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.render.ShapeBuilder;
+import dev.myriadclient.api.ui.draw.Canvas;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.phys.AABB;
-import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -21,8 +21,9 @@ import java.util.Objects;
  * or your first-person hands and held items (as View Model shapes them). Drag to turn it, right-drag or Shift-drag to
  * move it, scroll to zoom, double-click to put it back. The modules that are on draw on it as in the world, in the
  * render mode that's on, through {@link dev.myriadclient.api.event.events.PreviewEvent}. {@link #decorate} draws on
- * this one preview with a {@link ShapeBuilder}, in the subject's own coordinates: the subject's box is passed in. Put one in a module's settings window with {@code Module.preview}, or in any window; players add
- * Preview windows of their own to a workspace.
+ * this one preview with a {@link ShapeBuilder}, in the subject's own coordinates: the subject's box is passed in. Put
+ * one in a module's settings window with {@code Module.preview}, or in any window; players add Preview windows of their
+ * own to a workspace.
  * <p>
  * Entities and you need a world: outside one, the preview shows only its background.
  *
@@ -40,6 +41,7 @@ public final class Preview extends Widget {
 
 	/** An entity of {@code type}, standing, facing you. */
 	public record EntitySubject(EntityType<?> type) implements Subject {
+		/** Throws {@link NullPointerException} for a null type. */
 		public EntitySubject {
 			Objects.requireNonNull(type);
 		}
@@ -54,6 +56,7 @@ public final class Preview extends Widget {
 
 	/** An item as a 3D model: a block's item shows the block (chests and shulker boxes as they stand in the world). */
 	public record ItemSubject(ItemStack stack) implements Subject {
+		/** Keeps a copy of {@code stack}, so later changes to it don't show. */
 		public ItemSubject {
 			stack = stack.copy();
 		}
@@ -72,6 +75,7 @@ public final class Preview extends Widget {
 	 */
 	@FunctionalInterface
 	public interface Decoration {
+		/** Draws this frame's shapes with {@code shapes}; called every frame the preview is drawn, on the render thread. */
 		void draw(ShapeBuilder shapes, AABB box, @Nullable Entity entity);
 	}
 
@@ -123,25 +127,29 @@ public final class Preview extends Widget {
 		return new Preview(new ViewModelSubject(), 0, 0);
 	}
 
-	/** Draws {@code decoration} on the preview each frame; several are drawn in the order added. */
+	/** Draws {@code decoration} on the preview each frame; several are drawn in the order added. Returns this preview. */
 	public Preview decorate(Decoration decoration) {
 		decorations.add(Objects.requireNonNull(decoration));
 		return this;
 	}
 
-	/** The preview's height in UI units (120 by default); it takes the width it's given. */
+	/** The preview's height in UI units (120 by default, at least 40); it takes the width it's given. Returns this preview. */
 	public Preview height(float height) {
 		this.previewHeight = Math.max(40, height);
 		return this;
 	}
 
-	/** The angle it starts at (and goes back to on a double-click): degrees around, and up from level. */
+	/**
+	 * The angle it starts at (and goes back to on a double-click): degrees around, and up from level. Returns this
+	 * preview.
+	 */
 	public Preview view(float yaw, float pitch) {
 		this.startYaw = this.yaw = yaw;
 		this.startPitch = this.pitch = pitch;
 		return this;
 	}
 
+	/** What it shows. */
 	public Subject subject() {
 		return subject;
 	}
@@ -166,11 +174,12 @@ public final class Preview extends Widget {
 		return zoom;
 	}
 
-	/** How far it's moved from the middle, in UI units. */
+	/** How far it's moved right from the middle, in UI units. */
 	public float panX() {
 		return panX;
 	}
 
+	/** How far it's moved down from the middle, in UI units. */
 	public float panY() {
 		return panY;
 	}
@@ -188,9 +197,9 @@ public final class Preview extends Widget {
 
 	@Override
 	public boolean mouseClicked(float mouseX, float mouseY, int button) {
-		if (!isHovered(mouseX, mouseY) || button > 1) return false;
+		if (!isHovered(mouseX, mouseY) || button != InputConstants.MOUSE_BUTTON_LEFT && button != InputConstants.MOUSE_BUTTON_RIGHT) return false;
 		long now = System.currentTimeMillis();
-		if (button == 0 && now - lastClick < DOUBLE_CLICK_MS) {
+		if (button == InputConstants.MOUSE_BUTTON_LEFT && now - lastClick < DOUBLE_CLICK_MS) {
 			yaw = startYaw;
 			pitch = startPitch;
 			zoom = 1;
@@ -211,7 +220,7 @@ public final class Preview extends Widget {
 		dy = mouseY - lastY;
 		lastX = mouseX;
 		lastY = mouseY;
-		if (dragButton == 1 || shiftDown()) {
+		if (dragButton == InputConstants.MOUSE_BUTTON_RIGHT || shiftDown()) {
 			panX += dx;
 			panY += dy;
 		} else {
@@ -238,7 +247,6 @@ public final class Preview extends Widget {
 	private static boolean shiftDown() {
 		Minecraft mc = Minecraft.getInstance();
 		if (mc == null) return false;
-		long w = mc.getWindow().handle();
-		return GLFW.glfwGetKey(w, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS || GLFW.glfwGetKey(w, GLFW.GLFW_KEY_RIGHT_SHIFT) == GLFW.GLFW_PRESS;
+		return InputConstants.isKeyDown(InputConstants.KEY_LSHIFT) || InputConstants.isKeyDown(InputConstants.KEY_RSHIFT);
 	}
 }

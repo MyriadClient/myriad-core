@@ -14,6 +14,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
 
+/**
+ * ItemTooltipEvent: lines added to or changed in an item's tooltip, after vanilla has built them, wherever the tooltip
+ * is shown.
+ */
 @Mixin(ItemStack.class)
 public abstract class ItemStackMixin {
 	@Inject(method = "getTooltipLines", at = @At("RETURN"))

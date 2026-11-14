@@ -1,11 +1,12 @@
 package dev.myriadclient.api.service;
 
+import dev.myriadclient.api.annotation.RenderThread;
 import dev.myriadclient.api.hook.Replacement;
 import dev.myriadclient.api.hook.Service;
-import dev.myriadclient.api.util.Reach;
-import dev.myriadclient.api.util.RenderThread;
+import dev.myriadclient.api.player.Reach;
 import net.minecraft.core.BlockPos;
 import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -29,6 +30,7 @@ import java.util.concurrent.CompletableFuture;
 @ApiStatus.NonExtendable
 @RenderThread
 public interface Breaking {
+	/** How a block is mined: how long it takes, and how the tool and your hand are used. */
 	enum Mode {
 		/**
 		 * Mines like holding the attack button: the tool held the whole time, a swing every tick, vanilla's full time,
@@ -70,13 +72,15 @@ public interface Breaking {
 	 * }</pre>
 	 */
 	final class Options {
+		/** Mines as holding the attack button does ({@link Mode#VANILLA}), fastest tool, no rotation, 4.5 blocks. */
 		public static final Options DEFAULT = new Options(Mode.VANILLA, false, true, 4.5, true, false, false);
+		/** {@link #DEFAULT}, turned to face each block: for servers that check where you look while mining. */
 		public static final Options STRICT = new Options(Mode.VANILLA, true, true, 4.5, true, false, false);
 		/** Packet mining, Grim-safe: hand free, vanilla's time. */
 		public static final Options PACKET = new Options(Mode.PACKET, false, true, 4.5, true, false, false);
-		/** For servers that don't check break times. */
+		/** For servers that don't check break times: {@link Mode#FAST} with double break. */
 		public static final Options FAST = new Options(Mode.FAST, false, true, 4.5, true, true, false);
-		/** Fast mining past Grim on servers with ViaVersion (2b2t); experimental. */
+		/** Fast mining past Grim on servers with ViaVersion (2b2t), with double break; experimental. */
 		public static final Options FAST_GRIM = new Options(Mode.FAST_GRIM, false, true, 4.5, true, true, false);
 
 		private final Mode mode;
@@ -153,42 +157,50 @@ public interface Breaking {
 		/**
 		 * Packet modes: leave the block in place on your screen until the server says it's gone, instead of showing it
 		 * broken as the packet goes out. A finish the server refuses then never flashes the block away and back (no
-		 * ghost blocks to walk into); the cost is a round trip before you see it go.
+		 * block that looks gone but is still there to walk into); the cost is a round trip before you see it go. Off by
+		 * default.
 		 */
 		public boolean waitForServer() {
 			return waitForServer;
 		}
 
+		/** These options with {@link #mode()} set. */
 		public Options withMode(Mode mode) {
 			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
+		/** These options with {@link #rotate()} set. */
 		public Options withRotate(boolean rotate) {
 			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
+		/** These options with {@link #swing()} set. */
 		public Options withSwing(boolean swing) {
 			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
+		/** These options with {@link #range()} set, in blocks. */
 		public Options withRange(double range) {
 			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
+		/** These options with {@link #autoTool()} set. */
 		public Options withAutoTool(boolean autoTool) {
 			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
+		/** These options with {@link #doubleBreak()} set. */
 		public Options withDoubleBreak(boolean doubleBreak) {
 			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
+		/** These options with {@link #waitForServer()} set. */
 		public Options withWaitForServer(boolean waitForServer) {
 			return new Options(mode, rotate, swing, range, autoTool, doubleBreak, waitForServer);
 		}
 
 		@Override
-		public boolean equals(Object o) {
+		public boolean equals(@Nullable Object o) {
 			return o instanceof Options x && x.mode == mode && x.rotate == rotate && x.swing == swing && x.range == range
 				&& x.autoTool == autoTool && x.doubleBreak == doubleBreak && x.waitForServer == waitForServer;
 		}
@@ -205,7 +217,9 @@ public interface Breaking {
 		}
 	}
 
+	/** Whether a block could be broken now, and if not, why not. */
 	enum Check {
+		/** It can be broken. */
 		OK,
 		/** Not in a world. */
 		UNAVAILABLE,
@@ -218,6 +232,7 @@ public interface Breaking {
 		/** A placement there is still waiting for the server. */
 		PENDING;
 
+		/** Whether this is {@link #OK}. */
 		public boolean ok() {
 			return this == OK;
 		}
@@ -225,13 +240,20 @@ public interface Breaking {
 
 	/**
 	 * One break. {@link #result()} completes with true once the server has broken the block (or it was already gone),
-	 * and false if it refused, the block went out of range, or the break was cancelled. Completes on the render thread.
+	 * and false if it refused, the block went out of range, or the break was cancelled. Completes on the render thread,
+	 * and is already false when the break wasn't accepted.
+	 *
+	 * @param pos the block to break
+	 * @param check {@link Check#OK} if it was queued, otherwise why not
+	 * @param result whether the server broke the block
 	 */
 	record Attempt(BlockPos pos, Check check, CompletableFuture<Boolean> result) {
+		/** Whether it was queued ({@link #check()} is {@link Check#OK}). */
 		public boolean accepted() {
 			return check == Check.OK;
 		}
 
+		/** An attempt that wasn't queued, for {@code check}'s reason, its result already false. */
 		public static Attempt refused(BlockPos pos, Check check) {
 			return new Attempt(pos, check, CompletableFuture.completedFuture(false));
 		}
@@ -241,15 +263,17 @@ public interface Breaking {
 	Check check(BlockPos pos, Options options);
 
 	/**
-	 * Queues {@code pos} to be broken. Higher {@code priority} goes first, then first come first served. Asking again
-	 * for a position that's already queued returns its attempt (raising its priority if yours is higher).
+	 * Queues {@code pos} to be broken for {@code owner}. Higher {@code priority} goes first, then first come first
+	 * served. Asking again for a position that's already queued returns its attempt (raising its priority if yours is
+	 * higher), whoever asked first and with their options. Refused at once, with its result false, unless
+	 * {@link #check} says {@link Check#OK}.
 	 */
 	Attempt breakBlock(Object owner, BlockPos pos, int priority, Options options);
 
-	/** Stops and forgets every break {@code owner} asked for. */
+	/** Stops and forgets every break {@code owner} asked for; their results complete with false. */
 	void cancel(Object owner);
 
-	/** Stops the break at {@code pos}, whoever asked for it. */
+	/** Stops the break at {@code pos}, whoever asked for it; its result completes with false. */
 	void cancel(BlockPos pos);
 
 	/** True while a break at {@code pos} is queued, being mined, or waiting for the server. */
@@ -258,7 +282,10 @@ public interface Breaking {
 	/** How far mining {@code pos} has got, 0 to 1 (1 = the finish has been sent); 0 if it isn't being mined. */
 	float progress(BlockPos pos);
 
-	/** Whether a block at {@code pos} can be broken now by packet mining's rebreak (a single finish packet). */
+	/**
+	 * Whether a block at {@code pos} can be broken now by packet mining's rebreak (a single finish packet): it's where
+	 * the last block was mined, and enough time has passed since for the server (and Grim, where it times breaks).
+	 */
 	boolean canRebreak(BlockPos pos);
 
 	/**
@@ -270,6 +297,7 @@ public interface Breaking {
 		/** The service this one wraps: core's own. */
 		protected final Breaking core;
 
+		/** Wraps {@code core}, the service handed to your replacement's factory. */
 		protected Forwarding(Breaking core) {
 			this.core = Objects.requireNonNull(core);
 		}

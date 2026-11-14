@@ -1,5 +1,5 @@
 // Shared by the highlight passes (see HighlightRenderer). Highlights is a buffer of vec4s: texel 0 is
-// (radius, GUI scale, count, boundary radius), texel 1 (seconds, legacy, glows, glow scale), texel 2 (1 if the masks'
+// (radius, GUI scale, count, boundary radius), texel 1 (seconds, unused, glows, glow scale), texel 2 (1 if the masks'
 // depth can be read, 1 if clip space depth runs 0..1 rather than -1..1, 0, 0), texels 3 to 6 the columns of the matrix
 // from the masks' clip space to view space, texels 7 to 10 those of the one from view space to the world's axes (from
 // the camera; a preview's subject's own space), then HIGHLIGHT_TEXELS per highlight:
@@ -15,13 +15,9 @@ uniform samplerBuffer Highlights;
 
 const int HIGHLIGHT_TEXELS = 7;
 
-// Texel 1's other fields: (y) 1 for the old full-radius search everywhere (.bench render compare only), (z) 1 when some
-// highlight this frame glows past its outline, so the glow passes ran, (w) the glow field's scale: framebuffer pixels
-// per texel (2, or 4 for a wide glow, whose falloff hides a coarser field).
-bool highlightLegacy() {
-    return texelFetch(Highlights, 1).y > 0.5;
-}
-
+// Texel 1's other fields: (y) unused, (z) 1 when some highlight this frame glows past its outline, so the glow passes
+// ran, (w) the glow field's scale: framebuffer pixels per texel (2, or 4 for a wide glow, whose falloff hides a coarser
+// field).
 bool highlightGlows() {
     return texelFetch(Highlights, 1).z > 0.5;
 }

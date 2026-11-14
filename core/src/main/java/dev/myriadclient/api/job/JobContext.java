@@ -3,6 +3,7 @@ package dev.myriadclient.api.job;
 import dev.myriadclient.api.event.Subscription;
 import dev.myriadclient.api.util.TickBudget;
 import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.util.function.Consumer;
 
@@ -36,14 +37,16 @@ public interface JobContext {
 	 */
 	<E> Subscription on(Class<E> event, Consumer<? super E> handler);
 
-	/** How far along, for the Jobs window's bar. */
+	/** How far along, for the Jobs window's bar: {@code done} of {@code total} (a total of 0 or less clears it). */
 	void progress(int done, int total);
 
+	/** How far along as a fraction, clamped to 0..1; NaN clears it (the bar then shows no progress). */
 	void progress(double fraction);
 
 	/** A live detail for the Jobs window; overrides {@link Step.Run#status()}. Null goes back to that. */
-	void status(String text);
+	void status(@Nullable String text);
 
+	/** Whether the job (or a job above it) is paused right now. */
 	boolean paused();
 
 	/** A line in the log, attributed to the job ("Printer › Build wall: ..."). */

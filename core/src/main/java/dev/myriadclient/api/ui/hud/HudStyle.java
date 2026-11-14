@@ -2,8 +2,6 @@ package dev.myriadclient.api.ui.hud;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.setting.BoolSetting;
 import dev.myriadclient.api.setting.ColorSetting;
 import dev.myriadclient.api.setting.DoubleSetting;
@@ -12,7 +10,10 @@ import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.Settings;
 import dev.myriadclient.api.ui.ThemeSettings;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The colour options every text HUD element shares, as a "Colors" settings group: how values are coloured, a
@@ -22,21 +23,35 @@ import dev.myriadclient.api.util.ColorUtil;
  * <p>{@code index}/{@code count} let a gradient or rainbow run across lines: pass the line's position.
  */
 public final class HudStyle {
+	/** How a HUD element colours its values. */
 	public enum Mode {
 		/** The module's category colour (module lists); other elements fall back to the accent. */
 		CATEGORY,
-		TEXT, ACCENT, GRADIENT, RAINBOW, CUSTOM
+		/** The theme's text colour. */
+		TEXT,
+		/** The theme's accent. */
+		ACCENT,
+		/** From the active border's first stop on the first line to its second on the last. */
+		GRADIENT,
+		/** A rainbow that cycles over time, shifted from line to line by Rainbow Spread. */
+		RAINBOW,
+		/** A colour the player picks. */
+		CUSTOM
 	}
 
 	private final EnumSetting<Mode> mode;
 	private final ColorSetting custom;
-	private final ColorSetting labels;
+	private final @Nullable ColorSetting labels;
 	private final DoubleSetting rainbowSpeed;
 	private final DoubleSetting rainbowSpread;
 	private final BoolSetting shadow;
 
 	/**
-	 * @param withLabels whether the element draws labels (like "FPS") and should offer a colour for them
+	 * Adds the "Colors" group to {@code settings} (a panel's {@code settings}). Make it in the element's constructor,
+	 * once.
+	 *
+	 * @param defaultMode how values are coloured until the player changes it
+	 * @param withLabels  whether the element draws labels (like "FPS") and should offer a colour for them
 	 */
 	public HudStyle(Settings settings, Mode defaultMode, boolean withLabels) {
 		SettingGroup sg = settings.group("Colors");
@@ -51,15 +66,20 @@ public final class HudStyle {
 		shadow = sg.bool("Shadow").defaultValue(true).build();
 	}
 
+	/** The colour mode chosen. */
 	public Mode mode() {
 		return mode.get();
 	}
 
+	/** Whether text gets a drop shadow. */
 	public boolean shadow() {
 		return shadow.get();
 	}
 
-	/** Value colour for line {@code index} of {@code count}; {@code category} is used in CATEGORY mode. */
+	/**
+	 * Value colour (ARGB) for line {@code index} of {@code count}; {@code category} (an ARGB colour, 0 for none) is
+	 * used in CATEGORY mode.
+	 */
 	public int color(int index, int count, int category) {
 		ThemeSettings theme = Myriad.ui().theme();
 		return switch (mode.get()) {
@@ -72,10 +92,12 @@ public final class HudStyle {
 		};
 	}
 
+	/** Value colour for line {@code index} of {@code count}, with no category (CATEGORY mode gives the accent). */
 	public int color(int index, int count) {
 		return color(index, count, 0);
 	}
 
+	/** Value colour for line {@code index} of {@code count}, where CATEGORY mode uses {@code module}'s tag colour. */
 	public int color(int index, int count, Module module) {
 		return color(index, count, module.tag().color());
 	}
@@ -90,7 +112,10 @@ public final class HudStyle {
 		return draw(c, font, size, text, x, y, color, shadow.get());
 	}
 
-	/** Draws text with an optional HUD-style drop shadow. Returns the width drawn. */
+	/**
+	 * Draws text with an optional HUD-style drop shadow (translucent black, 0.6 units down and right). Returns the width
+	 * drawn.
+	 */
 	public static float draw(Canvas c, FontFamily font, float size, String text, float x, float y, int color, boolean shadow) {
 		if (shadow) c.text(font, size, text, x + 0.6f, y + 0.6f, 0x99000000);
 		return c.text(font, size, text, x, y, color);

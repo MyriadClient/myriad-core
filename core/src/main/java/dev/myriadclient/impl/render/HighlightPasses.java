@@ -1,19 +1,20 @@
 package dev.myriadclient.impl.render;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.IndexType;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.buffers.GpuBuffer;
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuSampler;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.pipeline.IndexType;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuSampler;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.myriadclient.api.render.HighlightStyle;
 import dev.myriadclient.api.render.WorldMesh;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
@@ -30,6 +31,7 @@ import org.joml.Vector4f;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.List;
@@ -42,17 +44,12 @@ import java.util.OptionalDouble;
  */
 final class HighlightPasses {
 	/**
-	 * vec4s before the first highlight: (radius, GUI scale, count, boundary radius), (seconds, legacy, glows, glow scale),
+	 * vec4s before the first highlight: (radius, GUI scale, count, boundary radius), (seconds, 0, glows, glow scale),
 	 * (1 if the masks' depth can be read, 1 if depth runs 0..1 in clip space rather than -1..1, 0, 0), the four columns
 	 * of the matrix from clip space to view space, then the four of the one from view space to the world's axes (see
 	 * highlight.glsl).
 	 */
 	private static final int HEADER = 11;
-	/**
-	 * Only for .bench render compare: the way it was before the glow had its own field, searching the whole radius
-	 * everywhere at full size.
-	 */
-	static boolean legacy;
 
 	/**
 	 * Framebuffer pixels per texel of the glow's distance field for this radius: 2, or 4 once the glow is wide enough
@@ -69,7 +66,7 @@ final class HighlightPasses {
 	private static final IntOpenHashSet BROKEN_FILLS = new IntOpenHashSet();
 	private static final Logger LOG = LoggerFactory.getLogger("Myriad/Highlights");
 	private static final long START = System.nanoTime();
-	private static @Nullable TextureTarget noDepth, sceneCopy;
+	private static @Nullable TextureTarget blank, sceneCopy;
 
 	private HighlightPasses() {
 	}
@@ -138,6 +135,42 @@ final class HighlightPasses {
 		}
 	}
 
+	/** {@code mask} (made the first time, resized to {@code width} by {@code height}) cleared for a frame's silhouettes. */
+	static TextureTarget clearedMask(@Nullable TextureTarget mask, String label, int width, int height) {
+		if (mask == null) mask = new TextureTarget(label, width, height, GpuFormat.RGBA8_UNORM, GpuFormat.D32_FLOAT);
+		else if (mask.width != width || mask.height != height) mask.resize(width, height);
+		RenderSystem.getDevice().createCommandEncoder().clearColorAndDepthTextures(mask.getColorTexture(), new Vector4f(0), mask.getDepthTexture(), 0.0);
+		return mask;
+	}
+
+	/**
+	 * A frame's boxes ({@code mesh}, camera-relative) into {@code mask}, with {@code vertices} kept from the last frame's
+	 * if it's big enough. Returns the buffer they're in.
+	 */
+	static GpuBuffer drawShapes(CommandEncoder encoder, TextureTarget mask, MeshData mesh, @Nullable GpuBuffer vertices) {
+		ByteBuffer data = mesh.vertexBuffer();
+		if (vertices == null || vertices.size() < data.remaining()) {
+			if (vertices != null) vertices.close();
+			int size = Math.max(data.remaining() * 2, 1 << 16);
+			vertices = RenderSystem.getDevice().createBuffer(() -> "Myriad highlight shapes", GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, size);
+		}
+		encoder.writeToBuffer(vertices.slice(0, data.remaining()), data);
+		int count = mesh.drawState().indexCount();
+		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
+		GpuBuffer indexBuffer = indices.getBuffer(count);
+		GpuBufferSlice transform = RenderSystem.getDynamicUniforms().writeTransform(RenderSystem.getModelViewMatrixCopy(), new Vector4f(1, 1, 1, 1), new Vector3f(), IDENTITY);
+		try (RenderPass pass = encoder.createRenderPass(() -> "Myriad highlight shapes", mask.getColorTextureView(), Optional.empty(),
+			mask.getDepthTextureView(), OptionalDouble.empty())) {
+			pass.setPipeline(RenderSystem.getCompiledPipeline(MyriadPipelines.HIGHLIGHT_SHAPES_PIPELINE));
+			RenderSystem.bindDefaultUniforms(pass);
+			pass.setUniform("DynamicTransforms", transform);
+			pass.setIndexBuffer(indexBuffer, indices.type());
+			pass.setVertexBuffer(0, vertices.slice());
+			pass.drawIndexed(count, 1, 0, 0, 0);
+		}
+		return vertices;
+	}
+
 	private static void drawMeshes(CommandEncoder encoder, GpuBuffer gpuData, List<MeshDraw> meshes, TextureTarget mask, int layer,
 								   GpuBufferSlice[] transforms, GpuBuffer indexBuffer, IndexType indexType) {
 		boolean any = false;
@@ -145,7 +178,7 @@ final class HighlightPasses {
 		if (!any) return;
 		try (RenderPass pass = encoder.createRenderPass(() -> "Myriad highlight meshes", mask.getColorTextureView(), Optional.empty(),
 			mask.getDepthTextureView(), OptionalDouble.empty())) {
-			pass.setPipeline(MyriadPipelines.HIGHLIGHT_MESH);
+			pass.setPipeline(RenderSystem.getCompiledPipeline(MyriadPipelines.HIGHLIGHT_MESH));
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.setUniform("Highlights", gpuData);
 			pass.setIndexBuffer(indexBuffer, indexType);
@@ -181,20 +214,20 @@ final class HighlightPasses {
 			// Far enough out for the spread's search and the glow's.
 			int out = 2 * radius + 4;
 			try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_RESOLVE, layer.resolved.getColorTextureView(), gpuData, grow(area, out, out, w, h))) {
-				pass.bindTexture("Mask", source, nearestSampler);
-				pass.bindTexture("MaskDepth", mask.getDepthTextureView(), nearestSampler);
-				pass.bindTexture("SceneDepth", main.getDepthTextureView(), nearestSampler);
+				pass.setUniform("Mask", source, nearestSampler);
+				pass.setUniform("MaskDepth", mask.getDepthTextureView(), nearestSampler);
+				pass.setUniform("SceneDepth", main.getDepthTextureView(), nearestSampler);
 				pass.draw(3, 1, 0, 0);
 			}
 			source = layer.resolved.getColorTextureView();
 		}
 		GpuTimings.begin(GpuTimings.Pass.SPREAD);
 		try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_SPREAD, layer.spread.getColorTextureView(), gpuData, grow(area, radius, 2 * radius, w, h))) {
-			pass.bindTexture("InSampler", source, nearestSampler);
+			pass.setUniform("InSampler", source, nearestSampler);
 			pass.draw(3, 1, 0, 0);
 		}
 		GpuTimings.end(GpuTimings.Pass.SPREAD);
-		if (!legacy && radius > boundary) {
+		if (radius > boundary) {
 			GpuTimings.begin(GpuTimings.Pass.GLOW);
 			glow(encoder, layer, source, gpuData, radius, w, h);
 			GpuTimings.end(GpuTimings.Pass.GLOW);
@@ -219,11 +252,11 @@ final class HighlightPasses {
 		int reach = radius / scale + 1;
 		try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_GLOW_ROW, layer.glowRow.getColorTextureView(), gpuData, grow(half, reach + 1, 2 * reach + 2, hw, hh))) {
 			// Linear: one read between four pixels sees them all.
-			pass.bindTexture("InSampler", source, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+			pass.setUniform("InSampler", source, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
 			pass.draw(3, 1, 0, 0);
 		}
 		try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_GLOW_COLUMN, layer.glow.getColorTextureView(), gpuData, grow(half, reach + 1, reach + 1, hw, hh))) {
-			pass.bindTexture("InSampler", layer.glowRow.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+			pass.setUniform("InSampler", layer.glowRow.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
 			pass.draw(3, 1, 0, 0);
 		}
 	}
@@ -245,19 +278,22 @@ final class HighlightPasses {
 		}
 	}
 
+	/** Resources reloaded: fills that didn't compile get another go. */
+	static void fillsReloaded() {
+		BROKEN_FILLS.clear();
+	}
+
 	/**
-	 * Whether fill {@code shaderId}'s pipeline compiled: compiled now if it hasn't been since the last resource reload
-	 * (the device keeps the result, good or bad, until then). One that doesn't is said once in the log and drawn as no
-	 * fill, rather than stopping the game's resources loading as one of its own pipelines would.
+	 * Whether fill {@code shaderId}'s pipeline compiled: compiled now if it hasn't been. A pipeline that doesn't compile
+	 * isn't kept, so it's only tried once until the next resource reload ({@link #fillsReloaded}), said once in the log
+	 * and drawn as no fill, rather than stopping the game's resources loading as one of its own pipelines would.
 	 */
 	private static boolean compiles(int shaderId, RenderPipeline pipeline) {
-		if (RenderSystem.getDevice().precompilePipeline(pipeline).isValid()) {
-			BROKEN_FILLS.remove(shaderId);
-			return true;
-		}
+		if (BROKEN_FILLS.contains(shaderId)) return false;
+		if (RenderSystem.getCompiledPipelineNullable(pipeline) != null) return true;
 		if (BROKEN_FILLS.add(shaderId)) {
 			LOG.error("The fill shader {} didn't compile (its errors are above); its highlights are drawn with no fill",
-				pipeline.getFragmentShader());
+				pipeline.getLocation());
 		}
 		return false;
 	}
@@ -270,10 +306,10 @@ final class HighlightPasses {
 	/** {@code target} copied where the layer is composited, drawn rather than copied (a preview's picture can't be). */
 	private static GpuTextureView copyScene(CommandEncoder encoder, Layer layer, GpuTextureView target, GpuBuffer gpuData) {
 		int w = target.texture().getWidth(0), h = target.texture().getHeight(0);
-		if (sceneCopy == null) sceneCopy = new TextureTarget("Myriad highlights scene", w, h, false, GpuFormat.RGBA8_UNORM);
+		if (sceneCopy == null) sceneCopy = new TextureTarget("Myriad highlights scene", w, h, GpuFormat.RGBA8_UNORM, null);
 		else if (sceneCopy.width != w || sceneCopy.height != h) sceneCopy.resize(w, h);
 		try (RenderPass pass = begin(encoder, MyriadPipelines.HIGHLIGHT_SCENE_COPY, sceneCopy.getColorTextureView(), gpuData, layer.compositeRect)) {
-			pass.bindTexture("InSampler", target, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+			pass.setUniform("InSampler", target, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
 			pass.draw(3, 1, 0, 0);
 		}
 		return sceneCopy.getColorTextureView();
@@ -281,33 +317,35 @@ final class HighlightPasses {
 
 	private static void composite(CommandEncoder encoder, RenderPipeline pipeline, Layer layer, GpuTextureView target, GpuBuffer gpuData,
 								  @Nullable GpuBuffer options, @Nullable GpuTextureView scene) {
+		// Made (and cleared) before the pass opens: no texture can be cleared while one is open.
+		GpuTextureView none = pipeline != MyriadPipelines.HIGHLIGHT_COMPOSITE ? blank() : null;
 		try (RenderPass pass = begin(encoder, pipeline, target, gpuData, layer.compositeRect)) {
 			if (options != null) pass.setUniform("FillOptions", options);
 			GpuSampler nearest = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
-			pass.bindTexture("SpreadSampler", layer.spread.getColorTextureView(), nearest);
-			pass.bindTexture("GlowSampler", layer.glow.getColorTextureView(), nearest);
+			pass.setUniform("SpreadSampler", layer.spread.getColorTextureView(), nearest);
+			pass.setUniform("GlowSampler", layer.glow.getColorTextureView(), nearest);
 			// Only addons' fills read the depth; the main pass doesn't take it.
 			if (pipeline != MyriadPipelines.HIGHLIGHT_COMPOSITE) {
-				pass.bindTexture("MaskDepth", layer.depth != null ? layer.depth : noDepth(), nearest);
-				pass.bindTexture("SceneColor", scene != null ? scene : noDepth(), nearest);
-				pass.bindTexture("SceneDepth", scene != null && layer.sceneDepth != null ? layer.sceneDepth : noDepth(), nearest);
+				pass.setUniform("MaskDepth", layer.depth != null ? layer.depth : none, nearest);
+				pass.setUniform("SceneColor", scene != null ? scene : none, nearest);
+				pass.setUniform("SceneDepth", scene != null && layer.sceneDepth != null ? layer.sceneDepth : none, nearest);
 			}
 			pass.draw(3, 1, 0, 0);
 		}
 	}
 
-	/** A texture of one pixel with no depth, for a mask without any (a fill then reads none). */
-	private static GpuTextureView noDepth() {
-		if (noDepth == null) {
-			noDepth = new TextureTarget("Myriad highlights no depth", 1, 1, false, GpuFormat.RGBA8_UNORM);
-			RenderSystem.getDevice().createCommandEncoder().clearColorTexture(noDepth.getColorTexture(), new Vector4f(0));
+	/** A clear texture of one pixel, standing in for a depth or scene texture a pass doesn't have (a fill then reads none). */
+	private static GpuTextureView blank() {
+		if (blank == null) {
+			blank = new TextureTarget("Myriad highlights blank", 1, 1, GpuFormat.RGBA8_UNORM, null);
+			RenderSystem.getDevice().createCommandEncoder().clearColorTexture(blank.getColorTexture(), new Vector4f(0));
 		}
-		return noDepth.getColorTextureView();
+		return blank.getColorTextureView();
 	}
 
 	private static RenderPass begin(CommandEncoder encoder, RenderPipeline pipeline, GpuTextureView target, GpuBuffer gpuData, int[] rect) {
 		RenderPass pass = encoder.createRenderPass(() -> "Myriad highlights", target, Optional.empty(), null, OptionalDouble.empty());
-		pass.setPipeline(pipeline);
+		pass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));
 		RenderSystem.bindDefaultUniforms(pass);
 		pass.setUniform("Highlights", gpuData);
 		pass.enableScissor(rect[0], rect[1], rect[2], rect[3]);
@@ -346,7 +384,7 @@ final class HighlightPasses {
 		try (GpuBufferSlice.MappedView view = gpu.map(false, true)) {
 			FloatBuffer out = view.data().order(ByteOrder.nativeOrder()).asFloatBuffer();
 			out.put(radius).put((float) Minecraft.getInstance().getWindow().getGuiScale()).put(to - from).put(boundary);
-			out.put((float) ((System.nanoTime() - START) / 1e9 % 3600)).put(legacy ? 1 : 0).put(!legacy && radius > boundary ? 1 : 0).put(glowScale(radius));
+			out.put((float) ((System.nanoTime() - START) / 1e9 % 3600)).put(0).put(radius > boundary ? 1 : 0).put(glowScale(radius));
 			out.put(toView != null ? 1 : 0).put(RenderSystem.getDevice().getDeviceInfo().isZZeroToOne() ? 1 : 0).put(0).put(0);
 			float[] columns = new float[16];
 			(toView != null ? toView : IDENTITY).get(columns);
@@ -361,10 +399,10 @@ final class HighlightPasses {
 	private static void resize(Layer layer, int w, int h) {
 		int hw = (w + 1) / 2, hh = (h + 1) / 2;
 		if (layer.spread == null) {
-			layer.resolved = new TextureTarget("Myriad highlights resolved (" + layer.name + ")", w, h, false, GpuFormat.RGBA8_UNORM);
-			layer.spread = new TextureTarget("Myriad highlights spread (" + layer.name + ")", w, h, false, GpuFormat.RGBA16_UNORM);
-			layer.glowRow = new TextureTarget("Myriad highlights glow rows (" + layer.name + ")", hw, hh, false, GpuFormat.RGBA16_UNORM);
-			layer.glow = new TextureTarget("Myriad highlights glow (" + layer.name + ")", hw, hh, false, GpuFormat.RGBA16_UNORM);
+			layer.resolved = new TextureTarget("Myriad highlights resolved (" + layer.name + ")", w, h, GpuFormat.RGBA8_UNORM, null);
+			layer.spread = new TextureTarget("Myriad highlights spread (" + layer.name + ")", w, h, GpuFormat.RGBA16_UNORM, null);
+			layer.glowRow = new TextureTarget("Myriad highlights glow rows (" + layer.name + ")", hw, hh, GpuFormat.RGBA16_UNORM, null);
+			layer.glow = new TextureTarget("Myriad highlights glow (" + layer.name + ")", hw, hh, GpuFormat.RGBA16_UNORM, null);
 		} else if (layer.spread.width != w || layer.spread.height != h) {
 			layer.resolved.resize(w, h);
 			layer.spread.resize(w, h);

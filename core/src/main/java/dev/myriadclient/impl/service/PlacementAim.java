@@ -1,10 +1,10 @@
 package dev.myriadclient.impl.service;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.player.Reach;
 import dev.myriadclient.api.service.Placement.Options;
-import dev.myriadclient.api.util.BlockInfo;
 import dev.myriadclient.api.util.MathUtil;
-import dev.myriadclient.api.util.Reach;
+import dev.myriadclient.api.world.BlockInfo;
 import dev.myriadclient.impl.network.JoinedVersion;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -70,7 +70,21 @@ final class PlacementAim {
 			if (o.visibleFaces() && !visible(aim)) return null;
 			return aim;
 		}
+		// Only faces turned away from you: servers that don't check which face a click lands on take them (2b2t), so
+		// they're clicked where neither visible faces nor a turn to the face (which can't look at one) are asked for.
+		if (o.visibleFaces() || o.rotate()) return null;
+		for (BlockHitResult t : targets) {
+			Aim aim = awayAt(t.getBlockPos(), t.getDirection(), o.range());
+			if (aim != null) return aim;
+		}
 		return null;
+	}
+
+	/** Where to click {@code face} of the block at {@code pos} when it points away from you: its point nearest your eyes, if in reach. */
+	private @Nullable Aim awayAt(BlockPos pos, Direction face, double range) {
+		double reach = range - REACH_SLACK, own = mc.player.getEyeHeight();
+		Vec3 point = spread(pointOnFace(pos, face, eyes(own), INSET), pos, face, INSET);
+		return eyes(own).distanceToSqr(point) <= reach * reach ? aim(point, face, pos, own) : null;
 	}
 
 	/**

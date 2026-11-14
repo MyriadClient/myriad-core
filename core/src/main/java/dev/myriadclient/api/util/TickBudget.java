@@ -20,7 +20,7 @@ public final class TickBudget {
 		reset();
 	}
 
-	/** A budget of {@code nanos}, starting now. */
+	/** A budget of {@code nanos} nanoseconds (negative counts as none), starting now. */
 	public static TickBudget of(long nanos) {
 		return new TickBudget(nanos);
 	}
@@ -30,6 +30,7 @@ public final class TickBudget {
 		return System.nanoTime() < deadline;
 	}
 
+	/** Nanoseconds left before the budget runs out, 0 once it has. */
 	public long remainingNanos() {
 		return Math.max(0, deadline - System.nanoTime());
 	}

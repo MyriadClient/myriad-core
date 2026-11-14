@@ -50,11 +50,11 @@ final class HighlightTable {
 		groups.clear();
 	}
 
-	void camera(Vec3 pos, Matrix4fc modelView) {
+	void camera(Vec3 pos, Matrix4fc viewRotation) {
 		camX = pos.x;
 		camY = pos.y;
 		camZ = pos.z;
-		view.set(modelView);
+		view.set(viewRotation);
 	}
 
 	/** Records a highlight in {@code layer}; returns its id, or -1 when there are too many. */

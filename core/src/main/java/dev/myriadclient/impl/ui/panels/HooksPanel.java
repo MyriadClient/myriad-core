@@ -4,13 +4,13 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.hook.Contribution;
 import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Service;
-import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.ui.WidgetPanel;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.api.ui.widget.Heading;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.VBox;
-import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.hook.HookManager;
 

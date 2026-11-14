@@ -1,6 +1,6 @@
 package dev.myriadclient.api.world;
 
-import dev.myriadclient.api.util.BlockInfo;
+import dev.myriadclient.api.world.BlockInfo;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -11,7 +11,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -47,6 +47,7 @@ public final class Holes {
 		BLAST_PROOF
 	}
 
+	/** A hole's size. */
 	public enum Shape {
 		/** One block. */
 		SINGLE,
@@ -59,6 +60,12 @@ public final class Holes {
 	/**
 	 * A hole. {@code origin} is its lowest-x, lowest-z cell; {@code axis} says which way a {@link Shape#DOUBLE} runs
 	 * (null otherwise).
+	 *
+	 * @param origin its lowest-x, lowest-z cell, at foot level
+	 * @param shape  its size
+	 * @param axis   for a {@link Shape#DOUBLE}, the axis it runs along from {@code origin} (towards positive x or z);
+	 *               null for the others
+	 * @param safety whether every wall and the floor is bedrock, or only blast-proof
 	 */
 	public record Hole(BlockPos origin, Shape shape, Direction.@Nullable Axis axis, Safety safety) {
 		/** The air blocks you stand in. */
@@ -83,21 +90,26 @@ public final class Holes {
 			return new Vec3(b.getCenter().x, b.minY, b.getCenter().z);
 		}
 
+		/** Whether {@code pos} is one of its cells. */
 		public boolean contains(BlockPos pos) {
 			return cells().contains(pos);
 		}
 	}
 
-	private static BlockGetter world() {
+	private static @Nullable BlockGetter world() {
 		return Minecraft.getInstance().level;
 	}
 
-	/** The hole {@code pos} is a cell of (the air at foot level), or null. Single holes are found first, then doubles, then quads. */
+	/**
+	 * The hole {@code pos} is a cell of (the air at foot level), or null (also outside a world). Single holes are found
+	 * first, then doubles, then quads.
+	 */
 	public static @Nullable Hole at(BlockPos pos) {
 		BlockGetter level = world();
 		return level == null ? null : at(level, pos);
 	}
 
+	/** {@link #at(BlockPos)} reading {@code level}, e.g. a chunk's level from a {@link ChunkCache} compute. */
 	public static @Nullable Hole at(BlockGetter level, BlockPos pos) {
 		if (!isCell(level, pos)) return null;
 		Hole h = check(level, pos, Shape.SINGLE, null);
@@ -115,7 +127,10 @@ public final class Holes {
 		return null;
 	}
 
-	/** Every hole with a cell within {@code radius} blocks (a cube) of {@code center}, nearest first, each once. */
+	/**
+	 * Every hole with a cell within {@code radius} blocks (a cube) of {@code center}, nearest first, each once; empty
+	 * outside a world.
+	 */
 	public static List<Hole> around(BlockPos center, int radius) {
 		BlockGetter level = world();
 		if (level == null) return List.of();
@@ -166,7 +181,10 @@ public final class Holes {
 		return h != null && h.cells().containsAll(feet) ? h : null;
 	}
 
-	/** The blocks at foot level that {@code entity}'s bounding box overlaps (one to four for a player). */
+	/**
+	 * The blocks at foot level that {@code entity}'s bounding box overlaps (one to four for a player). Foot level is
+	 * taken 0.2 above the box's bottom, so standing on soul sand counts as the block above it.
+	 */
 	public static List<BlockPos> footprint(Entity entity) {
 		AABB b = entity.getBoundingBox();
 		int y = Mth.floor(b.minY + 0.2);

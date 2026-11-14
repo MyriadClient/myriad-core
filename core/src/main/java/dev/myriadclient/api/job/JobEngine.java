@@ -38,13 +38,16 @@ public final class JobEngine implements Jobs {
 		/** The services let go of what {@code job} asked for (placements, breaks, holds, borrows). */
 		void release(Job<?> job);
 
+		/** Core's: listens on the event bus. */
 		<E> Subscription listen(Class<E> type, Consumer<? super E> handler);
 
+		/** Core's: posts a {@link JobEvent} on the event bus. */
 		void post(Object event);
 
 		/** A root failed and nothing took the failure: tell the player. */
 		void failed(Job<?> root, Why why);
 
+		/** Core's: writes a line attributed to {@code job} to the log. */
 		void log(Job<?> job, String message);
 
 		/** A root job's tick took {@code nanos}, against {@code budgetNanos} (for the profiler). */
@@ -62,6 +65,7 @@ public final class JobEngine implements Jobs {
 	private int nextId = 1;
 	private boolean ticking;
 
+	/** Core's: an engine wired to the game through {@code host}. */
 	public JobEngine(Host host) {
 		this.host = host;
 	}

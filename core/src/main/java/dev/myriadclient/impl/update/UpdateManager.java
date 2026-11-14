@@ -6,10 +6,10 @@ import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.event.events.GameReadyEvent;
 import dev.myriadclient.api.event.events.ScreenOpenEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.api.network.Http;
 import dev.myriadclient.api.service.Notifications;
 import dev.myriadclient.api.util.Async;
-import dev.myriadclient.api.util.Http;
-import dev.myriadclient.impl.ui.DesktopScreen;
+import dev.myriadclient.impl.ui.UiScreen;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.Version;
 import net.fabricmc.loader.api.VersionParsingException;
@@ -23,12 +23,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -70,10 +72,22 @@ public final class UpdateManager {
 	/** Toasts wait until something draws them (the menu or the HUD); render thread only. */
 	private final List<Runnable> queuedToasts = new ArrayList<>();
 	private volatile boolean checkEnabled = true;
+	/** Newer releases for another Minecraft already said ("id message"), kept in the config so each is said once. */
+	private final Set<String> noted = ConcurrentHashMap.newKeySet();
 	private volatile boolean checking;
 
 	public UpdateManager(Path root) {
 		this.installer = new UpdateInstaller(root.resolve("updates"));
+	}
+
+	/** The notes about other Minecraft versions' releases already shown (see {@link #announce}), for the config. */
+	public Set<String> noted() {
+		return Set.copyOf(noted);
+	}
+
+	public void setNoted(Collection<String> said) {
+		noted.clear();
+		noted.addAll(said);
 	}
 
 	public boolean checkEnabled() {
@@ -107,7 +121,7 @@ public final class UpdateManager {
 			if (checkEnabled) check(false);
 		});
 		events.listen(ScreenOpenEvent.class, e -> {
-			if (e.screen() instanceof DesktopScreen) flushToasts();
+			if (e.screen() instanceof UiScreen) flushToasts();
 		});
 		events.listen(WorldEvent.Join.class, e -> flushToasts());
 	}
@@ -161,13 +175,20 @@ public final class UpdateManager {
 			Addon a = entry.getKey();
 			String id = a.id(), installed = installedVersion(a);
 			states.put(id, new State(Kind.CHECKING, null, null, null));
-			GitHubReleases.latest(entry.getValue(), jarOf(a).getFileName().toString(), installed).whenComplete((r, err) -> {
+			GitHubReleases.releases(entry.getValue(), jarOf(a).getFileName().toString(), installed, minecraftVersion()).whenComplete((found, err) -> {
+				GitHubReleases.Release r = found == null ? null : found.forThisMinecraft();
+				GitHubReleases.Release newest = found == null ? null : found.newest();
 				if (err != null) {
 					String why = reason(err);
 					LOG.info("Could not check {} for updates: {}", id, why);
 					states.put(id, new State(Kind.UNKNOWN, null, null, why.contains("HTTP 404") ? "No releases yet" : "Couldn't check: " + why));
-				} else if (!GitHubReleases.isNewer(r.version(), installed)) {
-					states.put(id, new State(Kind.UP_TO_DATE, r.version(), r.url(), null));
+				} else if (newest == null) {
+					states.put(id, new State(Kind.UNKNOWN, null, null, "No releases yet"));
+				} else if (r == null || !GitHubReleases.isNewer(r.version(), installed)) {
+					// Up to date for this Minecraft; a newer release for another one is only said, never installed.
+					boolean elsewhere = GitHubReleases.isNewer(newest.version(), installed) && newest != r;
+					String note = elsewhere ? newest.version() + " is out for Minecraft " + newest.minecraftShown() : null;
+					states.put(id, new State(Kind.UP_TO_DATE, r != null ? r.version() : installed, elsewhere ? newest.url() : r != null ? r.url() : null, note));
 				} else if (r.asset() == null) {
 					states.put(id, new State(Kind.UNKNOWN, r.version(), r.url(), r.version() + " is out, but its release has no jar to install"));
 				} else {
@@ -183,6 +204,15 @@ public final class UpdateManager {
 	}
 
 	private void announce(boolean manual) {
+		// Newer releases only for another Minecraft: said once each (every time when asked), as there's nothing to install.
+		for (Addon a : Myriad.addons()) {
+			State s = states.get(a.id());
+			if (s == null || s.kind() != Kind.UP_TO_DATE || s.message() == null) continue;
+			if (noted.add(a.id() + " " + s.message()) || manual) {
+				toast("Update for another Minecraft", a.name() + " " + s.message() + "; you're on " + minecraftVersion().getFriendlyString() + ".", Notifications.Level.INFO);
+				if (Myriad.isReady()) Myriad.config().markDirty();
+			}
+		}
 		List<String> ids = updatable();
 		if (ids.isEmpty()) {
 			if (!manual) return;
@@ -305,7 +335,7 @@ public final class UpdateManager {
 		Runnable post = () -> Myriad.notifications().toast(title, message).level(level).lasting(8000).replacing(TOAST_KEY + ":" + title).show();
 		Minecraft mc = Minecraft.getInstance();
 		// Startup runs before the game's GUI exists.
-		if (mc != null && mc.gui != null && (mc.gui.screen() instanceof DesktopScreen || mc.player != null)) post.run();
+		if (mc != null && mc.gui != null && (mc.gui.screen() instanceof UiScreen || mc.player != null)) post.run();
 		else queuedToasts.add(post);
 	}
 

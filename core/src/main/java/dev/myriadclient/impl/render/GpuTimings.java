@@ -1,9 +1,8 @@
 package dev.myriadclient.impl.render;
 
-import com.mojang.blaze3d.systems.GpuQueryPool;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.renderpearl.api.commands.GpuQueryPool;
 import net.minecraft.client.Minecraft;
-
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
@@ -44,21 +43,6 @@ public final class GpuTimings {
 	private static @Nullable Consumer<String> done;
 
 	private GpuTimings() {
-	}
-
-	/** Switches highlights to the way they were drawn before (or back); true if they're the old way now. */
-	public static boolean toggleLegacy() {
-		return HighlightPasses.legacy = !HighlightPasses.legacy;
-	}
-
-	/** Measures {@code frameCount} frames the way the passes were before (HighlightPasses.legacy), then as many as they are now. */
-	public static void compare(int frameCount, Consumer<String> report) {
-		HighlightPasses.legacy = true;
-		measure(frameCount, before -> {
-			HighlightPasses.legacy = false;
-			report.accept("Before: " + before);
-			measure(frameCount, after -> report.accept("Now: " + after));
-		});
 	}
 
 	/** Measures the next {@code frameCount} frames, then hands a one-line report to {@code report}. */

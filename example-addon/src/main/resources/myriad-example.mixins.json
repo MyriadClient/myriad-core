@@ -3,7 +3,7 @@
 	"package": "com.example.myriadaddon.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
-		"ChatHudMixin"
+		"ChatComponentMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

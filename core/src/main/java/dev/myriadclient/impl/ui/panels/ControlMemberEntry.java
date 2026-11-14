@@ -1,8 +1,8 @@
 package dev.myriadclient.impl.ui.panels;
 
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.setting.SettingGroup;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;

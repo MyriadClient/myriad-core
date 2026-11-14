@@ -4,8 +4,6 @@ import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.util.RateCounter;
 import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ServerboundAttackPacket;
-import net.minecraft.network.protocol.game.ServerboundInteractPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
@@ -24,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * go past the 72 but not to the 80th. Interactions follow Paper's spam limiter
  * ({@code spam-limiter.incoming-packet-threshold}, 300 ms by default): it keeps 9 use and place packets in a window
  * starting at a packet, and silently drops the rest, so 30 a second at best. Here it's the same 9 in any 300 ms, so
- * builds get that whole 30 a second (a 330 ms margin held them to about 27), and a burst of 9 (a surround) still goes
+ * builds get that whole 30 a second (a wider margin would hold them to about 27), and a burst of 9 (a surround) still goes
  * at once. Lock-free: every packet sent passes through here on whichever thread sends it.
  */
 public final class PacketLimiter implements PacketLimits {
@@ -72,8 +70,7 @@ public final class PacketLimiter implements PacketLimits {
 			case ServerboundPlayerActionPacket p -> Kind.BLOCK_ACTION;
 			case ServerboundUseItemOnPacket p -> Kind.INTERACT;
 			case ServerboundUseItemPacket p -> Kind.INTERACT;
-			case ServerboundInteractPacket p -> Kind.INTERACT;
-			case ServerboundAttackPacket p -> Kind.INTERACT;
+			// Attacks and using items on entities aren't counted: Paper's limiter only takes uses and placements.
 			default -> null;
 		};
 	}

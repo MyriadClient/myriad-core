@@ -7,6 +7,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
+/**
+ * The profiler's count of block reads, which hints where a chunk cache would help (Profiler).
+ */
 @Mixin(Level.class)
 public abstract class LevelMixin {
 	/**

@@ -4,11 +4,11 @@ import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.InputEvent;
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.ui.ThemeSettings;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
-import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.impl.render.UiRenderer;
 import dev.myriadclient.impl.wheel.WheelImpl;
 import dev.myriadclient.impl.wheel.WheelSlot;
@@ -18,7 +18,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,11 +25,11 @@ import java.util.List;
 /**
  * A wheel over the game while its bind is held: its slots as round buttons on a ring around a disc that names the one
  * the mouse points at. Letting go of the bind runs that one (pointing at the middle runs nothing); a click runs one
- * too, Escape or a right click closes it. Drawn in the desktop's theme, over a blur of the game. You keep walking
+ * too, Escape or a right click closes it. Drawn in the UI's theme, over a blur of the game. You keep walking
  * meanwhile: the movement keys you hold still move you, and what already moves you (Baritone, Auto Walk) carries on.
  */
 public final class WheelScreen extends Screen {
-	/** A slot's button radius, in the desktop's units. */
+	/** A slot's button radius, in the UI's units. */
 	private static final float BUTTON = 15;
 	/** Space between neighbouring buttons on the ring. */
 	private static final float GAP = 9;
@@ -85,9 +84,8 @@ public final class WheelScreen extends Screen {
 	private boolean held(KeyMapping mapping) {
 		if (mapping.isUnbound()) return false;
 		InputConstants.Key key = InputConstants.getKey(mapping.saveString());
-		long window = minecraft.getWindow().handle();
-		if (key.getType() == InputConstants.Type.MOUSE) return GLFW.glfwGetMouseButton(window, key.getValue()) == GLFW.GLFW_PRESS;
-		return InputConstants.isKeyDown(minecraft.getWindow(), key.getValue());
+		if (key.getType() == InputConstants.Type.MOUSE) return Keybind.mouse(key.getValue()).isPressed();
+		return InputConstants.isKeyDown(key.getValue());
 	}
 
 	private WindowManager wm() {
@@ -217,8 +215,8 @@ public final class WheelScreen extends Screen {
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
 		if (bind.mouse() && event.button() == bind.code()) return true;
-		if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT && hovered >= 0) finish(hovered);
-		else if (event.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) finish(-1);
+		if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && hovered >= 0) finish(hovered);
+		else if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT) finish(-1);
 		return true;
 	}
 

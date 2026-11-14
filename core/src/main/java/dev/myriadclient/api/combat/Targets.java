@@ -1,8 +1,8 @@
 package dev.myriadclient.api.combat;
 
-import dev.myriadclient.api.util.Entities;
+import dev.myriadclient.api.player.Reach;
 import dev.myriadclient.api.util.MathUtil;
-import dev.myriadclient.api.util.Reach;
+import dev.myriadclient.api.world.Entities;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ExperienceOrb;
@@ -11,7 +11,7 @@ import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
-import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.Enderman;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.monster.warden.Warden;
@@ -20,7 +20,7 @@ import net.minecraft.world.entity.npc.villager.AbstractVillager;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.phys.Vec3;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -36,13 +36,32 @@ import java.util.function.Predicate;
  *
  * <pre>{@code
  * Entity target = Targets.query().range(4.5).types(Targets.Type.PLAYERS, Targets.Type.HOSTILES).sort(Targets.Sort.HEALTH).best();
+ * if (target != null && Reach.canReach(target)) Interactions.attack(target, true);
  * }</pre>
+ *
+ * Queries read the client's entity list each time they're asked; a render handler that needs targets every frame keeps
+ * them in a {@link dev.myriadclient.api.util.TickCached}.
  */
 public final class Targets {
+	/** Kinds of target, as {@link #type} sorts entities. */
 	public enum Type {
-		PLAYERS, HOSTILES, ANIMALS, VILLAGERS, BOSSES, PROJECTILES
+		/** Other players (fake ones included; never you). */
+		PLAYERS,
+		/**
+		 * Monsters, and neutral mobs while angry (endermen and zombified piglins always, without {@code onlyAngry}).
+		 */
+		HOSTILES,
+		/** Animals, and calm neutral mobs such as wolves and bees when {@code onlyAngry} is off. */
+		ANIMALS,
+		/** Villagers and wandering traders. */
+		VILLAGERS,
+		/** The wither, wardens and the ender dragon. */
+		BOSSES,
+		/** Projectiles that can be hit: fireballs and shulker bullets (most others aren't attackable). */
+		PROJECTILES
 	}
 
+	/** Which target comes first. */
 	public enum Sort {
 		/** Closest first (to the nearest point of the hitbox). */
 		DISTANCE,
@@ -55,6 +74,10 @@ public final class Targets {
 	private Targets() {
 	}
 
+	/**
+	 * A new query with the defaults: players only, within 6 blocks, friends left out, invisible, named and creative
+	 * targets and those behind walls included, nearest first.
+	 */
 	public static Query query() {
 		return new Query();
 	}
@@ -69,7 +92,7 @@ public final class Targets {
 		if (e instanceof WitherBoss || e instanceof Warden || e instanceof EnderDragon) return Type.BOSSES;
 		if (e instanceof Projectile) return Type.PROJECTILES;
 		if (e instanceof AbstractVillager) return Type.VILLAGERS;
-		if (e instanceof EnderMan enderman) return !onlyAngry || enderman.hasBeenStaredAt() ? Type.HOSTILES : null;
+		if (e instanceof Enderman enderman) return !onlyAngry || enderman.hasBeenStaredAt() ? Type.HOSTILES : null;
 		if (e instanceof ZombifiedPiglin piglin) return !onlyAngry || piglin.isAggressive() ? Type.HOSTILES : null;
 		if (e instanceof NeutralMob angerable && !(e instanceof Monster)) {
 			if (angerable.isAngry()) return Type.HOSTILES;
@@ -85,6 +108,11 @@ public final class Targets {
 		return e instanceof LivingEntity l ? l.getHealth() + l.getAbsorptionAmount() : 0;
 	}
 
+	/**
+	 * Which entities to find and in what order: set what differs from the defaults ({@link Targets#query()}), then call
+	 * {@link #best()} or {@link #list()}. Every setter returns this query. A query can be kept and asked again each
+	 * tick; it reads the world only when asked.
+	 */
 	public static final class Query {
 		private double range = 6;
 		private final Set<Type> types = EnumSet.of(Type.PLAYERS);
@@ -95,7 +123,7 @@ public final class Targets {
 		private Query() {
 		}
 
-		/** Maximum distance from your eyes to the nearest point of the hitbox. */
+		/** Maximum distance in blocks from your eyes to the nearest point of the hitbox (6 by default). */
 		public Query range(double range) {
 			this.range = range;
 			return this;
@@ -108,12 +136,14 @@ public final class Targets {
 			return this;
 		}
 
+		/** Which kinds of entity count, replacing the ones set before; the set is copied. */
 		public Query types(Set<Type> types) {
 			this.types.clear();
 			this.types.addAll(types);
 			return this;
 		}
 
+		/** Leave neutral mobs out until they're angry (off by default); see {@link Targets#type}. */
 		public Query onlyAngry(boolean onlyAngry) {
 			this.onlyAngry = onlyAngry;
 			return this;
@@ -125,40 +155,46 @@ public final class Targets {
 			return this;
 		}
 
+		/** Include invisible entities (on by default). */
 		public Query invisibles(boolean include) {
 			this.invisibles = include;
 			return this;
 		}
 
-		/** Include mobs with name tags. */
+		/** Include mobs with name tags (on by default; players always count). */
 		public Query named(boolean include) {
 			this.named = include;
 			return this;
 		}
 
-		/** Include players in creative mode. */
+		/** Include players in creative mode (on by default). */
 		public Query creative(boolean include) {
 			this.creative = include;
 			return this;
 		}
 
-		/** Include entities you can't see (on by default). */
+		/** Include entities you have no line of sight to (on by default). */
 		public Query throughWalls(boolean include) {
 			this.throughWalls = include;
 			return this;
 		}
 
+		/** The order of {@link #list()} and which one {@link #best()} picks ({@link Sort#DISTANCE} by default). */
 		public Query sort(Sort sort) {
 			this.sort = sort;
 			return this;
 		}
 
-		/** An extra condition of your own. */
+		/** An extra condition of your own; several calls add up (all must pass). */
 		public Query filter(Predicate<Entity> filter) {
 			this.filter = this.filter.and(filter);
 			return this;
 		}
 
+		/**
+		 * Whether {@code e} matches: alive, attackable, not you, of a wanted type, passing every option and within range.
+		 * False outside a world.
+		 */
 		public boolean test(Entity e) {
 			Minecraft mc = Minecraft.getInstance();
 			if (mc.player == null || e == mc.player || !e.isAlive() || !e.isAttackable() || e instanceof ExperienceOrb) return false;
@@ -176,7 +212,7 @@ public final class Targets {
 			return filter.test(e);
 		}
 
-		/** Every match, best first. */
+		/** Every match among the entities the client has, best first; a new list, empty outside a world. */
 		public List<Entity> list() {
 			Minecraft mc = Minecraft.getInstance();
 			List<Entity> out = new ArrayList<>();
@@ -186,7 +222,7 @@ public final class Targets {
 			return out;
 		}
 
-		/** The best match, or null. */
+		/** The best match, or null if nothing matches (or outside a world); cheaper than {@code list().getFirst()}. */
 		public @Nullable Entity best() {
 			Minecraft mc = Minecraft.getInstance();
 			if (mc.level == null || mc.player == null) return null;

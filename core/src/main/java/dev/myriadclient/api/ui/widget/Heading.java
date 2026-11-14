@@ -1,9 +1,10 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
 import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.util.function.Supplier;
 
@@ -11,21 +12,23 @@ import java.util.function.Supplier;
  * What starts a part of a window that doesn't fold: its name, a hairline running on from it, and dim text at the end
  * (how many there are, say). For a part that folds, see {@link Collapsible}.
  */
-@ApiStatus.AvailableSince("1.4.0")
+@ApiStatus.AvailableSince("1.4")
 public class Heading extends Widget {
 	private final Supplier<String> title;
-	private Supplier<String> hint;
+	private @Nullable Supplier<@Nullable String> hint;
 
+	/** A heading named {@code title}. */
 	public Heading(String title) {
 		this(() -> title);
 	}
 
+	/** A heading named by {@code title}, asked every frame. */
 	public Heading(Supplier<String> title) {
 		this.title = title;
 	}
 
-	/** Dim text at the right. */
-	public Heading hint(Supplier<String> hint) {
+	/** Dim text at the right, asked every frame; null or empty shows none. Returns this heading. */
+	public Heading hint(Supplier<@Nullable String> hint) {
 		this.hint = hint;
 		return this;
 	}

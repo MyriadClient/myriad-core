@@ -10,8 +10,12 @@ import net.minecraft.commands.SharedSuggestionProvider;
 
 import java.util.concurrent.CompletableFuture;
 
-/** A config profile name; suggests existing profiles. */
+/**
+ * A config profile name, as one word; suggests existing profiles but accepts any name (to create one). Read it back
+ * with {@code ctx.getArgument(name, String.class)}.
+ */
 public class ProfileArgumentType implements ArgumentType<String> {
+	/** A profile name argument. */
 	public static ProfileArgumentType profile() {
 		return new ProfileArgumentType();
 	}

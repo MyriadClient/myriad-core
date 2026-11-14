@@ -1,9 +1,9 @@
 package dev.myriadclient.impl.render;
 
-import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.Std140Builder;
-import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
 import dev.myriadclient.api.render.HighlightStyle;
 import dev.myriadclient.api.setting.ChoiceSetting;
 import dev.myriadclient.api.setting.ColorSetting;

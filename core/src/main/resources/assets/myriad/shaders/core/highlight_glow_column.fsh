@@ -1,12 +1,13 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 
-#moj_import <myriad:highlight.glsl>
+#include <myriad:highlight.glsl>
 
 // The glow's distance field: the nearest of the row results over this column (searched outwards, stopping once rows
 // further away can't be closer), as (distance in framebuffer pixels * GLOW_SCALE, id).
 uniform sampler2D InSampler;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
     ivec2 p = ivec2(gl_FragCoord.xy);

@@ -1,12 +1,14 @@
 package dev.myriadclient.impl.ui.panels;
 
+import com.mojang.blaze3d.Blaze3D;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.WidgetPanel;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.api.ui.widget.HBox;
@@ -19,7 +21,6 @@ import dev.myriadclient.api.ui.widget.Widget;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.impl.ui.ThemeManager;
 import dev.myriadclient.impl.ui.WindowManager;
-import net.minecraft.util.Util;
 
 /**
  * The theme list (pick, create, duplicate, rename, delete or reset themes) and the active theme's values. Edits save
@@ -76,7 +77,7 @@ public final class ThemePanel extends WidgetPanel {
 		content.add(actions);
 
 		HBox files = new HBox(4);
-		files.add(new Button(" Open Folder", () -> Util.getPlatform().openPath(themes.folder())))
+		files.add(new Button(" Open Folder", () -> Blaze3D.openPath(themes.folder())))
 			.tooltip("Theme files live here. Share one by sending its .json; drop a received one in and press Reload.");
 		files.add(new Button(" Reload", () -> {
 			themes.reload();
@@ -184,7 +185,7 @@ public final class ThemePanel extends WidgetPanel {
 
 		@Override
 		public boolean mouseClicked(float mx, float my, int button) {
-			if (button != 0 || !isHovered(mx, my)) return false;
+			if (button != InputConstants.MOUSE_BUTTON_LEFT || !isHovered(mx, my)) return false;
 			wm.applyTheme(entry.id());
 			return true;
 		}

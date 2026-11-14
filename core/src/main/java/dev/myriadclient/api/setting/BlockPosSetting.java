@@ -3,17 +3,25 @@ package dev.myriadclient.api.setting;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import net.minecraft.core.BlockPos;
+import org.jspecify.annotations.Nullable;
 
 import java.util.function.Supplier;
 
-/** A block position: an anchor, a schematic origin, a home. The editor also offers "set to where I'm standing". */
+/**
+ * A block position: an anchor, a schematic origin, a home. The editor also offers "set to where I'm standing". Typed as
+ * {@code x y z} (commas also work). Protected from shared configs unless the builder says {@code protect(false)}.
+ */
 public class BlockPosSetting extends Setting<BlockPos> {
-	public BlockPosSetting(String name, String description, BlockPos defaultValue, Supplier<Boolean> visible) {
+	/**
+	 * A setting as its {@link Builder} makes it; get one from {@link SettingGroup#blockPos(String)}, or call this from
+	 * a subclass.
+	 */
+	public BlockPosSetting(String name, @Nullable String description, BlockPos defaultValue, @Nullable Supplier<Boolean> visible) {
 		super(name, description, defaultValue, visible);
 	}
 
 	@Override
-	protected BlockPos validate(BlockPos v) {
+	protected BlockPos validate(@Nullable BlockPos v) {
 		return v == null ? defaultValue : v.immutable();
 	}
 
@@ -52,7 +60,12 @@ public class BlockPosSetting extends Setting<BlockPos> {
 		return get().getX() + " " + get().getY() + " " + get().getZ();
 	}
 
+	/** Builds a {@link BlockPosSetting}; {@code 0 0 0} by default. */
 	public static class Builder extends Setting.Builder<BlockPosSetting.Builder, BlockPos, BlockPosSetting> {
+		/**
+		 * A builder for a setting called {@code name}; prefer {@link SettingGroup#blockPos(String)}, which adds it to
+		 * the group.
+		 */
 		public Builder(String name) {
 			super(name, BlockPos.ZERO);
 			// Coordinates are where your things are: private unless the addon says otherwise.

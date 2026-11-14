@@ -3,11 +3,11 @@ package dev.myriadclient.impl.ui.layout;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import dev.myriadclient.api.ui.Direction;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.ui.Rect;
+import dev.myriadclient.api.ui.Side;
 import dev.myriadclient.api.ui.layout.Layout;
 import dev.myriadclient.api.ui.layout.LayoutState;
-import dev.myriadclient.api.util.MyriadId;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -169,7 +169,7 @@ public final class DwindleLayout implements Layout {
 
 		/** {@code target}'s leaf split in two the way {@code side} says, {@code window} on that side, the split even. */
 		@Override
-		public void insertBeside(W window, W target, Direction side) {
+		public void insertBeside(W window, W target, Side side) {
 			if (window == target || find(root, target) == null) return;
 			remove(window);
 			Node<W> t = find(root, target);
@@ -180,13 +180,13 @@ public final class DwindleLayout implements Layout {
 			if (t.parent == null) root = split;
 			else if (t.parent.a == t) t.parent.a = split;
 			else t.parent.b = split;
-			boolean first = side == Direction.LEFT || side == Direction.UP;
+			boolean first = side == Side.LEFT || side == Side.UP;
 			split.a = first ? leaf : t;
 			split.b = first ? t : leaf;
 			t.parent = split;
 			leaf.parent = split;
 			split.box = t.box;
-			split.horizontal = side == Direction.LEFT || side == Direction.RIGHT;
+			split.horizontal = side == Side.LEFT || side == Side.RIGHT;
 		}
 
 		@Override

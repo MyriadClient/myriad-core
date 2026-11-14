@@ -3,18 +3,102 @@
 Myriad follows [semantic versioning](https://semver.org) for the public API (`dev.myriadclient.api`). The API names
 Minecraft's own types, so addons are rebuilt for each Minecraft version whatever Myriad does; within one:
 
-- Every 1.x release is **source- and binary-compatible** with the 1.x releases before it for the same
-  Minecraft version: an addon built against 1.2 runs on 1.5. Core's build checks this against the last release.
+- Every release is **source- and binary-compatible** with the earlier ones of the same major version for the same
+  Minecraft version: an addon built against 2.0 runs on 2.3. Core's build checks this against the last release.
 - A move to a **new Minecraft version is a minor release**. It may deprecate what the new version made wrong, with the
   replacement in the javadoc, but removes nothing.
-- **Removals need a major release**, and only of what a minor release deprecated first.
+- **Removals need a major release**, and only of what a minor release deprecated first. A major release may also move
+  or rename types, with the old name and the new one in its notes.
 - A **patch** release never changes the API.
-- What a 1.x release adds carries `@ApiStatus.AvailableSince` with that release.
+- What a release adds carries `@ApiStatus.AvailableSince` with that release.
 
 Before 1.0 a minor release could also remove what an earlier one had deprecated.
 
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
-(`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
+(`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
+
+## 2.0.0
+
+**For Minecraft 26.3, with the API put in order.** 2.0 runs on Minecraft 26.3; 1.8.1 stays for 26.2 (the update check
+only offers each the release for its Minecraft). Addons had to be rebuilt for 26.3 anyway, so every API change that
+needed a major release is in this one: the grab-bag `util` package is split into packages named for what's in them, the
+menu's entry point is `Ui`, and what 1.x deprecated is gone. Every public type and member is documented, and the 1.x
+promise holds again for 2.x.
+
+### Minecraft 26.3
+
+- **Keys and buttons.** 26.3 reads input through SDL: binds saved by 1.x convert when they're loaded, and are saved in the
+  new form (`sdl-key:`, `sdl-mouse:`). Typing in Myriad's text fields turns the game's text input on while they're focused.
+- **Rendering on 26.3's graphics layer.** Highlights, fills, meshes, previews, the HUD and the menu are ported; the entity
+  outline pass gets the depth buffer it no longer has. Addons' fill shaders import with `#include <namespace:path>`
+  (`#moj_import` no longer compiles).
+- **A step back from a setback no longer flags.** 26.3 doesn't note a teleport's position as the last one sent, so walking
+  straight back the way you came after a setback sent no position at all and the next move was set back again (Grim's
+  Simulation, a run of them while sprinting). Core notes it.
+- **Using an item while facing elsewhere no longer flags.** Since 1.21 the server turns you to an item use's rotation,
+  but Grim only reads rotations from movement, so the next movement now carries it (on 2b2t this set Altitude back at
+  pull-up swaps).
+- Swings go out as 26.3's hand-less punch, which ViaVersion turns into a main-hand swing for older servers.
+
+### Fixes
+
+- **Crafting shows its result again** while you hold a stack or right after taking one: the server's answer for a result
+  slot (crafting, furnaces, villagers, the grindstone, the loom) is always taken, since the client can't work recipes out.
+- **Highlights no longer linger** for a moment after what they were on is gone (an item as you pick it up): a frame
+  with nothing outlined left the last frame's silhouettes in place.
+- **An addon's fill on your held item no longer crashes the game** (as View Model's Item Fill).
+- **No setback after eating straight after a teleport**: the rotation the server set was forgotten a tick too early.
+- **Putting the hotbar back finds an item you moved along it**: one moved to another used hotbar slot was taken as gone
+  (only the main inventory was searched), so the sword you'd shifted along wasn't put back where it belonged.
+- **Turning a module off lets go of what it held**: its inventory holds end and items it borrowed go back.
+- **Builds go quicker**: only actions really sent count toward a build's places per tick (`Building.Options`). Attacks
+  and entity interactions no longer count toward the interaction limit (Paper doesn't limit them).
+- `CharEvent.modifiers()` reports the held modifiers (it was always 0); `HBox.clear()` forgets its sizes and a cleared
+  `Container` drops focus inside it; the bundled fonts' licences no longer log "Invalid path" errors.
+
+### For addon developers
+
+Rebuild against 2.0 and Minecraft 26.3. Most of the work is imports:
+
+| 1.x | 2.0 |
+|---|---|
+| `util.AnyThread`, `util.RenderThread` | `annotation.AnyThread`, `annotation.RenderThread` |
+| `util.MyriadId` | `registry.MyriadId` |
+| `util.Keybind`, `service.KeyAction` | `input.Keybind`, `input.KeyAction` |
+| `util.Packets`, `util.PacketChannel`, `util.Http` | `network.Packets`, `network.PacketChannel`, `network.Http` |
+| `util.ItemInfo`, `util.ItemMatch`, `util.Slots` | `item.ItemInfo`, `item.ItemMatch`, `item.Slots` |
+| `util.Interactions`, `util.Reach`, `util.Movement`, `util.Mining` | `player.Interactions`, `player.Reach`, `player.Movement`, `player.Mining` |
+| `util.BlockInfo`, `util.Entities`, `util.Positions`, `util.FakePlayers` | `world.BlockInfo`, `world.Entities`, `world.Positions`, `world.FakePlayers` |
+| `util.Baritone` | `integration.Baritone` |
+| `render.Canvas`, `FontFamily`, `ThemeFont`, `MyriadLogo`, `Animated`, `Bezier`, `Easing` | `ui.draw.*` |
+| `ui.Desktop` (`Myriad.ui()`) | `ui.Ui` (`Myriad.ui()`) |
+| `ui.Direction` | `ui.Side` |
+
+- **Removed**, deprecated since chat moved to Essentials: `ThemeSettings`' chat options (`ChatBackground`, `ChatFont`,
+  `ChatShown` and their settings) and `titleScreen`.
+- **Nullness is JSpecify's** (`org.jspecify.annotations.Nullable`) and every API package is `@NullMarked`: what isn't
+  marked nullable never is. A hook's output type is `O extends @Nullable Object`.
+- `Registry` and `ModuleRegistry` are interfaces: reading them is unchanged.
+- 26.3's own changes show through where the API names its types: `Canvas.texture` takes 26.3's `GpuTextureView`.
+- **New**: `ServerStats.serverKey()` and `onHost(domain)` (with static `hostOf` and `isHost`); `Slots.ARMOR`,
+  `isOpen`, `menuSlot`, `playerSlots` and `containerSlots`; `Baritone.override()` for settings changed for a while and
+  put back; `Inventory.containerOpen()`; `Interactions.handBreakProgress(pos)`; `NotificationEvent`;
+  `Http.StatusException` and `Http.postJson(url, json, retries)`; `Keybind.heldModifiers()`; `Setting.editsTakeEffect()`;
+  and `Myriad.devSteps()` (experimental: dev runs' console steps, for tests).
+- **The addon plugin** adds a `gametest` source set for in-game tests, run in a `runTestClient` dev run, and fails the
+  build when an addon uses API marked `@ApiStatus.Internal` or deprecated for removal. The example addon builds with
+  the plugin.
+
+## 1.8.1
+
+- **Updates only offer what runs on your Minecraft.** The update check reads a repository's releases instead of only the
+  newest, and offers the newest one made for the Minecraft you're playing (a release says which in a `Minecraft:` line of
+  its notes, which the release workflow now adds; one without it counts as any). A newer release only for another
+  Minecraft version isn't offered: it's mentioned once, and shown under the addon in Addons and `.update`.
+- **Altitude holds its height in fresh terrain.** With No Durability's chest swaps, chunks arriving just in time (2b2t's
+  new terrain) kept cutting dives short and capping them below the speed a pull-up needs, so the flight sank lower and
+  lower. It looks one second ahead instead of four, carries on with a climb it has started, keeps climbing for half a
+  second after the last missing chunk, and no longer caps the dive while chunks come in late.
 
 ## 1.8.0
 

@@ -1,27 +1,29 @@
 package dev.myriadclient.harness;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.serialization.Lifecycle;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
-import dev.myriadclient.api.util.Ticks;
 import dev.myriadclient.api.util.RateCounter;
+import dev.myriadclient.api.util.Ticks;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.util.Clock;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Camera;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
-import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.multiplayer.ClientPacketListener;
-import net.minecraft.client.KeyMapping;
+import net.minecraft.client.multiplayer.MultiPlayerGameMode;
+import net.minecraft.client.player.FirstPersonHandsAndItems;
+import net.minecraft.client.player.ItemActivation;
 import net.minecraft.client.player.KeyboardInput;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
-import com.mojang.serialization.Lifecycle;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.RegistrationInfo;
@@ -31,40 +33,39 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.registries.VanillaRegistries;
 import net.minecraft.network.Connection;
-import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.PacketProcessor;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.network.protocol.common.ClientboundPingPacket;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundBlockChangedAckPacket;
+import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
 import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
-import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
-import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ServerboundClientTickEndPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
+import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.server.packs.PackType;
 import net.minecraft.server.packs.repository.ServerPacksSource;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
-import net.minecraft.tags.TagLoader;
 import net.minecraft.stats.StatsCounter;
-import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.TagLoader;
 import net.minecraft.world.damagesource.DamageSources;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Input;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.biome.Biomes;
-import net.minecraft.world.level.chunk.PalettedContainerFactory;
-import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.ItemStack;
-
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.PalettedContainerFactory;
+import net.minecraft.world.level.dimension.BuiltinDimensionTypes;
 import org.jetbrains.annotations.Nullable;
 
 import java.io.File;
@@ -151,8 +152,14 @@ public final class Harness implements AutoCloseable {
 		Fields.set(level, "damageSources", new DamageSources(registries));
 		Fields.set(level, "palettedContainerFactory", PalettedContainerFactory.create(registries));
 		Fields.set(level, "minecraft", mc);
-		player = new LocalPlayer(mc, level, listener, new StatsCounter(), null, Input.EMPTY, false, null);
+		player = new LocalPlayer(mc, level, listener, new StatsCounter(), null, Input.EMPTY, false, null, new ItemActivation());
 		player.input = new KeyboardInput(mc.options);
+		// Its tick asks the game's item models, which aren't loaded here.
+		Fields.set(player, "firstPersonHandsAndItems", new FirstPersonHandsAndItems() {
+			@Override
+			public void tick(LocalPlayer ignored) {
+			}
+		});
 		// No sound engine, so no ambient sounds (underwater, biome, bubble columns).
 		Fields.set(player, "ambientSoundHandlers", new ArrayList<>());
 		level.add(player);
@@ -191,11 +198,11 @@ public final class Harness implements AutoCloseable {
 		// Fabric leaves the built-in registries open for mods until they've initialised; there are none here.
 		Fields.callStatic(BuiltInRegistries.class, "freeze");
 		// Tags (which tools mine what, which blocks are climbable) from the game's own data, as a server loads them.
-		try (var resources = new MultiPackResourceManager(PackType.SERVER_DATA, List.of(ServerPacksSource.createVanillaPackSource()))) {
+		try (var resources = new MultiPackResourceManager(PackType.SERVER_DATA, List.of(ServerPacksSource.createVanillaPackSource().fullResources()))) {
 			TagLoader.loadTagsForExistingRegistries(resources, RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY))
 				.forEach(Registry.PendingTags::apply);
 		}
-		lookup = VanillaRegistries.createLookup();
+		lookup = VanillaRegistries.createReloadableLookup(VanillaRegistries.createWorldLookup());
 		BuiltInRegistries.DATA_COMPONENT_INITIALIZERS.build(lookup).forEach(p -> p.apply());
 		Map<ResourceKey<? extends Registry<?>>, Registry<?>> all = new HashMap<>();
 		BuiltInRegistries.REGISTRY.forEach(r -> all.put(r.key(), r));
@@ -222,6 +229,7 @@ public final class Harness implements AutoCloseable {
 		for (int i = 0; i < 5; i++) {
 			int before = channel.outboundMessages().size();
 			player.tick();
+			player.sendChanges();
 			if (channel.outboundMessages().size() == before) break;
 		}
 		collect();
@@ -253,7 +261,8 @@ public final class Harness implements AutoCloseable {
 	@SuppressWarnings("unchecked")
 	private static <T> Registry<T> frozenCopy(HolderLookup.RegistryLookup<T> lookup) {
 		MappedRegistry<T> registry = new MappedRegistry<>((ResourceKey<? extends Registry<T>>) (ResourceKey<?>) lookup.key(), Lifecycle.stable());
-		lookup.listElements().forEach(h -> registry.register(h.key(), h.value(), RegistrationInfo.BUILT_IN));
+		// Some world generation registries list one value under two names, which a MappedRegistry refuses.
+		lookup.listElements().filter(h -> registry.getKey(h.value()) == null).forEach(h -> registry.register(h.key(), h.value(), RegistrationInfo.BUILT_IN));
 		return registry.freeze();
 	}
 
@@ -344,6 +353,7 @@ public final class Harness implements AutoCloseable {
 		for (Runnable a : actions) a.run();
 		mc.gameMode.tick();
 		player.tick();
+		player.sendChanges();
 		player.connection.send(ServerboundClientTickEndPacket.INSTANCE);
 		Myriad.events().post(TickEvent.Post.INSTANCE);
 		collect();

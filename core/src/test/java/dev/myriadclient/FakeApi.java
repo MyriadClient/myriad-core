@@ -5,6 +5,8 @@ import dev.myriadclient.api.MyriadApi;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.registry.Registry;
+import dev.myriadclient.impl.module.ModuleRegistryImpl;
+import dev.myriadclient.impl.registry.RegistryImpl;
 
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
@@ -16,8 +18,8 @@ import java.util.Map;
  * interface). Install it around a test and uninstall after.
  */
 public final class FakeApi {
-	private final ModuleRegistry modules = new ModuleRegistry();
-	private final Registry<ModuleGroup> groups = new Registry<>("group");
+	private final ModuleRegistryImpl modules = new ModuleRegistryImpl();
+	private final RegistryImpl<ModuleGroup> groups = new RegistryImpl<>("group");
 	private final Map<Class<?>, Object> stubs = new HashMap<>();
 
 	public static FakeApi install() {
@@ -30,12 +32,12 @@ public final class FakeApi {
 		Myriad.install(null);
 	}
 
-	public ModuleRegistry modules() {
+	public ModuleRegistryImpl modules() {
 		return modules;
 	}
 
 	/** The declared groups, real too, for {@code ModuleRegistry.groups()}. */
-	public Registry<ModuleGroup> groups() {
+	public RegistryImpl<ModuleGroup> groups() {
 		return groups;
 	}
 

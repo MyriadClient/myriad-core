@@ -1,7 +1,7 @@
 package dev.myriadclient.api.event.events;
 
+import dev.myriadclient.api.annotation.AnyThread;
 import dev.myriadclient.api.event.Cancellable;
-import dev.myriadclient.api.util.AnyThread;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.ApiStatus;
@@ -15,18 +15,20 @@ import org.jetbrains.annotations.ApiStatus;
 public final class BlockRenderEvent extends Cancellable {
 	private final BlockState state;
 
+	/** Core's; only Myriad makes these. */
 	@ApiStatus.Internal
 	public BlockRenderEvent(BlockState state) {
 		this.state = state;
 	}
 
+	/** The block state being meshed. */
 	public BlockState state() {
 		return state;
 	}
 
 	/**
 	 * Meshes every chunk again (as F3+A does), so a change to what's hidden shows. Vanilla and Sodium both rebuild from
-	 * this at the start of the next frame.
+	 * this at the start of the next frame. Does nothing without a world. Call it on the render thread.
 	 */
 	public static void reloadChunks() {
 		Minecraft mc = Minecraft.getInstance();

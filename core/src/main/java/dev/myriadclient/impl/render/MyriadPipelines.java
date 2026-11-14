@@ -1,20 +1,19 @@
 package dev.myriadclient.impl.render;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.pipeline.BindGroupLayout;
-import com.mojang.blaze3d.pipeline.BlendFunction;
-import com.mojang.blaze3d.pipeline.ColorTargetState;
-import com.mojang.blaze3d.pipeline.DepthStencilState;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.platform.CompareOp;
-import com.mojang.blaze3d.shaders.UniformType;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.BlendFunction;
+import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.pipeline.UniformType;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import dev.myriadclient.impl.compat.IrisCompat;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.rendertype.OutputTarget;
 import net.minecraft.client.renderer.rendertype.RenderSetup;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.resources.Identifier;
@@ -51,7 +50,7 @@ public final class MyriadPipelines {
 		.build());
 
 	private static final BindGroupLayout BLUR_LAYOUT = BindGroupLayout.builder()
-		.withSampler("InSampler")
+		.withUniform("InSampler", UniformType.COMBINED_IMAGE_SAMPLER)
 		.withUniform("BlurInfo", UniformType.UNIFORM_BUFFER)
 		.build();
 
@@ -75,9 +74,9 @@ public final class MyriadPipelines {
 	public static final RenderPipeline WORLD_FACES_XRAY = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
 		.withLocation(id("pipeline/world_faces_xray")).withDepthStencilState(THROUGH_WALLS).withCull(true).build());
 	public static final RenderPipeline WORLD_LINES = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
-		.withLocation(id("pipeline/world_lines")).withDepthStencilState(WORLD_DEPTH).build());
+		.withLocation(id("pipeline/world_lines")).withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT)).withDepthStencilState(WORLD_DEPTH).build());
 	public static final RenderPipeline WORLD_LINES_XRAY = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
-		.withLocation(id("pipeline/world_lines_xray")).withDepthStencilState(THROUGH_WALLS).build());
+		.withLocation(id("pipeline/world_lines_xray")).withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT)).withDepthStencilState(THROUGH_WALLS).build());
 
 	// Retained meshes (WorldMesh, ChunkCache): the same shapes, but the vertex shaders add ModelOffset (the mesh origin
 	// relative to the camera), so one GPU buffer is drawn frame after frame without being rebuilt. Their quads come from
@@ -87,9 +86,9 @@ public final class MyriadPipelines {
 	public static final RenderPipeline MESH_QUADS_XRAY = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
 		.withLocation(id("pipeline/mesh_quads_xray")).withVertexShader(id("core/mesh_color")).withDepthStencilState(THROUGH_WALLS).withCull(true).build());
 	public static final RenderPipeline MESH_LINES = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
-		.withLocation(id("pipeline/mesh_lines")).withVertexShader(id("core/mesh_lines")).withDepthStencilState(WORLD_DEPTH).build());
+		.withLocation(id("pipeline/mesh_lines")).withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT)).withVertexShader(id("core/mesh_lines")).withDepthStencilState(WORLD_DEPTH).build());
 	public static final RenderPipeline MESH_LINES_XRAY = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.LINES_SNIPPET)
-		.withLocation(id("pipeline/mesh_lines_xray")).withVertexShader(id("core/mesh_lines")).withDepthStencilState(THROUGH_WALLS).build());
+		.withLocation(id("pipeline/mesh_lines_xray")).withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT)).withVertexShader(id("core/mesh_lines")).withDepthStencilState(THROUGH_WALLS).build());
 
 	// Entity models in a flat colour (Chams, ESP): submitted in the entity vertex format, the shader only reads position
 	// and colour.
@@ -99,27 +98,20 @@ public final class MyriadPipelines {
 	public static final RenderPipeline MODEL_FILL_XRAY = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.DEBUG_FILLED_SNIPPET)
 		.withLocation(id("pipeline/model_fill_xray")).withVertexBinding(0, DefaultVertexFormat.ENTITY).withDepthStencilState(THROUGH_WALLS).build());
 
-	// Highlights (see HighlightRenderer). Shapes draw their highlight id into vanilla's entity outline target, like
-	// glowing entities do, nearest first; the passes after read it back as a mask.
+	// Highlights (see HighlightRenderer). Shapes draw their highlight id into a mask of their own, as glowing entities do
+	// into vanilla's outline target, nearest first; the passes after read it back.
 	public static final RenderPipeline HIGHLIGHT_SHAPES_PIPELINE = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
 		.withLocation(id("pipeline/highlight_shapes"))
-		.withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+		.withBindGroupLayout(BindGroupLayouts.PROJECTION)
+		.withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
 		.withVertexShader("core/position_color")
 		.withFragmentShader("core/position_color")
 		.withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
 		.withPrimitiveTopology(PrimitiveTopology.QUADS)
+		.withColorTargetState(ColorTargetState.DEFAULT)
 		.withCull(false)
 		.withDepthStencilState(DepthStencilState.DEFAULT)
 		.build());
-	// Drawn in the frame's outline pass (IS_OUTLINE), into Myriad's own shapes mask rather than vanilla's entity one.
-	public static final RenderType HIGHLIGHT_SHAPES = RenderType.create("myriad_highlight_shapes", RenderSetup.builder(HIGHLIGHT_SHAPES_PIPELINE)
-		.setOutputTarget(new OutputTarget("myriad_highlight_shapes", () -> HighlightRenderer.INSTANCE.shapeMask()))
-		.setOutline(RenderSetup.OutlineProperty.IS_OUTLINE).createRenderSetup());
-	/** The same, into the mask of shapes drawn below the others ({@code RenderEvent#below()}). */
-	public static final RenderType HIGHLIGHT_SHAPES_BELOW = RenderType.create("myriad_highlight_shapes_below", RenderSetup.builder(HIGHLIGHT_SHAPES_PIPELINE)
-		.setOutputTarget(new OutputTarget("myriad_highlight_shapes_below", () -> HighlightRenderer.INSTANCE.belowMask()))
-		.setOutline(RenderSetup.OutlineProperty.IS_OUTLINE).createRenderSetup());
-
 	private static final BindGroupLayout HIGHLIGHT_DATA = BindGroupLayout.builder()
 		.withUniform("Highlights", UniformType.TEXEL_BUFFER, GpuFormat.RGBA32_FLOAT)
 		.build();
@@ -127,28 +119,30 @@ public final class MyriadPipelines {
 	// the colour modulator plus each vertex's palette index (highlight_mask.fsh).
 	public static final RenderPipeline HIGHLIGHT_MESH = RenderPipelines.register(RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
 		.withLocation(id("pipeline/highlight_mesh"))
-		.withBindGroupLayout(BindGroupLayouts.MATRICES_PROJECTION)
+		.withBindGroupLayout(BindGroupLayouts.PROJECTION)
+		.withBindGroupLayout(BindGroupLayouts.DYNAMIC_TRANSFORMS)
 		.withBindGroupLayout(HIGHLIGHT_DATA)
 		.withVertexShader(id("core/mesh_color"))
 		.withFragmentShader(id("core/highlight_mask"))
+		.withColorTargetState(ColorTargetState.DEFAULT)
 		.withVertexBinding(0, DefaultVertexFormat.POSITION_COLOR)
 		.withPrimitiveTopology(PrimitiveTopology.QUADS)
 		.withCull(false)
 		.withDepthStencilState(DepthStencilState.DEFAULT)
 		.build());
 	public static final RenderPipeline HIGHLIGHT_RESOLVE = RenderPipelines.register(highlight("highlight_resolve",
-		BindGroupLayout.builder().withSampler("Mask").withSampler("MaskDepth").withSampler("SceneDepth").build(), ColorTargetState.DEFAULT));
+		BindGroupLayout.builder().withUniform("Mask", UniformType.COMBINED_IMAGE_SAMPLER).withUniform("MaskDepth", UniformType.COMBINED_IMAGE_SAMPLER).withUniform("SceneDepth", UniformType.COMBINED_IMAGE_SAMPLER).build(), ColorTargetState.DEFAULT));
 	public static final RenderPipeline HIGHLIGHT_SPREAD = RenderPipelines.register(highlight("highlight_spread",
-		BindGroupLayout.builder().withSampler("InSampler").build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA16_UNORM, ColorTargetState.WRITE_ALL)));
+		BindGroupLayout.builder().withUniform("InSampler", UniformType.COMBINED_IMAGE_SAMPLER).build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA16_UNORM, ColorTargetState.WRITE_ALL)));
 	public static final RenderPipeline HIGHLIGHT_GLOW_ROW = RenderPipelines.register(highlight("highlight_glow_row",
-		BindGroupLayout.builder().withSampler("InSampler").build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA16_UNORM, ColorTargetState.WRITE_ALL)));
+		BindGroupLayout.builder().withUniform("InSampler", UniformType.COMBINED_IMAGE_SAMPLER).build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA16_UNORM, ColorTargetState.WRITE_ALL)));
 	public static final RenderPipeline HIGHLIGHT_GLOW_COLUMN = RenderPipelines.register(highlight("highlight_glow_column",
-		BindGroupLayout.builder().withSampler("InSampler").build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA16_UNORM, ColorTargetState.WRITE_ALL)));
+		BindGroupLayout.builder().withUniform("InSampler", UniformType.COMBINED_IMAGE_SAMPLER).build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA16_UNORM, ColorTargetState.WRITE_ALL)));
 	/** What's under a highlight, copied for a fill that reads the scene. */
 	public static final RenderPipeline HIGHLIGHT_SCENE_COPY = RenderPipelines.register(highlight("highlight_scene_copy",
-		BindGroupLayout.builder().withSampler("InSampler").build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA8_UNORM, ColorTargetState.WRITE_ALL)));
+		BindGroupLayout.builder().withUniform("InSampler", UniformType.COMBINED_IMAGE_SAMPLER).build(), new ColorTargetState(Optional.empty(), GpuFormat.RGBA8_UNORM, ColorTargetState.WRITE_ALL)));
 	public static final RenderPipeline HIGHLIGHT_COMPOSITE = RenderPipelines.register(highlight("highlight_composite",
-		BindGroupLayout.builder().withSampler("SpreadSampler").withSampler("GlowSampler").build(), new ColorTargetState(BlendFunction.TRANSLUCENT)));
+		BindGroupLayout.builder().withUniform("SpreadSampler", UniformType.COMBINED_IMAGE_SAMPLER).withUniform("GlowSampler", UniformType.COMBINED_IMAGE_SAMPLER).build(), new ColorTargetState(BlendFunction.TRANSLUCENT)));
 
 	public static final RenderType QUADS = RenderType.create("myriad_quads", RenderSetup.builder(WORLD_QUADS).sortOnUpload().createRenderSetup());
 	public static final RenderType QUADS_XRAY = RenderType.create("myriad_quads_xray", RenderSetup.builder(WORLD_QUADS_XRAY).sortOnUpload().createRenderSetup());
@@ -195,8 +189,8 @@ public final class MyriadPipelines {
 			.withVertexShader(id("core/blur"))
 			.withFragmentShader(shader)
 			.withShaderDefine("MYRIAD_FILL_ID", shaderId)
-			.withBindGroupLayout(BindGroupLayout.builder().withSampler("SpreadSampler").withSampler("GlowSampler").withSampler("MaskDepth")
-				.withSampler("SceneColor").withSampler("SceneDepth").withUniform("FillOptions", UniformType.UNIFORM_BUFFER).build())
+			.withBindGroupLayout(BindGroupLayout.builder().withUniform("SpreadSampler", UniformType.COMBINED_IMAGE_SAMPLER).withUniform("GlowSampler", UniformType.COMBINED_IMAGE_SAMPLER).withUniform("MaskDepth", UniformType.COMBINED_IMAGE_SAMPLER)
+				.withUniform("SceneColor", UniformType.COMBINED_IMAGE_SAMPLER).withUniform("SceneDepth", UniformType.COMBINED_IMAGE_SAMPLER).withUniform("FillOptions", UniformType.UNIFORM_BUFFER).build())
 			.withBindGroupLayout(HIGHLIGHT_DATA)
 			.withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
 			.withPrimitiveTopology(PrimitiveTopology.TRIANGLES)

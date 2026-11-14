@@ -20,6 +20,7 @@ public final class Timer {
 		start = 0;
 	}
 
+	/** Starts timing from now. */
 	public void reset() {
 		start = now();
 	}
@@ -29,19 +30,25 @@ public final class Timer {
 		start = 0;
 	}
 
+	/** Milliseconds since the last {@link #reset()} (on a monotonic clock); huge before the first reset. */
 	public long elapsedMs() {
 		return now() - start;
 	}
 
+	/** Whether at least {@code ms} milliseconds have passed since the last {@link #reset()}. */
 	public boolean passed(long ms) {
 		return elapsedMs() >= ms;
 	}
 
+	/** Whether at least {@code ms} milliseconds have passed, for delays from a decimal setting. */
 	public boolean passed(double ms) {
 		return elapsedMs() >= ms;
 	}
 
-	/** Game ticks are 50 ms apart at 20 TPS. */
+	/**
+	 * Whether {@code ticks} game ticks' worth of time (50 ms each) has passed. Wall-clock time: on a lagging server fewer
+	 * real ticks may have gone by; count with {@link Ticks} where that matters.
+	 */
 	public boolean passedTicks(int ticks) {
 		return passed(ticks * 50L);
 	}

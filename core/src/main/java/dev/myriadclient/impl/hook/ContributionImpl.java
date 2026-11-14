@@ -5,7 +5,7 @@ import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.HookHandler;
 import dev.myriadclient.api.hook.Match;
 import dev.myriadclient.api.hook.Service;
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.registry.MyriadId;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.function.Function;

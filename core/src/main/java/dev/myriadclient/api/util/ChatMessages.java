@@ -2,6 +2,7 @@ package dev.myriadclient.api.util;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.function.Predicate;
@@ -23,6 +24,7 @@ import java.util.regex.Pattern;
  * }</pre>
  */
 public final class ChatMessages {
+	/** What kind of chat line a {@link Parsed} is. */
 	public enum Kind {
 		/** Said in public chat by {@link Parsed#player()} (possibly you). */
 		PUBLIC,
@@ -34,10 +36,18 @@ public final class ChatMessages {
 		OTHER
 	}
 
-	/** @param player the other side of the message (the sender, or who you whispered to); null for {@link Kind#OTHER} */
-	public record Parsed(Kind kind, String player, String body) {
+	/**
+	 * A chat line taken apart.
+	 *
+	 * @param kind   public, whisper in, whisper out, or anything else
+	 * @param player the other side of the message (the sender, or who you whispered to); null for {@link Kind#OTHER}
+	 * @param body   what was said, without the name and format around it; empty for {@link Kind#OTHER}
+	 */
+	public record Parsed(Kind kind, @Nullable String player, String body) {
+		/** A line that matched no known format. */
 		public static final Parsed NONE = new Parsed(Kind.OTHER, null, "");
 
+		/** Whether it's a whisper either way ({@link Kind#WHISPER_IN} or {@link Kind#WHISPER_OUT}). */
 		public boolean isWhisper() {
 			return kind == Kind.WHISPER_IN || kind == Kind.WHISPER_OUT;
 		}
@@ -66,7 +76,7 @@ public final class ChatMessages {
 	private ChatMessages() {
 	}
 
-	/** Parses a chat line, checking non-vanilla formats against the tab list. */
+	/** Parses a chat line, checking names from non-vanilla formats against the tab list; {@link Parsed#NONE} if none fits. */
 	public static Parsed parse(Component message) {
 		return parse(message.getString(), ChatMessages::isOnline);
 	}
@@ -87,7 +97,8 @@ public final class ChatMessages {
 	/** Whether {@code parsed} is your own public message. */
 	public static boolean isFromSelf(Parsed parsed) {
 		Minecraft mc = Minecraft.getInstance();
-		return parsed.kind() == Kind.PUBLIC && mc.player != null && parsed.player().equalsIgnoreCase(mc.player.getGameProfile().name());
+		return parsed.kind() == Kind.PUBLIC && mc.player != null && parsed.player() != null
+			&& parsed.player().equalsIgnoreCase(mc.player.getGameProfile().name());
 	}
 
 	private static boolean isOnline(String name) {

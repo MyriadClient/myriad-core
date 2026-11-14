@@ -50,11 +50,6 @@ final class GrimChunks {
 		INSTANCE.clear();
 	}
 
-	/** Whether the client has the chunk at block {@code x, z} and Grim knows it does. */
-	public static boolean known(double x, double z) {
-		return why(x, z) == null;
-	}
-
 	/** Why Grim doesn't count the chunk at block {@code x, z} as the client's: "missing", "unanswered"; null if it does. */
 	public static String why(double x, double z) {
 		int cx = (int) Math.floor(x) >> 4, cz = (int) Math.floor(z) >> 4;
@@ -78,7 +73,7 @@ final class GrimChunks {
 				if (pingNumber.size() > 1024) pingNumber.clear();
 				pingNumber.put(ping.getId(), pings);
 			}
-			case ClientboundLevelChunkWithLightPacket chunk -> chunkAfter.put(ChunkPos.pack(chunk.getX(), chunk.getZ()), pings);
+			case ClientboundLevelChunkWithLightPacket chunk -> chunkAfter.put(ChunkPos.pack(chunk.x(), chunk.z()), pings);
 			case ClientboundForgetLevelChunkPacket forget -> chunkAfter.remove(forget.pos().pack());
 			default -> {
 			}

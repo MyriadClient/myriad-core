@@ -1,6 +1,6 @@
 package dev.myriadclient.impl.render.font;
 
-import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

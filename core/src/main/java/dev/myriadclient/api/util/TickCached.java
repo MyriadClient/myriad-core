@@ -1,5 +1,7 @@
 package dev.myriadclient.api.util;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.function.Supplier;
 
 /**
@@ -18,7 +20,7 @@ import java.util.function.Supplier;
  *
  * Not thread-safe beyond the render thread; a read from another thread may compute the value a second time.
  */
-public final class TickCached<T> {
+public final class TickCached<T extends @Nullable Object> {
 	private final Supplier<T> compute;
 	private T value;
 	private long tick = -1;
@@ -27,7 +29,11 @@ public final class TickCached<T> {
 		this.compute = compute;
 	}
 
-	public static <T> TickCached<T> of(Supplier<T> compute) {
+	/**
+	 * A value worked out by {@code compute} on the first {@link #get()} of each tick; nothing runs until then. The value
+	 * may be null ({@code TickCached<@Nullable Entity>} for a target that may be missing).
+	 */
+	public static <T extends @Nullable Object> TickCached<T> of(Supplier<T> compute) {
 		return new TickCached<>(compute);
 	}
 

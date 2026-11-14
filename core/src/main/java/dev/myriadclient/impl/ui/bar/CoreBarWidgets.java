@@ -2,12 +2,12 @@ package dev.myriadclient.impl.ui.bar;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.AddonContext;
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
-import dev.myriadclient.api.render.MyriadLogo;
 import dev.myriadclient.api.ui.BarWidget;
-import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.ThemeSettings;
+import dev.myriadclient.api.ui.Ui;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
+import dev.myriadclient.api.ui.draw.MyriadLogo;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.ui.WindowManager;
@@ -59,12 +59,12 @@ public final class CoreBarWidgets {
 			/** The workspaces to show, in order, ending with the HUD (0). */
 			private int[] shown() {
 				int active = wm.activeWorkspace();
-				int[] out = new int[Desktop.WORKSPACES + 1];
+				int[] out = new int[Ui.WORKSPACES + 1];
 				int n = 0;
-				for (int ws = 1; ws <= Desktop.WORKSPACES; ws++) {
+				for (int ws = 1; ws <= Ui.WORKSPACES; ws++) {
 					if (ws <= ALWAYS || ws == active || wm.windowCount(ws) > 0) out[n++] = ws;
 				}
-				out[n++] = Desktop.HUD_WORKSPACE;
+				out[n++] = Ui.HUD_WORKSPACE;
 				return Arrays.copyOf(out, n);
 			}
 
@@ -80,14 +80,14 @@ public final class CoreBarWidgets {
 				for (int i = 0; i < shown.length; i++) {
 					int ws = shown[i];
 					// The HUD sits a little apart from the numbers.
-					float cx = x + i * CELL + (ws == Desktop.HUD_WORKSPACE ? 2 : 0);
+					float cx = x + i * CELL + (ws == Ui.HUD_WORKSPACE ? 2 : 0);
 					boolean isActive = ws == active;
 					boolean occupied = wm.windowCount(ws) > 0;
 					boolean hover = mx >= cx && mx < cx + CELL && my >= y && my < y + h;
 					if (isActive) c.roundRect(cx + 1, y + 3, CELL - 2, h - 6, 3, ColorUtil.withAlpha(theme().accent.argb(), 200));
 					else if (hover) c.roundRect(cx + 1, y + 3, CELL - 2, h - 6, 3, theme().surfaceHover.argb());
-					String label = ws == Desktop.HUD_WORKSPACE ? "\uf108" : String.valueOf(ws);
-					FontFamily f = ws == Desktop.HUD_WORKSPACE ? FontFamily.MONO : FontFamily.SANS_BOLD;
+					String label = ws == Ui.HUD_WORKSPACE ? "\uf108" : String.valueOf(ws);
+					FontFamily f = ws == Ui.HUD_WORKSPACE ? FontFamily.MONO : FontFamily.SANS_BOLD;
 					int color = isActive ? 0xFF11111B : occupied ? theme().text.argb() : ColorUtil.withAlpha(theme().textDim.argb(), 140);
 					float tw = c.textWidth(f, c.defaultFontSize() * 0.9f, label);
 					c.text(f, c.defaultFontSize() * 0.9f, label, cx + (CELL - tw) / 2, y + (h - c.textHeight(f, c.defaultFontSize() * 0.9f)) / 2, color);

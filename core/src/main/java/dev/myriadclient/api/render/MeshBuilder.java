@@ -1,11 +1,11 @@
 package dev.myriadclient.api.render;
 
-import com.mojang.blaze3d.PrimitiveTopology;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
-import org.jetbrains.annotations.Nullable;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Records shapes for a {@link WorldMesh}. Hand one out only through {@link WorldMesh#build} (or a {@code ChunkCache}

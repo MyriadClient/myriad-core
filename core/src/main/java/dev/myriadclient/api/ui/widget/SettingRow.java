@@ -1,8 +1,9 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.setting.Setting;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
 
 /**
@@ -21,6 +22,13 @@ public class SettingRow extends Widget {
 	private boolean below;
 	private float nameW;
 
+	/**
+	 * A row for {@code setting} with {@code editor} as its editor (usually made for you by
+	 * {@link dev.myriadclient.api.ui.SettingWidgets#create}). It shows only while the setting is visible, and its
+	 * tooltip is the setting's description (and who's overriding it, if anyone is).
+	 *
+	 * @param stacked whether the editor always goes below the name
+	 */
 	public SettingRow(Setting<?> setting, Widget editor, boolean stacked) {
 		this.setting = setting;
 		this.editor = editor;
@@ -87,11 +95,11 @@ public class SettingRow extends Widget {
 			return true;
 		}
 		if (mx < x || mx >= x + nameW || my < y || my >= y + ROW) return false;
-		if (button == 1) {
+		if (button == InputConstants.MOUSE_BUTTON_RIGHT) {
 			setting.reset();
 			return true;
 		}
-		if (button == 0 && editor instanceof Toggle) {
+		if (button == InputConstants.MOUSE_BUTTON_LEFT && editor instanceof Toggle) {
 			editor.activate();
 			return true;
 		}

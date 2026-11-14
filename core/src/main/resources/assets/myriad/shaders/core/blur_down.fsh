@@ -1,4 +1,5 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 
 // Dual-Kawase downsample.
 uniform sampler2D InSampler;
@@ -11,8 +12,8 @@ layout(std140) uniform BlurInfo {
     float Opaque;
 };
 
-in vec2 texCoord;
-out vec4 fragColor;
+layout(location = 0) in vec2 texCoord;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
     vec2 o = HalfTexel * Offset;

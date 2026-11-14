@@ -5,10 +5,12 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.InputEvent;
 import dev.myriadclient.api.event.events.MovementPacketsEvent;
 import dev.myriadclient.api.event.events.PacketEvent;
+import dev.myriadclient.api.event.events.TeleportEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.util.MathUtil;
 import dev.myriadclient.api.util.Threads;
+import dev.myriadclient.impl.network.JoinedVersion;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
@@ -40,6 +42,13 @@ public final class RotationManager implements Rotations {
 	private final List<Request> requests = new ArrayList<>();
 	private boolean rotating;
 	private float serverYaw, serverPitch;
+	/**
+	 * The server set your look (a teleport) and no movement packet of a tick has carried one since: it has the
+	 * teleport's numbers, which may be the same direction written differently from yours (-90 against -810), so the next
+	 * movement packet carries the look again, and a use before it gets the same numbers. The teleport's own reply doesn't
+	 * count: it goes out with your numbers, but Grim keeps the teleport's.
+	 */
+	private boolean lookSetByServer;
 	/** Easing back after a turning request ended: the speed, and whether it still needs move fix. 0 = not easing. */
 	private float returnSpeed;
 	private boolean returnMoveFix;
@@ -169,8 +178,9 @@ public final class RotationManager implements Rotations {
 
 		// Asked to carry a rotation and nothing changed since the last one sent: nudge the pitch so one goes out (a
 		// pinned rotation already had it).
-		if (sendRotation && pinned == null) e.pitch = nudged(e.yaw, e.pitch);
+		if (mustCarry() && pinned == null) e.pitch = nudged(e.yaw, e.pitch);
 		sendRotation = false;
+		lookSetByServer = false;
 		pinned = null;
 
 		sentCallbacks.clear();
@@ -207,13 +217,36 @@ public final class RotationManager implements Rotations {
 	/** Where core's services act at the start of a tick: after held actions go out, before modules. */
 	static final int ACT_PRIORITY = 900;
 
-	/** Every rotation that reaches the server, including ones features send directly. */
+	/**
+	 * Every rotation that reaches the server through movement packets, including ones features send directly: what Grim
+	 * simulates with. Since 1.21 a use's rotation turns the player on the server too, but not in Grim, so after a use
+	 * facing elsewhere the next movement packet carries the rotation whatever it is: both have the same one again.
+	 * Without it the server kept the use's rotation (Elytra Fly's glide was set back every tick after a chest swap's
+	 * use); counted as sent, Grim kept the last movement's (set back at each pull-up's swap). Compared as sent, not
+	 * as directions: Grim (BadPacketsJ) wants the very same numbers, so -810 after -90 needs the movement's too.
+	 */
 	@Subscribe(priority = Priority.LOWEST)
 	private synchronized void onSend(PacketEvent.Send e) {
-		if (!e.isCancelled() && e.packet() instanceof ServerboundMovePlayerPacket p && p.hasRotation()) {
+		if (e.isCancelled()) return;
+		if (e.packet() instanceof ServerboundMovePlayerPacket p && p.hasRotation()) {
 			serverYaw = p.getYRot(0);
 			serverPitch = p.getXRot(0);
+		} else if (e.packet() instanceof ServerboundUseItemPacket p && useTurns() && (p.yRot() != serverYaw || p.xRot() != serverPitch)) {
+			sendRotation = true;
 		}
+	}
+
+	@Subscribe
+	private synchronized void onTeleport(TeleportEvent e) {
+		lookSetByServer = true;
+	}
+
+	/** 1.21's protocol: the first whose use carries a rotation the server turns the player to. */
+	private static final int USE_ROTATION_SINCE = 767;
+
+	private static boolean useTurns() {
+		int protocol = JoinedVersion.get().protocol();
+		return protocol < 0 || protocol >= USE_ROTATION_SINCE;
 	}
 
 	@Subscribe
@@ -254,9 +287,14 @@ public final class RotationManager implements Rotations {
 			// Exactly the value the movement packet will hold.
 			yaw = continuous(yaw);
 			float pitch = plan(false, mc.player.getXRot()).value;
-			pinned = new float[]{yaw, sendRotation ? nudged(yaw, pitch) : pitch};
+			pinned = new float[]{yaw, mustCarry() ? nudged(yaw, pitch) : pitch};
 		}
 		return pinned.clone();
+	}
+
+	/** Whether this tick's movement packet has to carry a rotation even if nothing turned. */
+	private boolean mustCarry() {
+		return sendRotation || lookSetByServer;
 	}
 
 	/**
@@ -268,8 +306,8 @@ public final class RotationManager implements Rotations {
 	@Subscribe(priority = Priority.HIGH, packets = ServerboundUseItemPacket.class)
 	private void onSendAction(PacketEvent.Send e) {
 		if (!(e.packet() instanceof ServerboundUseItemPacket p) || mc.player == null) return;
-		float[] r = useRotation(p.getHand(), p.getYRot(), p.getXRot());
-		if (p.getYRot() != r[0] || p.getXRot() != r[1]) e.setPacket(new ServerboundUseItemPacket(p.getHand(), p.getSequence(), r[0], r[1]));
+		float[] r = useRotation(p.hand(), p.yRot(), p.xRot());
+		if (p.yRot() != r[0] || p.xRot() != r[1]) e.setPacket(new ServerboundUseItemPacket(p.hand(), p.sequence(), r[0], r[1]));
 	}
 
 	/** The rotation an item use in {@code hand}, made facing {@code yaw}/{@code pitch}, goes out with (see above). */
@@ -303,7 +341,7 @@ public final class RotationManager implements Rotations {
 	}
 
 	private synchronized float[] pinTo(float yaw, float pitch) {
-		if (pinned == null) pinned = new float[]{yaw, sendRotation ? nudged(yaw, pitch) : pitch};
+		if (pinned == null) pinned = new float[]{yaw, mustCarry() ? nudged(yaw, pitch) : pitch};
 		return pinned.clone();
 	}
 

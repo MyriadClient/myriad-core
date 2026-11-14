@@ -4,4 +4,7 @@
  * ({@code Myriad.shares()}). Settings marked {@link dev.myriadclient.api.setting.Setting.Builder#protect()} are never
  * shared.
  */
+@NullMarked
 package dev.myriadclient.api.share;
+
+import org.jspecify.annotations.NullMarked;

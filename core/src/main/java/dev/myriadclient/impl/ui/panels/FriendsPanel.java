@@ -10,6 +10,7 @@ import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.VBox;
 
+/** The Friends window: your friends listed, with a field to add one and a button beside each to remove them. */
 public final class FriendsPanel extends WidgetPanel {
 	private String name = "";
 

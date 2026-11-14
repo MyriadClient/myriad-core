@@ -6,7 +6,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -46,6 +46,7 @@ public final class MergedBoxes {
 	/** The colour for a group; 0 (or fully transparent) draws none. */
 	@FunctionalInterface
 	public interface Paint {
+		/** The ARGB colour for blocks of {@code group} (never 0: those aren't drawn at all). */
 		int color(int group);
 	}
 
@@ -69,7 +70,8 @@ public final class MergedBoxes {
 
 	/**
 	 * Draws the merged shape of {@code cells} into {@code out}: faces in {@code fill}'s colour and lines in
-	 * {@code line}'s (either may return 0 to skip). Positions whose group is 0 are skipped.
+	 * {@code line}'s (either may return 0 to skip). Positions whose group is 0 are skipped. The lookup is asked about
+	 * each position at most once per call, the cells' neighbours included.
 	 */
 	public static void draw(ShapeBuilder out, Iterable<BlockPos> cells, Lookup lookup, Paint fill, Paint line, boolean throughWalls) {
 		MergedBoxes m = new MergedBoxes(out, lookup, fill, line, throughWalls);

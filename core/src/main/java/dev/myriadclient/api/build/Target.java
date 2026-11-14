@@ -1,6 +1,6 @@
 package dev.myriadclient.api.build;
 
-import dev.myriadclient.api.util.BlockInfo;
+import dev.myriadclient.api.world.BlockInfo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
@@ -11,7 +11,7 @@ import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Property;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -60,6 +60,7 @@ public interface Target {
 	 * neighbours (stair shapes, fence connections, waterlogging, power). {@link #state} compares only these.
 	 */
 	final class Orientation {
+		/** Facing, axis, attachment, half, slab type, rotation, hinge, vertical direction and hanging. */
 		public static final List<Property<?>> PROPERTIES = List.of(
 			BlockStateProperties.FACING, BlockStateProperties.HORIZONTAL_FACING, BlockStateProperties.FACING_HOPPER,
 			BlockStateProperties.AXIS, BlockStateProperties.HORIZONTAL_AXIS, BlockStateProperties.ORIENTATION,
@@ -154,7 +155,7 @@ public interface Target {
 		return Solid.INSTANCE;
 	}
 
-	/** {@link #exact}. */
+	/** What {@link #exact} returns; the planner tells it apart to build a state as exactly as it can. */
 	final class Exact implements Target {
 		private static final Map<BlockState, Exact> ALL = new ConcurrentHashMap<>();
 		private final BlockState state;
@@ -199,6 +200,7 @@ public interface Target {
 		}
 	}
 
+	/** What {@link #air()} returns: done when the position is air or a fluid. */
 	final class Air implements Target {
 		static final Air INSTANCE = new Air();
 
@@ -223,6 +225,7 @@ public interface Target {
 		}
 	}
 
+	/** What {@link #solid()} returns: done when there's a block with a full collision box. */
 	final class Solid implements Target {
 		static final Solid INSTANCE = new Solid();
 

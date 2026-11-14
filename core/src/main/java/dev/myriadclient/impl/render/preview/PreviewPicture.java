@@ -3,8 +3,8 @@ package dev.myriadclient.impl.render.preview;
 import com.mojang.blaze3d.ProjectionType;
 import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.myriadclient.api.event.events.HighlightEvent;
 import dev.myriadclient.api.ui.widget.Preview;
 import dev.myriadclient.impl.render.HandHighlights;
@@ -78,7 +78,7 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 
 	@Override
 	protected void renderToTexture(PreviewRenderState state, PoseStack poseStack, SubmitNodeCollector collector) {
-		target = RenderSystem.outputColorTextureOverride;
+		target = textureView;
 		int guiScale = Math.max(1, Minecraft.getInstance().getWindow().getGuiScale());
 		int w = (state.x1() - state.x0()) * guiScale, h = (state.y1() - state.y0()) * guiScale;
 		highlights.begin(w, h);
@@ -119,7 +119,7 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 		// The pose is in blocks here, the y axis pointing down the screen: moved, flipped upright, then turned.
 		poseStack.translate(state.panX() / state.scale(), state.panY() / state.scale(), 0);
 		Quaternionf view = new Quaternionf().rotateZ((float) Math.PI).rotateX((float) Math.toRadians(-state.pitch())).rotateY((float) Math.toRadians(state.yaw()));
-		poseStack.mulPose(view);
+		poseStack.rotate(view);
 		// The subject's middle on the pivot (a block's box is the cube from 0).
 		Entity entity = PreviewSubjects.entity(state.subject());
 		// For fills laying a pattern on it: the subject's own space to the view the highlights see (y up, z towards you;
@@ -197,10 +197,11 @@ final class PreviewPicture extends PictureInPictureRenderer<PreviewRenderState> 
 		// Moved and zoomed as the other subjects: a drag across the preview is about its width at arm's length.
 		float reach = 1.0F / Math.min(width, height) * guiScale;
 		pose.translate(state.panX() * reach, -state.panY() * reach, (state.zoom() - 1) * 0.6F);
-		pose.mulPose(new Quaternionf().rotateX((float) Math.toRadians(state.pitch() * 0.5F)).rotateY((float) Math.toRadians(state.yaw() * 0.5F)));
+		pose.rotate(new Quaternionf().rotateX((float) Math.toRadians(state.pitch() * 0.5F)).rotateY((float) Math.toRadians(state.yaw() * 0.5F)));
 		// Each part is asked about as in the world, its highlight going into this preview's.
 		HandHighlights.INSTANCE.previewHands(highlights);
-		mc.gameRenderer.itemInHandRenderer.submitHandsWithItems(1.0F, pose, collector, mc.player, LightCoordsUtil.FULL_BRIGHT);
+		var hands = mc.gameRenderer.gameRenderState.levelRenderState.playerRenderState;
+		mc.gameRenderer.firstPersonHandsAndItemsRenderer.submitHandsWithItems(1.0F, pose, collector, hands, hands.firstPersonHandsAndItems);
 	}
 
 	private BlockModelResolver blocks() {

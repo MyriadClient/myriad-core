@@ -1,11 +1,11 @@
 package dev.myriadclient.api.hook;
 
 import dev.myriadclient.api.addon.AddonContext;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
-import dev.myriadclient.api.util.MyriadId;
 
 import java.util.List;
 
@@ -43,9 +43,13 @@ import java.util.List;
  * Only a replacement for everyone should take over sending things itself.
  */
 public final class Service<S> {
+	/** {@code Myriad.rotations()}: where the server thinks you look. Extend {@link Rotations.Forwarding}. */
 	public static final Service<Rotations> ROTATIONS = new Service<>("rotations", "Rotations", Rotations.class);
+	/** {@code Myriad.inventory()}: slots, clicks, holds and borrows. Extend {@link Inventory.Forwarding}. */
 	public static final Service<Inventory> INVENTORY = new Service<>("inventory", "Inventory", Inventory.class);
+	/** {@code Myriad.placement()}: placing blocks and using them. Extend {@link Placement.Forwarding}. */
 	public static final Service<Placement> PLACEMENT = new Service<>("placement", "Placement", Placement.class);
+	/** {@code Myriad.breaking()}: mining blocks. Extend {@link Breaking.Forwarding}. */
 	public static final Service<Breaking> BREAKING = new Service<>("breaking", "Breaking", Breaking.class);
 
 	private static final List<Service<?>> ALL = List.of(ROTATIONS, INVENTORY, PLACEMENT, BREAKING);
@@ -60,18 +64,22 @@ public final class Service<S> {
 		this.type = type;
 	}
 
+	/** Every service that can be replaced, in a fixed order. */
 	public static List<Service<?>> all() {
 		return ALL;
 	}
 
+	/** Its id ({@code myriad:rotations}): what a {@link Contribution#target()} names. */
 	public MyriadId id() {
 		return id;
 	}
 
+	/** Its name for people ("Rotations"); also the default label of a replacement. */
 	public String name() {
 		return name;
 	}
 
+	/** The service's interface, which a replacement must implement. */
 	public Class<S> type() {
 		return type;
 	}

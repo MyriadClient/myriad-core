@@ -1,20 +1,21 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 
-in vec2 vLocal;
-in vec2 vUv;
-in vec2 vPixel;
-in vec2 vScreenUv;
-flat in vec2 vSize;
-flat in vec4 vRadii;
-flat in vec4 vColor1;
-flat in vec4 vColor2;
-flat in vec4 vParams;
-flat in vec4 vClip;
+layout(location = 0) in vec2 vLocal;
+layout(location = 1) in vec2 vUv;
+layout(location = 2) in vec2 vPixel;
+layout(location = 3) in vec2 vScreenUv;
+layout(location = 4) flat in vec2 vSize;
+layout(location = 5) flat in vec4 vRadii;
+layout(location = 6) flat in vec4 vColor1;
+layout(location = 7) flat in vec4 vColor2;
+layout(location = 8) flat in vec4 vParams;
+layout(location = 9) flat in vec4 vClip;
 
 uniform sampler2D Sampler0; // glyph page or image
 uniform sampler2D Sampler1; // the frame's blurred scene
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 const int FILL = 0;
 const int OUTLINE = 1;

@@ -10,6 +10,10 @@ import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
+/**
+ * CameraEvent.Rotation and CameraEvent.Position, for modules that move the camera without moving you. Hooked where the
+ * camera aligns itself with the entity it follows each frame, so the change only reaches what is drawn.
+ */
 @Mixin(Camera.class)
 public abstract class CameraMixin {
 	@WrapOperation(method = "alignWithEntity", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Camera;setRotation(FF)V"))

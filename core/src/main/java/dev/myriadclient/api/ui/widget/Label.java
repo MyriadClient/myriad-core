@@ -1,64 +1,75 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
-/** Text, wrapped to the available width (or cut short with "…", see {@link #oneLine}). */
+/**
+ * Text, wrapped to the available width (or cut short with "…", see {@link #oneLine}), in the theme's text colour,
+ * font and size unless told otherwise. Explicit line breaks ({@code \n}) are kept. The text is read every frame.
+ */
 public class Label extends Widget {
 	/** How narrow a long text can wrap in a tight row, and how wide its longest word can ask for. */
 	private static final float MIN_WRAPPED = 44, MAX_WORD = 70;
 
 	private final Supplier<String> text;
 	private IntSupplier color = () -> theme().text.argb();
-	private FontFamily font;
+	private @Nullable FontFamily font;
 	private float size = -1;
 	private boolean centered, oneLine;
 	private List<String> lines = List.of();
 	/** What the tooltip showed before this cut itself short, to give it back once the text fits. */
-	private String ownTooltip;
+	private @Nullable String ownTooltip;
 	private boolean cut;
 
+	/** A label showing {@code text}. */
 	public Label(String text) {
 		this(() -> text);
 	}
 
+	/** A label showing what {@code text} returns, asked every frame. */
 	public Label(Supplier<String> text) {
 		this.text = text;
 	}
 
+	/** Its ARGB colour, asked every frame (the theme's text colour by default). Returns this label. */
 	public Label color(IntSupplier color) {
 		this.color = color;
 		return this;
 	}
 
+	/** In the theme's dim text colour, for secondary text. Returns this label. */
 	public Label dim() {
 		return color(() -> theme().textDim.argb());
 	}
 
+	/** In {@code font} at {@code size} UI units (0 or less: the theme's size). Returns this label. */
 	public Label font(FontFamily font, float size) {
 		this.font = font;
 		this.size = size;
 		return this;
 	}
 
+	/** In {@link FontFamily#SANS_BOLD}, at the size it has. Returns this label. */
 	public Label bold() {
 		this.font = FontFamily.SANS_BOLD;
 		return this;
 	}
 
+	/** Each line centred in the width rather than left-aligned. Returns this label. */
 	public Label centered() {
 		this.centered = true;
 		return this;
 	}
 
 	/** Keeps it to one line, cut short with "…" when it doesn't fit; the whole text shows as its tooltip then. */
-	@ApiStatus.AvailableSince("1.4.0")
+	@ApiStatus.AvailableSince("1.4")
 	public Label oneLine() {
 		this.oneLine = true;
 		return this;

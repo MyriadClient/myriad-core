@@ -1,7 +1,7 @@
 package dev.myriadclient.api.job;
 
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -23,15 +23,21 @@ import java.util.concurrent.CompletableFuture;
  */
 @ApiStatus.NonExtendable
 public interface Job<T> {
+	/** Where a job stands. The first four are active; the last three are final. */
 	enum State {
 		/** Started, waiting for its first tick. */
 		QUEUED,
+		/** Working. */
 		RUNNING,
 		/** Waiting for a reason that may clear; see {@link #why()}. */
 		STUCK,
+		/** Paused by the player or {@link #pause()}: not ticked until resumed. */
 		PAUSED,
+		/** Finished; {@link #result()} has completed with the result. */
 		DONE,
+		/** Couldn't finish; {@link #why()} says why. */
 		FAILED,
+		/** Ended from outside: the player, a parent failing, a lost race, the owner turning off, leaving the world. */
 		CANCELLED;
 
 		/** Queued, running, stuck or paused: not over. */
@@ -43,11 +49,13 @@ public interface Job<T> {
 	/** Unique while the game runs; what {@code .job cancel <id>} takes. */
 	int id();
 
+	/** The step's name, as the Jobs window shows it (a live name from {@code Step.named(Supplier)} as of now). */
 	String name();
 
 	/** Who started the root: a module, usually. */
 	Object owner();
 
+	/** The job this one runs under, or null for a root job (one {@link Jobs#start} made). */
 	@Nullable Job<?> parent();
 
 	/** The jobs under this one that are running now. */
@@ -56,6 +64,7 @@ public interface Job<T> {
 	/** The step this job runs, as it was built. */
 	Step<T> step();
 
+	/** Where it stands now. */
 	State state();
 
 	/** The nearest reason when stuck, failed or cancelled (its own, or the child's it's waiting on); null otherwise. */
@@ -83,6 +92,7 @@ public interface Job<T> {
 	/** Stops ticking it; running steps are told ({@link Step.Run#pause}). The whole subtree pauses. */
 	void pause();
 
+	/** Undoes {@link #pause()}: it's ticked again from the next job tick, and running steps are told. */
 	void resume();
 
 	/** Cancels this job and everything under it: children first, then what each held. */
@@ -90,14 +100,17 @@ public interface Job<T> {
 
 	/** A failed or cancelled job's reason, as an exception for {@link #result()}. */
 	final class JobException extends RuntimeException {
+		/** Why the job failed or was cancelled. */
 		private final Why why;
 
+		/** Core's; only Myriad makes these. */
 		@ApiStatus.Internal
 		public JobException(Why why) {
 			super(why.toString(), why.cause());
 			this.why = why;
 		}
 
+		/** The reason the job failed or was cancelled. */
 		public Why why() {
 			return why;
 		}

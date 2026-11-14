@@ -50,6 +50,13 @@ public interface Build {
 		UNSUPPORTED
 	}
 
+	/**
+	 * One position of the plan.
+	 *
+	 * @param pos    the position
+	 * @param target what the blueprint wants there
+	 * @param status what's happening there, or why it's stuck
+	 */
 	record Step(BlockPos pos, Target target, Status status) {
 	}
 
@@ -72,8 +79,13 @@ public interface Build {
 	/** Whether everything in the blueprint is done (as of the last full check). */
 	boolean isDone();
 
+	/** Whether it's still going: false once it has finished or been stopped. */
 	boolean isRunning();
 
+	/**
+	 * Stops it where it is ({@link #finished()} completes with false); what's already placed or broken stays. Nothing
+	 * happens if it has already ended.
+	 */
 	void stop();
 
 	/**

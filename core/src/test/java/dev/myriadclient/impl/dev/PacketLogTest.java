@@ -3,10 +3,9 @@ package dev.myriadclient.impl.dev;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Subscription;
 import dev.myriadclient.api.event.events.PacketEvent;
-import dev.myriadclient.api.util.Packets;
+import dev.myriadclient.api.network.Packets;
 import dev.myriadclient.harness.Harness;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
-import net.minecraft.world.InteractionHand;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -36,18 +35,18 @@ class PacketLogTest {
 		try (Harness h = Harness.start()) {
 			h.standAt(0.5, 64, 0.5, 0, 0);
 			assertTrue(PacketLog.start(dir, List.of()).startsWith("Logging packets to"));
-			Packets.send(new ServerboundSwingPacket(InteractionHand.OFF_HAND));
+			Packets.send(ServerboundPunchPacket.INSTANCE);
 			Subscription cancel = Myriad.events().listen(PacketEvent.Send.class, e -> {
-				if (e.packet() instanceof ServerboundSwingPacket) e.cancel();
+				if (e.packet() instanceof ServerboundPunchPacket) e.cancel();
 			});
-			Packets.send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
+			Packets.send(ServerboundPunchPacket.INSTANCE);
 			cancel.unsubscribe();
 			String stopped = PacketLog.stop();
 			assertTrue(stopped.startsWith("1 packet in"), stopped);
 			List<String> lines = lines();
 			assertTrue(lines.getFirst().startsWith("# "), lines.getFirst());
 			assertEquals(2, lines.size(), String.join("\n", lines));
-			assertTrue(lines.get(1).matches("t\\d+ \\+\\d+ > SwingPacket \\{hand=OFF_HAND\\}"), lines.get(1));
+			assertTrue(lines.get(1).matches("t\\d+ \\+\\d+ > PunchPacket \\{\\}"), lines.get(1));
 		}
 	}
 
@@ -55,14 +54,14 @@ class PacketLogTest {
 	void aFilterKeepsOnlyWhatItNames() throws IOException {
 		try (Harness h = Harness.start()) {
 			h.standAt(0.5, 64, 0.5, 0, 0);
-			PacketLog.start(dir, List.of("swing"));
+			PacketLog.start(dir, List.of("punch"));
 			h.tick();
-			Packets.send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
+			Packets.send(ServerboundPunchPacket.INSTANCE);
 			h.tick();
 			PacketLog.stop();
 			List<String> lines = lines();
 			assertEquals(2, lines.size(), String.join("\n", lines));
-			assertTrue(lines.get(1).contains("> SwingPacket"));
+			assertTrue(lines.get(1).contains("> PunchPacket"));
 			assertFalse(String.join("\n", lines).contains("MovePlayer"));
 			assertEquals("Not logging packets", PacketLog.stop());
 		}

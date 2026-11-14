@@ -44,7 +44,7 @@ class ContainersHarnessTest {
 			h.onTick(() -> open[0] = Myriad.containers().open(this, CHEST, 20, Placement.Options.forServer())).ticks(3);
 			List<ServerboundUseItemOnPacket> clicks = h.sent(ServerboundUseItemOnPacket.class);
 			assertEquals(1, clicks.size(), "one click on the chest");
-			assertEquals(CHEST, clicks.getFirst().getHitResult().getBlockPos());
+			assertEquals(CHEST, clicks.getFirst().hitResult().getBlockPos());
 			assertFalse(open[0].isDone());
 			h.serverOpensChest(7, List.of(new ItemStack(Items.DIAMOND, 5), ItemStack.EMPTY, new ItemStack(Items.DIAMOND, 3)));
 			Containers.View view = open[0].getNow(null);

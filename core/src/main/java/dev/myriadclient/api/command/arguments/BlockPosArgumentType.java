@@ -32,6 +32,7 @@ public class BlockPosArgumentType implements ArgumentType<BlockPos> {
 		this.origin = origin;
 	}
 
+	/** Coordinates relative to where you stand when the command is typed (the origin if not in a world). */
 	public static BlockPosArgumentType blockPos() {
 		return new BlockPosArgumentType(() -> {
 			var player = Minecraft.getInstance().player;
@@ -39,6 +40,10 @@ public class BlockPosArgumentType implements ArgumentType<BlockPos> {
 		});
 	}
 
+	/**
+	 * The position parsed for the argument {@code name}. Brigadier throws {@link IllegalArgumentException} if the
+	 * command has no such argument.
+	 */
 	public static BlockPos get(CommandContext<?> ctx, String name) {
 		return ctx.getArgument(name, BlockPos.class);
 	}

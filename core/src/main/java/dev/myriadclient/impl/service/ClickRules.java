@@ -1,5 +1,7 @@
 package dev.myriadclient.impl.service;
 
+import dev.myriadclient.api.service.ServerStats;
+import dev.myriadclient.impl.network.KnownServers;
 import net.minecraft.world.entity.player.Input;
 import org.jetbrains.annotations.Nullable;
 
@@ -27,11 +29,10 @@ public enum ClickRules {
 	SNEAK(false, true);
 
 	/**
-	 * Hosts (with their subdomains) whose Grim takes a click whatever keys the last input held. 2b2t: live captures
-	 * (2026-10-14, joined as 26.2) of clicks made with forward or jump held in the last input packet, every one applied,
-	 * where current Grim cancels them.
+	 * Hosts (with their subdomains) whose Grim takes a click whatever keys the last input held: on 2b2t, clicks made with
+	 * forward or jump held in the last input packet are all applied, where current Grim cancels them.
 	 */
-	static final Set<String> NO_INPUT_RULE = Set.of("2b2t.org");
+	static final Set<String> NO_INPUT_RULE = Set.of(KnownServers.TWO_B2T);
 	/**
 	 * More such hosts, comma-separated, from {@code -Dmyriad.noInputRuleHosts}: dev runs pass "localhost" so the Grim
 	 * test server, set up like 2b2t's, is clicked on as 2b2t is.
@@ -62,13 +63,10 @@ public enum ClickRules {
 	}
 
 	static boolean ignoresInput(@Nullable String address) {
-		if (address == null) return false;
-		String host = address.trim().toLowerCase(Locale.ROOT);
-		int colon = host.lastIndexOf(':');
-		if (colon > 0 && host.indexOf(':') == colon) host = host.substring(0, colon);
-		if (host.endsWith(".")) host = host.substring(0, host.length() - 1);
-		for (String h : NO_INPUT_RULE) if (host.equals(h) || host.endsWith("." + h)) return true;
-		return !host.isEmpty() && EXTRA_HOSTS.contains(host);
+		String host = ServerStats.hostOf(address);
+		if (host == null || host.isEmpty()) return false;
+		for (String h : NO_INPUT_RULE) if (ServerStats.isHost(host, h)) return true;
+		return EXTRA_HOSTS.contains(host);
 	}
 
 	/** Whether the movement keys and jump of the last input packet count. */

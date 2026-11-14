@@ -1,6 +1,6 @@
 package dev.myriadclient.api.combat;
 
-import dev.myriadclient.api.util.Positions;
+import dev.myriadclient.api.world.Positions;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
@@ -35,7 +35,10 @@ public final class Crystals {
 		return state.is(Blocks.OBSIDIAN) || state.is(Blocks.BEDROCK);
 	}
 
-	/** Whether a crystal can be placed on {@code base} now: a base block, air above, and nothing in the way. */
+	/**
+	 * Whether a crystal can be placed on {@code base} now: a base block, air above, and nothing in the way. Reach isn't
+	 * checked; false outside a world.
+	 */
 	public static boolean canPlace(BlockPos base, boolean twoHigh) {
 		return canPlace(base, twoHigh, e -> false);
 	}
@@ -65,11 +68,15 @@ public final class Crystals {
 		return new Vec3(base.getX() + 0.5, base.getY() + 1, base.getZ() + 0.5);
 	}
 
-	/** Every base within {@code range} of {@code from} a crystal could be placed on now, nearest first. */
+	/**
+	 * Every base a crystal could be placed on now whose block centre is within {@code range} blocks of {@code from},
+	 * nearest first. A full scan of the sphere each call.
+	 */
 	public static List<BlockPos> bases(Vec3 from, double range, boolean twoHigh) {
 		return Positions.sphere(from, range, p -> canPlace(p, twoHigh));
 	}
 
+	/** Whether {@code e} is an end crystal. */
 	public static boolean isCrystal(Entity e) {
 		return e instanceof EndCrystal;
 	}

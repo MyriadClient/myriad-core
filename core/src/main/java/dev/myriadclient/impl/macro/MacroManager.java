@@ -4,11 +4,11 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.AddonStorage;
+import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.Tag;
-import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.setting.SettingColor;
-import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.MyriadImpl;
 
 import java.util.ArrayList;

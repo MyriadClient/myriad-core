@@ -1,9 +1,10 @@
 package dev.myriadclient.impl;
 
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.harness.Harness;
+import dev.myriadclient.impl.module.ModuleRegistryImpl;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -36,7 +37,7 @@ class SafeModeTurnOffTest {
 		try (Harness h = Harness.start()) {
 			Plain on = new Plain("On"), off = new Plain("Off");
 			Mirror mirror = new Mirror();
-			for (Module m : List.of(on, off, mirror)) Myriad.modules().register(m, "myriad-test");
+			for (Module m : List.of(on, off, mirror)) ((ModuleRegistryImpl) Myriad.modules()).register(m, "myriad-test");
 			on.setEnabled(true);
 			mirror.setEnabled(true);
 			List<Module> were = SafeMode.turnOff(Myriad.modules().values());

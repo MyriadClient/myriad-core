@@ -4,12 +4,12 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.BlockBreakEvent;
 import dev.myriadclient.api.event.events.TickEvent;
-import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.module.Tags;
+import dev.myriadclient.api.player.Mining;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.setting.BoolSetting;
 import dev.myriadclient.api.setting.IntSetting;
-import dev.myriadclient.api.util.Mining;
-import dev.myriadclient.api.util.MyriadId;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 

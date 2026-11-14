@@ -1,23 +1,25 @@
 package dev.myriadclient.impl.ui;
 
 import com.google.gson.JsonObject;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.module.ModuleGroup;
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.service.Notifications;
-import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.ui.PanelType;
-import dev.myriadclient.api.ui.Direction;
 import dev.myriadclient.api.ui.Rect;
 import dev.myriadclient.api.ui.SettingWidgets;
+import dev.myriadclient.api.ui.Side;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.ThemeSettings;
+import dev.myriadclient.api.ui.Ui;
 import dev.myriadclient.api.ui.Window;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.layout.Layout;
 import dev.myriadclient.api.ui.layout.LayoutState;
-import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.CoreAddon;
 import dev.myriadclient.impl.render.UiRenderer;
 import dev.myriadclient.impl.service.NotificationManager;
@@ -29,7 +31,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import org.jspecify.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,15 +45,15 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * The Hyprland-inspired window manager behind {@link Desktop}: workspaces with tiling layouts and floating windows,
+ * The Hyprland-inspired window manager behind {@link Ui}: workspaces with tiling layouts and floating windows,
  * keyboard-driven focus/move/resize, animated window placement and workspace switching, and the HUD workspace whose
  * windows are drawn in game.
  */
-// size: the Desktop API is implemented here, and window bookkeeping (opening, closing, focus, floating, moving between
+// size: the Ui API is implemented here, and window bookkeeping (opening, closing, focus, floating, moving between
 // workspaces, replacing panels) changes the window list and the workspaces together; input, saving and loading, HUD
 // elements, drawing, group windows and binds are classes of their own.
-public final class WindowManager implements Desktop {
-	static final Logger LOG = LoggerFactory.getLogger("Myriad/Desktop");
+public final class WindowManager implements Ui {
+	static final Logger LOG = LoggerFactory.getLogger("Myriad/UI");
 	static final float TITLE_H = 13;
 	final Minecraft mc = Minecraft.getInstance();
 	final ThemeSettings theme = new ThemeSettings();
@@ -62,19 +63,19 @@ public final class WindowManager implements Desktop {
 	final List<WindowImpl> windows = new ArrayList<>();
 	final List<WindowImpl> closing = new ArrayList<>();
 	final Launcher launcher = new Launcher(this);
-	private final DesktopInput input = new DesktopInput(this);
-	private final DesktopStore store = new DesktopStore(this);
+	private final UiInput input = new UiInput(this);
+	private final UiStore store = new UiStore(this);
 	final HudElements hud = new HudElements(this);
-	private final DesktopPainter painter = new DesktopPainter(this);
+	private final UiPainter painter = new UiPainter(this);
 	final GroupWindows groups = new GroupWindows(this);
-	final DesktopBinds binds = new DesktopBinds(this);
+	final UiBinds binds = new UiBinds(this);
 	final Set<WindowImpl> failedPanels = new HashSet<>();
 	final Animated transition = new Animated(1);
 	final long borderEpoch = System.nanoTime();
 	private Runnable dirtyHook = () -> {
 	};
 
-	/** Modules came or went since the desktop was last laid out: group windows need rebuilding, new groups placing. */
+	/** Modules came or went since the UI was last laid out: group windows need rebuilding, new groups placing. */
 	boolean modulesChanged;
 	int active = 1, previous = 1;
 	int nextUid = 1;
@@ -100,18 +101,18 @@ public final class WindowManager implements Desktop {
 	}
 
 	// ================================================================================================================
-	// Desktop API
+	// Ui API
 
 	@Override
 	public void open() {
 		refreshModules();
-		if (!(mc.gui.screen() instanceof DesktopScreen)) mc.gui.setScreen(new DesktopScreen(this));
+		if (!(mc.gui.screen() instanceof UiScreen)) mc.gui.setScreen(new UiScreen(this));
 	}
 
-	/** Runs one of the desktop's own bindings by id ("launcher", "layout", "close", ...), for the dev console. */
+	/** Runs one of the UI's own bindings by id ("launcher", "layout", "close", ...), for the dev console. */
 	public void runBind(String id) {
-		DesktopBinds.Bind b = binds.get(id);
-		if (b == null) throw new IllegalArgumentException("no desktop binding '" + id + "'; one of " + binds.all().keySet());
+		UiBinds.Bind b = binds.get(id);
+		if (b == null) throw new IllegalArgumentException("no UI binding '" + id + "'; one of " + binds.all().keySet());
 		b.action.accept(this);
 	}
 
@@ -125,7 +126,7 @@ public final class WindowManager implements Desktop {
 		modulesChanged = true;
 	}
 
-	/** Before the desktop shows: rebuilds group windows and places new groups if modules came or went since. */
+	/** Before the UI shows: rebuilds group windows and places new groups if modules came or went since. */
 	public void refreshModules() {
 		if (!modulesChanged) return;
 		modulesChanged = false;
@@ -137,12 +138,12 @@ public final class WindowManager implements Desktop {
 
 	@Override
 	public void close() {
-		if (mc.gui.screen() instanceof DesktopScreen) mc.gui.setScreen(null);
+		if (mc.gui.screen() instanceof UiScreen) mc.gui.setScreen(null);
 	}
 
 	@Override
 	public boolean isOpen() {
-		return mc.gui.screen() instanceof DesktopScreen;
+		return mc.gui.screen() instanceof UiScreen;
 	}
 
 	@Override
@@ -290,14 +291,14 @@ public final class WindowManager implements Desktop {
 	}
 
 	/**
-	 * The desktop's shortcuts that work without the menu open, in game and on the title screen: mod+1..9 opens the menu
+	 * The UI's shortcuts that work without the menu open, in game and on the title screen: mod+1..9 opens the menu
 	 * on that workspace, mod+S on the HUD, mod+Space the launcher (on its own over the game). True if the key was one.
 	 */
 	public boolean globalKey(int key, int mods) {
 		if ((mods & modMask()) == 0 || isOpen() || mc.gui.screen() instanceof LauncherScreen) return false;
-		int rest = mods & ~modMask() & ~GLFW.GLFW_MOD_NUM_LOCK & ~GLFW.GLFW_MOD_CAPS_LOCK;
-		for (DesktopBinds.Bind b : binds.all().values()) {
-			if (b.bind.mouse() || b.bind.code() != key || (b.bind.modifiers() & ~GLFW.GLFW_MOD_NUM_LOCK & ~GLFW.GLFW_MOD_CAPS_LOCK) != rest) continue;
+		int rest = mods & ~modMask() & ~InputConstants.MOD_NUM_LOCK & ~InputConstants.MOD_CAPS_LOCK;
+		for (UiBinds.Bind b : binds.all().values()) {
+			if (b.bind.mouse() || b.bind.code() != key || (b.bind.modifiers() & ~InputConstants.MOD_NUM_LOCK & ~InputConstants.MOD_CAPS_LOCK) != rest) continue;
 			if (b.id.equals("launcher")) {
 				// On its own, over the game or the title screen: no workspace opens unless what it runs needs one.
 				Screen behind = mc.gui.screen();
@@ -326,7 +327,7 @@ public final class WindowManager implements Desktop {
 		return menu + " opens the menu · " + mod + "+Space the launcher";
 	}
 
-	public Map<String, DesktopBinds.Bind> binds() {
+	public Map<String, UiBinds.Bind> binds() {
 		return binds.all();
 	}
 
@@ -498,7 +499,7 @@ public final class WindowManager implements Desktop {
 	}
 
 	/**
-	 * Theme → Preferences → UI Scale as the desktop draws it: changed once the slider is let go, not at each step of a
+	 * Theme → Preferences → UI Scale as the UI draws it: changed once the slider is let go, not at each step of a
 	 * drag (the menu rescaled under the pointer as it moved, the slider jumping away from it), and then kept only if you
 	 * say so within {@link #KEEP_SCALE_MS}, as a screen resolution is; otherwise it goes back. Changed with the menu shut
 	 * (a profile loaded, a command), it's simply taken.
@@ -511,7 +512,7 @@ public final class WindowManager implements Desktop {
 			shownUiScale = keptUiScale = wanted;
 			return wanted;
 		}
-		if (GLFW.glfwGetMouseButton(mc.getWindow().handle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS) return shownUiScale;
+		if (Keybind.mouse(InputConstants.MOUSE_BUTTON_LEFT).isPressed()) return shownUiScale;
 		shownUiScale = wanted;
 		if (scaleDialog != 0) DialogPanel.dismiss(scaleDialog);
 		JsonObject args = DialogPanel.prepare("UI Scale", left -> "Keep this scale? Going back in " + left + " s.", "Keep", () -> {
@@ -591,13 +592,13 @@ public final class WindowManager implements Desktop {
 		}
 	}
 
-	/** The mouse and keys, for the screens that show the desktop. */
-	DesktopInput input() {
+	/** The mouse and keys, for the screens that show the UI. */
+	UiInput input() {
 		return input;
 	}
 
-	/** Draws the desktop, the HUD and Myriad's own screens. */
-	DesktopPainter painter() {
+	/** Draws the UI, the HUD and Myriad's own screens. */
+	UiPainter painter() {
 		return painter;
 	}
 
@@ -623,7 +624,7 @@ public final class WindowManager implements Desktop {
 		return screenH;
 	}
 
-	/** A GUI coordinate (mouse) in the desktop's units. */
+	/** A GUI coordinate (mouse) in the UI's units. */
 	float units(double guiCoord) {
 		return toUnits(guiCoord);
 	}
@@ -654,9 +655,9 @@ public final class WindowManager implements Desktop {
 
 	int modMask() {
 		return switch (theme.modKey.get()) {
-			case ALT -> GLFW.GLFW_MOD_ALT;
-			case SUPER -> GLFW.GLFW_MOD_SUPER;
-			case CTRL -> GLFW.GLFW_MOD_CONTROL;
+			case ALT -> InputConstants.MOD_ALT;
+			case SUPER -> InputConstants.MOD_SUPER;
+			case CTRL -> InputConstants.MOD_CONTROL;
 		};
 	}
 
@@ -669,16 +670,11 @@ public final class WindowManager implements Desktop {
 	}
 
 	boolean modHeld() {
-		long handle = mc.getWindow().handle();
 		return switch (theme.modKey.get()) {
-			case ALT -> down(handle, GLFW.GLFW_KEY_LEFT_ALT) || down(handle, GLFW.GLFW_KEY_RIGHT_ALT);
-			case SUPER -> down(handle, GLFW.GLFW_KEY_LEFT_SUPER) || down(handle, GLFW.GLFW_KEY_RIGHT_SUPER);
-			case CTRL -> down(handle, GLFW.GLFW_KEY_LEFT_CONTROL) || down(handle, GLFW.GLFW_KEY_RIGHT_CONTROL);
+			case ALT -> InputConstants.isKeyDown(InputConstants.KEY_LALT) || InputConstants.isKeyDown(InputConstants.KEY_RALT);
+			case SUPER -> InputConstants.isKeyDown(InputConstants.KEY_LGUI) || InputConstants.isKeyDown(InputConstants.KEY_RGUI);
+			case CTRL -> InputConstants.isKeyDown(InputConstants.KEY_LCONTROL) || InputConstants.isKeyDown(InputConstants.KEY_RCONTROL);
 		};
-	}
-
-	static boolean down(long handle, int key) {
-		return GLFW.glfwGetKey(handle, key) == GLFW.GLFW_PRESS;
 	}
 
 	WindowImpl topWindowAt(float x, float y) {
@@ -718,16 +714,16 @@ public final class WindowManager implements Desktop {
 	 * Where dropping a dragged tiled window on {@code target} (at {@code r}) puts it: beside it on the side returned, the
 	 * cursor in the band along that edge, or null for swapping the two (the cursor towards the middle).
 	 */
-	@Nullable Direction splitSide(Rect r, float mx, float my) {
+	@Nullable Side splitSide(Rect r, float mx, float my) {
 		float fx = (mx - r.x()) / r.w(), fy = (my - r.y()) / r.h();
 		float left = fx, right = 1 - fx, up = fy, down = 1 - fy;
 		float nearest = Math.min(Math.min(left, right), Math.min(up, down));
 		if (nearest > SPLIT_BAND) return null;
-		return nearest == left ? Direction.LEFT : nearest == right ? Direction.RIGHT : nearest == up ? Direction.UP : Direction.DOWN;
+		return nearest == left ? Side.LEFT : nearest == right ? Side.RIGHT : nearest == up ? Side.UP : Side.DOWN;
 	}
 
 	/** The half of {@code r} a window dropped on its {@code side} takes. */
-	static Rect half(Rect r, Direction side) {
+	static Rect half(Rect r, Side side) {
 		return switch (side) {
 			case LEFT -> new Rect(r.x(), r.y(), r.w() / 2, r.h());
 			case RIGHT -> new Rect(r.x() + r.w() / 2, r.y(), r.w() / 2, r.h());
@@ -766,6 +762,8 @@ public final class WindowManager implements Desktop {
 		float offX, offY;
 		Rect start;
 		float startX, startY;
+		/** A panel drag: where the mouse was at the last drag event (for its movement since). */
+		float lastX, lastY;
 		int button;
 	}
 
@@ -773,7 +771,7 @@ public final class WindowManager implements Desktop {
 		return store.save();
 	}
 
-	/** Loads a saved layout; {@code null} builds the first-run desktop. */
+	/** Loads a saved layout; {@code null} builds the first-run UI. */
 	public void load(JsonObject o) {
 		store.load(o);
 	}

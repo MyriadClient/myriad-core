@@ -1,16 +1,26 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.Bezier;
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.Bezier;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-/** A titled section whose body can be folded away. */
+/**
+ * A titled section whose body can be folded away: click the header (or Enter, or h/l with the keyboard selection on
+ * it) to fold or unfold it, with an animation. Folded, the body takes no room and gets no input.
+ *
+ * <pre>{@code
+ * VBox body = new VBox(2, 0);
+ * body.add(new Label("Inside"));
+ * content.add(new Collapsible("Advanced", body).indent(10).hint(() -> "1"));
+ * }</pre>
+ */
 public class Collapsible extends Widget {
 	private final Supplier<String> title;
 	private final Widget body;
@@ -18,8 +28,12 @@ public class Collapsible extends Widget {
 	private final Consumer<Boolean> expandedSetter;
 	private final Animated open;
 	private float indent;
-	private Supplier<String> hint;
+	private @Nullable Supplier<@Nullable String> hint;
 
+	/**
+	 * A section whose folded state lives elsewhere (a setting group's, say): {@code expanded} is read every frame and
+	 * {@code setExpanded} called when the player folds or unfolds it.
+	 */
 	public Collapsible(Supplier<String> title, Widget body, Supplier<Boolean> expanded, Consumer<Boolean> setExpanded) {
 		this.title = title;
 		this.body = body;
@@ -28,6 +42,7 @@ public class Collapsible extends Widget {
 		this.open = new Animated(expanded.get() ? 1 : 0);
 	}
 
+	/** A section that starts unfolded and remembers its state itself (until the widgets are rebuilt). */
 	public Collapsible(String title, Widget body) {
 		this(() -> title, body, new boolean[]{true});
 	}
@@ -36,14 +51,20 @@ public class Collapsible extends Widget {
 		this(title, body, () -> state[0], v -> state[0] = v);
 	}
 
-	/** Indents the body and draws a guide line down its left edge, so nested sections read as a tree. */
+	/**
+	 * Indents the body by {@code indent} UI units and draws a guide line down its left edge, so nested sections read as
+	 * a tree. Returns this section.
+	 */
 	public Collapsible indent(float indent) {
 		this.indent = indent;
 		return this;
 	}
 
-	/** Dim text at the right of the header (e.g. how many settings the section holds). */
-	public Collapsible hint(Supplier<String> hint) {
+	/**
+	 * Dim text at the right of the header (e.g. how many settings the section holds), asked every frame; null or empty
+	 * shows none. It gives way to the title in a narrow window. Returns this section.
+	 */
+	public Collapsible hint(Supplier<@Nullable String> hint) {
 		this.hint = hint;
 		return this;
 	}

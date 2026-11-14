@@ -3,11 +3,11 @@ package dev.myriadclient.impl.ui.layout;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import dev.myriadclient.api.ui.Direction;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.ui.Rect;
+import dev.myriadclient.api.ui.Side;
 import dev.myriadclient.api.ui.layout.Layout;
 import dev.myriadclient.api.ui.layout.LayoutState;
-import dev.myriadclient.api.util.MyriadId;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -155,10 +155,10 @@ public final class ColumnsLayout implements Layout {
 
 		/** Before {@code target} (left or up) or after it (right or down): columns are one row. */
 		@Override
-		public void insertBeside(W window, W target, Direction side) {
+		public void insertBeside(W window, W target, Side side) {
 			if (window == target || !windows.contains(target)) return;
 			remove(window);
-			int at = windows.indexOf(target) + (side == Direction.LEFT || side == Direction.UP ? 0 : 1);
+			int at = windows.indexOf(target) + (side == Side.LEFT || side == Side.UP ? 0 : 1);
 			windows.add(at, window);
 			weights.add(at, 1f);
 		}

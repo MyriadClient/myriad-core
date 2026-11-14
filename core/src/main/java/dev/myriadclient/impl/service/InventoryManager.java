@@ -8,13 +8,13 @@ import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Inventory;
-import dev.myriadclient.api.util.Slots;
 import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.api.util.Ticks;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.util.ScreenSlots;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.protocol.game.ClientboundSetHeldSlotPacket;
 import net.minecraft.network.protocol.game.ServerboundAttackPacket;
 import net.minecraft.network.protocol.game.ServerboundClientTickEndPacket;
@@ -25,8 +25,8 @@ import net.minecraft.network.protocol.game.ServerboundPickItemFromEntityPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.world.InteractionHand;
@@ -145,7 +145,7 @@ public final class InventoryManager implements Inventory {
 	 * (from a handler that runs before the tick start's own, say) takes it with it, ahead of itself.
 	 */
 	@Subscribe(priority = Priority.HIGHEST + 100, packets = {ServerboundAttackPacket.class, ServerboundInteractPacket.class, ServerboundUseItemPacket.class,
-		ServerboundUseItemOnPacket.class, ServerboundPlayerActionPacket.class, ServerboundPlayerCommandPacket.class, ServerboundSwingPacket.class,
+		ServerboundUseItemOnPacket.class, ServerboundPlayerActionPacket.class, ServerboundPlayerCommandPacket.class, ServerboundPunchPacket.class,
 		ServerboundPlayerInputPacket.class})
 	private void beforeAction(PacketEvent.Send e) {
 		if (due() && !restoring && mc.player != null && mc.isSameThread()) restore();
@@ -529,6 +529,12 @@ public final class InventoryManager implements Inventory {
 	@Override
 	public boolean safeToClick() {
 		return gate.safeToClick();
+	}
+
+	@Override
+	public boolean containerOpen() {
+		var player = mc.player;
+		return player != null && mc.gui.screen() != null && !(mc.gui.screen() instanceof InventoryScreen) && player.containerMenu != player.inventoryMenu;
 	}
 
 	/** What a click has to wait for, for the version this connection joined as and the server. */

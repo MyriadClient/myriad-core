@@ -5,11 +5,11 @@ import dev.myriadclient.api.build.BlockRules;
 import dev.myriadclient.api.build.Blueprint;
 import dev.myriadclient.api.build.Build;
 import dev.myriadclient.api.build.Target;
+import dev.myriadclient.api.player.Reach;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Building;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.util.MathUtil;
-import dev.myriadclient.api.util.Reach;
 import it.unimi.dsi.fastutil.bytes.ByteArrayList;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -275,18 +275,18 @@ final class BuildRun implements Build {
 		long deadline = System.nanoTime() + SOLVE_BUDGET_NANOS;
 		for (int k = 0; k < places.size() && actions < o.placesPerTick() && System.nanoTime() < deadline; k++) {
 			int i = index(places.getLong(k));
-			Status s = place(at(i), workTargets.get(i), o);
-			set(i, s);
-			if (s == Status.WAITING) actions++;
+			sent = false;
+			set(i, place(at(i), workTargets.get(i), o));
+			if (sent) actions++;
 		}
 
 		// One step per click, the next once the server has answered the last (some only change on the server).
 		sort(clicks);
 		for (int k = 0; k < clicks.size() && actions < o.placesPerTick(); k++) {
 			int i = index(clicks.getLong(k));
-			Status s = click(at(i).immutable(), ((Target.Exact) workTargets.get(i)).state(), o);
-			set(i, s);
-			if (s == Status.WAITING) actions++;
+			sent = false;
+			set(i, click(at(i).immutable(), ((Target.Exact) workTargets.get(i)).state(), o));
+			if (sent) actions++;
 		}
 	}
 
@@ -399,6 +399,12 @@ final class BuildRun implements Build {
 
 	// ---- acting -------------------------------------------------------------------------------------------------
 
+	/**
+	 * Whether the last {@link #place} or {@link #click} sent something: only those count towards the actions per tick,
+	 * not a block waiting for its item to reach the hotbar or for the server's answer.
+	 */
+	private boolean sent;
+
 	/** Gets the item, solves the click where the target shapes the block, and places, or says why not. */
 	private Status place(BlockPos at, Target target, Building.Options o) {
 		Status held = held(at);
@@ -413,6 +419,7 @@ final class BuildRun implements Build {
 		if (want == null) {
 			Placement.Attempt a = Myriad.placement().place(this, pos, slot, o.placing());
 			if (!a.sent()) return status(a.check());
+			sent = true;
 			track(pos, a);
 			return Status.WAITING;
 		}
@@ -421,6 +428,7 @@ final class BuildRun implements Build {
 		Placement.Click click = solution.click();
 		Placement.Attempt a = Myriad.placement().place(this, click, slot, o.placing());
 		if (!a.sent()) return status(a.check());
+		sent = true;
 		if (!click.turns()) {
 			track(pos, a);
 			return Status.WAITING;
@@ -453,7 +461,9 @@ final class BuildRun implements Build {
 		// Without turning, unless the look you have would swing it round.
 		boolean turn = rotate || !BlockRules.clickKeepsFacing(current, Myriad.rotations().serverYaw());
 		Placement.Attempt a = Myriad.placement().use(this, hit, -1, o.placing().withRotate(turn).withSneak(false));
-		return a.sent() ? Status.WAITING : status(a.check());
+		if (!a.sent()) return status(a.check());
+		sent = true;
+		return Status.WAITING;
 	}
 
 	/**

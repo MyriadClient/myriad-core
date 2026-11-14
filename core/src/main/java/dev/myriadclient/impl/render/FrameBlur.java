@@ -1,17 +1,17 @@
 package dev.myriadclient.impl.render;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.systems.CommandEncoder;
-import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryStack;
@@ -91,10 +91,10 @@ public final class FrameBlur {
 			encoder.writeToBuffer(ubo.slice(), data);
 		}
 		try (RenderPass pass = encoder.createRenderPass(() -> "Myriad blur", to.getColorTextureView(), Optional.empty(), null, OptionalDouble.empty())) {
-			pass.setPipeline(pipeline);
+			pass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));
 			RenderSystem.bindDefaultUniforms(pass);
 			pass.setUniform("BlurInfo", ubo);
-			pass.bindTexture("InSampler", from, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
+			pass.setUniform("InSampler", from, RenderSystem.getSamplerCache().getClampToEdge(FilterMode.LINEAR));
 			pass.draw(3, 1, 0, 0);
 		}
 	}
@@ -108,7 +108,7 @@ public final class FrameBlur {
 			// New targets rather than resizing these: this frame's UI may already have recorded draws sampling the old
 			// view (the window was resized between recording and drawing), so it's freed a few frames late.
 			TextureTarget old = levels[i];
-			levels[i] = new TextureTarget("Myriad blur " + i, w, h, false, GpuFormat.RGBA8_UNORM);
+			levels[i] = new TextureTarget("Myriad blur " + i, w, h, GpuFormat.RGBA8_UNORM, null);
 			if (old != null) GpuGarbage.close(old::destroyBuffers);
 		}
 		for (int i = 0; i < info.length; i++) {

@@ -6,14 +6,15 @@ import com.mojang.blaze3d.font.GlyphProvider;
 import com.mojang.blaze3d.font.UnbakedGlyph;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.renderpearl.api.textures.GpuTexture;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.ints.IntSet;
 import it.unimi.dsi.fastutil.ints.IntSets;
+import net.minecraft.client.gui.font.TextRenderable;
 import net.minecraft.client.gui.font.glyphs.BakedGlyph;
-import net.minecraft.client.gui.font.glyphs.EmptyGlyph;
+import net.minecraft.network.chat.Style;
 import org.jspecify.annotations.Nullable;
 import org.lwjgl.system.MemoryUtil;
 
@@ -98,6 +99,11 @@ public final class ThemeGlyphs implements GlyphProvider {
 		final FontRenderContext frc;
 		/** The shift, in whole pixels at this scale. */
 		final float down;
+		/**
+		 * How far bold text's second copy and the shadow are drawn off, in GUI pixels: a screen pixel or two, where
+		 * Minecraft's pixel font takes a whole GUI pixel (two or three screen pixels on a thin smooth face read as two lines).
+		 */
+		final float boldOffset, shadowOffset;
 		private final Int2ObjectMap<UnbakedGlyph> glyphs = new Int2ObjectOpenHashMap<>();
 
 		Scaled(int scale) {
@@ -109,6 +115,28 @@ public final class ThemeGlyphs implements GlyphProvider {
 			measure.dispose();
 			float caps = sized.createGlyphVector(frc, "H").getGlyphPixelBounds(0, frc, 0, 0).height / (float) scale;
 			down = Math.round((Float.isNaN(shift) ? CAPS_MIDDLE + caps / 2 - 7 : shift) * scale) / (float) scale;
+			boldOffset = Math.max(1, Math.round(scale * 0.4f)) / (float) scale;
+			shadowOffset = Math.max(1, Math.round(scale * 0.5f)) / (float) scale;
+		}
+
+		/** A glyph's measures at this scale: its advance (GUI pixels) and the bold and shadow offsets. */
+		GlyphInfo info(float advance) {
+			return new GlyphInfo() {
+				@Override
+				public float getAdvance() {
+					return advance;
+				}
+
+				@Override
+				public float getBoldOffset() {
+					return boldOffset;
+				}
+
+				@Override
+				public float getShadowOffset() {
+					return shadowOffset;
+				}
+			};
 		}
 
 		synchronized @Nullable UnbakedGlyph glyph(int cp) {
@@ -116,12 +144,33 @@ public final class ThemeGlyphs implements GlyphProvider {
 			if (glyph == null && supported.contains(cp)) {
 				char ch = (char) cp;
 				GlyphVector gv = sized.createGlyphVector(frc, new char[]{ch});
+				// The font's box for a character it hasn't got: Minecraft's font is asked instead.
+				if (gv.getGlyphCode(0) == sized.getMissingGlyphCode()) return null;
 				float advance = gv.getGlyphMetrics(0).getAdvanceX();
 				Rectangle ink = gv.getGlyphPixelBounds(0, frc, 0, 0);
-				glyph = ink.isEmpty() ? new EmptyGlyph(advance / scale) : new Glyph(ch, ink, advance);
+				glyph = ink.isEmpty() ? new Blank(info(advance / scale)) : new Glyph(ch, ink, advance);
 				glyphs.put(cp, glyph);
 			}
 			return glyph;
+		}
+
+		/** A glyph with no ink (a space): only its advance. */
+		private record Blank(GlyphInfo info) implements UnbakedGlyph {
+			@Override
+			public BakedGlyph bake(UnbakedGlyph.Stitcher stitcher) {
+				return new BakedGlyph() {
+					@Override
+					public GlyphInfo info() {
+						return info;
+					}
+
+					@Override
+					public TextRenderable.@Nullable Styled createGlyph(float x, float y, int color, int shadowColor, Style style, float boldOffset,
+						float shadowOffset) {
+						return null;
+					}
+				};
+			}
 		}
 
 		private final class Glyph implements UnbakedGlyph, GlyphBitmap {
@@ -132,7 +181,7 @@ public final class ThemeGlyphs implements GlyphProvider {
 			Glyph(char ch, Rectangle ink, float advance) {
 				this.ch = ch;
 				this.ink = ink;
-				info = GlyphInfo.simple(advance / scale);
+				info = Scaled.this.info(advance / scale);
 			}
 
 			@Override

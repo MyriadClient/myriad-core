@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(targets = "net.irisshaders.iris.pathways.HandRenderer", remap = false)
 public abstract class IrisHandRendererMixin {
-	@ModifyArg(method = "setupGlState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ProjectionMatrixBuffer;getBuffer(Lorg/joml/Matrix4f;)Lcom/mojang/blaze3d/buffers/GpuBufferSlice;"))
+	@ModifyArg(method = "setupGlState", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ProjectionMatrixBuffer;getBuffer(Lorg/joml/Matrix4f;)Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;"))
 	private Matrix4f myriad$handProjection(Matrix4f projection) {
 		if (HighlightRenderer.INSTANCE.isArmed()) HandHighlights.INSTANCE.beginHand(projection);
 		return projection;

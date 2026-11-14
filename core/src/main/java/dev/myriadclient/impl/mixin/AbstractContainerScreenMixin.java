@@ -24,11 +24,18 @@ import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+/**
+ * Every container screen through their common base: clicks, tooltips and drawn slots for ContainerScreenEvent, what
+ * slots show while masks or a sort's result hide the real items (Inventory.mask, ContainerTracker), held containers
+ * kept open when you close the screen (Containers.hold), your clicks kept on screen (HandClicks), and Themed Screens'
+ * labels, slot highlight and swap bar.
+ */
 @Mixin(AbstractContainerScreen.class)
 public abstract class AbstractContainerScreenMixin {
 	@Shadow
@@ -64,11 +71,13 @@ public abstract class AbstractContainerScreenMixin {
 		if (ThemedScreens.tabClicked((AbstractContainerScreen<?>) (Object) this, event.x(), event.y(), event.button())) cir.setReturnValue(true);
 	}
 
-	/** The title and inventory labels of a screen drawn in the theme: the themed window draws them (see ThemedScreens). */
+	/** The title and inventory labels of a screen drawn in the theme, in its font and colours (see ThemedScreens.label). */
 	@WrapOperation(method = "extractLabels", at = @At(value = "INVOKE",
 		target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;text(Lnet/minecraft/client/gui/Font;Lnet/minecraft/network/chat/Component;IIIZ)V"))
 	private void myriad$label(GuiGraphicsExtractor graphics, Font font, Component text, int x, int y, int color, boolean shadow, Operation<Void> original) {
-		if (!ThemedScreens.themed((AbstractContainerScreen<?>) (Object) this)) original.call(graphics, font, text, x, y, color, shadow);
+		AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>) (Object) this;
+		if (ThemedScreens.themed(screen)) ThemedScreens.label(screen, graphics, font, text, x, y);
+		else original.call(graphics, font, text, x, y, color, shadow);
 	}
 
 	/** The slot under the mouse, lit in the theme on a screen drawn in it (see ThemedScreens). */
@@ -85,16 +94,17 @@ public abstract class AbstractContainerScreenMixin {
 	/** Your inventory's slots show what masks keep them showing (see Inventory.mask). */
 	@ModifyExpressionValue(method = "extractSlot", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/inventory/Slot;getItem()Lnet/minecraft/world/item/ItemStack;", ordinal = 0))
 	private ItemStack myriad$shownSlot(ItemStack stack, @Local(argsOnly = true) Slot slot) {
-		return shownIn(slot, stack);
+		return myriad$shownIn(slot, stack);
 	}
 
 	@ModifyExpressionValue(method = "extractTooltip", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/inventory/Slot;getItem()Lnet/minecraft/world/item/ItemStack;"))
 	private ItemStack myriad$shownTooltip(ItemStack stack) {
-		return hoveredSlot == null ? stack : shownIn(hoveredSlot, stack);
+		return hoveredSlot == null ? stack : myriad$shownIn(hoveredSlot, stack);
 	}
 
 	/** What a slot shows: a running sort's result (see ContainerTracker.shown), else what masks keep your inventory's showing. */
-	private ItemStack shownIn(Slot slot, ItemStack stack) {
+	@Unique
+	private ItemStack myriad$shownIn(Slot slot, ItemStack stack) {
 		var player = Minecraft.getInstance().player;
 		if (!Myriad.isReady() || player == null) return stack;
 		ItemStack sorted = MyriadImpl.get().containerTracker().shown(((AbstractContainerScreen<?>) (Object) this).getMenu(), slot.index);
@@ -128,7 +138,7 @@ public abstract class AbstractContainerScreenMixin {
 		if (Myriad.isReady() && MyriadImpl.get().containerTracker().arranging(((AbstractContainerScreen<?>) (Object) this).getMenu())) cir.setReturnValue(true);
 	}
 
-	@Inject(method = "slotClicked", at = @At("HEAD"), cancellable = true)
+	@Inject(method = "slotClicked(Lnet/minecraft/world/inventory/Slot;IILnet/minecraft/world/inventory/ContainerInput;)V", at = @At("HEAD"), cancellable = true)
 	private void myriad$click(Slot slot, int slotId, int button, ContainerInput input, CallbackInfo ci) {
 		if (!Myriad.isReady()) return;
 		// Aimed at a sort's result before it's real: the sort stops and the click is dropped.
@@ -148,7 +158,7 @@ public abstract class AbstractContainerScreenMixin {
 	}
 
 	/** Your click went to the server: what it made stays on screen while answers to older ones arrive (HandClicks). */
-	@Inject(method = "slotClicked", at = @At("TAIL"))
+	@Inject(method = "slotClicked(Lnet/minecraft/world/inventory/Slot;IILnet/minecraft/world/inventory/ContainerInput;)V", at = @At("TAIL"))
 	private void myriad$clicked(Slot slot, int slotId, int button, ContainerInput input, CallbackInfo ci) {
 		if (Myriad.isReady() && MyriadImpl.get() != null) MyriadImpl.get().handClicks().clicked(((AbstractContainerScreen<?>) (Object) this).getMenu());
 	}

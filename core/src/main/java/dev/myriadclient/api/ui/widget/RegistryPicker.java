@@ -1,8 +1,8 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.setting.RegistryListSetting;
 import dev.myriadclient.api.setting.RegistrySetting;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.util.ColorUtil;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
@@ -19,19 +19,27 @@ import java.util.Locale;
 
 /**
  * Inline searchable multi-select over a vanilla registry, instead of a separate picker screen. Selected
- * entries sort first; items and blocks show their icon.
+ * entries sort first; items and blocks show their icon. Shut, it's a row saying what's picked; click it (or Enter) to
+ * open a search box and a scrolling list, where clicking an entry picks or unpicks it. The search matches names and
+ * ids. The order is taken when it opens or the search changes, so entries don't jump while you pick.
+ *
+ * @param <T> the registry's entry type
  */
 public class RegistryPicker<T> extends Widget {
 	private static final float LIST_HEIGHT = 120, ENTRY = 12;
 
 	/** What the picker lists and how picking works: a multi-select list, a single choice, or anything else. */
 	public interface Source<T> {
+		/** Every entry there is (a registry), in its own order. */
 		Iterable<T> all();
 
+		/** Whether {@code t} may be listed at all (a setting's filter). */
 		boolean accepts(T t);
 
+		/** Whether {@code t} is picked now. */
 		boolean contains(T t);
 
+		/** A click on {@code t}: pick or unpick it (or, for a single choice, pick it). */
 		void toggle(T t);
 
 		/** How many are selected (any non-negative number for single choices). */
@@ -43,8 +51,10 @@ public class RegistryPicker<T> extends Widget {
 		/** Matched by the search box besides the name. */
 		String id(T t);
 
+		/** What {@code t} is called on screen. */
 		String name(T t);
 
+		/** The icon drawn beside {@code t}: blocks and items show their item, anything else {@link ItemStack#EMPTY} (none). */
 		default ItemStack icon(T t) {
 			if (t instanceof Block b && b.asItem() != Items.AIR) return new ItemStack(b.asItem());
 			if (t instanceof Item i) return new ItemStack(i);
@@ -60,6 +70,7 @@ public class RegistryPicker<T> extends Widget {
 	private float scroll;
 	private int lastSize = -1;
 
+	/** A multi-select over {@code setting}'s registry, picking into the setting; the row says how many are picked. */
 	public RegistryPicker(RegistryListSetting<T> setting) {
 		this(new Source<>() {
 			@Override
@@ -149,6 +160,7 @@ public class RegistryPicker<T> extends Widget {
 		});
 	}
 
+	/** A picker over any {@link Source}. */
 	public RegistryPicker(Source<T> setting) {
 		this.setting = setting;
 		this.search = new TextField(() -> query).search().placeholder("Search…").onChange(s -> {

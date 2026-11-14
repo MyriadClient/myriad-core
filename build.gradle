@@ -1,8 +1,11 @@
+// Loom comes with the addon plugin (gradle-plugin, built with the Loom core uses), so core and the example addon share
+// one copy of it.
 plugins {
-	id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
+	id 'dev.myriadclient.addon' apply false
 }
 
-subprojects {
+// Core's build. The example addon is built by the addon plugin, as any addon is.
+project(':core') {
 	apply plugin: 'net.fabricmc.fabric-loom'
 	apply plugin: 'maven-publish'
 
@@ -79,28 +82,4 @@ subprojects {
 	afterEvaluate {
 		publishing.publications.mavenJava.artifactId = base.archivesName.get()
 	}
-}
-
-// Addons (the example here, Essentials in its own repo) may only use Myriad's public API. dev.myriadclient.impl is internal and changes without
-// notice, so referencing it from an addon fails the build here rather than breaking players' games later.
-configure(subprojects.findAll { it.name != 'core' }) {
-	def sources = fileTree("src/main/java") { include "**/*.java" }
-	def root = rootDir
-	def checkApiOnly = tasks.register("checkApiOnly") {
-		group = "verification"
-		description = "Fails if this addon references Myriad internals (dev.myriadclient.impl)."
-		inputs.files(sources)
-		doLast {
-			def bad = []
-			sources.each { f ->
-				f.eachLine { line, n ->
-					if (line.contains("dev.myriadclient.impl")) bad << "${root.toPath().relativize(f.toPath())}:${n}: ${line.trim()}"
-				}
-			}
-			if (!bad.isEmpty()) {
-				throw new GradleException("Addons may only use Myriad's API (dev.myriadclient.api.*), but these lines reference internals:\n  " + bad.join("\n  "))
-			}
-		}
-	}
-	tasks.named("compileJava") { dependsOn checkApiOnly }
 }

@@ -1,6 +1,7 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 
-#moj_import <myriad:highlight.glsl>
+#include <myriad:highlight.glsl>
 
 // The glow's distance search along each row of its field, outwards so it stops at the first hit: (distance in field
 // texels, or NONE; the id there). A field texel is a block of the full-size silhouettes, scale pixels square, read two
@@ -8,7 +9,7 @@
 // (InSampler is sampled linearly); only a hit reads them one by one, for the id.
 uniform sampler2D InSampler;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 // Whether the block of field texel q holds a silhouette pixel.
 bool blockSet(ivec2 q, int scale, vec2 size) {

@@ -2,13 +2,13 @@ package dev.myriadclient.impl.service;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.build.BlockRules;
-import dev.myriadclient.api.service.Placement;
+import dev.myriadclient.api.player.Reach;
 import dev.myriadclient.api.service.Placement.Check;
 import dev.myriadclient.api.service.Placement.Click;
 import dev.myriadclient.api.service.Placement.Solution;
-import dev.myriadclient.api.util.BlockInfo;
+import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.util.MathUtil;
-import dev.myriadclient.api.util.Reach;
+import dev.myriadclient.api.world.BlockInfo;
 import dev.myriadclient.impl.mixin.BlockItemAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;

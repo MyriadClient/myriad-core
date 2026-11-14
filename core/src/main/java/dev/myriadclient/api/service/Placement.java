@@ -1,15 +1,15 @@
 package dev.myriadclient.api.service;
 
+import dev.myriadclient.api.annotation.RenderThread;
 import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Replacement;
 import dev.myriadclient.api.hook.Service;
-import dev.myriadclient.api.util.Reach;
-import dev.myriadclient.api.util.RenderThread;
+import dev.myriadclient.api.player.Reach;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Objects;
@@ -81,14 +81,19 @@ public interface Placement {
 
 		/**
 		 * Allow placing with no solid neighbour, through the off hand (swap, place, swing, swap back), clicking the
-		 * face of the empty space that faces you. This is how 2b2t clients air place there; current Grim builds (2.3.74
-		 * on the test server) refuse any placement against air (AirLiquidPlace).
+		 * face of the empty space that faces you. 2b2t takes these; current Grim builds refuse any placement against air
+		 * (AirLiquidPlace), so offer it as a choice rather than turning it on for a server.
 		 */
 		public boolean airPlace() {
 			return airPlace;
 		}
 
-		/** Swing the hand. */
+		/**
+		 * Swing the hand with each placement and click, where you see it. Off, an air placement or a click with
+		 * {@link #use} still tells the server of a swing without showing one; a main-hand placement sends none. Where
+		 * the server doesn't ask for swings ({@link AntiCheat.Profile#checksSwings()} false) none is sent whatever this
+		 * says.
+		 */
 		public boolean swing() {
 			return swing;
 		}
@@ -104,7 +109,9 @@ public interface Placement {
 
 		/**
 		 * Only click faces that point towards you with nothing in the way; strict anti-cheats reject the rest. Visible
-		 * faces are always preferred; this makes them required.
+		 * faces are always preferred; this makes them required. Off, and without {@link #rotate()}, a face turned away
+		 * from you is clicked when there's no other (the block ahead of the one you stand on), as servers that don't
+		 * check which face a click lands on take.
 		 */
 		public boolean visibleFaces() {
 			return visibleFaces;
@@ -120,32 +127,38 @@ public interface Placement {
 			return sneak;
 		}
 
+		/** These options with {@link #rotate()} set. */
 		public Options withRotate(boolean rotate) {
 			return new Options(rotate, airPlace, swing, range, visibleFaces, sneak);
 		}
 
+		/** These options with {@link #airPlace()} set. */
 		public Options withAirPlace(boolean airPlace) {
 			return new Options(rotate, airPlace, swing, range, visibleFaces, sneak);
 		}
 
+		/** These options with {@link #swing()} set. */
 		public Options withSwing(boolean swing) {
 			return new Options(rotate, airPlace, swing, range, visibleFaces, sneak);
 		}
 
+		/** These options with {@link #range()} set, in blocks. */
 		public Options withRange(double range) {
 			return new Options(rotate, airPlace, swing, range, visibleFaces, sneak);
 		}
 
+		/** These options with {@link #visibleFaces()} set. */
 		public Options withVisibleFaces(boolean visibleFaces) {
 			return new Options(rotate, airPlace, swing, range, visibleFaces, sneak);
 		}
 
+		/** These options with {@link #sneak()} set. */
 		public Options withSneak(boolean sneak) {
 			return new Options(rotate, airPlace, swing, range, visibleFaces, sneak);
 		}
 
 		@Override
-		public boolean equals(Object o) {
+		public boolean equals(@Nullable Object o) {
 			return o instanceof Options x && x.rotate == rotate && x.airPlace == airPlace && x.swing == swing && x.range == range
 				&& x.visibleFaces == visibleFaces && x.sneak == sneak;
 		}
@@ -166,7 +179,10 @@ public interface Placement {
 	enum Check {
 		/** It can be placed. */
 		OK,
-		/** Not in a world, or the hotbar slot isn't 0-8. */
+		/**
+		 * Not in a world, the hotbar slot isn't 0-8, or a replacement of {@link #AIM} found nowhere to click where core
+		 * would have.
+		 */
 		UNAVAILABLE,
 		/** Something that can't be replaced is already there. */
 		OCCUPIED,
@@ -192,6 +208,7 @@ public interface Placement {
 		 */
 		WRONG_ANGLE;
 
+		/** Whether this is {@link #OK}. */
 		public boolean ok() {
 			return this == OK;
 		}
@@ -202,12 +219,18 @@ public interface Placement {
 	 * rotation is out. {@link #result()} completes with true once the server has kept a block at {@link #pos()}, and
 	 * false if it refused it, never answered, or the rotation never got through. It completes on the render thread,
 	 * and is already false when the placement wasn't accepted.
+	 *
+	 * @param pos where the block goes (for a click with {@link #use}, the block clicked)
+	 * @param check {@link Check#OK} if it was accepted, otherwise why not
+	 * @param result whether the server kept the block (or answered the click)
 	 */
 	record Attempt(BlockPos pos, Check check, CompletableFuture<Boolean> result) {
+		/** Whether it was accepted ({@link #check()} is {@link Check#OK}). */
 		public boolean sent() {
 			return check == Check.OK;
 		}
 
+		/** An attempt that wasn't accepted, for {@code check}'s reason, its result already false. */
 		public static Attempt refused(BlockPos pos, Check check) {
 			return new Attempt(pos, check, CompletableFuture.completedFuture(false));
 		}
@@ -226,6 +249,7 @@ public interface Placement {
 		private final BlockState wanted;
 		private final int count;
 
+		/** Core's: clicks come from {@link Placement#solve}. */
 		@ApiStatus.Internal
 		public Click(BlockPos pos, BlockHitResult hit, boolean sneak, boolean air, float yaw, float pitch, boolean lookAtHit, float aimYaw, float aimPitch,
 		             BlockState wanted, int count) {
@@ -267,10 +291,12 @@ public interface Placement {
 			return !Float.isNaN(yaw);
 		}
 
+		/** The yaw to click with, in degrees; NaN when it clicks with the look you have ({@link #turns()}). */
 		public float yaw() {
 			return yaw;
 		}
 
+		/** The pitch to click with, in degrees; NaN when it clicks with the look you have ({@link #turns()}). */
 		public float pitch() {
 			return pitch;
 		}
@@ -291,10 +317,12 @@ public interface Placement {
 			return !Float.isNaN(aimYaw);
 		}
 
+		/** The yaw of the look after the click, in degrees; NaN unless {@link #aimed()}. */
 		public float aimYaw() {
 			return aimYaw;
 		}
 
+		/** The pitch of the look after the click, in degrees; NaN unless {@link #aimed()}. */
 		public float aimPitch() {
 			return aimPitch;
 		}
@@ -326,21 +354,24 @@ public interface Placement {
 			this.check = check;
 		}
 
+		/** Core's: a solution with {@code click}. */
 		@ApiStatus.Internal
 		public static Solution of(Click click) {
 			return new Solution(Objects.requireNonNull(click), Check.OK);
 		}
 
+		/** Core's: no solution, for {@code why}. */
 		@ApiStatus.Internal
 		public static Solution none(Check why) {
 			return new Solution(null, why);
 		}
 
+		/** Whether there's a click ({@link #click()} isn't null). */
 		public boolean found() {
 			return click != null;
 		}
 
-		/** The click, or null. */
+		/** The click, or null when none was found ({@link #check()} says why). */
 		public @Nullable Click click() {
 			return click;
 		}
@@ -355,7 +386,11 @@ public interface Placement {
 		}
 	}
 
-	/** Whether a block could go at {@code pos} now: {@link Check#OK}, or the reason it can't. */
+	/**
+	 * Whether a block could go at {@code pos} now: {@link Check#OK}, or the reason it can't. Checks the space (free,
+	 * in reach, nothing in the way, nothing pending, budget left) and that there's a face to click as {@code options}
+	 * allow; not what you hold.
+	 */
 	Check check(BlockPos pos, Options options);
 
 	/**
@@ -375,20 +410,25 @@ public interface Placement {
 		return Solution.none(Check.UNAVAILABLE);
 	}
 
+	/** Whether {@link #check} says {@link Check#OK}. */
 	default boolean canPlace(BlockPos pos, Options options) {
 		return check(pos, options).ok();
 	}
 
-	/** Places the block in {@code hotbarSlot} (0-8) at {@code pos}. The visible selected slot doesn't change. */
+	/**
+	 * Places the block in {@code hotbarSlot} (0-8) at {@code pos}, with no owner: {@link #cancel} can't drop it. The
+	 * visible selected slot doesn't change.
+	 */
 	default Attempt place(BlockPos pos, int hotbarSlot, Options options) {
 		return place(null, pos, hotbarSlot, options);
 	}
 
 	/**
 	 * Like {@link #place(BlockPos, int, Options)}, owned by {@code owner}: placements still waiting for their rotation
-	 * are dropped by {@link #cancel(Object)} (a module's are when it's disabled).
+	 * are dropped by {@link #cancel(Object)} (a module's are when it's disabled). Clicks the face {@link #AIM} picks;
+	 * without {@link Options#rotate()} the placement goes at once, with it as soon as the rotation is out.
 	 */
-	Attempt place(Object owner, BlockPos pos, int hotbarSlot, Options options);
+	Attempt place(@Nullable Object owner, BlockPos pos, int hotbarSlot, Options options);
 
 	/**
 	 * Places by clicking exactly {@code hit}, for when the face or the click position matters: stairs, slabs, logs and
@@ -402,7 +442,11 @@ public interface Placement {
 		return place(null, hit, hotbarSlot, options);
 	}
 
-	Attempt place(Object owner, BlockHitResult hit, int hotbarSlot, Options options);
+	/**
+	 * {@link #place(BlockHitResult, int, Options)} owned by {@code owner}, so {@link #cancel(Object)} drops it while it
+	 * waits for its rotation.
+	 */
+	Attempt place(@Nullable Object owner, BlockHitResult hit, int hotbarSlot, Options options);
 
 	/**
 	 * Makes a {@link #solve}d click with the item in {@code hotbarSlot}. A click that turns asks for its look, and goes
@@ -414,7 +458,7 @@ public interface Placement {
 	 * doesn't turn goes at once. Range, swing and pending follow {@code options}; sneak, air placement and the look come
 	 * from the click.
 	 */
-	default Attempt place(Object owner, Click click, int hotbarSlot, Options options) {
+	default Attempt place(@Nullable Object owner, Click click, int hotbarSlot, Options options) {
 		return Attempt.refused(click.pos(), Check.UNAVAILABLE);
 	}
 
@@ -436,7 +480,7 @@ public interface Placement {
 	 *
 	 * @param hotbarSlot the item to click with, swapped to silently for the click; -1 for whatever you hold
 	 */
-	default Attempt use(Object owner, BlockHitResult hit, int hotbarSlot, Options options) {
+	default Attempt use(@Nullable Object owner, BlockHitResult hit, int hotbarSlot, Options options) {
 		return Attempt.refused(hit.getBlockPos(), Check.UNAVAILABLE);
 	}
 
@@ -455,8 +499,11 @@ public interface Placement {
 		return true;
 	}
 
-	/** Drops {@code owner}'s placements that haven't been sent yet; their results complete with false. */
-	void cancel(Object owner);
+	/**
+	 * Drops {@code owner}'s placements and clicks that haven't been sent yet; their results complete with false. Ones
+	 * already sent still wait for the server's answer. Does nothing for null.
+	 */
+	void cancel(@Nullable Object owner);
 
 	/**
 	 * Every neighbour face that could be clicked to put a block at {@code pos}: faces you can see first, then nearest
@@ -467,7 +514,12 @@ public interface Placement {
 	/** True while a placement at {@code pos}, or a click using the block there, is waiting to be sent or for the server's answer. */
 	boolean isPending(BlockPos pos);
 
-	/** A block to place, for {@link #AIM}. */
+	/**
+	 * A block to place, for {@link #AIM}.
+	 *
+	 * @param pos where the block goes
+	 * @param options how it's placed (range, visible faces, air placement)
+	 */
 	record Target(BlockPos pos, Options options) {
 	}
 
@@ -476,7 +528,7 @@ public interface Placement {
 	 * nearest your eyes; for an air placement, the empty space itself), or null if there's nowhere it may click.
 	 * Called with the placement's owner as caller. A click elsewhere than core would pick is aimed at from your eyes.
 	 */
-	Hook<Target, BlockHitResult> AIM = Hook.of("myriad:placement_aim", "Placement aim",
+	Hook<Target, @Nullable BlockHitResult> AIM = Hook.of("myriad:placement_aim", "Placement aim",
 		"Where a placement clicks.");
 
 	/**
@@ -488,6 +540,7 @@ public interface Placement {
 		/** The service this one wraps: core's own. */
 		protected final Placement core;
 
+		/** Wraps {@code core}, the service handed to your replacement's factory. */
 		protected Forwarding(Placement core) {
 			this.core = Objects.requireNonNull(core);
 		}
@@ -498,17 +551,17 @@ public interface Placement {
 		}
 
 		@Override
-		public Attempt place(Object owner, BlockPos pos, int hotbarSlot, Options options) {
+		public Attempt place(@Nullable Object owner, BlockPos pos, int hotbarSlot, Options options) {
 			return core.place(owner, pos, hotbarSlot, options);
 		}
 
 		@Override
-		public Attempt place(Object owner, BlockHitResult hit, int hotbarSlot, Options options) {
+		public Attempt place(@Nullable Object owner, BlockHitResult hit, int hotbarSlot, Options options) {
 			return core.place(owner, hit, hotbarSlot, options);
 		}
 
 		@Override
-		public Attempt place(Object owner, Click click, int hotbarSlot, Options options) {
+		public Attempt place(@Nullable Object owner, Click click, int hotbarSlot, Options options) {
 			return core.place(owner, click, hotbarSlot, options);
 		}
 
@@ -518,7 +571,7 @@ public interface Placement {
 		}
 
 		@Override
-		public Attempt use(Object owner, BlockHitResult hit, int hotbarSlot, Options options) {
+		public Attempt use(@Nullable Object owner, BlockHitResult hit, int hotbarSlot, Options options) {
 			return core.use(owner, hit, hotbarSlot, options);
 		}
 
@@ -533,7 +586,7 @@ public interface Placement {
 		}
 
 		@Override
-		public void cancel(Object owner) {
+		public void cancel(@Nullable Object owner) {
 			core.cancel(owner);
 		}
 

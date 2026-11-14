@@ -1,9 +1,9 @@
 package dev.myriadclient.api.job;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.item.ItemInfo;
 import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Placement;
-import dev.myriadclient.api.util.ItemInfo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 

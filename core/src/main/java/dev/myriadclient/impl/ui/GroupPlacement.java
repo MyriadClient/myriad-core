@@ -1,14 +1,14 @@
 package dev.myriadclient.impl.ui;
 
 /**
- * Where a newly seen addon's group windows go, so a desktop with many addons stays readable. One addon at a time:
+ * Where a newly seen addon's group windows go, so a UI with many addons stays readable. One addon at a time:
  * <ol>
  * <li>all together, on the first workspace with room for all of them;</li>
  * <li>and when there are more than one workspace holds, filling empty workspaces in order.</li>
  * </ol>
  * With no empty workspace left and none with room for them all, the least crowded workspace takes the rest.
  * A workspace has room while it holds fewer tiled windows than {@code capacity} (as many as fit side by side at a
- * readable width). Only windows the desktop hasn't seen are placed; anything already arranged stays where it is.
+ * readable width). Only windows the UI hasn't seen are placed; anything already arranged stays where it is.
  */
 final class GroupPlacement {
 	private GroupPlacement() {

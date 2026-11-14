@@ -1,8 +1,9 @@
 package dev.myriadclient.api.setting;
 
 import com.google.gson.JsonElement;
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.registry.MyriadId;
 import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -20,27 +21,50 @@ import java.util.function.Supplier;
  * a server profile. {@link #get()} is the topmost layer's value; releasing an override uncovers what's under it, so
  * nothing has to be put back and nothing is left changed. Subclasses keep reading and writing {@link #value} (the
  * player's) for saving, parsing and in-place edits, and use {@link #get()} for behaviour.
+ * <p>
+ * Settings are made with the builders of a {@link SettingGroup} and live as long as their owner. Read them freely
+ * (from mixins too); change them on the render thread. A change runs the {@link #onChanged} listeners right away, on
+ * the thread that made it, and has the owner's profile saved shortly after.
+ *
+ * <pre>{@code
+ * private final DoubleSetting range = sgGeneral.decimal("Range").defaultValue(4.5).range(0, 6).build();
+ *
+ * double r = range.get();                                         // in effect now
+ * otherModule.speed.override(this, Setting.Layer.MODULE, name(), 1.0);   // while this module needs it
+ * otherModule.speed.release(this);                                // back to what was there
+ * }</pre>
  */
 public abstract class Setting<T> {
 	private static Runnable globalChangeHook = () -> {
 	};
 
+	/** The display name, as given to the builder. */
 	protected final String name;
+	/** {@link #name} in snake_case: the key in config files. */
 	protected final String id;
+	/** The tooltip text; empty for none. */
 	protected final String description;
+	/**
+	 * The value it starts at and {@link #reset} goes back to. Never changed: {@link #copy} keeps it apart from {@link
+	 * #value}.
+	 */
 	protected final T defaultValue;
+	/** The player's own value, the one saved: subclasses read and write it for saving, parsing and in-place edits. */
 	protected T value;
 	private final Supplier<Boolean> visible;
 	private final List<Consumer<T>> listeners = new ArrayList<>(1);
-	private SettingGroup group;
+	private @Nullable SettingGroup group;
 	/** Values laid over the player's, lowest first by layer; null when there are none (the usual case). */
-	private List<Layered<T>> overrides;
+	private @Nullable List<Layered<T>> overrides;
 	/** While decoding or encoding a value without touching the setting: no listeners fire. */
 	private boolean muted;
 
 	/** Who lays a value over the player's, lowest first: a later layer wins over an earlier one. */
 	public enum Layer {
-		/** Values for a kind of server (not used yet). */
+		/**
+		 * Values for the server you're on, under everything else: an addon's per-server profile ({@link #override}).
+		 * Core sets none.
+		 */
 		SERVER,
 		/** A control panel, while it's on. */
 		CONTROL_PANEL,
@@ -48,10 +72,17 @@ public abstract class Setting<T> {
 		MODULE
 	}
 
-	private record Layered<T>(Object owner, Layer layer, String label, T value, Consumer<T> editor) {
+	private record Layered<T>(Object owner, Layer layer, String label, T value, @Nullable Consumer<T> editor) {
 	}
 
-	protected Setting(String name, String description, T defaultValue, Supplier<Boolean> visible) {
+	/**
+	 * A setting starting at {@code defaultValue}. Addons make settings with a {@link SettingGroup}'s builders; this is for
+	 * the {@link Builder#create()} of a setting type of your own.
+	 *
+	 * @param description the tooltip; null for none
+	 * @param visible     whether the settings window shows it right now (asked as it draws); null for always
+	 */
+	protected Setting(String name, @Nullable String description, T defaultValue, @Nullable Supplier<Boolean> visible) {
 		this.name = Objects.requireNonNull(name);
 		this.id = MyriadId.toPath(name);
 		this.description = description == null ? "" : description;
@@ -71,6 +102,7 @@ public abstract class Setting<T> {
 		return isProtected;
 	}
 
+	/** The display name, as given to the builder. */
 	public String name() {
 		return name;
 	}
@@ -80,6 +112,7 @@ public abstract class Setting<T> {
 		return id;
 	}
 
+	/** The tooltip text; empty for none. */
 	public String description() {
 		return description;
 	}
@@ -98,8 +131,9 @@ public abstract class Setting<T> {
 	 * Lays {@code value} over the player's for {@code owner} until {@link #release}d (replacing any it laid before).
 	 * {@code label} says who, in the UI ("Hunting"). An {@code editor}, if given, takes edits made in the UI while this
 	 * override is the one in effect (a control panel saving them); without one, edits go to the player's value.
+	 * Listeners fire if the value in effect changes. Overrides aren't saved: lay yours again after a restart.
 	 */
-	public void override(Object owner, Layer layer, String label, T value, Consumer<T> editor) {
+	public void override(Object owner, Layer layer, String label, T value, @Nullable Consumer<T> editor) {
 		T before = get();
 		if (overrides == null) overrides = new ArrayList<>(1);
 		overrides.removeIf(o -> o.owner() == owner);
@@ -107,11 +141,14 @@ public abstract class Setting<T> {
 		if (!Objects.equals(before, get())) changed();
 	}
 
+	/**
+	 * {@link #override(Object, Layer, String, Object, Consumer)} without an editor: UI edits go to the player's value.
+	 */
 	public void override(Object owner, Layer layer, String label, T value) {
 		override(owner, layer, label, value, null);
 	}
 
-	/** Takes {@code owner}'s override off, uncovering what's under it. */
+	/** Takes {@code owner}'s override off, uncovering what's under it; nothing if it laid none. */
 	public void release(Object owner) {
 		if (overrides == null) return;
 		T before = get();
@@ -120,12 +157,13 @@ public abstract class Setting<T> {
 		if (!Objects.equals(before, get())) changed();
 	}
 
+	/** Whether any override lies on the player's value (so {@link #get()} may differ from {@link #playerValue()}). */
 	public boolean isOverridden() {
 		return overrides != null;
 	}
 
 	/** Who set the value in effect ("Hunting"), or null when it's the player's own. */
-	public String overriddenBy() {
+	public @Nullable String overriddenBy() {
 		return overrides == null ? null : top().label();
 	}
 
@@ -133,6 +171,12 @@ public abstract class Setting<T> {
 		Layered<T> top = overrides.getFirst();
 		for (Layered<T> o : overrides) if (o.layer().ordinal() >= top.layer().ordinal()) top = o;
 		return top;
+	}
+
+	/** Whether {@link #edit} would change the value in effect: no override lies on it, or the one in effect takes edits. */
+	@ApiStatus.AvailableSince("2.0")
+	public boolean editsTakeEffect() {
+		return overrides == null || overrides.isEmpty() || top().editor() != null;
 	}
 
 	/**
@@ -167,7 +211,7 @@ public abstract class Setting<T> {
 	}
 
 	/** The value {@code input} stands for, read the way {@link #parse} reads it (null if it isn't valid), without changing this setting. */
-	public T decode(String input) {
+	public @Nullable T decode(String input) {
 		T base = value;
 		muted = true;
 		try {
@@ -192,11 +236,15 @@ public abstract class Setting<T> {
 		}
 	}
 
+	/** The value it starts at and {@link #reset} goes back to. */
 	public T defaultValue() {
 		return defaultValue;
 	}
 
-	/** Sets the value (after {@link #validate}); listeners fire only if it changed. */
+	/**
+	 * Sets the player's value (after {@link #validate}: clamped, rounded or replaced as the type requires); listeners fire
+	 * only if it changed. While an override is in effect, {@link #get()} keeps the override's value.
+	 */
 	public void set(T newValue) {
 		T validated = validate(newValue);
 		if (Objects.equals(validated, value)) return;
@@ -204,7 +252,10 @@ public abstract class Setting<T> {
 		changed();
 	}
 
-	/** Call after mutating a collection value in place. */
+	/**
+	 * Runs the listeners with the value in effect and has the owner saved. {@link #set} calls it; call it yourself after
+	 * changing a collection value in place.
+	 */
 	public void changed() {
 		if (muted) return;
 		T now = get();
@@ -213,24 +264,32 @@ public abstract class Setting<T> {
 		globalChangeHook.run();
 	}
 
+	/** Sets the player's value back to the default. */
 	public void reset() {
 		set(copy(defaultValue));
 	}
 
+	/** Whether the player's value is the default (then it isn't written to config). */
 	public boolean isDefault() {
 		return Objects.equals(value, defaultValue);
 	}
 
+	/** Whether the settings window shows it right now, from the builder's {@link Builder#visible}. */
 	public boolean isVisible() {
 		return visible.get();
 	}
 
+	/**
+	 * Runs {@code listener} with the value in effect each time it changes, by the player, an override or code. Returns
+	 * this setting. A listener can't be removed, so add it once.
+	 */
 	public Setting<T> onChanged(Consumer<T> listener) {
 		listeners.add(listener);
 		return this;
 	}
 
-	public SettingGroup group() {
+	/** The group it was built into or added to; null for a setting made on its own. */
+	public @Nullable SettingGroup group() {
 		return group;
 	}
 
@@ -238,8 +297,8 @@ public abstract class Setting<T> {
 		this.group = group;
 	}
 
-	/** Clamp / normalise a candidate value. */
-	protected T validate(T v) {
+	/** Clamps or normalises a candidate value before it's set or laid over; null gives the default. */
+	protected T validate(@Nullable T v) {
 		return v == null ? copy(defaultValue) : v;
 	}
 
@@ -253,24 +312,29 @@ public abstract class Setting<T> {
 		return true;
 	}
 
+	/** The player's value as JSON, for config and shares. */
 	public abstract JsonElement toJson();
 
 	/** Load from JSON; invalid input must leave the value unchanged rather than throw. */
 	public abstract void fromJson(JsonElement json);
 
-	/** Parse user input from a command. Returns false if the input is invalid. */
+	/**
+	 * Sets the player's value from what a player typed (a command, a text box). Returns false, leaving the value as it
+	 * was, if the input isn't valid.
+	 */
 	public abstract boolean parse(String input);
 
-	/** Completions for command input. */
+	/** Completions for command input; none by default. */
 	public List<String> suggestions() {
 		return List.of();
 	}
 
-	/** Human-readable current value. */
+	/** The value in effect for people, the way {@link #parse} reads it back where it can. */
 	public String valueString() {
 		return String.valueOf(get());
 	}
 
+	/** Core's: told of every change to any setting, for the config's autosave. */
 	@ApiStatus.Internal
 	public static void setGlobalChangeHook(Runnable hook) {
 		globalChangeHook = hook;
@@ -282,34 +346,48 @@ public abstract class Setting<T> {
 	 */
 	@SuppressWarnings("unchecked")
 	public abstract static class Builder<B extends Builder<B, T, S>, T, S extends Setting<T>> {
+		/** The name given to the builder. */
 		protected final String name;
+		/** From {@link #description}; empty by default. */
 		protected String description = "";
+		/** From {@link #defaultValue}; each type starts with its own (false, 0, empty). */
 		protected T defaultValue;
+		/** From {@link #visible}; always visible by default. */
 		protected Supplier<Boolean> visible = () -> true;
-		protected Consumer<T> onChanged;
+		/** From {@link #onChanged}; none by default. */
+		protected @Nullable Consumer<T> onChanged;
+		/** From {@link #protect()}; off by default, on for coordinates and file paths. */
 		protected boolean protect;
 		SettingGroup group;
 
+		/** A builder for a setting called {@code name}, with the type's own default value. */
 		protected Builder(String name, T defaultValue) {
 			this.name = name;
 			this.defaultValue = defaultValue;
 		}
 
+		/** The tooltip: one sentence on what the setting does. */
 		public B description(String description) {
 			this.description = description;
 			return (B) this;
 		}
 
+		/** The value it starts at, and goes back to on reset. Only values that differ from it are saved. */
 		public B defaultValue(T value) {
 			this.defaultValue = value;
 			return (B) this;
 		}
 
+		/**
+		 * When the settings window shows it, asked as the window draws: e.g. {@code () -> mode.get() == Mode.CUSTOM}. A
+		 * hidden setting still applies and is still saved.
+		 */
 		public B visible(Supplier<Boolean> visible) {
 			this.visible = visible;
 			return (B) this;
 		}
 
+		/** A listener for changes, as {@link Setting#onChanged} adds; one per builder. */
 		public B onChanged(Consumer<T> onChanged) {
 			this.onChanged = onChanged;
 			return (B) this;
@@ -335,8 +413,12 @@ public abstract class Setting<T> {
 			return (B) this;
 		}
 
+		/**
+		 * Makes the setting from the builder's fields; {@link #build()} does the rest. For setting types of your own.
+		 */
 		protected abstract S create();
 
+		/** Makes the setting and, for a builder from a {@link SettingGroup}, adds it to the group. Call it once. */
 		public S build() {
 			S s = create();
 			((Setting<?>) s).isProtected = protect;

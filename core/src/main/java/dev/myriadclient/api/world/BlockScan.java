@@ -21,13 +21,18 @@ public final class BlockScan {
 	/** Receives each match. {@code pos} is reused between calls: call {@code pos.immutable()} to keep it. */
 	@FunctionalInterface
 	public interface Visitor {
+		/** One match: its position (reused, see above) and state. */
 		void visit(BlockPos.MutableBlockPos pos, BlockState state);
 	}
 
 	private BlockScan() {
 	}
 
-	/** Visits every block in {@code chunk} whose state matches {@code filter}, bottom to top. */
+	/**
+	 * Visits every block in {@code chunk} whose state matches {@code filter}, bottom to top. A filter that matches air
+	 * reads every all-air section too, so keep it to the blocks you want. It reads only the chunk, so it suits a
+	 * {@link ChunkCache.Builder#async() ChunkCache.async()} compute.
+	 */
 	public static void forEach(LevelChunk chunk, Predicate<BlockState> filter, Visitor visitor) {
 		LevelChunkSection[] sections = chunk.getSections();
 		int baseX = chunk.getPos().x() << 4, baseZ = chunk.getPos().z() << 4;
@@ -48,7 +53,7 @@ public final class BlockScan {
 		}
 	}
 
-	/** True if any block in {@code chunk} matches, checking palettes first. */
+	/** True if any block in {@code chunk} matches, checking palettes first and stopping at the first match. */
 	public static boolean contains(LevelChunk chunk, Predicate<BlockState> filter) {
 		for (LevelChunkSection section : chunk.getSections()) {
 			if (section == null || !section.maybeHas(filter)) continue;

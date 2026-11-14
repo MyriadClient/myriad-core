@@ -1,84 +1,10 @@
+// Built by Myriad's addon plugin, exactly as an addon in its own repository is (see the template): Loom, Minecraft,
+// Fabric, the dev client and its switches, the API-only check and publishing all come from it. Inside Myriad's
+// repository it builds against the :core project rather than a released core.
+plugins {
+	id 'dev.myriadclient.addon'
+}
+
 base {
 	archivesName = "myriad-example-addon"
 }
-
-repositories {
-	// Essentials for the dev runtime comes from Myriad's maven.
-	exclusiveContent {
-		forRepositories(maven {
-			name = "Myriad"
-			url = "https://maven.myriadclient.dev/releases"
-		})
-		filter { includeGroup "dev.myriadclient" }
-	}
-}
-
-dependencies {
-	implementation project(":core")
-	// Only so `:example-addon:runClient` also boots the stock modules; the addon does not depend on them. With
-	// -PessentialsDir=../myriad-essentials the jar built in that checkout is used instead of the released one, and
-	// -PnoEssentials leaves it out (CI: core is released before the Essentials built on it).
-	if (project.hasProperty("essentialsDir")) {
-		localRuntime fileTree(dir: "${project.essentialsDir}/build/libs", include: "myriad-essentials-*.jar", exclude: ["*-sources.jar"])
-	} else if (!project.hasProperty("noEssentials")) {
-		localRuntime("dev.myriadclient:myriad-essentials:${rootProject.essentials_version}") {
-			// The released core it depends on would load beside this checkout's under the same mod id.
-			exclude group: "dev.myriadclient", module: "myriad"
-		}
-	}
-}
-
-loom {
-	mods {
-		"myriad" {
-			sourceSet("main", ":core")
-		}
-		"myriad-example" {
-			sourceSet sourceSets.main
-		}
-	}
-}
-
-loom {
-	runs {
-		client {
-			// Dev checks: core's services log a call from a thread other than the render thread (Threads.assertRender).
-			property("myriad.dev", "true")
-			// ./gradlew :example-addon:runClient -PopenDesktop opens the desktop over the title screen on launch.
-			property("myriad.openDesktop", project.hasProperty("openDesktop").toString())
-			// -PscreenshotEvery=N saves a screenshot every N seconds.
-			if (project.hasProperty("screenshotEvery")) property("myriad.screenshotEvery", project.property("screenshotEvery").toString())
-			// -PauditMixins applies every mixin at startup, so a broken one fails straight away instead of when its class loads.
-			property("myriad.auditMixins", project.hasProperty("auditMixins").toString())
-			// Lines appended to run/myriad-dev-inbox are run in game (Myriad commands, server commands, held keys, the menu,
-			// screenshots), so tests can be scripted from outside; Essentials' tools/grim-test/client writes there.
-			property("myriad.devConsole", "myriad-dev-inbox")
-			// -PquickPlay="World name" loads straight into a singleplayer world.
-			if (project.hasProperty("quickPlay")) programArgs("--quickPlaySingleplayer", project.property("quickPlay").toString())
-			// -PquickPlayServer=localhost:25565 joins a server instead (the Grim test server in myriad-essentials, say).
-			if (project.hasProperty("quickPlayServer")) programArgs("--quickPlayMultiplayer", project.property("quickPlayServer").toString())
-			// -PupdatesPretend=myriad-essentials=0.0.9 makes the update check treat those addons as that version.
-			// A local myriad-api and website for shared configs (./gradlew runClient -Papi=http://localhost:3000).
-			if (project.hasProperty("api")) property("myriad.api", project.property("api").toString())
-			if (project.hasProperty("site")) property("myriad.site", project.property("site").toString())
-			if (project.hasProperty("updatesPretend")) property("myriad.updates.pretend", project.property("updatesPretend").toString())
-			// -Pusername=Name plays as that name (offline servers), so a test server can op it once and keep it.
-			if (project.hasProperty("username")) programArgs("--username", project.property("username").toString())
-		}
-	}
-}
-
-// -Photswap: the dev client on the JetBrains Runtime (Java 25) with a debug port, so myriad-essentials' tools/grim-test/reload
-// can swap freshly compiled classes in (`./gradlew :core:classes`, then reload) without a restart.
-if (project.hasProperty("hotswap")) {
-	tasks.matching { it.name == "runClient" }.configureEach {
-		javaLauncher = javaToolchains.launcherFor {
-			languageVersion = JavaLanguageVersion.of(25)
-			vendor = JvmVendorSpec.JETBRAINS
-		}
-		jvmArgs("-XX:+AllowEnhancedClassRedefinition", "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=localhost:" + (project.findProperty("debugPort") ?: "5005"))
-	}
-}
-
-// The example is for reading and running, not depending on: it isn't published or released.
-tasks.withType(AbstractPublishToMaven).configureEach { enabled = false }

@@ -8,12 +8,12 @@ public final class Format {
 	private Format() {
 	}
 
-	/** "12m", "350m", "1.4km". */
+	/** A distance in blocks as "12m", "350m", "1.4km" (one block is a metre; km from 1000 blocks). */
 	public static String distance(double blocks) {
 		return blocks >= 1000 ? String.format("%.1fkm", blocks / 1000) : String.format("%.0fm", blocks);
 	}
 
-	/** "45s", "3m 05s", "2h 14m". */
+	/** A duration in milliseconds as "45s", "3m 05s", "2h 14m"; rounds down, negative counts as 0. */
 	public static String duration(long ms) {
 		long s = Math.max(0, ms) / 1000;
 		if (s < 60) return s + "s";
@@ -21,7 +21,7 @@ public final class Format {
 		return String.format("%dh %02dm", s / 3600, s / 60 % 60);
 	}
 
-	/** "just now", "5s ago", "3m ago", "2h ago", "4d ago". */
+	/** How long ago something happened, given the milliseconds since: "just now", "5s ago", "3m ago", "2h ago", "4d ago". */
 	public static String ago(long ms) {
 		long s = Math.max(0, ms) / 1000;
 		if (s < 2) return "just now";
@@ -31,7 +31,7 @@ public final class Format {
 		return s / 86400 + "d ago";
 	}
 
-	/** "999", "1.2k", "45k", "3.1M". */
+	/** A count shortened for a small space: "999", "1.2k", "45k", "3.1M", "2B"; negative numbers keep their sign. */
 	public static String compact(long n) {
 		long a = Math.abs(n);
 		if (a < 1000) return String.valueOf(n);
@@ -44,15 +44,20 @@ public final class Format {
 		return Math.abs(v) < 10 ? String.format("%.1f", v).replace(".0", "") : String.valueOf(Math.round(v));
 	}
 
+	/**
+	 * A block position as "x y z", the form commands take. Coordinates are private on most servers: keep them out of
+	 * chat, toasts and anything else that ends up on screen or in a screenshot.
+	 */
 	public static String coords(BlockPos pos) {
 		return pos.getX() + " " + pos.getY() + " " + pos.getZ();
 	}
 
+	/** A position as "x y z" to one decimal place. The same care as {@link #coords(BlockPos)} applies. */
 	public static String coords(Vec3 pos) {
 		return String.format("%.1f %.1f %.1f", pos.x, pos.y, pos.z);
 	}
 
-	/** "64%" for 0.64. */
+	/** A fraction as a whole percentage: "64%" for 0.64, rounded, not clamped. */
 	public static String percent(double fraction) {
 		return Math.round(fraction * 100) + "%";
 	}

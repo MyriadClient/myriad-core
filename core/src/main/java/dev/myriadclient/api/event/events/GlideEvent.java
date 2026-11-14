@@ -6,17 +6,20 @@ import org.jetbrains.annotations.ApiStatus;
 /**
  * The local player's glide is about to move it this tick, by vanilla's elytra physics ({@link #movement()}). Change it
  * to fly the glide yourself: {@link #setVelocity} for a flight that sets its speed (controlled flight, a boost), or
- * {@link #setMovement} for this tick's movement alone. Not posted on a tick No Durability holds you still.
+ * {@link #setMovement} for this tick's movement alone. Not posted on a tick No Durability holds you still. Posted on
+ * the render thread during the player's tick, only while something listens. Not cancellable.
  */
 public final class GlideEvent {
 	private Vec3 movement;
 	private boolean velocity, changed;
 
+	/** Core's; only Myriad makes these. */
 	@ApiStatus.Internal
 	public GlideEvent(Vec3 movement) {
 		this.movement = movement;
 	}
 
+	/** This tick's movement in blocks: vanilla's, or what an earlier handler set. */
 	public Vec3 movement() {
 		return movement;
 	}
@@ -38,6 +41,7 @@ public final class GlideEvent {
 		return changed;
 	}
 
+	/** Core's: whether a handler used {@link #setVelocity}. */
 	@ApiStatus.Internal
 	public boolean setsVelocity() {
 		return velocity;

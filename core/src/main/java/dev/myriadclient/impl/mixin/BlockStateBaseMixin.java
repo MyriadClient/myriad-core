@@ -18,6 +18,11 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+/**
+ * Every block state's collision and render shape, for CollisionShapeEvent (the local player's view of collisions) and
+ * BlockRenderEvent (hidden blocks). Hooked on the state itself so vanilla, Indigo and every physics path see the same
+ * answer; one listener flag read keeps it cheap while nothing listens.
+ */
 @Mixin(BlockBehaviour.BlockStateBase.class)
 public abstract class BlockStateBaseMixin {
 	/** CollisionShapeEvent: the local player's view of block collisions. */

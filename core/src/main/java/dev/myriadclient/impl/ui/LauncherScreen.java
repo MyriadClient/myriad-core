@@ -28,6 +28,7 @@ final class LauncherScreen extends Screen {
 			parent.extractBackground(context, -1, -1, delta);
 			parent.extractRenderState(context, -1, -1, delta);
 		}
+		wm.input().syncTextInput();
 		wm.painter().renderLauncher(context, mouseX, mouseY);
 	}
 
@@ -67,7 +68,7 @@ final class LauncherScreen extends Screen {
 
 	@Override
 	public boolean keyPressed(KeyEvent event) {
-		return wm.launcherOpen() && closeIfDone(wm.input().keyPressed(event.key(), event.scancode(), event.modifiers()));
+		return wm.launcherOpen() && closeIfDone(wm.input().keyPressed(event.key(), event.keycode(), event.modifiers()));
 	}
 
 	@Override
@@ -86,7 +87,7 @@ final class LauncherScreen extends Screen {
 
 	/**
 	 * Closed by Escape, a click outside, or running something that didn't need the menu: back to the game at once (what
-	 * needed the menu has replaced this screen with it already). The desktop's own keys never reach a hidden desktop.
+	 * needed the menu has replaced this screen with it already). The UI's own keys never reach a hidden UI.
 	 */
 	private boolean closeIfDone(boolean handled) {
 		if (!wm.launcherOpen() && minecraft.gui.screen() == this) onClose();

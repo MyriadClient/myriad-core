@@ -2,7 +2,7 @@ package dev.myriadclient.api.setting;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -10,12 +10,23 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Supplier;
 
-/** A file on disk (a schematic, a song, a list to import), chosen with the system's file picker or typed in. */
+/**
+ * A file on disk (a schematic, a song, a list to import), chosen with the system's file picker or typed in. The value is
+ * the path as text, empty for none; {@link #path()} gives it as a {@link Path}. Protected from shared configs unless the
+ * builder says {@code protect(false)}, as a path can name the player.
+ */
 public class FileSetting extends Setting<String> {
 	private final List<String> extensions;
-	private final Supplier<Path> directory;
+	private final @Nullable Supplier<Path> directory;
 
-	public FileSetting(String name, String description, String defaultValue, Supplier<Boolean> visible, List<String> extensions, Supplier<Path> directory) {
+	/**
+	 * A setting as its {@link Builder} makes it; get one from {@link SettingGroup#file(String)}, or call this from a
+	 * subclass.
+	 *
+	 * @param extensions what the picker offers, without dots; empty for any file
+	 * @param directory  where the picker opens; null for the system's default
+	 */
+	public FileSetting(String name, @Nullable String description, String defaultValue, @Nullable Supplier<Boolean> visible, List<String> extensions, @Nullable Supplier<Path> directory) {
 		super(name, description, defaultValue, visible);
 		this.extensions = extensions;
 		this.directory = directory;
@@ -69,10 +80,15 @@ public class FileSetting extends Setting<String> {
 		return p == null ? "" : String.valueOf(p.getFileName());
 	}
 
+	/** Builds a {@link FileSetting}; no file by default. */
 	public static class Builder extends Setting.Builder<FileSetting.Builder, String, FileSetting> {
 		private List<String> extensions = List.of();
-		private Supplier<Path> directory;
+		private @Nullable Supplier<Path> directory;
 
+		/**
+		 * A builder for a setting called {@code name}; prefer {@link SettingGroup#file(String)}, which adds it to the
+		 * group.
+		 */
 		public Builder(String name) {
 			super(name, "");
 			// A path can name you (your home folder): private unless the addon says otherwise.

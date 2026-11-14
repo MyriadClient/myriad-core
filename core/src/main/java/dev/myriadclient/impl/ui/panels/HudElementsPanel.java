@@ -3,6 +3,7 @@ package dev.myriadclient.impl.ui.panels;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Label;
@@ -10,7 +11,6 @@ import dev.myriadclient.api.ui.widget.SettingsView;
 import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.util.FuzzyMatch;
-import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.ui.WindowImpl;
 import dev.myriadclient.impl.ui.WindowManager;
 

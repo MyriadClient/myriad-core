@@ -3,9 +3,9 @@ package dev.myriadclient.api.render;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Maps world positions to the screen using the camera of the last rendered frame. Use it from a
@@ -21,7 +21,7 @@ public final class Projection {
 	private Projection() {
 	}
 
-	/** Called by Myriad after the world renders. */
+	/** Core's: called after the world renders, with that frame's camera. */
 	@ApiStatus.Internal
 	public static void update(Matrix4f positionMatrix, Matrix4f projectionMatrix, Vec3 cameraPos) {
 		view.set(positionMatrix);
@@ -30,14 +30,15 @@ public final class Projection {
 		valid = true;
 	}
 
-	/** The camera position of the last frame. */
+	/** The camera position of the last frame, in world coordinates; {@link Vec3#ZERO} before the first. */
 	public static Vec3 camera() {
 		return camera;
 	}
 
 	/**
 	 * Projects {@code world} to the screen. Returns {@code (x, y, depth)} in scaled GUI pixels, or null when the point
-	 * is behind the camera. Points off to the side still project (with x/y outside the screen).
+	 * is behind the camera (or no frame has rendered yet). Points off to the side still project (with x/y outside the
+	 * screen). The depth is the distance along the view, for sorting labels far to near or scaling them.
 	 */
 	public static @Nullable Vec3 toScreen(Vec3 world) {
 		if (!valid) return null;
@@ -52,8 +53,11 @@ public final class Projection {
 		return new Vec3(x, y, v.w);
 	}
 
-	/** Whether a projected point lies on screen (with {@code margin} extra pixels around the edges). */
-	public static boolean onScreen(Vec3 screen, double margin) {
+	/**
+	 * Whether a point from {@link #toScreen} lies on screen (with {@code margin} extra pixels around the edges); false
+	 * for null, so the result of {@code toScreen} can be passed straight in.
+	 */
+	public static boolean onScreen(@Nullable Vec3 screen, double margin) {
 		var window = Minecraft.getInstance().getWindow();
 		return screen != null && screen.x >= -margin && screen.y >= -margin
 			&& screen.x <= window.getGuiScaledWidth() + margin && screen.y <= window.getGuiScaledHeight() + margin;

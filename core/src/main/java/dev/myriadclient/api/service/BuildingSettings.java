@@ -16,9 +16,13 @@ import dev.myriadclient.api.setting.SettingGroup;
  * }</pre>
  */
 public final class BuildingSettings {
+	/** Range and Air Place. */
 	public final PlacementSettings placing;
+	/** Actions Per Tick: most blocks placed or clicked each tick (1-6, 2 by default). */
 	public final IntSetting actionsPerTick;
+	/** Break Wrong Blocks: break what's in the way of the build; off, it's left and shown as blocked. */
 	public final BoolSetting breakWrong;
+	/** Mode and Double Break for the build's breaks, shown only while Break Wrong Blocks is on. */
 	public final BreakingSettings breaking;
 
 	/** Adds the settings to {@code group}, with Break Wrong Blocks off by default. */

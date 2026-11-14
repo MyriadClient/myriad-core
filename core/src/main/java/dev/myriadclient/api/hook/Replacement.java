@@ -6,11 +6,17 @@ package dev.myriadclient.api.hook;
  * then. The services' {@code Forwarding} classes implement this already.
  */
 public interface Replacement {
-	/** It's the service in use from now (the server or the player's choice changed, or the game started). */
+	/**
+	 * It's in use from now (the server or the player's choice changed, or the game started), for the callers its
+	 * {@link Match} covers. Called on the render thread, before it's subscribed to events.
+	 */
 	default void activated() {
 	}
 
-	/** It's no longer in use: let go of anything you hold (rotations, held slots, queued actions). */
+	/**
+	 * It's no longer in use: let go of anything you hold (rotations, held slots, queued actions). Called after it's
+	 * unsubscribed from events; it may be activated again later.
+	 */
 	default void deactivated() {
 	}
 }

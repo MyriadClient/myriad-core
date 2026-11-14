@@ -29,7 +29,7 @@ public final class ChatLines {
 		}
 	}
 
-	/** Called by ChatHudMixin as each line is stored. */
+	/** Called by ChatComponentMixin as each line is stored. */
 	public static void onLineAdded(GuiMessage line) {
 		if (pending != null) byId.put(pending, line);
 	}

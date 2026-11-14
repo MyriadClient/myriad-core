@@ -1,6 +1,8 @@
 accessWidener v2 official
 accessible method net/minecraft/client/multiplayer/MultiPlayerGameMode ensureHasSentCarriedItem ()V
 accessible field net/minecraft/client/multiplayer/MultiPlayerGameMode carriedIndex I
+accessible field net/minecraft/client/multiplayer/MultiPlayerGameMode destroyBlockPos Lnet/minecraft/core/BlockPos;
+accessible field net/minecraft/client/multiplayer/MultiPlayerGameMode destroyProgress F
 accessible field net/minecraft/network/protocol/BundlePacket packets Ljava/lang/Iterable;
 mutable field net/minecraft/network/protocol/BundlePacket packets Ljava/lang/Iterable;
 # Helpers addons use instead of shipping their own wideners (Packets, Interactions, AttackEvent).
@@ -28,3 +30,5 @@ accessible field net/minecraft/client/renderer/rendertype/RenderType state Lnet/
 accessible field net/minecraft/client/renderer/rendertype/RenderSetup textures Ljava/util/Map;
 accessible class net/minecraft/client/renderer/rendertype/RenderSetup$TextureBinding
 accessible method net/minecraft/client/renderer/rendertype/RenderSetup$TextureBinding location ()Lnet/minecraft/resources/Identifier;
+accessible field net/minecraft/client/gui/render/pip/PictureInPictureRenderer textureView Lcom/mojang/renderpearl/api/textures/GpuTextureView;
+accessible field net/minecraft/client/renderer/GameRenderer gameRenderState Lnet/minecraft/client/renderer/state/GameRenderState;

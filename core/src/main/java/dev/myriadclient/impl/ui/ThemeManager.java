@@ -3,11 +3,11 @@ package dev.myriadclient.impl.ui;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.ThemeSettings;
-import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.config.JsonFiles;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;
@@ -332,7 +332,7 @@ public final class ThemeManager {
 		e.swatch = null;
 		save(e);
 		// No version bump: the list and names are as they were, and what shows the edits (the swatch, the Edited badge)
-		// reads them as it draws. A rebuild here, when the desktop's autosave commits, closed whatever the Theme window
+		// reads them as it draws. A rebuild here, when the UI's autosave commits, closed whatever the Theme window
 		// had open (a colour picker, a dropdown) while you were editing.
 	}
 

@@ -3,17 +3,17 @@ package dev.myriadclient.impl.config;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.config.ConfigManager;
+import dev.myriadclient.api.input.KeyAction;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.service.KeyAction;
-import dev.myriadclient.api.util.Keybind;
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.impl.CoreAddon;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.service.AntiCheatTracker;
 import net.fabricmc.loader.api.FabricLoader;
-import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,13 +115,18 @@ public final class ConfigManagerImpl implements ConfigManager {
 					}
 				}
 				if (o.has("checkUpdates")) myriad.updates().setCheckEnabled(o.get("checkUpdates").getAsBoolean());
+				if (o.has("updatesNoted") && o.get("updatesNoted").isJsonArray()) {
+					List<String> noted = new ArrayList<>();
+					for (JsonElement e : o.getAsJsonArray("updatesNoted")) if (e.isJsonPrimitive()) noted.add(e.getAsString());
+					myriad.updates().setNoted(noted);
+				}
 				if (o.has("keyActions") && o.get("keyActions").isJsonObject()) rawKeyActions = o.getAsJsonObject("keyActions");
 			});
 			// Before 0.3.2, Open Menu was Right Shift by default and saved as such; it's unbound now (mod+1..9 opens the
 			// menu), so a Right Shift saved before then is the old default, not a choice. Rebinding it later is kept.
 			if (intOr(rawKeyActions, "_version", 1) < 2) {
 				JsonElement open = rawKeyActions.get(CoreAddon.OPEN_MENU.toString());
-				if (open != null && Keybind.deserialize(open.getAsString()).equals(Keybind.key(GLFW.GLFW_KEY_RIGHT_SHIFT))) rawKeyActions.remove(CoreAddon.OPEN_MENU.toString());
+				if (open != null && Keybind.deserialize(open.getAsString()).equals(Keybind.key(InputConstants.KEY_RSHIFT))) rawKeyActions.remove(CoreAddon.OPEN_MENU.toString());
 			}
 			for (KeyAction a : myriad.keyActions()) {
 				JsonElement e = rawKeyActions.get(a.id().toString());
@@ -198,6 +203,9 @@ public final class ConfigManagerImpl implements ConfigManager {
 		for (String h : myriad.antiCheat().knownServers()) known.add(h);
 		global.add("knownGrimServers", known);
 		global.addProperty("checkUpdates", myriad.updates().checkEnabled());
+		JsonArray noted = new JsonArray();
+		for (String n : myriad.updates().noted()) noted.add(n);
+		if (!noted.isEmpty()) global.add("updatesNoted", noted);
 		JsonObject keys = rawKeyActions.deepCopy();
 		keys.addProperty("_version", 2);
 		for (KeyAction a : myriad.keyActions()) keys.addProperty(a.id().toString(), a.bind().serialize());

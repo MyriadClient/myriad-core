@@ -2,6 +2,7 @@ package dev.myriadclient.api.setting;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,13 +13,17 @@ import java.util.function.Consumer;
 /**
  * The settings of one module or panel, organised in groups. Setting ids are unique within their group; the JSON
  * form nests by group ({@code {"general": {"range": 4.5}, "targets": {...}}}). Commands accept a bare setting id
- * when it is unambiguous, or {@code group.setting}.
+ * when it is unambiguous, or {@code group.setting}. A module has its own in {@code Module.settings}; an addon's are in
+ * its {@link dev.myriadclient.api.addon.AddonSettings}.
  */
 public class Settings {
 	private final List<SettingGroup> groups = new ArrayList<>();
 	private final List<Consumer<Setting<?>>> listeners = new ArrayList<>(1);
 
-	/** Returns the group with this name, creating it if needed. */
+	/**
+	 * Returns the group with this name, creating it if needed (exact name, case and all). A new group is added after the
+	 * others; the first one starts open in the settings window, later ones folded.
+	 */
 	public SettingGroup group(String name) {
 		for (SettingGroup g : groups) if (g.name().equals(name)) return g;
 		SettingGroup g = new SettingGroup(this, name);
@@ -40,17 +45,22 @@ public class Settings {
 		for (Consumer<Setting<?>> l : listeners) l.accept(setting);
 	}
 
+	/** The groups in the order they were made; unmodifiable, and follows later additions. */
 	public List<SettingGroup> groups() {
 		return Collections.unmodifiableList(groups);
 	}
 
+	/** Every setting of every group, in order; a copy. */
 	public List<Setting<?>> all() {
 		List<Setting<?>> list = new ArrayList<>();
 		for (SettingGroup g : groups) list.addAll(g.settings());
 		return list;
 	}
 
-	/** Looks up {@code group.setting}, or a bare setting id (first match). */
+	/**
+	 * Looks up {@code group.setting}, or a bare setting id (first match), by id and ignoring case; empty if none
+	 * matches.
+	 */
 	public Optional<Setting<?>> get(String key) {
 		int dot = key.indexOf('.');
 		if (dot > 0) {
@@ -83,13 +93,14 @@ public class Settings {
 		for (Setting<?> s : all()) s.release(owner);
 	}
 
+	/** Sets every setting back to its default (overrides stay laid on top). */
 	public void resetAll() {
 		for (Setting<?> s : all()) s.reset();
 	}
 
 	/**
 	 * Only values that differ from their defaults are written, so improving a default in an update reaches users who
-	 * never changed it.
+	 * never changed it. Buttons aren't written; groups with nothing to write are left out.
 	 */
 	public JsonObject toJson() {
 		JsonObject o = new JsonObject();
@@ -106,7 +117,7 @@ public class Settings {
 	 * don't know: values of settings a newer version added (after a downgrade), or of ones another version renamed. So
 	 * going back and forth between versions loses nothing.
 	 */
-	public JsonObject toJson(JsonObject previous) {
+	public JsonObject toJson(@Nullable JsonObject previous) {
 		JsonObject o = previous == null ? new JsonObject() : previous.deepCopy();
 		for (SettingGroup g : groups) {
 			JsonElement ge = o.get(g.id());
@@ -131,7 +142,8 @@ public class Settings {
 
 	/**
 	 * Loads known groups/ids. Settings missing from the JSON are reset to their defaults (only non-defaults are
-	 * saved); unknown keys are ignored here, and {@link #toJson(JsonObject)} keeps them when saving.
+	 * saved); unknown keys are ignored here, and {@link #toJson(JsonObject)} keeps them when saving. A value that can't be
+	 * read leaves that setting as it was and doesn't stop the rest.
 	 */
 	public void fromJson(JsonObject o) {
 		for (SettingGroup g : groups) {

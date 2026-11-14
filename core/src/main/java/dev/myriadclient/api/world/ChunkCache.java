@@ -8,8 +8,8 @@ import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.render.MeshBuilder;
-import dev.myriadclient.api.render.RenderMode;
 import dev.myriadclient.api.render.RenderLook;
+import dev.myriadclient.api.render.RenderMode;
 import dev.myriadclient.api.render.WorldMesh;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.util.Async;
@@ -28,7 +28,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,7 +68,8 @@ import java.util.function.IntSupplier;
  *
  * Built with {@link #of(Module, Compute)}, the cache runs while its module is enabled and frees everything when it's
  * disabled. Work is spread over ticks within a time budget, nearest chunks first; the theme changing re-meshes
- * automatically. Everything runs on the client thread, so compute functions can read the world freely.
+ * automatically. Unless built {@link Builder#async()}, everything runs on the client thread, so compute functions can
+ * read the world freely.
  * <p>
  * Keep the compute function to facts about the world, and turn settings into looks in the mesher: then a colour or
  * shape setting only needs {@link #remeshAll()}, which never touches the world. Call {@link #invalidateAll()} when a
@@ -82,24 +83,31 @@ public final class ChunkCache<T> {
 	/** Works out the value for a loaded chunk, or null to keep nothing for it. */
 	@FunctionalInterface
 	public interface Compute<T> {
+		/**
+		 * The value for {@code chunk}, a fully loaded chunk; null to keep nothing. An exception counts as null and is
+		 * logged once per cache.
+		 */
 		@Nullable T compute(LevelChunk chunk);
 	}
 
 	/** Draws a chunk's value into its mesh, in world coordinates. Called again after {@link #remeshAll()}. */
 	@FunctionalInterface
 	public interface Mesher<T> {
+		/** Draws {@code value} (never null: chunks without a value get no mesh) into {@code mesh}. */
 		void mesh(T value, MeshBuilder mesh);
 	}
 
 	/** A chunk's value as boxes, each in a colour (ARGB), for {@link Builder#boxes}. */
 	@FunctionalInterface
 	public interface Boxes<T> {
+		/** Hands each box of {@code value} to {@code out}. */
 		void boxes(T value, BoxSink out);
 	}
 
 	/** Takes a chunk's boxes ({@link Boxes}), in world coordinates. */
 	@FunctionalInterface
 	public interface BoxSink {
+		/** One box in world coordinates, in an ARGB colour. */
 		void box(AABB box, int color);
 	}
 
@@ -152,7 +160,7 @@ public final class ChunkCache<T> {
 		this.budget = TickBudget.of((long) (b.budgetMillis * 1_000_000));
 	}
 
-	/** A cache that runs while {@code owner} is enabled. */
+	/** A cache that runs while {@code owner} is enabled, named after it in log messages. */
 	public static <T> Builder<T> of(Module owner, Compute<T> compute) {
 		return new Builder<>(Objects.requireNonNull(owner), compute);
 	}
@@ -164,13 +172,13 @@ public final class ChunkCache<T> {
 
 	// ---- reading ---------------------------------------------------------------------------------------------------
 
-	/** The value for a chunk, or null if it has none (yet). */
+	/** The value for a chunk (chunk coordinates: block x and z divided by 16), or null if it has none (yet). */
 	public @Nullable T get(int chunkX, int chunkZ) {
 		Entry<T> e = entries.get(ChunkPos.pack(chunkX, chunkZ));
 		return e == null ? null : e.value;
 	}
 
-	/** The value for the chunk holding {@code pos}. */
+	/** The value for the chunk holding {@code pos}, or null if it has none (yet). */
 	public @Nullable T get(BlockPos pos) {
 		return get(pos.getX() >> 4, pos.getZ() >> 4);
 	}
@@ -190,13 +198,14 @@ public final class ChunkCache<T> {
 		return queue.size() + inFlight;
 	}
 
+	/** Whether it's listening and computing: between {@link #start()} and {@link #stop()}, or while its module is on. */
 	public boolean isRunning() {
 		return running;
 	}
 
 	// ---- invalidating ----------------------------------------------------------------------------------------------
 
-	/** Recomputes one chunk on a coming tick. */
+	/** Recomputes one chunk on a coming tick; nothing happens for a chunk the cache doesn't cover. */
 	public void invalidate(int chunkX, int chunkZ) {
 		markCompute(ChunkPos.pack(chunkX, chunkZ));
 	}
@@ -376,7 +385,6 @@ public final class ChunkCache<T> {
 					entries.put(key, new Entry<>());
 					queue.add(key);
 					sortedQueue = null;
-		sortedQueue = null;
 				}
 			}
 		}
@@ -389,7 +397,7 @@ public final class ChunkCache<T> {
 		if (inRange(x, z)) {
 			entries.computeIfAbsent(key, k -> new Entry<>()).compute = true;
 			queue.add(key);
-		sortedQueue = null;
+			sortedQueue = null;
 		}
 		if (neighbours) {
 			markCompute(ChunkPos.pack(x - 1, z));
@@ -550,6 +558,7 @@ public final class ChunkCache<T> {
 
 	// ---- builder ---------------------------------------------------------------------------------------------------
 
+	/** Configures a {@link ChunkCache}; from {@link ChunkCache#of} or {@link ChunkCache#standalone}. */
 	public static final class Builder<T> {
 		private final @Nullable Module owner;
 		private final Compute<T> compute;
@@ -600,7 +609,6 @@ public final class ChunkCache<T> {
 			return this;
 		}
 
-		/** Milliseconds of work per tick (default 2). At least one chunk is processed each tick regardless. */
 		/**
 		 * Runs the compute function on Myriad's worker pool instead of within the tick budget, for scans that take
 		 * long (many block types over many chunks): a chunk's blocks are read while the game may be changing them, so
@@ -612,17 +620,22 @@ public final class ChunkCache<T> {
 			return this;
 		}
 
+		/** Milliseconds of work per tick (default 2). At least one chunk is processed each tick regardless. */
 		public Builder<T> budget(double millis) {
 			this.budgetMillis = millis;
 			return this;
 		}
 
-		/** A name for log messages. Defaults to the module's name. */
+		/** A name for log messages. Defaults to the module's name ("standalone" without one). */
 		public Builder<T> name(String name) {
 			this.name = name;
 			return this;
 		}
 
+		/**
+		 * The cache. One made with {@link ChunkCache#of} starts and stops with its module from now on; a standalone one
+		 * waits for {@link ChunkCache#start()}.
+		 */
 		public ChunkCache<T> build() {
 			ChunkCache<T> cache = new ChunkCache<>(this);
 			if (owner != null) owner.whileEnabled(cache::start, cache::stop);

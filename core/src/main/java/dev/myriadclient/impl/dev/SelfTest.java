@@ -6,8 +6,8 @@ import dev.myriadclient.api.combat.Threats;
 import dev.myriadclient.api.combat.Trajectory;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.Modules;
-import dev.myriadclient.api.util.Movement;
-import dev.myriadclient.api.util.Reach;
+import dev.myriadclient.api.player.Movement;
+import dev.myriadclient.api.player.Reach;
 import dev.myriadclient.api.world.Holes;
 import dev.myriadclient.impl.event.MyriadEventBus;
 import net.minecraft.client.Minecraft;
@@ -40,15 +40,23 @@ final class SelfTest {
 	private boolean wasEnabled;
 	private int left, tested;
 
-	SelfTest(int ticks, Set<String> skip) {
+	/** Where the self test reports: the dev console's output for the step. */
+	interface Say {
+		void say(String format, Object... args);
+	}
+
+	private final Say say;
+
+	SelfTest(int ticks, Set<String> skip, Say say) {
 		this.ticks = Math.max(1, ticks);
+		this.say = say;
 		for (Module m : Myriad.modules().values()) {
 			if (!skip.contains(m.id().path()) && !skip.contains(m.id().toString())) queue.add(m);
 		}
 	}
 
 	void start() {
-		LOG.info("[dev] selftest: {} modules, {} ticks each", queue.size(), ticks);
+		say.say("selftest: {} modules, {} ticks each", queue.size(), ticks);
 		((MyriadEventBus) Myriad.events()).setFailureHook((where, t) -> failures.add((current == null ? "?" : current.id()) + ": " + where + ": " + t));
 		Modules.setGuardHook((module, t) -> failures.add((current == null ? "?" : current.id()) + ": " + module.id() + "'s mixin code: " + t));
 		helpers();
@@ -87,9 +95,9 @@ final class SelfTest {
 	private void report() {
 		((MyriadEventBus) Myriad.events()).setFailureHook(null);
 		Modules.setGuardHook(null);
-		if (!selfDisabled.isEmpty()) LOG.info("[dev] selftest: turned themselves off: {}", String.join(", ", selfDisabled));
-		for (String f : failures) LOG.warn("[dev] selftest: FAIL {}", f);
-		LOG.info("[dev] selftest: {} modules run, {} failures", tested, failures.size());
+		if (!selfDisabled.isEmpty()) say.say("selftest: turned themselves off: {}", String.join(", ", selfDisabled));
+		for (String f : failures) say.say("selftest: FAIL {}", f);
+		say.say("selftest: {} modules run, {} failures", tested, failures.size());
 	}
 
 	/** Each world helper once, logging what it found. */
@@ -104,7 +112,7 @@ final class SelfTest {
 			var bases = Crystals.bases(Reach.eyes(), 5, false);
 			var launch = Trajectory.launch(p, new ItemStack(Items.SNOWBALL), p.getYRot(), p.getXRot());
 			var path = Trajectory.simulate(launch, 100, p);
-			LOG.info("[dev] selftest: helpers: {} holes, {} crystal bases, snowball lands {} after {} ticks, worst threat {}, base speed {}, "
+			say.say("selftest: helpers: {} holes, {} crystal bases, snowball lands {} after {} ticks, worst threat {}, base speed {}, "
 					+ "surrounded {}, anti-cheat {}", holes.size(), bases.size(), path.end(), path.points().size() - 1, String.format(Locale.ROOT, "%.1f", Threats.worst()),
 				String.format(Locale.ROOT, "%.4f", Movement.baseSpeed()), Holes.isSurrounded(p), Myriad.antiCheat().profile());
 		} catch (RuntimeException e) {

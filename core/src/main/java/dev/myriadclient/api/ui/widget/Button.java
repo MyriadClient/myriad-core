@@ -1,33 +1,43 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
+import com.mojang.blaze3d.platform.InputConstants;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.util.ColorUtil;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.function.Supplier;
 
+/**
+ * A push button one row tall, its label centred (cut short to fit, except a lone icon). A left click, or Enter/Space
+ * with the keyboard selection on it, runs its action.
+ */
 public class Button extends Widget {
 	private final Supplier<String> label;
 	private final Runnable action;
 	private boolean accent, danger;
 
+	/** A button labelled {@code label} that runs {@code action}. */
 	public Button(String label, Runnable action) {
 		this(() -> label, action);
 	}
 
+	/** A button labelled by {@code label} (asked every frame) that runs {@code action}. */
 	public Button(Supplier<String> label, Runnable action) {
 		this.label = label;
 		this.action = action;
 	}
 
-	/** Use the accent colour as the background. */
+	/** Use the accent colour as the background: the main action of a window. Returns this button. */
 	public Button accent() {
 		this.accent = true;
 		return this;
 	}
 
-	/** Something that can't be undone (Delete): its text and hover are red, so it isn't pressed in passing. */
-	@ApiStatus.AvailableSince("1.4.0")
+	/**
+	 * Something that can't be undone (Delete): its text and hover are red, so it isn't pressed in passing. Returns this
+	 * button.
+	 */
+	@ApiStatus.AvailableSince("1.4")
 	public Button danger() {
 		this.danger = true;
 		return this;
@@ -72,7 +82,7 @@ public class Button extends Widget {
 
 	@Override
 	public boolean mouseClicked(float mx, float my, int button) {
-		if (button != 0 || !isHovered(mx, my)) return false;
+		if (button != InputConstants.MOUSE_BUTTON_LEFT || !isHovered(mx, my)) return false;
 		action.run();
 		return true;
 	}

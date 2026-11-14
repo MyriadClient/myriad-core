@@ -1,13 +1,13 @@
 package dev.myriadclient.api.service;
 
-import dev.myriadclient.api.util.ItemMatch;
-import dev.myriadclient.api.util.RenderThread;
+import dev.myriadclient.api.annotation.RenderThread;
+import dev.myriadclient.api.item.ItemMatch;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Optional;
@@ -43,29 +43,38 @@ import java.util.function.ToIntFunction;
 @ApiStatus.NonExtendable
 @RenderThread
 public interface Containers {
-	/** The open container, if one is open (the player's own inventory doesn't count). */
+	/**
+	 * The open container, if one is open (the player's own inventory doesn't count): by hand, by the server or through
+	 * {@link #open}, with its screen showing or not. Empty in the menus.
+	 */
 	Optional<View> current();
 
 	/**
 	 * Right-clicks the block at {@code pos} (on the nearest face in reach) and completes once the container's
-	 * contents have arrived. Fails with a {@link TimeoutException} after {@code timeoutTicks}, or
-	 * an {@link IllegalStateException} if the block is out of reach. Opening another replaces a pending one.
+	 * contents have arrived. Fails with a {@link TimeoutException} after {@code timeoutTicks} ticks, or an
+	 * {@link IllegalStateException} if the block is out of reach ({@link dev.myriadclient.api.player.Reach#blockRange()})
+	 * or you're not in a world. Opening another replaces a pending one, which fails. Completes at once with the open
+	 * container if it's already that block's and loaded. Another container open stays open until the server replaces it
+	 * with this one, so no close goes out first. The click goes unsneaked, so it opens the container rather than placing
+	 * what you hold.
 	 */
 	CompletableFuture<View> open(BlockPos pos, int timeoutTicks);
 
 	/**
 	 * {@link #open(BlockPos, int)} on behalf of {@code owner} (your module), which the container then reports as its
 	 * {@link View#opener()}: modules that act on containers as they open (sorting, stealing) can leave other modules'
-	 * alone.
+	 * alone. A null owner is the same as {@link #open(BlockPos, int)}.
 	 */
-	CompletableFuture<View> open(Object owner, BlockPos pos, int timeoutTicks);
+	CompletableFuture<View> open(@Nullable Object owner, BlockPos pos, int timeoutTicks);
 
 	/**
 	 * {@link #open(Object, BlockPos, int)} with the click made as {@code options} say, through
 	 * {@link Placement#use}: with {@code Placement.Options.forServer()} on servers that check looks, the look turns
-	 * onto the block first (Grim checks a click on a block as a placement). The timeout counts from the click.
+	 * onto the block first (Grim checks a click on a block as a placement). The timeout counts from the click. Fails
+	 * with an {@link IllegalStateException} if the click can't be made or the server never answers it. Reach is
+	 * {@link Placement.Options#range()}; the click never sneaks.
 	 */
-	default CompletableFuture<View> open(Object owner, BlockPos pos, int timeoutTicks, Placement.Options options) {
+	default CompletableFuture<View> open(@Nullable Object owner, BlockPos pos, int timeoutTicks, Placement.Options options) {
 		return open(owner, pos, timeoutTicks);
 	}
 
@@ -74,8 +83,9 @@ public interface Containers {
 	 * above your head, a block up where there's room (into the empty space with {@link Placement.Options#airPlace()},
 	 * else against a block over it; an ender chest only the first way, as it won't open under a solid block), or else in
 	 * one of the eight blocks around your feet (on the floor, or with air placement in the air) or, with air placement,
-	 * around the block over your head, opens it in the same tick, and completes with the session once its contents have arrived. Where the server checks looks
-	 * ({@code options}, usually {@code Placement.Options.forServer()}) both clicks go with one look. One from the
+	 * around the block over your head, opens it in the same tick, and completes with the session once its contents have
+	 * arrived ({@code ticks}: how many ticks opening it may take, as {@link #open}'s timeout). Where the server checks
+	 * looks ({@code options}, usually {@code Placement.Options.forServer()}) both clicks go with one look. One from the
 	 * inventory is brought into the hotbar for the placement, and what it displaced goes back once it's open.
 	 * {@link ItemSession#finish()} puts it back, where it came from. An ender chest needs a Silk Touch pickaxe (anywhere
 	 * in the inventory: it's swapped in for the break), or breaking it would only drop obsidian.
@@ -129,17 +139,21 @@ public interface Containers {
 	 */
 	@ApiStatus.NonExtendable
 	interface ItemSession {
-		/** The open box: the last time it was opened, for one {@link #putDownItem put down} and opened later; null until then. */
-		View view();
+		/**
+		 * The open box: the last time it was opened, for one {@link #putDownItem put down} and opened later; null until
+		 * then.
+		 */
+		@Nullable View view();
 
-		/** Where it stands. */
+		/** The block it stands at. */
 		BlockPos where();
 
 		/**
 		 * Closes it, breaks it (with the Silk Touch pickaxe for an ender chest), picks it up and puts it back where it
 		 * came from: your inventory, wherever it lands, or the container it was opened from, opened again for it, into
-		 * the first free slot there (your inventory if that's full); completes once it's back, or fails saying where it was left. Runs as Myriad's own job, so
-		 * it finishes even if your module turns off meanwhile. Asking again returns the same future.
+		 * the first free slot there (your inventory if that's full); completes once it's back, or fails saying where it
+		 * was left. Runs as Myriad's own job, so it finishes even if your module turns off meanwhile. Asking again
+		 * returns the same future.
 		 */
 		CompletableFuture<Void> finish();
 
@@ -171,7 +185,8 @@ public interface Containers {
 	/**
 	 * What a box {@code owner} takes out of a container does when that container can't be opened again to put it back,
 	 * a held one far away ({@link #hold}): {@link NoWayBack#REFUSE} until set. One from an ender chest goes back through
-	 * any ender chest in reach first, whatever this says, as every ender chest holds the same things.
+	 * any ender chest in reach first, whatever this says, as every ender chest holds the same things. Kept until set
+	 * again, also after the module turns off.
 	 */
 	@ApiStatus.AvailableSince("1.2")
 	void noWayBack(Object owner, NoWayBack what);
@@ -180,7 +195,8 @@ public interface Containers {
 	 * Shows the swap bar over container screens while any owner has it {@code on}: a tab for your inventory, the
 	 * container you last opened and each box handed to it ({@link ItemSession#finishWhenClosed}), the one showing
 	 * highlighted; a click opens that one again. Drawn in the theme whether container screens are or not. It shows while
-	 * boxes stand or a container is {@link #hold held} regardless.
+	 * boxes stand or a container is {@link #hold held} regardless. Turn it off yourself when your module turns off: it
+	 * isn't done for you.
 	 */
 	@ApiStatus.AvailableSince("1.2")
 	void swapBar(Object owner, boolean on);
@@ -204,11 +220,17 @@ public interface Containers {
 	@ApiStatus.AvailableSince("1.2")
 	Optional<View> held();
 
-	/** Shows the held container's screen again, if there is one ({@link #hold}); false if none. */
+	/**
+	 * Shows the held container's screen again, with no packets ({@link #hold}); true if it's showing now, false if no
+	 * container is held or the server has closed it.
+	 */
 	@ApiStatus.AvailableSince("1.2")
 	boolean reopen();
 
-	/** Lets the held container go: the server is told it's closed, and its screen closes if it shows. */
+	/**
+	 * Lets the held container go: the server is told it's closed, and its screen closes if it shows. Does nothing if
+	 * none is held.
+	 */
 	@ApiStatus.AvailableSince("1.2")
 	void release();
 
@@ -216,7 +238,7 @@ public interface Containers {
 	 * Closes the open container (and its screen), if any, at a moment the server takes it: Grim flags a close made while
 	 * you move just as it refuses a click then (MultiActionsD), so where clicks have to wait for a still moment
 	 * ({@link Inventory#prepareClick()}), so does the close, first thing in a coming tick. {@link View#isOpen()} says
-	 * when it has.
+	 * when it has. Does nothing if no container is open.
 	 */
 	void close();
 
@@ -240,11 +262,12 @@ public interface Containers {
 			return ALL;
 		}
 
-		/** At most {@code count} items. */
+		/** At most {@code count} items, hotbar included. */
 		public static Transfer upTo(int count) {
 			return ALL.withCount(count);
 		}
 
+		/** The same, moving at most {@code count} items (negative counts as 0). */
 		public Transfer withCount(int count) {
 			return new Transfer(Math.max(0, count), hotbar);
 		}
@@ -257,6 +280,7 @@ public interface Containers {
 			return new Transfer(count, false);
 		}
 
+		/** The most items to move; {@link Integer#MAX_VALUE} for {@link #all()}. */
 		public int count() {
 			return count;
 		}
@@ -267,11 +291,25 @@ public interface Containers {
 		}
 	}
 
-	/** An open container. Slot numbers are the container's own (0 = its first slot), unless noted. */
+	/**
+	 * A container that's open (or was), from {@link #current()} or {@link #open}: usable while {@link #isOpen()}, and a
+	 * stale handle after (its clicks do nothing and the futures it starts fail). Slot numbers are the container's own
+	 * (0 = its first slot), unless noted.
+	 * <p>
+	 * The single clicks ({@link #quickMove}, {@link #quickMoveFromPlayer}, {@link #swapWithHotbar}, {@link #drop},
+	 * {@link #click}) do nothing once the container has closed, or on a tick the server would refuse them (while you
+	 * move, see {@link Inventory#safeToClick()}); your keys are then released for the next tick, so a click asked for
+	 * again then works. They don't check the click budget or wait for the server's answer to the last click: before a
+	 * run of clicks that belong together, check {@link Inventory#prepareClick()} and
+	 * {@code Myriad.limits().canSend(PacketLimits.Kind.INVENTORY, n)} (2b2t disconnects you for too many). {@link #take}
+	 * and {@link #put} do all of that themselves.
+	 */
 	@ApiStatus.NonExtendable
 	interface View {
+		/** The game's menu for it, with every slot of its screen (the container's own, then your inventory's). */
 		AbstractContainerMenu handler();
 
+		/** The menu's id, as the server's packets name it ({@code containerId}). */
 		int syncId();
 
 		/** The block it was opened from, when known (it was opened by clicking a block just before). */
@@ -280,7 +318,7 @@ public interface Containers {
 		/** Whether the contents have arrived. Before that, slots read as empty. */
 		boolean isLoaded();
 
-		/** Whether this container is still the one open. */
+		/** Whether this container is still the one open (the server can close it, or another can open over it). */
 		boolean isOpen();
 
 		/**
@@ -295,12 +333,16 @@ public interface Containers {
 		/** Number of the container's own slots (the player's inventory below them isn't counted). */
 		int size();
 
+		/**
+		 * What container slot {@code slot} holds; an empty stack outside {@code 0..size()-1}. The menu's own stack: don't
+		 * change it.
+		 */
 		ItemStack stack(int slot);
 
-		/** The container's own slots. */
+		/** The container's own slots in order, as a new list of the menu's stacks (don't change the stacks). */
 		List<ItemStack> stacks();
 
-		/** First container slot matching, or -1. */
+		/** First container slot whose stack matches (empty slots are skipped), or -1. */
 		int find(Predicate<ItemStack> predicate);
 
 		/** First empty container slot, or -1 if it's full. */
@@ -309,12 +351,15 @@ public interface Containers {
 		/** Total count of matching items in the container. */
 		int count(Predicate<ItemStack> predicate);
 
-		/** The screen slot id for an inventory index (0-35) in this container's screen. */
+		/**
+		 * The screen slot id for an inventory index (0-35) in this container's screen, for {@link #click} and
+		 * {@link Arrangement}s.
+		 *
+		 * @throws IllegalArgumentException for armour or the off hand, which container screens don't show
+		 */
 		int playerSlot(int inventoryIndex);
 
-		// The clicks below do nothing on a tick the server would refuse them (while you move, see
-		// Inventory.safeToClick); your keys are then released for the next tick, so a click asked for again then works.
-		// Check Inventory.prepareClick() before a run of clicks that belong together.
+		// The single clicks: see the interface's comment on what they don't check.
 
 		/** Shift-clicks a container slot: moves its stack into your inventory. */
 		void quickMove(int slot);
@@ -328,7 +373,10 @@ public interface Containers {
 		/** Drops a container slot's stack (or one item). */
 		void drop(int slot, boolean wholeStack);
 
-		/** Any click, with a raw screen slot id. */
+		/**
+		 * Any click, with a raw screen slot id ({@code -999} for outside the window), button and input, as
+		 * {@code handleContainerInput} takes them.
+		 */
 		void click(int screenSlot, int button, ContainerInput action);
 
 		/**
@@ -340,8 +388,8 @@ public interface Containers {
 		 * asked what it has ({@link #refresh()}); a click it never took or a slot someone else changed meanwhile gets
 		 * another round, up to three.
 		 * <p>
-		 * Moves on one container run one after another. It fails if the container closes, or another click (yours, or a
-		 * module's) moves the cursor's items while it runs.
+		 * Moves on one container run one after another. It fails if the container closes (also when it's closed already),
+		 * or another click (yours, or a module's) moves the cursor's items while it runs.
 		 */
 		CompletableFuture<Integer> take(Predicate<ItemStack> what, Transfer how);
 
@@ -350,7 +398,7 @@ public interface Containers {
 
 		/**
 		 * Asks the server for the container's contents (and your inventory's) and completes once they're here: what the
-		 * client shows is then what the server has (see {@link Inventory#refresh()}).
+		 * client shows is then what the server has (see {@link Inventory#refresh()}). Fails if the container has closed.
 		 */
 		CompletableFuture<View> refresh();
 
@@ -371,18 +419,29 @@ public interface Containers {
 		/**
 		 * Runs your own {@link Planner}'s clicks the way {@link #arrange} runs its own: at tick starts, within the budget
 		 * and the server's rules, then checked against the server, three rounds at most. Completes with
-		 * {@link Planner#done()}.
+		 * {@link Planner#done()}. Fails if the container closes, or has.
 		 */
 		CompletableFuture<Boolean> run(Planner planner);
 
+		/** {@link Containers#close()} if this is still the open container; otherwise nothing. */
 		void close();
 	}
 
-	/** One click in a menu: screen slot id, button, input, as {@code handleContainerInput} takes them. */
+	/**
+	 * One click in a menu: screen slot id, button, input, as {@code handleContainerInput} takes them.
+	 *
+	 * @param slot the screen slot id ({@code -999} for outside the window)
+	 * @param button the mouse button, or the hotbar slot for {@link ContainerInput#SWAP} (40: the off hand)
+	 * @param input what kind of click
+	 */
 	record Click(int slot, int button, ContainerInput input) {
 	}
 
-	/** Clicks worked out one at a time from the menu as it is, for {@link View#run}. */
+	/**
+	 * Clicks worked out one at a time from the menu as it is, for {@link View#run}. Called on the render thread at the
+	 * start of a tick, as often as the packet budget and the server's rules let clicks go; look at the menu afresh each
+	 * time, as a click may not have been taken.
+	 */
 	interface Planner {
 		/** The next click, or null when there's nothing more to do (see {@link #stuck()}). */
 		@Nullable Click next();
@@ -427,9 +486,11 @@ public interface Containers {
 		/**
 		 * {@code layout.get(i)} is what slot {@code slots[i]} should hold: that item with that count, an empty stack for
 		 * nothing, or null to leave it be. Items come from the slots themselves and go back among them; widen that with
-		 * {@link #from} and {@link #dumpTo}.
+		 * {@link #from} and {@link #dumpTo}. Both are copied.
+		 *
+		 * @throws IllegalArgumentException if {@code slots} and {@code layout} differ in length
 		 */
-		public static Arrangement of(int[] slots, List<ItemStack> layout) {
+		public static Arrangement of(int[] slots, List<@Nullable ItemStack> layout) {
 			if (slots.length != layout.size()) throw new IllegalArgumentException("slots and layout differ in length");
 			ItemStack[] l = new ItemStack[slots.length];
 			for (int i = 0; i < l.length; i++) l[i] = layout.get(i) == null ? null : layout.get(i).copy();
@@ -468,31 +529,37 @@ public interface Containers {
 			return new Arrangement(slots, layout, sources, dumps, match, allowance, counts.clone());
 		}
 
+		/** The menu slots the layout covers (a copy). */
 		public int[] slots() {
 			return slots.clone();
 		}
 
-		/** What each slot should hold; null entries are left be. */
+		/** What each of {@link #slots()} should hold, in the same order; null entries are left be. A copy. */
 		public @Nullable ItemStack[] layout() {
 			return layout.clone();
 		}
 
+		/** Where items may come from ({@link #from}; the layout's own slots unless set). A copy. */
 		public int[] sources() {
 			return sources.clone();
 		}
 
+		/** Where what doesn't belong goes ({@link #dumpTo}; the layout's own slots unless set). A copy. */
 		public int[] dumps() {
 			return dumps.clone();
 		}
 
+		/** When a stack counts as the layout's item ({@link #match(ItemMatch)}). */
 		public ItemMatch match() {
 			return match;
 		}
 
+		/** The cap on items taken from outside the layout's slots ({@link #limit}), or null for none. */
 		public @Nullable ToIntFunction<ItemStack> allowance() {
 			return allowance;
 		}
 
+		/** What each source slot keeps ({@link #reserve}), by menu slot id, or null if nothing is reserved. A copy. */
 		public int @Nullable [] reserved() {
 			return reserved == null ? null : reserved.clone();
 		}

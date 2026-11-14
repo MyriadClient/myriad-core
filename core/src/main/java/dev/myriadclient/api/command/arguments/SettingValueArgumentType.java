@@ -11,8 +11,13 @@ import net.minecraft.commands.SharedSuggestionProvider;
 
 import java.util.concurrent.CompletableFuture;
 
-/** Greedy value text for the setting parsed by preceding {@code module} and {@code setting} arguments. */
+/**
+ * The rest of the line, as a value for the setting named by preceding arguments called {@code module} and
+ * {@code setting} (see {@link SettingArgumentType}), suggesting what that setting accepts. It's taken as text: hand it
+ * to {@link Setting#parse}. Read it back with {@code ctx.getArgument(name, String.class)}.
+ */
 public class SettingValueArgumentType implements ArgumentType<String> {
+	/** A setting value argument. Being greedy, it must be the last argument. */
 	public static SettingValueArgumentType value() {
 		return new SettingValueArgumentType();
 	}

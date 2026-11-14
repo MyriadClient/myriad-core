@@ -1,12 +1,13 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.Bezier;
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.ui.Icons;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.Bezier;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
 import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,23 +27,27 @@ public class IconPicker extends Widget {
 	/** How tall the grid gets before it scrolls. */
 	private static final float MAX_GRID = 108;
 
-	private final Supplier<String> getter;
+	private final Supplier<@Nullable String> getter;
 	private final Consumer<String> setter;
-	private Supplier<String> fallback = () -> "";
+	private Supplier<@Nullable String> fallback = () -> "";
 	private final Animated open = new Animated(0);
 	private final TextField search;
 	private String query = "";
 	private List<Icons.Icon> shown = Icons.all();
 	private boolean expanded;
 	private float scroll, inset;
-	private String name;
+	private @Nullable String name;
 	/** The sections to show, for the search as it is. */
 	private List<Group> groups = groups(Icons.all(), true);
 	/** What's pointed at this frame, named on the footer. */
-	private Icons.Icon pointed;
+	private Icons.@Nullable Icon pointed;
 	private boolean pointedDefault;
 
-	public IconPicker(Supplier<String> getter, Consumer<String> setter) {
+	/**
+	 * @param getter the chosen glyph, read every frame; empty (or null) for Default
+	 * @param setter called with the glyph picked, or an empty string for Default
+	 */
+	public IconPicker(Supplier<@Nullable String> getter, Consumer<String> setter) {
 		this.getter = getter;
 		this.setter = setter;
 		this.search = new TextField(() -> query).search().placeholder("Search icons…").onChange(s -> {
@@ -55,9 +60,12 @@ public class IconPicker extends Widget {
 		});
 	}
 
-	/** The icon shown for Default: what it's for has without a choice. */
-	@ApiStatus.AvailableSince("1.4.0")
-	public IconPicker fallback(Supplier<String> fallback) {
+	/**
+	 * The icon shown for Default: what it's for has without a choice. Read every frame; null or empty shows none.
+	 * Returns this picker.
+	 */
+	@ApiStatus.AvailableSince("1.4")
+	public IconPicker fallback(Supplier<@Nullable String> fallback) {
 		this.fallback = fallback;
 		return this;
 	}
@@ -67,8 +75,11 @@ public class IconPicker extends Widget {
 		this.inset = inset;
 	}
 
-	/** Its own name at the left, in a column {@code inset} wide, as a setting's row would show it. */
-	@ApiStatus.AvailableSince("1.4.0")
+	/**
+	 * Its own name at the left, in a column {@code inset} UI units wide, as a setting's row would show it. Returns this
+	 * picker.
+	 */
+	@ApiStatus.AvailableSince("1.4")
 	public IconPicker named(String name, float inset) {
 		this.name = name;
 		this.inset = inset;
@@ -122,7 +133,7 @@ public class IconPicker extends Widget {
 		return out;
 	}
 
-	private record Group(String section, List<Icons.Icon> icons) {
+	private record Group(@Nullable String section, List<Icons.Icon> icons) {
 	}
 
 	/** The height of all that scrolls. */
@@ -248,7 +259,7 @@ public class IconPicker extends Widget {
 	}
 
 	/** Names what's pointed at, or else what's picked. */
-	private void footer(Canvas c, Icons.Icon known, boolean isDefault, float fy) {
+	private void footer(Canvas c, Icons.@Nullable Icon known, boolean isDefault, float fy) {
 		Icons.Icon named = pointed != null ? pointed : pointedDefault ? null : known;
 		String text = named != null ? named.name() + " · " + named.section() : pointedDefault || isDefault ? "Default" : "Custom";
 		float s = c.defaultFontSize() * 0.8f;

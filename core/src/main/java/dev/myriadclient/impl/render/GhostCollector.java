@@ -16,8 +16,8 @@ import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.client.resources.model.geometry.BakedQuad;
+import net.minecraft.client.renderer.texture.UvMapping;
+import net.minecraft.client.resources.model.geometry.ItemQuads;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ARGB;
@@ -81,10 +81,13 @@ class GhostCollector implements OrderedSubmitNodeCollector {
 
 	@Override
 	public <S> void submitModel(Model<? super S> model, S state, PoseStack poseStack, RenderType renderType, int lightCoords, int overlayCoords,
-								int tintedColor, @Nullable TextureAtlasSprite sprite, int outlineColor,
-								ModelFeatureRenderer.@Nullable CrumblingOverlay crumblingOverlay) {
-		delegate.submitModel(model, state, poseStack, translucent(renderType), lightCoords, overlayCoords, ARGB.multiplyAlpha(tintedColor, alpha), sprite, outlineColor,
-			null);
+								int tintedColor, @Nullable UvMapping uvMapping, int outlineColor) {
+		delegate.submitModel(model, state, poseStack, translucent(renderType), lightCoords, overlayCoords, ARGB.multiplyAlpha(tintedColor, alpha), uvMapping, outlineColor);
+	}
+
+	@Override
+	public <S> void submitCrumblingOverlay(Model<? super S> model, S state, PoseStack poseStack, RenderType renderType, int lightCoords, int overlayCoords,
+										   int tintedColor, ModelFeatureRenderer.CrumblingOverlay crumblingOverlay) {
 	}
 
 	@Override
@@ -99,6 +102,10 @@ class GhostCollector implements OrderedSubmitNodeCollector {
 	@Override
 	public void submitText(PoseStack poseStack, float x, float y, FormattedCharSequence string, boolean dropShadow, Font.DisplayMode displayMode,
 						   int lightCoords, int color, int backgroundColor, int outlineColor) {
+	}
+
+	@Override
+	public void submitTextBackground(PoseStack poseStack, float x0, float y0, float x1, float y1, int color, Font.DisplayMode displayMode, int lightCoords) {
 	}
 
 	@Override
@@ -121,7 +128,7 @@ class GhostCollector implements OrderedSubmitNodeCollector {
 	}
 
 	@Override
-	public void submitBreakingBlockModel(PoseStack poseStack, List<BlockStateModelPart> parts, int progress) {
+	public void submitBreakingBlockModel(PoseStack poseStack, List<BlockStateModelPart> parts, int progress, boolean isBlockTranslucent) {
 	}
 
 	@Override
@@ -131,7 +138,7 @@ class GhostCollector implements OrderedSubmitNodeCollector {
 
 	@Override
 	public void submitItem(PoseStack poseStack, ItemDisplayContext displayContext, int lightCoords, int overlayCoords, int outlineColor, int[] tintLayers,
-						   List<BakedQuad> quads, ItemStackRenderState.FoilType foilType) {
+						   ItemQuads quads, ItemStackRenderState.FoilType foilType) {
 		delegate.submitItem(poseStack, displayContext, lightCoords, overlayCoords, outlineColor, tintLayers, quads, foilType);
 	}
 

@@ -1,6 +1,8 @@
 package dev.myriadclient.impl.dev;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.dev.DevSteps;
 import dev.myriadclient.api.event.Priority;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.InputEvent;
@@ -8,11 +10,13 @@ import dev.myriadclient.api.event.events.MouseButtonEvent;
 import dev.myriadclient.api.event.events.Render2DEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WindowResizeEvent;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.job.Progress;
 import dev.myriadclient.api.job.Step;
 import dev.myriadclient.api.job.Why;
+import dev.myriadclient.api.player.Interactions;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.service.Placement;
-import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.command.CommandManager;
 import dev.myriadclient.impl.service.InventoryManager;
@@ -20,16 +24,16 @@ import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.ui.panels.CorePanels;
 import dev.myriadclient.impl.util.Clock;
 import dev.myriadclient.impl.wheel.WheelSlot;
-import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.CameraType;
+import net.minecraft.client.KeyboardHandler;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.ChatScreen;
-import net.minecraft.client.gui.components.ChatComponent;
-import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.Screenshot;
+import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonInfo;
@@ -40,9 +44,11 @@ import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLKeyboard;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.helpers.MessageFormatter;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -50,7 +56,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.EnumSet;
@@ -59,11 +65,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
- * Dev runs only ({@code -Dmyriad.devConsole=<file>}): runs the lines appended to a file, one script step at a time, so
- * a test can drive the game from outside it (the Grim test server's {@code ./client} script writes here). Output goes to
- * the game log, prefixed {@code [dev]}.
+ * Dev runs only (a development environment, or {@code -Dmyriad.devConsole=<file>}): runs script steps one at a time,
+ * from {@link DevSteps#run} (Myriad Testing) and from the lines appended to the file, if one was given (the Grim test
+ * server's {@code ./client} script writes there), so a test can drive the game. Output goes to the game log, prefixed
+ * {@code [dev]}, and back to whoever ran the step.
  *
  * <pre>
  * .toggle packet_mine          a Myriad command
@@ -86,13 +94,13 @@ import java.util.concurrent.CompletableFuture;
  * screenshot name              save screenshots/name.png (README pictures are taken this way)
  * menu open|close              the Myriad menu; workspace 3 switches; panel myriad:theme opens a panel
  * hud myriad-essentials:fps     puts a HUD element on the HUD (at its default spot)
- * launcher [query]             the launcher with the query typed; wm launcher|layout|close|... runs a desktop binding
+ * launcher [query]             the launcher with the query typed; wm launcher|layout|close|... runs a UI binding
  * settings kill_aura           a module's settings in a window of its own
  * faketab 200                  that many made-up players in the player list (0: none), with skins of their own
  * frametime 5                  frame times for that many seconds, logged as [dev] frametime; the script waits for it
  * </pre>
  */
-public final class DevConsole {
+public final class DevConsole implements DevSteps {
 	private static final Logger LOG = LoggerFactory.getLogger("Myriad/Dev");
 
 	private enum Key {
@@ -100,9 +108,12 @@ public final class DevConsole {
 	}
 
 	private final Minecraft mc = Minecraft.getInstance();
-	private final Path inbox;
+	private final @Nullable Path inbox;
 	private final CommandManager commands;
-	private final Deque<String> pending = new ArrayDeque<>();
+	/** Steps to run, oldest first: added from the file on the render thread, from {@link #run} on any. */
+	private final Deque<Entry> pending = new ConcurrentLinkedDeque<>();
+	/** The step whose output is being collected: until the script goes on to its next one. */
+	private @Nullable Entry running;
 	private final Set<Key> held = EnumSet.noneOf(Key.class);
 	private long read;
 	private int waitTicks, holdTicks, devTicks;
@@ -113,9 +124,24 @@ public final class DevConsole {
 	private int frames;
 	private long lastFrame;
 
-	public DevConsole(Path inbox, CommandManager commands) {
+	/** A step to run, with who's waiting for it (nobody for the file's) and what it said. */
+	private static final class Entry {
+		final String line;
+		final @Nullable CompletableFuture<List<String>> done;
+		final List<String> said = new ArrayList<>();
+		@Nullable String failed;
+
+		Entry(String line, @Nullable CompletableFuture<List<String>> done) {
+			this.line = line;
+			this.done = done;
+		}
+	}
+
+	/** {@code inbox}: the file whose appended lines are run too, or null for steps from {@link #run} only. */
+	public DevConsole(@Nullable Path inbox, CommandManager commands) {
 		this.inbox = inbox;
 		this.commands = commands;
+		if (inbox == null) return;
 		try {
 			// Start empty, so lines from an earlier run aren't replayed.
 			Files.createDirectories(inbox.toAbsolutePath().getParent());
@@ -132,6 +158,20 @@ public final class DevConsole {
 	 */
 	@Subscribe(priority = Priority.BEFORE_ACTIONS + 1000)
 	private void onTick(TickEvent.Pre e) {
+		// Never lets an error out: the event bus turns a handler off after enough of them, and every step after would
+		// wait for ever. The step that was running fails instead, and the console goes on with the next.
+		try {
+			tick();
+		} catch (Throwable t) {
+			LOG.error("[dev] step failed: {}", running == null ? "(between steps)" : running.line, t);
+			if (running != null) running.failed = t.toString();
+			waitTicks = 0;
+			selfTest = null;
+			finishRunning();
+		}
+	}
+
+	private void tick() {
 		devTicks++;
 		poll();
 		if (holdTicks > 0 && --holdTicks == 0) held.clear();
@@ -150,7 +190,42 @@ public final class DevConsole {
 			return;
 		}
 		if (frameTimes != null) logFrameTimes();
-		while (!pending.isEmpty() && waitTicks == 0 && selfTest == null) run(pending.poll());
+		finishRunning();
+		while (!pending.isEmpty() && waitTicks == 0 && selfTest == null) {
+			running = pending.poll();
+			execute(running.line);
+			if (waitTicks == 0 && selfTest == null) finishRunning();
+		}
+	}
+
+	@Override
+	public CompletableFuture<List<String>> run(String step) {
+		CompletableFuture<List<String>> done = new CompletableFuture<>();
+		pending.add(new Entry(step.strip(), done));
+		return done;
+	}
+
+	/** Hands the step that ran its output (or its failure). */
+	private void finishRunning() {
+		Entry e = running;
+		running = null;
+		if (e == null || e.done == null) return;
+		if (e.failed != null) e.done.completeExceptionally(new IllegalStateException(e.failed));
+		else e.done.complete(List.copyOf(e.said));
+	}
+
+	/** Logs what a step found, and gives it to whoever ran the step. */
+	private void say(String format, Object... args) {
+		String text = MessageFormatter.arrayFormat(format, args).getMessage();
+		LOG.info("[dev] {}", text);
+		if (running != null) running.said.add(text);
+	}
+
+	/** Like {@link #say}, as a warning: the step didn't do what it was asked. */
+	private void complain(String format, Object... args) {
+		String text = MessageFormatter.arrayFormat(format, args).getMessage();
+		LOG.warn("[dev] {}", text);
+		if (running != null) running.failed = text;
 	}
 
 	@Subscribe(priority = Priority.HIGHEST)
@@ -184,17 +259,18 @@ public final class DevConsole {
 		long[] sorted = Arrays.copyOf(frameTimes, frames);
 		frameTimes = null;
 		if (sorted.length == 0) {
-			LOG.info("[dev] frametime: no frames");
+			say("frametime: no frames");
 			return;
 		}
 		Arrays.sort(sorted);
 		double mean = Arrays.stream(sorted).average().orElse(0) / 1e6;
-		LOG.info("[dev] frametime: {} frames, mean {} ms ({} fps), p50 {} ms, p99 {} ms", sorted.length, fmt(mean), Math.round(1000 / mean),
+		say("frametime: {} frames, mean {} ms ({} fps), p50 {} ms, p99 {} ms", sorted.length, fmt(mean), Math.round(1000 / mean),
 			fmt(sorted[sorted.length / 2] / 1e6), fmt(sorted[sorted.length * 99 / 100] / 1e6));
 	}
 
 	/** Reads whole lines appended since last time. */
 	private void poll() {
+		if (inbox == null) return;
 		try (RandomAccessFile f = new RandomAccessFile(inbox.toFile(), "r")) {
 			if (f.length() < read) read = 0;
 			if (f.length() == read) return;
@@ -205,7 +281,7 @@ public final class DevConsole {
 			int end = text.lastIndexOf('\n');
 			if (end < 0) return;
 			read += text.substring(0, end + 1).getBytes(StandardCharsets.UTF_8).length;
-			for (String line : text.substring(0, end).split("\n")) if (!line.isBlank()) pending.add(line.strip());
+			for (String line : text.substring(0, end).split("\n")) if (!line.isBlank()) pending.add(new Entry(line.strip(), null));
 		} catch (IOException ignored) {
 		}
 	}
@@ -232,7 +308,7 @@ public final class DevConsole {
 		});
 	}
 
-	private void run(String line) {
+	private void execute(String line) {
 		LOG.info("[dev] > {}", line);
 		try {
 			if (line.startsWith(".")) {
@@ -260,7 +336,7 @@ public final class DevConsole {
 					mc.player.setXRot(Float.parseFloat(a[2]));
 				}
 				case "select" -> Myriad.inventory().select(Integer.parseInt(a[1]) - 1);
-				case "move" -> LOG.info("[dev] move {}", Myriad.inventory().move(Integer.parseInt(a[1]), Integer.parseInt(a[2])));
+				case "move" -> say("move {}", Myriad.inventory().move(Integer.parseInt(a[1]), Integer.parseInt(a[2])));
 				case "uclick" -> {
 					// As your own click in the inventory screen: it waits for a tick the server takes it, as those do.
 					var inv = (InventoryManager) Myriad.inventory();
@@ -268,22 +344,22 @@ public final class DevConsole {
 					var type = ContainerInput.valueOf(a[3].toUpperCase(Locale.ROOT));
 					boolean waits = inv.holdScreenClick(menu, slot, button, type);
 					if (!waits) mc.gameMode.handleContainerInput(menu, slot, button, type, mc.player);
-					LOG.info("[dev] uclick {}", waits ? "waits" : "sent");
+					say("uclick {}", waits ? "waits" : "sent");
 				}
 				case "attack" -> attack();
 				// As your own right click (a module's slot hold steps aside for it).
 				case "use" -> asClick(this::use);
 				case "middle" -> {
-					Myriad.events().post(new MouseButtonEvent(GLFW.GLFW_MOUSE_BUTTON_MIDDLE, GLFW.GLFW_PRESS, 0, false));
-					Myriad.events().post(new MouseButtonEvent(GLFW.GLFW_MOUSE_BUTTON_MIDDLE, GLFW.GLFW_RELEASE, 0, false));
+					Myriad.events().post(new MouseButtonEvent(InputConstants.MOUSE_BUTTON_MIDDLE, InputConstants.PRESS, 0, false));
+					Myriad.events().post(new MouseButtonEvent(InputConstants.MOUSE_BUTTON_MIDDLE, InputConstants.RELEASE, 0, false));
 				}
 				// "mouse 0 press shift": a press held with Shift down (a drag keeps the press's modifiers).
 				case "mouse" -> {
-					int button = Integer.parseInt(a[1]);
+					int button = Keybind.parse("mouse" + (Integer.parseInt(a[1]) + 1)).code();
 					String how = a.length > 2 ? a[2].toLowerCase(Locale.ROOT) : "click";
 					int mods = a.length > 3 ? modifiers(a[3]) : 0;
-					if (!how.equals("release")) mouseButton(button, GLFW.GLFW_PRESS, mods);
-					if (!how.equals("press")) mouseButton(button, GLFW.GLFW_RELEASE, mods);
+					if (!how.equals("release")) mouseButton(button, InputConstants.PRESS, mods);
+					if (!how.equals("press")) mouseButton(button, InputConstants.RELEASE, mods);
 				}
 				// Real key presses through vanilla's KeyboardHandler: "key 1 alt", "key space alt", "key enter".
 				// "key g press" ... "key g release" holds it in between (a wheel's bind, say).
@@ -291,8 +367,8 @@ public final class DevConsole {
 					int key = keyCode(a[1]);
 					String how = a.length > 2 && (a[a.length - 1].equals("press") || a[a.length - 1].equals("release")) ? a[a.length - 1] : "click";
 					int mods = a.length > 2 && !a[2].equals(how) ? modifiers(a[2]) : 0;
-					if (!how.equals("release")) keyboard(GLFW.GLFW_PRESS, key, mods);
-					if (!how.equals("press")) keyboard(GLFW.GLFW_RELEASE, key, mods);
+					if (!how.equals("release")) keyboard(InputConstants.PRESS, key, mods);
+					if (!how.equals("press")) keyboard(InputConstants.RELEASE, key, mods);
 				}
 				case "type" -> {
 					for (int cp : line.substring(4).strip().codePoints().toArray()) {
@@ -305,13 +381,13 @@ public final class DevConsole {
 				case "drag" -> {
 					double scale = mc.getWindow().getGuiScale();
 					if (mc.gui.screen() != null) mc.gui.screen().mouseDragged(new net.minecraft.client.input.MouseButtonEvent(Double.parseDouble(a[1]) / scale, Double.parseDouble(a[2]) / scale,
-						new MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_LEFT, 0)), 0, 0);
+						new MouseButtonInfo(InputConstants.MOUSE_BUTTON_LEFT, 0)), 0, 0);
 				}
 				// Moves the cursor to x y in window pixels, as screenshots show them: "cursor 400 220"; or over slot n of the
 				// open container screen, wherever it is: "cursor slot 10".
 				case "cursor" -> {
 					double[] at = a[1].equals("slot") ? slotPixels(Integer.parseInt(a[2])) : new double[]{Double.parseDouble(a[1]), Double.parseDouble(a[2])};
-					invokeMouse("onMove", new Class<?>[]{long.class, double.class, double.class}, mc.getWindow().handle(), at[0], at[1]);
+					moveMouse(at[0], at[1]);
 				}
 				case "scroll" -> invokeMouse("onScroll", new Class<?>[]{long.class, double.class, double.class},
 					mc.getWindow().handle(), 0.0, Double.parseDouble(a[1]));
@@ -334,7 +410,7 @@ public final class DevConsole {
 						if (a[i].startsWith("-")) skip.add(a[i].substring(1));
 						else ticks = Integer.parseInt(a[i]);
 					}
-					selfTest = new SelfTest(ticks, skip);
+					selfTest = new SelfTest(ticks, skip, this::say);
 					selfTest.start();
 				}
 				// "openitem 14 air 40": opens the box at inventory index 14 (air placing where it may), logs how long it took to
@@ -349,23 +425,23 @@ public final class DevConsole {
 					var theme = MyriadImpl.get().windowManager().theme();
 					var setting = theme.preferences.get(a[1]).or(() -> theme.settings.get(a[1]));
 					String value = line.substring(line.indexOf(a[1]) + a[1].length()).strip();
-					if (setting.isPresent() && value.isEmpty()) LOG.info("[dev] pref {} = {}", a[1], setting.get().get());
-					else if (setting.isEmpty() || !setting.get().parse(value)) LOG.warn("[dev] pref {}: no such setting, or {} isn't a value for it", a[1], value);
-					else LOG.info("[dev] pref {} = {}", a[1], setting.get().get());
+					if (setting.isPresent() && value.isEmpty()) say("pref {} = {}", a[1], setting.get().get());
+					else if (setting.isEmpty() || !setting.get().parse(value)) complain("pref {}: no such setting, or {} isn't a value for it", a[1], value);
+					else say("pref {} = {}", a[1], setting.get().get());
 				}
-				case "tabs" -> LOG.info("[dev] tabs: {}", MyriadImpl.get().containerTabs().tabs().stream()
+				case "tabs" -> say("tabs: {}", MyriadImpl.get().containerTabs().tabs().stream()
 					.map(t -> (MyriadImpl.get().containerTabs().isCurrent(t) ? "*" : "") + (t.you() ? "you" : t.pos().toShortString() + (t.box() != null ? " box" : ""))).toList());
 				case "tab" -> {
 					var tabs = MyriadImpl.get().containerTabs().tabs();
 					int i = Integer.parseInt(a[1]);
-					LOG.info("[dev] tab {}: {}", i, i < tabs.size() && MyriadImpl.get().containerTabs().switchTo(tabs.get(i)));
+					say("tab {}: {}", i, i < tabs.size() && MyriadImpl.get().containerTabs().switchTo(tabs.get(i)));
 				}
 				// Closes whatever screen is open (a container's as the game does, telling the server).
 				case "closescreen" -> {
 					if (mc.gui.screen() instanceof AbstractContainerScreen<?>) mc.player.closeContainer();
 					else if (mc.gui.screen() != null) mc.gui.setScreen(null);
 				}
-				case "echo" -> LOG.info("[dev] echo {}", line.substring(4).strip());
+				case "echo" -> say("echo {}", line.substring(4).strip());
 				// "camera front": first person, back or front, as F5 steps through.
 				case "camera" -> mc.options.setCameraType(switch (a[1]) {
 					case "back" -> CameraType.THIRD_PERSON_BACK;
@@ -382,7 +458,7 @@ public final class DevConsole {
 						mc.options.guiScale().set(Integer.parseInt(a[1]));
 						mc.resizeGui();
 					}
-					LOG.info("[dev] guiscale {}: {}", a[1], mc.getWindow().getGuiScale());
+					say("guiscale {}: {}", a[1], mc.getWindow().getGuiScale());
 				}
 				// Opens chat, as the chat key does.
 				case "openchat" -> mc.gui.hud.getChat().openScreen(ChatComponent.ChatMethod.MESSAGE, ChatScreen::new);
@@ -424,11 +500,11 @@ public final class DevConsole {
 				case "faketab" -> fakeTab.set(Integer.parseInt(a[1]));
 				case "frametime" -> startFrameTimes(Integer.parseInt(a[1]));
 				case "settings" -> Myriad.modules().byName(a[1]).ifPresentOrElse(m -> CorePanels.openModuleSettings(m, true),
-					() -> LOG.warn("[dev] no module {}", a[1]));
-				default -> LOG.warn("[dev] unknown: {}", line);
+					() -> complain("no module {}", a[1]));
+				default -> complain("unknown: {}", line);
 			}
 		} catch (RuntimeException ex) {
-			LOG.warn("[dev] failed: {} ({})", line, ex.toString());
+			complain("failed: {} ({})", line, ex.toString());
 		}
 	}
 
@@ -436,30 +512,36 @@ public final class DevConsole {
 		invokeMouse("onButton", new Class<?>[]{long.class, MouseButtonInfo.class, int.class}, mc.getWindow().handle(), new MouseButtonInfo(button, mods), action);
 	}
 
-	/** Calls one of vanilla's (private) GLFW input callbacks on the mouse handler. */
+	/** Moves the cursor to window pixel {@code x}, {@code y} through vanilla's mouse handler, with the movement it took. */
+	private void moveMouse(double x, double y) {
+		invokeMouse("onMove", new Class<?>[]{long.class, double.class, double.class, double.class, double.class}, mc.getWindow().handle(), x, y,
+			x - mc.mouseHandler.xpos(), y - mc.mouseHandler.ypos());
+	}
+
+	/** Calls one of vanilla's (private) input callbacks on the mouse handler. */
 	private void keyboard(int action, int key, int mods) {
 		invokeKeyboard("keyPress", new Class<?>[]{long.class, int.class, KeyEvent.class},
-			mc.getWindow().handle(), action, new KeyEvent(key, GLFW.glfwGetKeyScancode(key), mods));
+			mc.getWindow().handle(), action, new KeyEvent(key, SDLKeyboard.SDL_GetKeyFromScancode(key, (short) 0, false), mods));
 	}
 
 	private static int keyCode(String name) {
 		String n = name.toLowerCase(Locale.ROOT);
 		return switch (n) {
-			case "space" -> GLFW.GLFW_KEY_SPACE;
-			case "enter" -> GLFW.GLFW_KEY_ENTER;
-			case "escape", "esc" -> GLFW.GLFW_KEY_ESCAPE;
-			case "tab" -> GLFW.GLFW_KEY_TAB;
-			case "backspace" -> GLFW.GLFW_KEY_BACKSPACE;
-			case "up" -> GLFW.GLFW_KEY_UP;
-			case "down" -> GLFW.GLFW_KEY_DOWN;
-			case "left" -> GLFW.GLFW_KEY_LEFT;
-			case "right" -> GLFW.GLFW_KEY_RIGHT;
-			case "left_alt" -> GLFW.GLFW_KEY_LEFT_ALT;
-			case "f5" -> GLFW.GLFW_KEY_F5;
+			case "space" -> InputConstants.KEY_SPACE;
+			case "enter" -> InputConstants.KEY_RETURN;
+			case "escape", "esc" -> InputConstants.KEY_ESCAPE;
+			case "tab" -> InputConstants.KEY_TAB;
+			case "backspace" -> InputConstants.KEY_BACKSPACE;
+			case "up" -> InputConstants.KEY_UP;
+			case "down" -> InputConstants.KEY_DOWN;
+			case "left" -> InputConstants.KEY_LEFT;
+			case "right" -> InputConstants.KEY_RIGHT;
+			case "left_alt" -> InputConstants.KEY_LALT;
+			case "f5" -> InputConstants.KEY_F5;
 			default -> {
 				char c = n.charAt(0);
-				if (n.length() == 1 && c >= '0' && c <= '9') yield GLFW.GLFW_KEY_0 + (c - '0');
-				if (n.length() == 1 && c >= 'a' && c <= 'z') yield GLFW.GLFW_KEY_A + (c - 'a');
+				if (n.length() == 1 && c >= '0' && c <= '9') yield c == '0' ? InputConstants.KEY_0 : InputConstants.KEY_1 + (c - '1');
+				if (n.length() == 1 && c >= 'a' && c <= 'z') yield InputConstants.KEY_A + (c - 'a');
 				yield Integer.parseInt(n);
 			}
 		};
@@ -469,10 +551,10 @@ public final class DevConsole {
 		int mods = 0;
 		for (String m : names.toLowerCase(Locale.ROOT).split("\\+")) {
 			mods |= switch (m) {
-				case "alt" -> GLFW.GLFW_MOD_ALT;
-				case "shift" -> GLFW.GLFW_MOD_SHIFT;
-				case "ctrl" -> GLFW.GLFW_MOD_CONTROL;
-				case "super" -> GLFW.GLFW_MOD_SUPER;
+				case "alt" -> InputConstants.MOD_ALT;
+				case "shift" -> InputConstants.MOD_SHIFT;
+				case "ctrl" -> InputConstants.MOD_CONTROL;
+				case "super" -> InputConstants.MOD_SUPER;
 				default -> throw new IllegalArgumentException("unknown modifier " + m);
 			};
 		}
@@ -514,13 +596,13 @@ public final class DevConsole {
 		HitResult hit = mc.hitResult;
 		if (hit instanceof EntityHitResult e) mc.gameMode.attack(mc.player, e.getEntity());
 		else if (hit instanceof BlockHitResult b && hit.getType() == HitResult.Type.BLOCK) mc.gameMode.startDestroyBlock(b.getBlockPos(), b.getDirection());
-		mc.player.swing(InteractionHand.MAIN_HAND);
+		Interactions.swing(InteractionHand.MAIN_HAND);
 	}
 
 	private void use() {
 		if (mc.player == null || mc.gameMode == null) return;
 		if (mc.hitResult instanceof BlockHitResult b && b.getType() == HitResult.Type.BLOCK) {
-			if (mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, b).consumesAction()) mc.player.swing(InteractionHand.MAIN_HAND);
+			if (mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, b).consumesAction()) Interactions.swing(InteractionHand.MAIN_HAND);
 		} else {
 			mc.gameMode.useItem(mc.player, InteractionHand.MAIN_HAND);
 		}
@@ -529,7 +611,7 @@ public final class DevConsole {
 	private void status() {
 		var p = mc.player;
 		if (p == null) {
-			LOG.info("[dev] status: not in a world");
+			say("status: not in a world");
 			return;
 		}
 		var v = p.getDeltaMovement();
@@ -538,7 +620,7 @@ public final class DevConsole {
 			case EntityHitResult en -> "entity " + en.getEntity().getName().getString();
 			case null, default -> "none";
 		};
-		LOG.info("[dev] status: pos {} {} {} motion {} {} {} ({} b/s) rot {} {} ground={} gliding={} sprinting={} sneaking={} health={} slot={} serverSlot={} item={} mode={} target={} fps={} ping={} carried={} screen={}",
+		say("status: pos {} {} {} motion {} {} {} ({} b/s) rot {} {} ground={} gliding={} sprinting={} sneaking={} health={} slot={} serverSlot={} item={} mode={} target={} fps={} ping={} carried={} screen={}",
 			fmt(p.getX()), fmt(p.getY()), fmt(p.getZ()), fmt(v.x), fmt(v.y), fmt(v.z), fmt(v.length() * 20), fmt(p.getYRot()), fmt(p.getXRot()),
 			p.onGround(), p.isFallFlying(), p.isSprinting(), p.isShiftKeyDown(), fmt(p.getHealth()), p.getInventory().getSelectedSlot() + 1, Myriad.inventory().serverSlot() + 1, p.getMainHandItem().getItem(),
 			mc.gameMode == null ? "?" : mc.gameMode.getPlayerMode().getName(), target, mc.getFps(), Myriad.server().ping(),

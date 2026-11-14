@@ -5,14 +5,19 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import org.jetbrains.annotations.ApiStatus;
 
-/** Chunks arriving from and leaving the client world. Posted on the render thread. */
+/**
+ * Chunks arriving from and leaving the client world. Posted on the render thread, only while something listens. Not
+ * cancellable.
+ */
 public abstract class ChunkEvent {
 	private final ChunkPos pos;
 
+	/** Core's; addons don't make these. */
 	protected ChunkEvent(ChunkPos pos) {
 		this.pos = pos;
 	}
 
+	/** Which chunk. */
 	public ChunkPos pos() {
 		return pos;
 	}
@@ -23,12 +28,14 @@ public abstract class ChunkEvent {
 		/** 1 fresh, -1 saved, 0 not read yet. */
 		private int fresh;
 
+		/** Core's; only Myriad makes these. */
 		@ApiStatus.Internal
 		public Loaded(LevelChunk chunk) {
 			super(chunk.getPos());
 			this.chunk = chunk;
 		}
 
+		/** The chunk as the client now holds it. */
 		public LevelChunk chunk() {
 			return chunk;
 		}
@@ -43,8 +50,9 @@ public abstract class ChunkEvent {
 		}
 	}
 
-	/** A chunk is being dropped from the client. */
+	/** A chunk is about to be dropped from the client (out of view distance, or the server unloaded it); still readable. */
 	public static final class Unloaded extends ChunkEvent {
+		/** Core's; only Myriad makes these. */
 		@ApiStatus.Internal
 		public Unloaded(ChunkPos pos) {
 			super(pos);

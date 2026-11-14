@@ -6,7 +6,7 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.Subscription;
 import dev.myriadclient.api.event.events.InputEvent;
 import dev.myriadclient.api.event.events.TickEvent;
-import dev.myriadclient.api.util.Packets;
+import dev.myriadclient.api.network.Packets;
 import dev.myriadclient.impl.network.ActionTiming;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;

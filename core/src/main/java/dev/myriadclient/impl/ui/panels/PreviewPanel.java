@@ -1,13 +1,13 @@
 package dev.myriadclient.impl.ui.panels;
 
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.setting.EnumSetting;
 import dev.myriadclient.api.setting.RegistrySetting;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.ui.Rect;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.widget.Container;
 import dev.myriadclient.api.ui.widget.Dropdown;
 import dev.myriadclient.api.ui.widget.HBox;

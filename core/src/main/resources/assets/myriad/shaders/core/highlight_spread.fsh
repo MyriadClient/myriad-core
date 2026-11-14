@@ -1,6 +1,7 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 
-#moj_import <myriad:highlight.glsl>
+#include <myriad:highlight.glsl>
 
 // First half of the distance search, searched outwards along the row so it stops at the first hit:
 //  - the nearest mask pixel within the outline's reach;
@@ -8,7 +9,7 @@
 //    different meet).
 uniform sampler2D InSampler;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
     ivec2 p = ivec2(gl_FragCoord.xy);
@@ -23,7 +24,7 @@ void main() {
         nearG = group;
     }
     // Outside, only the outline's reach: the glow beyond it comes from its own half-size distance field.
-    int reach = inside || !highlightLegacy() ? highlightBoundaryRadius() : highlightRadius();
+    int reach = highlightBoundaryRadius();
     int width = textureSize(InSampler, 0).x;
     for (int d = 1; d <= reach; d++) {
         if (inside ? otherD != NONE : nearD != NONE) break;

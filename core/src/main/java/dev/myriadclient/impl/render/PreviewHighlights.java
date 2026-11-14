@@ -1,19 +1,17 @@
 package dev.myriadclient.impl.render;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.myriadclient.api.render.HighlightStyle;
 import net.minecraft.client.renderer.MappableRingBuffer;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
-import org.joml.Vector4f;
 
 /**
  * A preview's highlights: the shader outlines, glows and fills of {@link HighlightRenderer}, drawn into a preview's own
@@ -22,7 +20,7 @@ import org.joml.Vector4f;
  * whole texture is one area; nothing hides the subject, so nothing is resolved against a scene.
  */
 public final class PreviewHighlights {
-	/** The preview whose outline pass is running now (LevelRendererMixin points the outline target at its mask). */
+	/** The preview whose outline pass is running now (FeatureRenderDispatcherMixin runs it into this preview's mask). */
 	private static @Nullable PreviewHighlights drawing;
 	private static final AABB HERE = new AABB(0, 0, 0, 0, 0, 0);
 
@@ -76,9 +74,7 @@ public final class PreviewHighlights {
 	}
 
 	private void clearMask() {
-		if (mask == null) mask = new TextureTarget("Myriad preview highlights", width, height, true, GpuFormat.RGBA8_UNORM);
-		else if (mask.width != width || mask.height != height) mask.resize(width, height);
-		RenderSystem.getDevice().createCommandEncoder().clearColorAndDepthTextures(mask.getColorTexture(), new Vector4f(0), mask.getDepthTexture(), 0.0);
+		mask = HighlightPasses.clearedMask(mask, "Myriad preview highlights", width, height);
 	}
 
 	/** Whether anything in this frame is highlighted. */

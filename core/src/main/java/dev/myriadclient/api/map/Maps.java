@@ -2,7 +2,7 @@ package dev.myriadclient.api.map;
 
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Optional;
@@ -26,12 +26,15 @@ public interface Maps {
 	 */
 	List<Waypoint> waypoints();
 
-	/** The first waypoint called {@code name} (case ignored), this dimension's before another's. */
+	/** The first waypoint called {@code name} (case ignored), this dimension's before another's; empty if none is. */
 	default Optional<Waypoint> waypoint(String name) {
 		for (Waypoint w : waypoints()) if (w.name().equalsIgnoreCase(name)) return Optional.of(w);
 		return Optional.empty();
 	}
 
-	/** Where {@code waypoint} is from the dimension you're in (scaled across dimensions); null outside a world. */
+	/**
+	 * Where {@code waypoint} is from the dimension you're in: its block's centre, scaled across dimensions (a Nether
+	 * waypoint's x and z times 8 in the Overworld), its height unchanged; null outside a world.
+	 */
 	@Nullable Vec3 positionHere(Waypoint waypoint);
 }

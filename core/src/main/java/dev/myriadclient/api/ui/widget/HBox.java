@@ -1,6 +1,6 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.ui.draw.Canvas;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,29 +22,38 @@ public class HBox extends Container {
 	private final float spacing;
 	private final List<Float> sizes = new ArrayList<>();
 
+	/** A row with {@code spacing} UI units between children. */
 	public HBox(float spacing) {
 		this.spacing = spacing;
 	}
 
+	/** A row with 4 units between children. */
 	public HBox() {
 		this(4);
 	}
 
-	/** Adds a child sharing leftover space by {@code weight}. */
+	/** Adds a child sharing leftover space by {@code weight} (relative to the other weighted children); returns it. */
 	public <W extends Widget> W addWeighted(W widget, float weight) {
 		sizes.add(-weight);
 		return super.add(widget);
 	}
 
-	/** Adds a child with a fixed width. */
+	/** Adds a child with a fixed width in UI units (which it gives up in a narrow row, down to its least); returns it. */
 	public <W extends Widget> W addFixed(W widget, float width) {
 		sizes.add(width);
 		return super.add(widget);
 	}
 
+	/** Adds a child with weight 1; returns it. */
 	@Override
 	public <W extends Widget> W add(W widget) {
 		return addWeighted(widget, 1);
+	}
+
+	@Override
+	public void clear() {
+		super.clear();
+		sizes.clear();
 	}
 
 	@Override

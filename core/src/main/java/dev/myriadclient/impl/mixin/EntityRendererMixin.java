@@ -15,10 +15,14 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+/**
+ * Every entity's render state as it is built: the entity it came from is remembered (RenderStates) and its outline
+ * colour pointed at its highlight, and EntityRenderEvent.Nametag can hide vanilla's name tags.
+ */
 @Mixin(EntityRenderer.class)
 public abstract class EntityRendererMixin<T extends Entity, S extends EntityRenderState> {
 	@Shadow
-	protected abstract AABB getBoundingBoxForCulling(T entity);
+	protected abstract AABB getBoundingBoxForCulling(T entity, float partialTicks);
 
 	/**
 	 * Every render state is built here: remember the entity it was built from (see RenderStates), and point its outline
@@ -28,7 +32,7 @@ public abstract class EntityRendererMixin<T extends Entity, S extends EntityRend
 	private void myriad$rememberEntity(T entity, float tickDelta, CallbackInfoReturnable<S> cir) {
 		S state = cir.getReturnValue();
 		((EntityRenderStateAccess) state).myriad$setEntity(entity);
-		if (HighlightRenderer.INSTANCE.isArmed()) HighlightRenderer.INSTANCE.entity(state, entity, tickDelta, getBoundingBoxForCulling(entity));
+		if (HighlightRenderer.INSTANCE.isArmed()) HighlightRenderer.INSTANCE.entity(state, entity, tickDelta, getBoundingBoxForCulling(entity, tickDelta));
 	}
 
 	/**

@@ -1,7 +1,7 @@
 package dev.myriadclient.api.setting;
 
 import com.google.gson.JsonParser;
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.registry.MyriadId;
 import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 

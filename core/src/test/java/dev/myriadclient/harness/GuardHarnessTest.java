@@ -1,9 +1,10 @@
 package dev.myriadclient.harness;
 
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.Modules;
+import dev.myriadclient.api.module.Tags;
+import dev.myriadclient.impl.module.ModuleRegistryImpl;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -23,7 +24,7 @@ class GuardHarnessTest {
 		Broken m = new Broken();
 		// Its on/off line in chat needs the HUD, which the harness doesn't have.
 		m.chatFeedback.set(false);
-		Myriad.modules().register(m, "myriad-test");
+		((ModuleRegistryImpl) Myriad.modules()).register(m, "myriad-test");
 		return m;
 	}
 

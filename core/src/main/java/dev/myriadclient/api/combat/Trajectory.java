@@ -27,7 +27,7 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -61,18 +61,30 @@ public final class Trajectory {
 	 * and gravity apply ({@code movesFirst}); thrown items after.
 	 */
 	public record Ballistics(double gravity, double drag, double waterDrag, boolean movesFirst, double radius) {
+		/** Arrows from bows and crossbows. */
 		public static final Ballistics ARROW = new Ballistics(0.05, 0.99, 0.6, true, 0.25);
+		/** Thrown tridents, which keep their speed in water. */
 		public static final Ballistics TRIDENT = new Ballistics(0.05, 0.99, 0.99, true, 0.25);
 		/** Snowballs, eggs and ender pearls. */
 		public static final Ballistics THROWN = new Ballistics(0.03, 0.99, 0.8, false, 0.125);
+		/** Splash and lingering potions. */
 		public static final Ballistics POTION = new Ballistics(0.05, 0.99, 0.8, false, 0.125);
+		/** Bottles o' enchanting. */
 		public static final Ballistics EXPERIENCE_BOTTLE = new Ballistics(0.07, 0.99, 0.8, false, 0.125);
+		/** Wind charges: straight ahead, no gravity or drag. */
 		public static final Ballistics WIND_CHARGE = new Ballistics(0, 1, 1, false, 0.15625);
 		/** A firework from a crossbow: straight ahead, no gravity. */
 		public static final Ballistics FIREWORK = new Ballistics(0, 1, 1, false, 0.125);
 	}
 
-	/** A projectile leaving {@code origin} at {@code velocity} blocks per tick. */
+	/**
+	 * A projectile leaving {@code origin} at {@code velocity} blocks per tick, flying as {@code ballistics} says. Build
+	 * one yourself to follow a projectile already in the air (its position, its delta movement).
+	 *
+	 * @param origin     where it starts
+	 * @param velocity   its velocity, in blocks per tick
+	 * @param ballistics how it flies
+	 */
 	public record Launch(Vec3 origin, Vec3 velocity, Ballistics ballistics) {
 	}
 
@@ -83,10 +95,12 @@ public final class Trajectory {
 			return hit != null ? hit.getLocation() : points.getLast();
 		}
 
+		/** The entity it hits, or null if it hits a block or nothing. */
 		public @Nullable Entity hitEntity() {
 			return hit instanceof EntityHitResult e ? e.getEntity() : null;
 		}
 
+		/** The block it lands on, or null if it hits an entity or nothing. */
 		public @Nullable BlockPos hitBlock() {
 			return hit instanceof BlockHitResult b && b.getType() == HitResult.Type.BLOCK ? b.getBlockPos() : null;
 		}
@@ -95,7 +109,8 @@ public final class Trajectory {
 	/**
 	 * How {@code shooter} would launch {@code item} facing {@code yaw}/{@code pitch}: bows at their current draw (full
 	 * when not drawing), charged crossbows, tridents, snowballs, eggs, pearls, splash and lingering potions, bottles o'
-	 * enchanting and wind charges. Null for anything else, or an uncharged crossbow.
+	 * enchanting and wind charges. Yaw and pitch are in degrees, Minecraft's way (yaw 0 = south, pitch positive
+	 * down); the shooter's own movement is added, as the game does. Null for anything else, or an uncharged crossbow.
 	 */
 	public static @Nullable Launch launch(LivingEntity shooter, ItemStack item, float yaw, float pitch) {
 		Ballistics b;
@@ -144,7 +159,9 @@ public final class Trajectory {
 	/**
 	 * The yaw and pitch to launch {@code item} at so it passes through {@code target}, on the low arc (the direct shot),
 	 * ignoring blocks and entities in the way; or null if it can't reach that far. For bows the power is the current
-	 * draw (full when not drawing). Worked out from the same physics as {@link #simulate}, without the world.
+	 * draw (full when not drawing). Worked out from the same physics as {@link #simulate}, without the world (water
+	 * drag isn't counted). Returns {@code [yaw, pitch]} in degrees, pitch positive down as the game takes it; null too
+	 * for items {@link #launch} doesn't know, or when the best arc misses by more than half a block.
 	 */
 	public static float @Nullable [] aimAt(LivingEntity shooter, ItemStack item, Vec3 target) {
 		Launch flat = launch(shooter, item, shooter.getYRot(), 0);

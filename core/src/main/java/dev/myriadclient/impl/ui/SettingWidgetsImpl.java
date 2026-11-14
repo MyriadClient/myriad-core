@@ -9,6 +9,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
+/**
+ * Which widget edits each kind of setting in the settings windows: a factory per setting class, found by walking up
+ * the setting's class (so an addon's subclass of a core setting gets core's editor unless it registers its own).
+ */
 final class SettingWidgetsImpl implements SettingWidgets {
 	private record Entry(Function<Setting<?>, Widget> factory, boolean stacked) {
 	}

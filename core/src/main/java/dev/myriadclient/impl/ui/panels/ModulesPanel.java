@@ -2,20 +2,21 @@ package dev.myriadclient.impl.ui.panels;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.Window;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.util.FuzzyMatch;
-import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.ui.WindowManager;
 
 import java.util.ArrayList;
@@ -23,9 +24,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -211,11 +212,11 @@ public final class ModulesPanel extends WidgetPanel {
 
 		@Override
 		public boolean mouseClicked(float mx, float my, int button) {
-			if (button == 0 && overPopOut(mx, my)) {
+			if (button == InputConstants.MOUSE_BUTTON_LEFT && overPopOut(mx, my)) {
 				popOut(group);
 				return true;
 			}
-			if (button == 0 && mx >= x && my >= y && mx < x + width && my < y + ROW) {
+			if (button == InputConstants.MOUSE_BUTTON_LEFT && mx >= x && my >= y && mx < x + width && my < y + ROW) {
 				// Held (taking the click makes it the pressed widget, for the drag and release): a click or a drag, told
 				// apart as it moves or is let go.
 				pressX = mx;

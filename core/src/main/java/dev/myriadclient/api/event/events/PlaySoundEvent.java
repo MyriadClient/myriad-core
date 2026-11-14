@@ -7,7 +7,7 @@ import org.jetbrains.annotations.ApiStatus;
 
 /**
  * A sound is about to play on the client: sounds the server sends, and the ones the client plays itself (your own
- * steps, clicks, music). Cancel it to keep it quiet. Posted on the render thread.
+ * steps, clicks, music). Cancel it to keep it quiet. Posted on the render thread, only while something listens.
  *
  * <pre>{@code
  * @Subscribe
@@ -19,11 +19,13 @@ import org.jetbrains.annotations.ApiStatus;
 public final class PlaySoundEvent extends Cancellable {
 	private final SoundInstance sound;
 
+	/** Core's; only Myriad makes these. */
 	@ApiStatus.Internal
 	public PlaySoundEvent(SoundInstance sound) {
 		this.sound = sound;
 	}
 
+	/** The sound about to play: its position, volume, pitch and category. */
 	public SoundInstance sound() {
 		return sound;
 	}

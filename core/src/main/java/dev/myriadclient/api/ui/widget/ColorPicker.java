@@ -1,9 +1,9 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.Bezier;
-import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.setting.SettingColor;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.Bezier;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.util.ColorUtil;
 
 import java.util.Arrays;
@@ -11,8 +11,10 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * Inline HSB colour picker: saturation/brightness square, hue and alpha bars, mode
- * buttons (static / rainbow / theme accent) and a hex field. Collapsed it is a swatch.
+ * Inline HSB colour picker: saturation/brightness square, hue and alpha bars, a row of theme colours, mode buttons
+ * (static / rainbow) and a hex field. Collapsed it is a swatch with the colour's hex or role; click it (or Enter) to
+ * open it. Picking a theme colour makes the value follow the theme ({@link SettingColor#role}); editing the colour by
+ * hand makes it static again. h/l step through the theme colours.
  */
 public class ColorPicker extends Widget {
 	private static final float SQUARE = 64, BAR = 7;
@@ -26,6 +28,10 @@ public class ColorPicker extends Widget {
 	private float[] hsb;
 	private int alpha;
 
+	/**
+	 * @param getter the colour, read every frame
+	 * @param setter called with each new colour as it's dragged, picked or typed
+	 */
 	public ColorPicker(Supplier<SettingColor> getter, Consumer<SettingColor> setter) {
 		this.getter = getter;
 		this.setter = setter;

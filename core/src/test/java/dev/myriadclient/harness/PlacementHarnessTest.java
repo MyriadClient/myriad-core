@@ -4,16 +4,16 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.util.MathUtil;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.Vec3;
-import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -63,7 +63,7 @@ class PlacementHarnessTest {
 			assertTrue(two.indexOf("UseItemOn") >= 0 && (two.indexOf("MovePlayer") < 0 || two.indexOf("UseItemOn") < two.indexOf("MovePlayer")), two.toString());
 			// The look the turn sent is on the clicked face.
 			float[] look = h.looks().getFirst();
-			BlockHitResult hit = h.sent(ServerboundUseItemOnPacket.class).getFirst().getHitResult();
+			BlockHitResult hit = h.sent(ServerboundUseItemOnPacket.class).getFirst().hitResult();
 			Vec3 eyes = h.player.getEyePosition();
 			assertTrue(new AABB(hit.getBlockPos()).clip(eyes, eyes.add(MathUtil.direction(look[0], look[1]).scale(6))).isPresent(), "the turn didn't face the click");
 		}
@@ -79,7 +79,7 @@ class PlacementHarnessTest {
 			assertEquals(Placement.Check.PENDING, a[1].check());
 			assertFalse(a[0].result().isDone());
 			// Refused: the server puts air back, then acknowledges.
-			int seq = h.sent(ServerboundUseItemOnPacket.class).getFirst().getSequence();
+			int seq = h.sent(ServerboundUseItemOnPacket.class).getFirst().sequence();
 			h.serverBlock(TARGET, Blocks.AIR.defaultBlockState()).ack(seq);
 			assertEquals(Boolean.FALSE, a[0].result().getNow(null));
 			assertTrue(h.level.getBlockState(TARGET).isAir(), "the client kept its guess");
@@ -170,7 +170,7 @@ class PlacementHarnessTest {
 			// The server's answer to the swap and placement, late, after the swap back: the block in the off hand again.
 			h.player.setItemSlot(net.minecraft.world.entity.EquipmentSlot.OFFHAND, new ItemStack(Items.OBSIDIAN, 15));
 			h.player.getInventory().setItem(3, new ItemStack(Items.TOTEM_OF_UNDYING));
-			assertTrue(Myriad.inventory().shown(dev.myriadclient.api.util.Slots.OFF_HAND).is(Items.TOTEM_OF_UNDYING), "the late update shows");
+			assertTrue(Myriad.inventory().shown(dev.myriadclient.api.item.Slots.OFF_HAND).is(Items.TOTEM_OF_UNDYING), "the late update shows");
 			server.sendAll(h.player);
 			h.ticks(3);
 			assertTrue(h.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING), "the off hand has " + h.player.getOffhandItem());

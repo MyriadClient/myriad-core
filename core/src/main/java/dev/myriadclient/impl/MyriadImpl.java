@@ -1,6 +1,7 @@
 package dev.myriadclient.impl;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.dev.DevSteps;
 import dev.myriadclient.api.MyriadApi;
 import dev.myriadclient.api.addon.Addon;
 import dev.myriadclient.api.addon.AddonSettings;
@@ -12,22 +13,20 @@ import dev.myriadclient.api.event.events.ScreenOpenEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.hook.Hooks;
 import dev.myriadclient.api.hook.Service;
+import dev.myriadclient.api.input.KeyAction;
 import dev.myriadclient.api.job.Jobs;
 import dev.myriadclient.api.map.Maps;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
-import dev.myriadclient.api.module.ModuleRegistry;
 import dev.myriadclient.api.module.Tag;
-import dev.myriadclient.api.registry.Registry;
+import dev.myriadclient.api.network.PacketChannel;
 import dev.myriadclient.api.render.Rendering;
-import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Building;
 import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Enemies;
 import dev.myriadclient.api.service.Friends;
 import dev.myriadclient.api.service.Inventory;
-import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.service.Notifications;
 import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.service.Placement;
@@ -38,12 +37,11 @@ import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.share.ConfigShares;
 import dev.myriadclient.api.ui.BarWidget;
-import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Theme;
+import dev.myriadclient.api.ui.Ui;
 import dev.myriadclient.api.ui.layout.Layout;
-import dev.myriadclient.api.util.PacketChannel;
 import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.impl.addon.AddonLoader;
 import dev.myriadclient.impl.command.CommandManager;
@@ -55,9 +53,11 @@ import dev.myriadclient.impl.event.MyriadEventBus;
 import dev.myriadclient.impl.hook.HookManager;
 import dev.myriadclient.impl.keybind.KeybindManager;
 import dev.myriadclient.impl.map.MapsImpl;
+import dev.myriadclient.impl.module.ModuleRegistryImpl;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
 import dev.myriadclient.impl.network.CorePacketChannel;
+import dev.myriadclient.impl.registry.RegistryImpl;
 import dev.myriadclient.impl.render.CoreRendering;
 import dev.myriadclient.impl.render.RenderRouter;
 import dev.myriadclient.impl.service.AntiCheatTracker;
@@ -67,9 +67,9 @@ import dev.myriadclient.impl.service.ContainerTabs;
 import dev.myriadclient.impl.service.ContainerTracker;
 import dev.myriadclient.impl.service.EnemiesManager;
 import dev.myriadclient.impl.service.FriendsManager;
+import dev.myriadclient.impl.service.HandClicks;
 import dev.myriadclient.impl.service.InventoryManager;
 import dev.myriadclient.impl.service.JobRunner;
-import dev.myriadclient.impl.service.HandClicks;
 import dev.myriadclient.impl.service.MenuSync;
 import dev.myriadclient.impl.service.NotificationManager;
 import dev.myriadclient.impl.service.PacketLimiter;
@@ -89,10 +89,12 @@ import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.TextColor;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Optional;
 
 /** Owns every Myriad service and drives startup. */
 public final class MyriadImpl implements MyriadApi {
@@ -101,17 +103,17 @@ public final class MyriadImpl implements MyriadApi {
 
 	private final Minecraft mc = Minecraft.getInstance();
 	private final MyriadEventBus events = new MyriadEventBus();
-	private final Registry<Tag> tags = new Registry<>("tag");
+	private final RegistryImpl<Tag> tags = new RegistryImpl<>("tag");
 	/** The tags under their old name, for addons built before 0.7.0; kept in step with {@link #tags}. */
-	private final Registry<ModuleGroup> groups = new Registry<>("group");
-	private final ModuleRegistry modules = new ModuleRegistry();
-	private final Registry<Command> commands = new Registry<>("command");
-	private final Registry<PanelType> panels = new Registry<>("panel");
-	private final Registry<Layout> layouts = new Registry<>("layout");
-	private final Registry<Theme> themes = new Registry<>("theme");
-	private final Registry<BarWidget> barWidgets = new Registry<>("bar widget");
-	private final Registry<KeyAction> keyActions = new Registry<>("key action");
-	private final Registry<AddonSettings> addonSettings = new Registry<>("addon settings");
+	private final RegistryImpl<ModuleGroup> groups = new RegistryImpl<>("group");
+	private final ModuleRegistryImpl modules = new ModuleRegistryImpl();
+	private final RegistryImpl<Command> commands = new RegistryImpl<>("command");
+	private final RegistryImpl<PanelType> panels = new RegistryImpl<>("panel");
+	private final RegistryImpl<Layout> layouts = new RegistryImpl<>("layout");
+	private final RegistryImpl<Theme> themes = new RegistryImpl<>("theme");
+	private final RegistryImpl<BarWidget> barWidgets = new RegistryImpl<>("bar widget");
+	private final RegistryImpl<KeyAction> keyActions = new RegistryImpl<>("key action");
+	private final RegistryImpl<AddonSettings> addonSettings = new RegistryImpl<>("addon settings");
 	private final ConfigManagerImpl config = new ConfigManagerImpl(this);
 	/** Null in the test harness, which never starts. */
 	private SafeMode safeMode;
@@ -217,7 +219,7 @@ public final class MyriadImpl implements MyriadApi {
 		LOG.warn("The game crashed {} times in a row within a minute of starting: every module is off (on before: {})", safeMode.earlyCrashes(),
 			names.isEmpty() ? "none" : names);
 		if (were.isEmpty()) return;
-		// Over the first title screen (opened before it, the desktop would be replaced by it, cancelling the dialog), or
+		// Over the first title screen (opened before it, the UI would be replaced by it, cancelling the dialog), or
 		// the first world when quick play skips the title screen.
 		boolean[] shown = {false};
 		Runnable show = () -> {
@@ -286,7 +288,7 @@ public final class MyriadImpl implements MyriadApi {
 		events.subscribe(commandManager);
 	}
 
-	public List<Registry<?>> registries() {
+	public List<RegistryImpl<?>> registries() {
 		return List.of(tags, groups, modules, commands, panels, layouts, themes, barWidgets, keyActions, addonSettings, controls.presets(), hooks.registry(), antiCheat.profiles());
 	}
 
@@ -322,47 +324,47 @@ public final class MyriadImpl implements MyriadApi {
 
 
 	@Override
-	public Registry<Tag> tags() {
+	public RegistryImpl<Tag> tags() {
 		return tags;
 	}
 
 	@Override
-	public Registry<ModuleGroup> groups() {
+	public RegistryImpl<ModuleGroup> groups() {
 		return groups;
 	}
 
 	@Override
-	public ModuleRegistry modules() {
+	public ModuleRegistryImpl modules() {
 		return modules;
 	}
 
 	@Override
-	public Registry<Command> commands() {
+	public RegistryImpl<Command> commands() {
 		return commands;
 	}
 
 	@Override
-	public Registry<PanelType> panels() {
+	public RegistryImpl<PanelType> panels() {
 		return panels;
 	}
 
 	@Override
-	public Registry<Layout> layouts() {
+	public RegistryImpl<Layout> layouts() {
 		return layouts;
 	}
 
 	@Override
-	public Registry<Theme> themes() {
+	public RegistryImpl<Theme> themes() {
 		return themes;
 	}
 
 	@Override
-	public Registry<BarWidget> barWidgets() {
+	public RegistryImpl<BarWidget> barWidgets() {
 		return barWidgets;
 	}
 
 	@Override
-	public Registry<KeyAction> keyActions() {
+	public RegistryImpl<KeyAction> keyActions() {
 		return keyActions;
 	}
 
@@ -498,7 +500,7 @@ public final class MyriadImpl implements MyriadApi {
 	}
 
 	@Override
-	public AntiCheat antiCheat() {
+	public AntiCheatTracker antiCheat() {
 		return antiCheat;
 	}
 
@@ -506,7 +508,7 @@ public final class MyriadImpl implements MyriadApi {
 		return serverStats;
 	}
 
-	public Registry<AddonSettings> addonSettings() {
+	public RegistryImpl<AddonSettings> addonSettings() {
 		return addonSettings;
 	}
 
@@ -543,7 +545,7 @@ public final class MyriadImpl implements MyriadApi {
 	}
 
 	@Override
-	public Desktop ui() {
+	public Ui ui() {
 		return windowManager;
 	}
 
@@ -561,6 +563,18 @@ public final class MyriadImpl implements MyriadApi {
 	public void runCommand(String line) {
 		String prefix = config.commandPrefix();
 		commandManager.execute(line.startsWith(prefix) ? line.substring(prefix.length()) : line);
+	}
+
+	private @Nullable DevSteps devSteps;
+
+	@Override
+	public Optional<DevSteps> devSteps() {
+		return Optional.ofNullable(devSteps);
+	}
+
+	/** Set once at start in dev runs (see MyriadClient). */
+	public void devSteps(DevSteps steps) {
+		devSteps = steps;
 	}
 
 	@Override

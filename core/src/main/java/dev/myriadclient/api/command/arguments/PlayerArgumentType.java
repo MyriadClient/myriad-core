@@ -12,8 +12,12 @@ import net.minecraft.commands.SharedSuggestionProvider;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-/** A player name; suggests names from the tab list. Any name is accepted. */
+/**
+ * A player name, as one word; suggests names from the tab list. Any name is accepted, online or not; read it back with
+ * {@code ctx.getArgument(name, String.class)}.
+ */
 public class PlayerArgumentType implements ArgumentType<String> {
+	/** A player name argument. */
 	public static PlayerArgumentType player() {
 		return new PlayerArgumentType();
 	}

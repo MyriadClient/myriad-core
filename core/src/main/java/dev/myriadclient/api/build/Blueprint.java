@@ -28,7 +28,10 @@ import java.util.function.Supplier;
  * }</pre>
  */
 public interface Blueprint {
-	/** Calls {@code action} for every position within {@code range} of {@code center}. */
+	/**
+	 * Calls {@code action} for every position whose block centre is within {@code range} blocks of {@code center}, in
+	 * no particular order. The planner calls it every tick, so it should cost only what's in range.
+	 */
 	void near(Vec3 center, double range, BiConsumer<BlockPos, Target> action);
 
 	/** Calls {@code action} for every position. Can be slow for large blueprints; the planner calls it rarely. */
@@ -58,7 +61,8 @@ public interface Blueprint {
 
 	/**
 	 * Fixed positions, stored the way chunks store blocks (a 16x16x16 array for each section that has any), so asking
-	 * for what's in reach visits only the positions in reach, a lookup each, however many there are in all.
+	 * for what's in reach visits only the positions in reach, a lookup each, however many there are in all. The map is
+	 * read once, here: changing it afterwards changes nothing.
 	 */
 	static Blueprint of(Map<BlockPos, Target> positions) {
 		final class Section {

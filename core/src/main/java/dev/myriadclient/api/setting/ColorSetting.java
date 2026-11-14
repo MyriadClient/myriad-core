@@ -4,12 +4,23 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import dev.myriadclient.api.util.ColorUtil;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.function.Supplier;
 
+/**
+ * A colour: a fixed ARGB colour, a rainbow, or a theme role that follows the theme (see {@link SettingColor}), with a
+ * picker. Typed as a hex colour ({@code #AARRGGBB}, or {@code #RRGGBB} for opaque), {@code rainbow}, or a role's name
+ * ({@code accent}, {@code red}). Draw with {@link #argb()} each frame rather than caching it, so roles and rainbows stay
+ * current.
+ */
 public class ColorSetting extends Setting<SettingColor> {
-	public ColorSetting(String name, String description, SettingColor defaultValue, Supplier<Boolean> visible) {
+	/**
+	 * A setting as its {@link Builder} makes it; get one from {@link SettingGroup#color(String)}, or call this from a
+	 * subclass.
+	 */
+	public ColorSetting(String name, @Nullable String description, SettingColor defaultValue, @Nullable Supplier<Boolean> visible) {
 		super(name, description, defaultValue, visible);
 	}
 
@@ -70,11 +81,17 @@ public class ColorSetting extends Setting<SettingColor> {
 		return get().mode() == SettingColor.Mode.STATIC ? ColorUtil.toHex(get().color()) : get().mode().name().toLowerCase();
 	}
 
+	/** Builds a {@link ColorSetting}; opaque white by default. Prefer a theme role for the default. */
 	public static class Builder extends Setting.Builder<ColorSetting.Builder, SettingColor, ColorSetting> {
+		/**
+		 * A builder for a setting called {@code name}; prefer {@link SettingGroup#color(String)}, which adds it to the
+		 * group.
+		 */
 		public Builder(String name) {
 			super(name, SettingColor.of(0xFFFFFFFF));
 		}
 
+		/** A fixed ARGB colour as the default ({@code 0xFF7FD8AE}). */
 		public ColorSetting.Builder defaultValue(int argb) {
 			return defaultValue(SettingColor.of(argb));
 		}

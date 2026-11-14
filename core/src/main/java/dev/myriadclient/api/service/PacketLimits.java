@@ -1,6 +1,7 @@
 package dev.myriadclient.api.service;
 
 import org.jetbrains.annotations.ApiStatus;
+
 /**
  * A shared budget for packets servers count, so that several modules acting at once (or one module on a fast loop)
  * don't add up to a kick. Every packet of each kind is counted as it's sent, by vanilla or by any feature, and
@@ -14,13 +15,20 @@ import org.jetbrains.annotations.ApiStatus;
  * }</pre>
  *
  * Wrap actions that must happen whatever the cost, like putting a totem in your off hand, in {@link #urgent}.
+ * <p>
+ * Counting and checking are lock-free and safe from any thread; packets are counted on whichever thread sends them.
  */
 @ApiStatus.NonExtendable
 public interface PacketLimits {
+	/**
+	 * The kinds of packet the budget counts, each with its own limit and window: inventory clicks 72 in any 5 seconds,
+	 * interactions the anti-cheat profile's {@link AntiCheat.Profile#interactionBudget()} in 300 ms (9, after Paper's
+	 * spam limiter), block actions 80 in half a second.
+	 */
 	enum Kind {
 		/** Block digging actions: starting, stopping and aborting a break, swapping hands, dropping the held item. */
 		BLOCK_ACTION,
-		/** Using items, using them on blocks (placing) and on entities, and attacking. */
+		/** Using items and using them on blocks (placing); not attacks or using items on entities, which Paper doesn't limit. */
 		INTERACT,
 		/** Clicks in inventories and containers. */
 		INVENTORY
@@ -39,7 +47,7 @@ public interface PacketLimits {
 	@ApiStatus.AvailableSince("1.8")
 	void count(Kind kind, int packets);
 
-	/** Packets of {@code kind} sent in the current window. */
+	/** Packets of {@code kind} sent in the last {@link #windowMs(Kind)} milliseconds (the window slides). */
 	int used(Kind kind);
 
 	/** How many packets of {@code kind} the budget allows per window ({@link #windowMs(Kind)}). */
@@ -50,7 +58,8 @@ public interface PacketLimits {
 
 	/**
 	 * Runs {@code action} with the budget ignored, for actions that matter more than the risk. Packets still count, and
-	 * inventory clicks still stop short of a disconnect (see {@link #canSend}).
+	 * inventory clicks still stop short of a disconnect (see {@link #canSend}). Call it on the render thread, where
+	 * Myriad's services act: the budget is ignored for every check made while {@code action} runs.
 	 */
 	void urgent(Runnable action);
 }

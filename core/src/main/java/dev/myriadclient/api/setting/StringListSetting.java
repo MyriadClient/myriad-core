@@ -2,14 +2,22 @@ package dev.myriadclient.api.setting;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-/** An ordered list of strings. Command input: {@code add <v>}, {@code remove <v>}, {@code clear}. */
+/**
+ * An ordered list of strings, without duplicates when added one at a time. Command input: {@code add <v>},
+ * {@code remove <v>}, {@code clear}, or a comma-separated list to replace the lot.
+ */
 public class StringListSetting extends Setting<List<String>> {
-	public StringListSetting(String name, String description, List<String> defaultValue, Supplier<Boolean> visible) {
+	/**
+	 * A setting as its {@link Builder} makes it; get one from {@link SettingGroup#stringList(String)}, or call this
+	 * from a subclass.
+	 */
+	public StringListSetting(String name, @Nullable String description, List<String> defaultValue, @Nullable Supplier<Boolean> visible) {
 		super(name, description, defaultValue, visible);
 	}
 
@@ -18,6 +26,7 @@ public class StringListSetting extends Setting<List<String>> {
 		return v == null ? new ArrayList<>() : new ArrayList<>(v);
 	}
 
+	/** Adds {@code s} to the end of the player's list, unless it's already there. */
 	public void add(String s) {
 		if (!value.contains(s)) {
 			value.add(s);
@@ -25,6 +34,7 @@ public class StringListSetting extends Setting<List<String>> {
 		}
 	}
 
+	/** Removes {@code s} from the player's list, if it's there. */
 	public void remove(String s) {
 		if (value.remove(s)) changed();
 	}
@@ -77,11 +87,17 @@ public class StringListSetting extends Setting<List<String>> {
 		return String.join(", ", get());
 	}
 
+	/** Builds a {@link StringListSetting}; empty by default. */
 	public static class Builder extends Setting.Builder<StringListSetting.Builder, List<String>, StringListSetting> {
+		/**
+		 * A builder for a setting called {@code name}; prefer {@link SettingGroup#stringList(String)}, which adds it to
+		 * the group.
+		 */
 		public Builder(String name) {
 			super(name, List.of());
 		}
 
+		/** The entries it starts with, in order. */
 		public StringListSetting.Builder defaultValue(String... values) {
 			return defaultValue(List.of(values));
 		}

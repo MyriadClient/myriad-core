@@ -8,7 +8,18 @@ import org.jetbrains.annotations.ApiStatus;
 
 import java.util.function.Predicate;
 
-/** Builds collapsible group sections with a row per setting. */
+/**
+ * Builds settings editors from {@link Settings}: a row per setting, made by
+ * {@link dev.myriadclient.api.ui.Ui#settingWidgets()} (settings of a class with no registered editor are left out).
+ * Rows read and write the settings live, and hide themselves while their setting isn't visible.
+ *
+ * <pre>{@code
+ * @Override
+ * protected void build(VBox content) {
+ *     content.add(SettingsView.build(settings));
+ * }
+ * }</pre>
+ */
 public final class SettingsView {
 	private SettingsView() {
 	}
@@ -17,7 +28,7 @@ public final class SettingsView {
 	 * Every setting of {@code settings} that {@code shown} lets through, as plain rows with no group sections: for
 	 * something with a few settings of its own, already under a heading.
 	 */
-	@ApiStatus.AvailableSince("1.4.0")
+	@ApiStatus.AvailableSince("1.4")
 	public static VBox rows(Settings settings, Predicate<Setting<?>> shown) {
 		VBox box = new VBox(3, 0);
 		for (Setting<?> s : settings.all()) {
@@ -28,6 +39,11 @@ public final class SettingsView {
 		return box;
 	}
 
+	/**
+	 * Every group of {@code settings} as a foldable section (named after the group, folded as the group remembers, its
+	 * count of visible settings shown while folded) holding a row per setting. Empty groups are left out, and a section
+	 * hides while none of its settings is visible.
+	 */
 	public static VBox build(Settings settings) {
 		VBox box = new VBox(4, 0);
 		for (SettingGroup group : settings.groups()) {

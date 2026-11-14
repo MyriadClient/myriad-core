@@ -2,7 +2,7 @@ package dev.myriadclient.api.elytra;
 
 import dev.myriadclient.api.job.Why;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.function.Consumer;
 
@@ -33,6 +33,7 @@ import java.util.function.Consumer;
  */
 @ApiStatus.NonExtendable
 public interface Flight {
+	/** What the flight is doing, from {@link #state()}. */
 	enum State {
 		/** Taking off, opening the elytra, or climbing to a height it should be at (or over ground ahead). */
 		CLIMBING,
@@ -80,6 +81,7 @@ public interface Flight {
 	/** Comes down to land where it is; {@link #onLanded} hears null once down. */
 	void land();
 
+	/** What it's doing now; {@link State#DOWN} before {@link #start()} and after {@link #stop()}. */
 	State state();
 
 	/** Why it's {@link State#STUCK}, {@link State#LANDING} or {@link State#DOWN}; null otherwise, or when it was asked to land. */

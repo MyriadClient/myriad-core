@@ -5,7 +5,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WindowResizeEvent;
-import dev.myriadclient.api.render.ThemeFont;
+import dev.myriadclient.api.ui.draw.ThemeFont;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.mixin.FontSetAccessor;
 import dev.myriadclient.impl.render.font.ThemeGlyphs;

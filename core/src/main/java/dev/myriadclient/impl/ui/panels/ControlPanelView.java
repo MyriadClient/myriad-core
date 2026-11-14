@@ -2,6 +2,7 @@ package dev.myriadclient.impl.ui.panels;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.TitleControl;
@@ -9,13 +10,12 @@ import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.Window;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.Collapsible;
-import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.EmptyState;
+import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.SettingsView;
 import dev.myriadclient.api.ui.widget.Spacer;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.util.FuzzyMatch;
-import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.control.ControlPanelImpl;
 

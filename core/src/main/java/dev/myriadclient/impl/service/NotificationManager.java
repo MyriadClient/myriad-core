@@ -1,11 +1,12 @@
 package dev.myriadclient.impl.service;
 
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.event.events.NotificationEvent;
 import dev.myriadclient.api.service.Notifications;
 import dev.myriadclient.api.ui.ThemeSettings;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.util.ColorUtil;
 
@@ -33,9 +34,14 @@ public final class NotificationManager implements Notifications {
 	}
 
 	@Override
-	public synchronized void send(String title, String message, Level level, long durationMs, String key) {
-		title = withoutCoords(title);
-		message = withoutCoords(message);
+	public void send(String title, String message, Level level, long durationMs, String key) {
+		String shownTitle = withoutCoords(title), shownMessage = withoutCoords(message);
+		show(shownTitle, shownMessage, level, durationMs, key);
+		// Outside the lock: a listener may send a notification of its own.
+		if (Myriad.isReady()) Myriad.events().post(new NotificationEvent(shownTitle, shownMessage, level));
+	}
+
+	private synchronized void show(String title, String message, Level level, long durationMs, String key) {
 		long now = System.currentTimeMillis();
 		for (Entry e : entries) {
 			// The same key replaces; the same notification again while it's still up is counted on it ("×3"), not stacked.

@@ -5,8 +5,8 @@ import dev.myriadclient.api.addon.AddonContext;
 import dev.myriadclient.api.addon.AddonState;
 import dev.myriadclient.api.addon.MyriadAddon;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.registry.Registry;
 import dev.myriadclient.impl.MyriadImpl;
+import dev.myriadclient.impl.registry.RegistryImpl;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.entrypoint.EntrypointContainer;
 import org.jetbrains.annotations.Nullable;
@@ -149,6 +149,6 @@ public final class AddonLoader {
 		for (Module m : myriad.modules().ownedBy(id)) {
 			m.setEnabled(false);
 		}
-		for (Registry<?> r : myriad.registries()) r.unregisterAll(id);
+		for (RegistryImpl<?> r : myriad.registries()) r.unregisterAll(id);
 	}
 }

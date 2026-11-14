@@ -5,7 +5,6 @@ import dev.myriadclient.api.event.events.CameraEvent;
 import dev.myriadclient.impl.render.HandHighlights;
 import dev.myriadclient.impl.render.HighlightRenderer;
 import dev.myriadclient.impl.render.WorldRenderQueue;
-import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.Projection;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
@@ -19,6 +18,11 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * Rendering and highlights: the frame's order is decided in {@link GameRenderer}, so highlights are composited here
+ * between the finished level and the hand, the level projection and view bob are noted for highlights and tracers,
+ * and the hand can be hidden (CameraEvent.Hand) or highlighted (HandHighlights).
+ */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
 	@Shadow
@@ -26,7 +30,7 @@ public abstract class GameRendererMixin {
 	private Projection hudProjection;
 
 	@Inject(method = "renderItemInHand", at = @At("HEAD"), cancellable = true)
-	private void myriad$hand(CameraRenderState cameraState, float deltaPartialTick, Matrix4fc modelViewMatrix, CallbackInfo ci) {
+	private void myriad$hand(CallbackInfo ci) {
 		if (Myriad.isReady() && Myriad.events().hasListeners(CameraEvent.Hand.class)
 			&& Myriad.events().post(new CameraEvent.Hand()).isCancelled()) {
 			ci.cancel();
@@ -38,7 +42,7 @@ public abstract class GameRendererMixin {
 
 	/** The hand is drawn: its highlights go over it, before screen effects and the GUI. */
 	@Inject(method = "renderItemInHand", at = @At("RETURN"))
-	private void myriad$handHighlights(CameraRenderState cameraState, float deltaPartialTick, Matrix4fc modelViewMatrix, CallbackInfo ci) {
+	private void myriad$handHighlights(CallbackInfo ci) {
 		HandHighlights.INSTANCE.endHand();
 	}
 
@@ -50,15 +54,15 @@ public abstract class GameRendererMixin {
 	}
 
 	/** The level projection as drawn (view bobbing and nausea included), so highlights know where things land on screen. */
-	@ModifyArg(method = "renderLevel", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ProjectionMatrixBuffer;getBuffer(Lorg/joml/Matrix4f;)Lcom/mojang/blaze3d/buffers/GpuBufferSlice;"))
+	@ModifyArg(method = "renderLevel", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/ProjectionMatrixBuffer;getBuffer(Lorg/joml/Matrix4f;)Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;"))
 	private Matrix4f myriad$levelProjection(Matrix4f projection) {
 		HighlightRenderer.INSTANCE.projection(projection);
 		return projection;
 	}
 
 	/** Highlights go over the finished world and under the hand, while the world's depth is still there. */
-	@Inject(method = "renderLevel", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/LevelRenderer;render(Lcom/mojang/blaze3d/resource/GraphicsResourceAllocator;Lnet/minecraft/client/DeltaTracker;ZLnet/minecraft/client/renderer/state/level/CameraRenderState;Lorg/joml/Matrix4fc;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;Lorg/joml/Vector4f;Z)V", shift = At.Shift.AFTER))
-	private void myriad$highlights(DeltaTracker deltaTracker, CallbackInfo ci) {
+	@Inject(method = "renderLevel", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/LevelRenderer;render(Lcom/mojang/blaze3d/resource/GraphicsResourceAllocator;ZLnet/minecraft/client/renderer/state/level/CameraRenderState;Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Lorg/joml/Vector4f;ZZ)V", shift = At.Shift.AFTER))
+	private void myriad$highlights(CallbackInfo ci) {
 		HighlightRenderer.INSTANCE.composite();
 	}
 }

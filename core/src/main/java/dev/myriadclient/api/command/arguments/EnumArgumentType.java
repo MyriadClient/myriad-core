@@ -14,7 +14,10 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 
-/** One of an enum's constants, typed in any case ({@code fast}, {@code FAST}); suggests them in lower case. */
+/**
+ * One of an enum's constants, typed in any case and with or without underscores ({@code fast_place},
+ * {@code FastPlace}, {@code fast-place}); suggests them in lower case.
+ */
 public class EnumArgumentType<E extends Enum<E>> implements ArgumentType<E> {
 	private final Class<E> type;
 	private final DynamicCommandExceptionType unknown;
@@ -25,10 +28,15 @@ public class EnumArgumentType<E extends Enum<E>> implements ArgumentType<E> {
 		this.unknown = new DynamicCommandExceptionType(v -> Component.literal("'" + v + "' isn't one of: " + options));
 	}
 
+	/** An argument for one of {@code type}'s constants. */
 	public static <E extends Enum<E>> EnumArgumentType<E> of(Class<E> type) {
 		return new EnumArgumentType<>(type);
 	}
 
+	/**
+	 * The constant parsed for the argument {@code name}. Brigadier throws {@link IllegalArgumentException} if the
+	 * command has no such argument.
+	 */
 	public static <E extends Enum<E>> E get(CommandContext<?> ctx, String name, Class<E> type) {
 		return ctx.getArgument(name, type);
 	}

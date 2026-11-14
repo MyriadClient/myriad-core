@@ -7,7 +7,7 @@ import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.Tag;
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.registry.MyriadId;
 
 import java.util.ArrayList;
 import java.util.List;

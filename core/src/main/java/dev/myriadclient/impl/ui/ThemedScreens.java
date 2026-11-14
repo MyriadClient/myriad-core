@@ -1,17 +1,19 @@
 package dev.myriadclient.impl.ui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.ThemeSettings;
+import dev.myriadclient.api.ui.draw.FontFamily;
+import dev.myriadclient.api.ui.draw.ThemeFont;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.mixin.AbstractContainerScreenAccessor;
 import dev.myriadclient.impl.render.UiRenderer;
 import dev.myriadclient.impl.service.ContainerTabs;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractFurnaceScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractMountInventoryScreen;
@@ -20,8 +22,8 @@ import net.minecraft.client.gui.screens.inventory.BrewingStandScreen;
 import net.minecraft.client.gui.screens.inventory.CartographyTableScreen;
 import net.minecraft.client.gui.screens.inventory.ContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CrafterScreen;
-import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.DispenserScreen;
 import net.minecraft.client.gui.screens.inventory.EnchantmentScreen;
 import net.minecraft.client.gui.screens.inventory.GrindstoneScreen;
@@ -33,8 +35,11 @@ import net.minecraft.client.gui.screens.inventory.MerchantScreen;
 import net.minecraft.client.gui.screens.inventory.ShulkerBoxScreen;
 import net.minecraft.client.gui.screens.inventory.SmithingScreen;
 import net.minecraft.client.gui.screens.inventory.StonecutterScreen;
+import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
 import net.minecraft.world.inventory.Slot;
 import org.jetbrains.annotations.Nullable;
@@ -300,7 +305,7 @@ public final class ThemedScreens {
 	}
 
 	/**
-	 * A tooltip's box around its contents at {@code x, y} ({@code w} by {@code h}), as the desktop draws its tooltips: the
+	 * A tooltip's box around its contents at {@code x, y} ({@code w} by {@code h}), as the UI draws its tooltips: the
 	 * window's backdrop, background (a little more solid), smaller rounding and border. Minecraft's text and pictures go
 	 * on it as before. False to let Minecraft draw it.
 	 */
@@ -504,6 +509,29 @@ public final class ThemedScreens {
 	}
 
 	/**
+	 * A themed screen's title or inventory label, in the theme's font but drawn by Minecraft, so the title's own colours,
+	 * a server's font for it, and characters only Minecraft's font has (drawn as Minecraft draws them, some as nothing)
+	 * come out as they would without the theme. The title is centred over the window and trimmed to fit it.
+	 */
+	public static void label(AbstractContainerScreen<?> screen, GuiGraphicsExtractor ctx, Font font, Component text, int x, int y) {
+		AbstractContainerScreenAccessor s = (AbstractContainerScreenAccessor) screen;
+		ThemeSettings theme = theme();
+		if (text == s.myriad$playerInventoryTitle()) {
+			ctx.text(font, ThemeFont.styled(text), x, y, theme.textDim.argb(), false);
+			return;
+		}
+		int width = s.myriad$imageWidth(), max = width - 16;
+		Component styled = ThemeFont.styled(text);
+		FormattedCharSequence line = styled.getVisualOrderText();
+		if (font.width(line) > max) {
+			Component ellipsis = ThemeFont.styled(Component.literal("\u2026"));
+			FormattedText cut = font.substrByWidth(styled, max - font.width(ellipsis));
+			line = Language.getInstance().getVisualOrder(FormattedText.composite(cut, ellipsis));
+		}
+		ctx.text(font, line, (width - font.width(line)) / 2, y, theme.text.argb(), false);
+	}
+
+	/**
 	 * Text a themed screen draws in Minecraft's dark label grey or its enchanting table's browns and yellow, in the
 	 * theme's text colours instead (they're unreadable on a dark window). Others are left as they are.
 	 */
@@ -544,7 +572,7 @@ public final class ThemedScreens {
 		return Myriad.isReady() && theme().themedScreens.get() ? 5 + (int) BAR_GAP : 0;
 	}
 
-	/** A window as the desktop draws one: shadow (if {@code shadow} and the theme has one), backdrop, surface and border. */
+	/** A window as the UI draws one: shadow (if {@code shadow} and the theme has one), backdrop, surface and border. */
 	static void window(UiRenderer c, ThemeSettings t, float x, float y, float w, float h, boolean shadow) {
 		float r = Math.min(t.rounding.get(), h / 2), b = t.borderSize.get();
 		if (shadow && t.shadow.get()) c.shadow(x, y, w, h, r, t.shadowRange.get(), t.shadowColor.argb());
@@ -584,14 +612,12 @@ public final class ThemedScreens {
 
 		boolean inventory = screen instanceof InventoryScreen;
 		float size = c.defaultFontSize();
-		String title = c.ellipsize(FontFamily.SANS_BOLD, size, screen.getTitle().getString(), w - 16);
-		// Titles centred over the window, but your inventory's (Crafting), over its grid beside your figure.
-		float tx = !inventory ? x + (w - c.textWidth(FontFamily.SANS_BOLD, size, title)) / 2 : x + s.myriad$titleLabelX();
-		// A villager's, a beacon's and the creative inventory's screens draw their own labels (a villager's level beside its
-		// name, a beacon's powers, the tab's name), only recoloured (textColor).
-		boolean ownLabels = screen instanceof MerchantScreen || screen instanceof BeaconScreen || screen instanceof CreativeModeInventoryScreen;
-		if (!ownLabels) c.text(FontFamily.SANS_BOLD, size, title, tx, y + s.myriad$titleLabelY(), theme.text.argb());
-		if (!inventory && !ownLabels) c.text(s.myriad$playerInventoryTitle().getString(), x + s.myriad$inventoryLabelX(), y + s.myriad$inventoryLabelY(), theme.textDim.argb());
+		// Your inventory's title (Crafting), over its grid beside your figure. Other screens' labels are Minecraft's, put
+		// in the theme as they're drawn (label); a villager's, a beacon's and the creative inventory's only recoloured (textColor).
+		if (inventory) {
+			String title = c.ellipsize(FontFamily.SANS_BOLD, size, screen.getTitle().getString(), w - 16);
+			c.text(FontFamily.SANS_BOLD, size, title, x + s.myriad$titleLabelX(), y + s.myriad$titleLabelY(), theme.text.argb());
+		}
 
 		float cr = cellRounding(theme);
 		int edge = ColorUtil.withAlpha(theme.inactiveBorder.argb(), 0x50);
@@ -691,8 +717,8 @@ public final class ThemedScreens {
 		for (int i = 0; i < tabRects.size() && i < tabList.size(); i++) {
 			float[] rr = tabRects.get(i);
 			if (mx < rr[0] || mx >= rr[0] + rr[2] || my < rr[1] || my >= rr[1] + rr[3]) continue;
-			if (button == 0) MyriadImpl.get().containerTabs().switchTo(tabList.get(i));
-			else if (button == 1) MyriadImpl.get().containerTabs().rightClicked(tabList.get(i));
+			if (button == InputConstants.MOUSE_BUTTON_LEFT) MyriadImpl.get().containerTabs().switchTo(tabList.get(i));
+			else if (button == InputConstants.MOUSE_BUTTON_RIGHT) MyriadImpl.get().containerTabs().rightClicked(tabList.get(i));
 			return true;
 		}
 		return false;

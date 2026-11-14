@@ -20,10 +20,10 @@ import dev.myriadclient.api.hook.Replacement;
 import dev.myriadclient.api.hook.ReplacementBuilder;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.registry.Identified;
-import dev.myriadclient.api.registry.Registry;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.service.AntiCheat;
-import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.event.MyriadEventBus;
+import dev.myriadclient.impl.registry.RegistryImpl;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,7 +87,7 @@ public final class HookManager implements Hooks {
 	private static final Comparator<ContributionImpl> BY_SPECIFICITY =
 		Comparator.<ContributionImpl>comparingInt(c -> -c.match().specificity()).thenComparingInt(c -> c.order);
 
-	private final Registry<ContributionImpl> contributions = new Registry<>("hook contribution");
+	private final RegistryImpl<ContributionImpl> contributions = new RegistryImpl<>("hook contribution");
 	private final MyriadEventBus events;
 	private final Set<MyriadId> disabled = ConcurrentHashMap.newKeySet();
 	private final Map<Service<?>, Object> cores = new HashMap<>();
@@ -124,7 +124,7 @@ public final class HookManager implements Hooks {
 		});
 	}
 
-	public Registry<ContributionImpl> registry() {
+	public RegistryImpl<ContributionImpl> registry() {
 		return contributions;
 	}
 

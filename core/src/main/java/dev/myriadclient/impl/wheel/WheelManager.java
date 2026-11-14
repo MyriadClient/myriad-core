@@ -4,7 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.util.Keybind;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.impl.ui.WheelScreen;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.Nullable;

@@ -1,6 +1,6 @@
 package dev.myriadclient.impl.network;
 
-import dev.myriadclient.api.util.PacketChannel;
+import dev.myriadclient.api.network.PacketChannel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 

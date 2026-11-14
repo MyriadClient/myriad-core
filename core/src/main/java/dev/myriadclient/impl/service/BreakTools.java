@@ -1,9 +1,9 @@
 package dev.myriadclient.impl.service;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.player.Mining;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Inventory;
-import dev.myriadclient.api.util.Mining;
 import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;

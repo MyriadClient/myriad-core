@@ -27,7 +27,7 @@
 		"fabric-api": "*"
 	},
 	"breaks": {
-		"myriad-essentials": "<0.3.0",
+		"myriad-essentials": "<2.0.0",
 		"myriad-boze": "<0.3.0",
 		"myriad-omarchy": "<0.2.0"
 	}

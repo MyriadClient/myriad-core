@@ -1,15 +1,15 @@
 package dev.myriadclient.api.event.events;
 
 import dev.myriadclient.api.render.HighlightStyle;
-import dev.myriadclient.api.render.RenderMode;
 import dev.myriadclient.api.render.RenderLook;
+import dev.myriadclient.api.render.RenderMode;
 import dev.myriadclient.api.render.ShapeBuilder;
 import dev.myriadclient.api.ui.widget.Preview;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A {@link Preview} is being drawn (a Preview window, or one in a module's settings): show on its subject what your
@@ -37,10 +37,12 @@ public final class PreviewEvent {
 	private boolean boxed;
 	private int color;
 
+	/** Core's; only Myriad makes these. */
 	@ApiStatus.Internal
 	public PreviewEvent() {
 	}
 
+	/** Core's: readies the shared instance for the next preview. */
 	@ApiStatus.Internal
 	public PreviewEvent reset(Preview.Subject subject, @Nullable Entity entity, @Nullable BlockState block, AABB box, ShapeBuilder shapes) {
 		this.subject = subject;
@@ -54,6 +56,7 @@ public final class PreviewEvent {
 		return this;
 	}
 
+	/** What the preview shows: an entity, a block, or your first-person hands. */
 	public Preview.Subject subject() {
 		return subject;
 	}
@@ -88,7 +91,7 @@ public final class PreviewEvent {
 
 	/**
 	 * Shows the subject (an entity or a block) in {@code look}, in the mode that's on: a shader highlight around its
-	 * shape, or a box around {@link #box()}. The first call wins.
+	 * shape, or a box around {@link #box()}. The first call wins; a colour with zero alpha does nothing.
 	 */
 	public void render(RenderLook look, int color) {
 		if (shown() || (color >>> 24) == 0) return;
@@ -112,6 +115,7 @@ public final class PreviewEvent {
 		return boxed ? null : style;
 	}
 
+	/** Core's: the colour {@link #render} was given. */
 	@ApiStatus.Internal
 	public int color() {
 		return color;

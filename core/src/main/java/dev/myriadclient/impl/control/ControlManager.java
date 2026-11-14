@@ -8,8 +8,8 @@ import dev.myriadclient.api.control.ControlPanel;
 import dev.myriadclient.api.control.ControlPreset;
 import dev.myriadclient.api.control.Controls;
 import dev.myriadclient.api.registry.Identified;
-import dev.myriadclient.api.registry.Registry;
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.registry.MyriadId;
+import dev.myriadclient.impl.registry.RegistryImpl;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.LinkedHashSet;
@@ -27,7 +27,7 @@ public final class ControlManager implements Controls {
 	public record Preset(MyriadId id, ControlPreset preset) implements Identified {
 	}
 
-	private final Registry<Preset> presets = new Registry<>("control panel");
+	private final RegistryImpl<Preset> presets = new RegistryImpl<>("control panel");
 	private final List<ControlPanelImpl> panels = new CopyOnWriteArrayList<>();
 	/** Presets deleted in this profile. */
 	private final Set<MyriadId> deleted = new LinkedHashSet<>();
@@ -46,7 +46,7 @@ public final class ControlManager implements Controls {
 		});
 	}
 
-	public Registry<Preset> presets() {
+	public RegistryImpl<Preset> presets() {
 		return presets;
 	}
 

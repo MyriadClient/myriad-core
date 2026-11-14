@@ -14,6 +14,8 @@ import org.jetbrains.annotations.ApiStatus;
  * <p>
  * Anything that doesn't change every frame is cheaper as a {@code WorldMesh} or {@code ChunkCache}, which are drawn
  * without a handler.
+ * <p>
+ * Posted on the render thread once a frame, in a world, only while something listens. Not cancellable.
  */
 public final class Render3DEvent {
 	private final PoseStack matrices;
@@ -21,6 +23,7 @@ public final class Render3DEvent {
 	private final float tickDelta;
 	private final SubmitNodeCollector submits;
 
+	/** Core's; only Myriad makes these. */
 	@ApiStatus.Internal
 	public Render3DEvent(PoseStack matrices, Camera camera, float tickDelta, SubmitNodeCollector submits) {
 		this.matrices = matrices;
@@ -29,14 +32,17 @@ public final class Render3DEvent {
 		this.submits = submits;
 	}
 
+	/** The world's pose stack for this frame. */
 	public PoseStack matrices() {
 		return matrices;
 	}
 
+	/** The camera the frame is drawn from. */
 	public Camera camera() {
 		return camera;
 	}
 
+	/** The partial tick the frame is drawn at (the same the entities were drawn with). */
 	public float tickDelta() {
 		return tickDelta;
 	}
@@ -46,6 +52,7 @@ public final class Render3DEvent {
 		return Renderer3D.shapes();
 	}
 
+	/** Vanilla's collector for this frame: submit models and other vanilla renderables to it, relative to the camera. */
 	public SubmitNodeCollector submits() {
 		return submits;
 	}

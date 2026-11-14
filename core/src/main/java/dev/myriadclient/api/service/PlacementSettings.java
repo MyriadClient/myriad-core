@@ -1,9 +1,9 @@
 package dev.myriadclient.api.service;
 
+import dev.myriadclient.api.player.Reach;
 import dev.myriadclient.api.setting.BoolSetting;
 import dev.myriadclient.api.setting.DoubleSetting;
 import dev.myriadclient.api.setting.SettingGroup;
-import dev.myriadclient.api.util.Reach;
 
 /**
  * The standard placement settings, Range and Air Place, so every module that places blocks offers the same ones. The
@@ -16,7 +16,9 @@ import dev.myriadclient.api.util.Reach;
  * }</pre>
  */
 public final class PlacementSettings {
+	/** Range: how far away blocks are placed, in blocks (1-6, 4.5 by default); see {@link #reach()}. */
 	public final DoubleSetting range;
+	/** Air Place: place with nothing next to the block, through the off hand (off by default). */
 	public final BoolSetting airPlace;
 
 	/** Adds Range and Air Place to {@code group}. */

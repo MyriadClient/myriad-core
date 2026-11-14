@@ -1,6 +1,6 @@
 package dev.myriadclient.api.job;
 
-import dev.myriadclient.api.util.RenderThread;
+import dev.myriadclient.api.annotation.RenderThread;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
@@ -13,34 +13,56 @@ import java.util.Optional;
  * its jobs ({@link Why#OWNER_OFF}); leaving the world cancels every job ({@link Why#LEFT_WORLD}). Render thread only.
  * <p>
  * A root job that fails with no one listening to its {@link Job#result()} (and no {@code onFailed} or {@code recover}
- * on its step) shows a notice with the owner's name and the reason.
+ * on its step) shows a notice with the owner's name and the reason. The Jobs window lists every job, and the player
+ * can pause or cancel any of them there.
+ *
+ * <pre>{@code
+ * // In a module: restock when low, one job at a time; turning the module off cancels it.
+ * if (!Myriad.jobs().isBusy(this) && lowOnFood()) {
+ *     Myriad.jobs().start(this, restock).result().thenAccept(moved -> info("Took " + moved));
+ * }
+ *
+ * // A one-off delay without a Step of your own.
+ * Myriad.jobs().later(this, 20, () -> info("A second later"));
+ * }</pre>
  */
 @ApiStatus.NonExtendable
 @RenderThread
 public interface Jobs {
-	/** Starts {@code step} for {@code owner}. It first ticks at the coming job tick (this tick's, if that hasn't run yet). */
+	/**
+	 * Starts {@code step} for {@code owner} (your module, usually: see {@link #cancel}) as a new root job and returns it.
+	 * It first ticks at the coming job tick (this tick's, if that hasn't run yet; the next one when started from a step
+	 * already running). One step value can be started any number of times, at once too.
+	 */
 	<T> Job<T> start(Object owner, Step<T> step);
 
 	/** Every active root job, oldest first. */
 	List<Job<?>> running();
 
-	/** {@code owner}'s active root jobs. */
+	/** {@code owner}'s active root jobs, oldest first (compared by identity). */
 	List<Job<?>> of(Object owner);
 
-	/** An active job by id, root or not. */
+	/** An active job by id, root or not; empty once it has ended. */
 	Optional<Job<?>> byId(int id);
 
-	/** Cancels every job {@code owner} started. */
+	/**
+	 * Cancels every root job {@code owner} started, with everything under it: with {@link Why#OWNER_OFF} when the owner is
+	 * a module that's off, else {@link Why#CANCELLED}. Core calls this when a module turns off.
+	 */
 	void cancel(Object owner);
 
-	/** Whether {@code owner} has an active job. */
+	/** Whether {@code owner} has an active root job. */
 	boolean isBusy(Object owner);
 
-	// The conveniences Tasks had, on the job runner: at the start of a tick (Tasks ran at its end).
-
-	/** Runs {@code action} after {@code ticks} ticks. */
+	/**
+	 * Runs {@code action} after {@code ticks} ticks (0 or less: at the coming job tick), at the start of that tick, as a
+	 * job of {@code owner}'s; cancel the job to call it off.
+	 */
 	Job<Void> later(Object owner, int ticks, Runnable action);
 
-	/** Runs {@code action} now and then every {@code intervalTicks} ticks (at least 1) until cancelled. */
+	/**
+	 * Runs {@code action} at the coming job tick and then every {@code intervalTicks} ticks (at least 1), as a job of
+	 * {@code owner}'s that never ends on its own: cancel it (or turn the owning module off) to stop it.
+	 */
 	Job<Void> every(Object owner, int intervalTicks, Runnable action);
 }

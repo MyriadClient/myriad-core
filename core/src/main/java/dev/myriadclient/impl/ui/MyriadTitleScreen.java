@@ -1,10 +1,11 @@
 package dev.myriadclient.impl.ui;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.realmsclient.RealmsMainScreen;
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.ui.ThemeSettings;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.impl.render.UiRenderer;
 import dev.myriadclient.impl.render.title.TitleScene;
@@ -12,7 +13,6 @@ import dev.myriadclient.impl.render.title.TitleSceneRenderer;
 import dev.myriadclient.impl.render.title.TitleSceneState;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.SharedConstants;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.CreditsAndAttributionScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -26,7 +26,7 @@ import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvents;
-import org.lwjgl.glfw.GLFW;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +35,7 @@ import java.util.function.BooleanSupplier;
 /**
  * Myriad's title screen, in place of Minecraft's while Theme → Preferences → Themed Screens is on: the logo over the
  * theme's own colours, the usual destinations as a column of buttons (plus the Myriad menu), and the keys that open the
- * menu. Drawn by Myriad's renderer, so it follows the theme like the desktop does. Arrow keys and Enter work too.
+ * menu. Drawn by Myriad's renderer, so it follows the theme like the UI does. Arrow keys and Enter work too.
  * <p>
  * With the width for it, the column moves left, frosted, over a {@link TitleScene} you stand in:
  * your head follows the mouse, a drag turns you and you settle back, a click makes you swing.
@@ -68,7 +68,7 @@ public final class MyriadTitleScreen extends Screen {
 	private TitleScene scene = TitleScene.pick();
 	private final long opened = System.nanoTime();
 	private long lastFrame = opened;
-	private float turn, tiltX, tiltY, headYaw, headPitch;
+	private float tiltX, tiltY, headYaw, headPitch;
 	/** Turned by hand, in degrees; settles back to 0 once let go. */
 	private float dragTurn;
 	private boolean dragging, dragged;
@@ -91,7 +91,7 @@ public final class MyriadTitleScreen extends Screen {
 		add("Myriad", wm::open, () -> true, true);
 		Screen mods = modMenu();
 		if (mods != null) add("Mods", () -> minecraft.gui.setScreen(modMenu()), () -> true, false);
-		add("Options", () -> minecraft.gui.setScreen(new OptionsScreen(this, minecraft.options, false)), () -> true, false);
+		add("Options", () -> minecraft.gui.setScreen(new OptionsScreen(this, minecraft.options)), () -> true, false);
 		add("Quit Game", minecraft::stop, () -> true, false);
 	}
 
@@ -322,7 +322,7 @@ public final class MyriadTitleScreen extends Screen {
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-		if (event.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
+		if (event.button() != InputConstants.MOUSE_BUTTON_LEFT) return false;
 		if (credits) {
 			minecraft.gui.setScreen(new CreditsAndAttributionScreen(this));
 			return true;
@@ -362,9 +362,9 @@ public final class MyriadTitleScreen extends Screen {
 	public boolean keyPressed(KeyEvent event) {
 		int n = entries.size();
 		switch (event.key()) {
-			case GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_TAB -> selected = selected < 0 ? 0 : (selected + 1) % n;
-			case GLFW.GLFW_KEY_UP -> selected = selected <= 0 ? n - 1 : selected - 1;
-			case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> {
+			case InputConstants.KEY_DOWN, InputConstants.KEY_TAB -> selected = selected < 0 ? 0 : (selected + 1) % n;
+			case InputConstants.KEY_UP -> selected = selected <= 0 ? n - 1 : selected - 1;
+			case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER, InputConstants.KEY_SPACE -> {
 				if (selected >= 0) run(selected);
 			}
 			default -> {

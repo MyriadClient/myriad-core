@@ -1,9 +1,9 @@
 package dev.myriadclient.impl.mixin;
 
-import dev.myriadclient.api.Myriad;
-import dev.myriadclient.impl.MyriadImpl;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import dev.myriadclient.api.Myriad;
+import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.ui.ThemedMenus;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.DisconnectedScreen;
@@ -15,6 +15,11 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * Themed Screens on every vanilla screen through their common base: the theme's font while a screen lays out and
+ * draws, the theme's background in place of the panorama and blur, and the disconnect screen's window. It also runs
+ * Myriad's commands from clicked chat text, which vanilla only does for "/" ones.
+ */
 @Mixin(Screen.class)
 public abstract class ScreenMixin {
 	/** Themed Screens with Theme Font: the screen's text in the theme's font while it lays itself out and draws (see FontMixin). */

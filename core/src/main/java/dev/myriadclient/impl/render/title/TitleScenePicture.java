@@ -4,16 +4,17 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.blaze3d.ProjectionType;
 import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import com.mojang.renderpearl.api.textures.FilterMode;
+import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.myriadclient.impl.cosmetic.MyriadCape;
 import dev.myriadclient.impl.render.UiRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.gui.render.pip.PictureInPictureRenderer;
+import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.renderer.Projection;
 import net.minecraft.client.renderer.ProjectionMatrixBuffer;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -28,14 +29,16 @@ import net.minecraft.client.renderer.state.gui.BlitRenderState;
 import net.minecraft.client.renderer.state.gui.GuiRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.util.ARGB;
-import net.minecraft.world.entity.HumanoidArm;
-import net.minecraft.world.item.ItemDisplayContext;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.PlayerModelPart;
 import net.minecraft.world.entity.player.PlayerSkin;
+import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.CardinalLighting;
 import net.minecraft.world.phys.shapes.Shapes;
 import org.jetbrains.annotations.Nullable;
@@ -84,7 +87,7 @@ final class TitleScenePicture extends PictureInPictureRenderer<TitleSceneState> 
 
 	@Override
 	protected void renderToTexture(TitleSceneState state, PoseStack unused, SubmitNodeCollector collector) {
-		target = RenderSystem.outputColorTextureOverride;
+		target = textureView;
 		// Frosted buttons over it show this rather than the screen, which holds nothing yet.
 		UiRenderer ui = UiRenderer.peek();
 		if (ui != null && target != null && state.frosted()) ui.blurFrom(target, width, height);
@@ -111,9 +114,9 @@ final class TitleScenePicture extends PictureInPictureRenderer<TitleSceneState> 
 
 		PoseStack pose = new PoseStack();
 		pose.translate(0, 0, -distance);
-		pose.mulPose(Axis.ZP.rotationDegrees(state.roll()));
-		pose.mulPose(Axis.XP.rotationDegrees(state.pitch()));
-		pose.mulPose(Axis.YP.rotationDegrees(state.yaw()));
+		pose.rotateDegrees(Axis.ZP, state.roll());
+		pose.rotateDegrees(Axis.XP, state.pitch());
+		pose.rotateDegrees(Axis.YP, state.yaw());
 		pose.translate(0, -state.lookAt(), 0);
 
 		if (blockResolver == null) blockResolver = new BlockModelResolver(mc.getModelManager());
@@ -157,8 +160,8 @@ final class TitleScenePicture extends PictureInPictureRenderer<TitleSceneState> 
 		avatar.bodyRot = 0;
 		avatar.yRot = state.headYaw();
 		avatar.xRot = state.headPitch();
-		avatar.attackTime = state.swing();
-		avatar.attackArm = avatar.mainArm;
+		avatar.swingAnimation = state.swing();
+		avatar.currentSwing = new LivingEntity.SwingDescription(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT, SwingAnimation.DEFAULT.duration());
 		avatar.walkAnimationPos = state.walk();
 		avatar.walkAnimationSpeed = state.walkSpeed();
 		// What's in your hand, held as an item is (no entity to ask what its arm's doing with it).

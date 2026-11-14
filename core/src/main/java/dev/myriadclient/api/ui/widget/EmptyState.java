@@ -1,17 +1,28 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
 
-/** Stands in for a list with nothing in it yet: an icon, what's missing, and how it gets filled. */
-@ApiStatus.AvailableSince("1.4.0")
+/**
+ * Stands in for a list with nothing in it yet: an icon, what's missing, and how it gets filled, centred and wrapped.
+ *
+ * <pre>{@code
+ * if (waypoints.isEmpty()) content.add(new EmptyState(Icons.MAP_MARKER, "No waypoints", "Add one with .waypoint add."));
+ * }</pre>
+ */
+@ApiStatus.AvailableSince("1.4")
 public class EmptyState extends Widget {
 	private final String icon, title, body;
 	private List<String> titleLines = List.of(), bodyLines = List.of();
 
+	/**
+	 * @param icon  a large glyph at the top ({@link dev.myriadclient.api.ui.Icons})
+	 * @param title what's missing, in bold
+	 * @param body  how it gets filled, dim; empty for none
+	 */
 	public EmptyState(String icon, String title, String body) {
 		this.icon = icon;
 		this.title = title;

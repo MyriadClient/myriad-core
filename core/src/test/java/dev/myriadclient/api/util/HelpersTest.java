@@ -1,5 +1,7 @@
 package dev.myriadclient.api.util;
 
+import dev.myriadclient.api.item.Slots;
+import dev.myriadclient.api.world.Positions;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;

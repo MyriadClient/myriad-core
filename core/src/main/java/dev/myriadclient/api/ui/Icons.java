@@ -1,5 +1,7 @@
 package dev.myriadclient.api.ui;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -8,11 +10,26 @@ import java.util.Locale;
  * Ready-made icons: glyphs of the icon font the UI draws with (Font Awesome, in the bundled Nerd Font), each with a name
  * and words to find it by. Use the constants anywhere an icon string goes (a module group, a tag, a panel), or let
  * players choose with an {@link dev.myriadclient.api.setting.IconSetting} and its picker.
+ * <p>
+ * Each constant is the glyph itself (a one-character string), named after the icon; {@link #all()} lists them with
+ * their names, sections (Combat, Movement, Render, Player, World, Tools, Signs) and search words, in the order the
+ * constants are declared. Draw one in any {@link dev.myriadclient.api.ui.draw.FontFamily}: missing glyphs fall back
+ * to the bundled Nerd Font.
  */
 public final class Icons {
-	/** One icon: its glyph, a name, the section it's listed under, and more words to find it by. */
+	/**
+	 * One icon: its glyph, a name, the section it's listed under, and more words to find it by.
+	 *
+	 * @param glyph    the character to draw
+	 * @param name     what players see it called
+	 * @param section  the group it's listed under
+	 * @param keywords more words to find it by, space-separated
+	 */
 	public record Icon(String glyph, String name, String section, String keywords) {
-		/** Whether every word of {@code query} starts a word of the name, section or keywords. */
+		/**
+		 * Whether every word of {@code query} starts a word of the name, section or keywords, ignoring case
+		 * (a hyphen in the icon's words counts as a space). A blank query matches.
+		 */
 		public boolean matches(String query) {
 			String hay = " " + (name + " " + section + " " + keywords).toLowerCase(Locale.ROOT).replace('-', ' ');
 			for (String w : query.toLowerCase(Locale.ROOT).trim().split("\\s+")) if (!w.isEmpty() && !hay.contains(" " + w)) return false;
@@ -236,19 +253,19 @@ public final class Icons {
 		return glyph;
 	}
 
-	/** Every icon, by section. */
+	/** Every icon, by section, as a new unmodifiable list. */
 	public static List<Icon> all() {
 		return List.copyOf(ALL);
 	}
 
-	/** The icons matching {@code query} ({@link Icon#matches}); all of them for a blank one. */
-	public static List<Icon> search(String query) {
+	/** The icons matching {@code query} ({@link Icon#matches}); all of them for a blank or null one. */
+	public static List<Icon> search(@Nullable String query) {
 		if (query == null || query.isBlank()) return all();
 		return ALL.stream().filter(i -> i.matches(query)).toList();
 	}
 
-	/** The icon with this glyph, if it's one of these. */
-	public static Icon of(String glyph) {
+	/** The icon with this glyph, or null if it isn't one of these. */
+	public static @Nullable Icon of(String glyph) {
 		for (Icon i : ALL) if (i.glyph().equals(glyph)) return i;
 		return null;
 	}

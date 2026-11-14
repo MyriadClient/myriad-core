@@ -6,7 +6,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Shader highlights outside {@link RenderEvent}: your first-person hand and held items ({@link Hand}), which have no
@@ -24,7 +24,13 @@ import org.jetbrains.annotations.Nullable;
  * }</pre>
  */
 public abstract class HighlightEvent {
-	/** How an entity is highlighted this frame, for {@link #ENTITY_HIGHLIGHT}: a null style for not at all. */
+	/**
+	 * How an entity is highlighted this frame, for {@link #ENTITY_HIGHLIGHT}: a null style for not at all.
+	 *
+	 * @param entity the entity
+	 * @param style  its look, or null to not show it
+	 * @param color  ARGB; 0 alpha also hides it
+	 */
 	public record EntityHighlight(net.minecraft.world.entity.Entity entity, @Nullable HighlightStyle style, int color) {
 	}
 
@@ -62,10 +68,12 @@ public abstract class HighlightEvent {
 		private @Nullable HighlightStyle style;
 		private int color;
 
+		/** Core's; only Myriad makes these. */
 		@ApiStatus.Internal
 		public Hand() {
 		}
 
+		/** Core's: readies the shared instance for the next part. */
 		@ApiStatus.Internal
 		public Hand reset(Part part, InteractionHand hand, HumanoidArm side, ItemStack item, float tickDelta) {
 			this.part = part;
@@ -78,6 +86,7 @@ public abstract class HighlightEvent {
 			return this;
 		}
 
+		/** Whether it's the bare arm or the held item. */
 		public Part part() {
 			return part;
 		}
@@ -102,22 +111,28 @@ public abstract class HighlightEvent {
 			return tickDelta;
 		}
 
-		/** Highlights the part in {@code color} (ARGB). Ignored if already highlighted or {@code color}'s alpha is 0. */
-		public void highlight(HighlightStyle style, int color) {
+		/**
+		 * Highlights the part in {@code style} and {@code color} (ARGB). Ignored if already highlighted, if
+		 * {@code style} is null, or if {@code color}'s alpha is 0.
+		 */
+		public void highlight(@Nullable HighlightStyle style, int color) {
 			if (this.style != null || style == null || (color >>> 24) == 0) return;
 			this.style = style;
 			this.color = color;
 		}
 
+		/** Whether a handler before this one highlighted it. */
 		public boolean isHighlighted() {
 			return style != null;
 		}
 
+		/** Core's: the style a handler asked for, or null. */
 		@ApiStatus.Internal
 		public @Nullable HighlightStyle style() {
 			return style;
 		}
 
+		/** Core's: the colour a handler asked for. */
 		@ApiStatus.Internal
 		public int color() {
 			return color;

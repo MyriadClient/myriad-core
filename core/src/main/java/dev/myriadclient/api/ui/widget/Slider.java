@@ -1,16 +1,19 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.Bezier;
-import dev.myriadclient.api.render.Canvas;
+import com.mojang.blaze3d.platform.InputConstants;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.Bezier;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.util.ColorUtil;
-import net.minecraft.client.Minecraft;
-import org.lwjgl.glfw.GLFW;
+import org.jspecify.annotations.Nullable;
 
 import java.util.function.DoubleConsumer;
 import java.util.function.DoubleSupplier;
 
-/** A horizontal slider. Right-click to type an exact value. */
+/**
+ * A horizontal slider over a range, showing its value at the right. Click or drag to set it (rounded to the slider's
+ * decimals); right-click or Enter to type an exact value; h/l step it. The wheel scrolls the window, not the value.
+ */
 public class Slider extends Widget {
 	private final DoubleSupplier getter;
 	private final DoubleConsumer setter;
@@ -18,8 +21,16 @@ public class Slider extends Widget {
 	private final int decimals;
 	private final Animated fill = new Animated(0);
 	private boolean dragging;
-	private TextField editor;
+	private @Nullable TextField editor;
 
+	/**
+	 * @param getter   the value, read every frame
+	 * @param setter   called with each new value; dragging and stepping keep it within {@code min}-{@code max}, but a
+	 *                 typed value is passed as typed, so clamp it if it matters
+	 * @param min      the left end
+	 * @param max      the right end
+	 * @param decimals how many decimals values are rounded to and shown with (0 for whole numbers)
+	 */
 	public Slider(DoubleSupplier getter, DoubleConsumer setter, double min, double max, int decimals) {
 		this.getter = getter;
 		this.setter = setter;
@@ -93,8 +104,7 @@ public class Slider extends Widget {
 	public boolean adjust(int direction) {
 		double range = max - min;
 		double step = decimals <= 0 ? Math.max(1, Math.round(range / 20)) : range / 20;
-		long window = Minecraft.getInstance().getWindow().handle();
-		if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS) {
+		if (InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)) {
 			step = decimals <= 0 ? 1 : step / 5;
 		}
 		double scale = Math.pow(10, Math.max(0, decimals));
@@ -118,7 +128,7 @@ public class Slider extends Widget {
 	public boolean mouseClicked(float mx, float my, int button) {
 		if (editor != null && editor.mouseClicked(mx, my, button)) return true;
 		if (!isHovered(mx, my)) return false;
-		if (button == 1) {
+		if (button == InputConstants.MOUSE_BUTTON_RIGHT) {
 			openEditor();
 			return true;
 		}

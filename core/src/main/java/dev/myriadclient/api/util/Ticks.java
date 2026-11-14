@@ -12,16 +12,17 @@ public final class Ticks {
 	private Ticks() {
 	}
 
-	/** Ticks since the game started. */
+	/** Client ticks since the game started (20 a second while the game runs at full speed). */
 	public static long current() {
 		return current;
 	}
 
-	/** Ticks since {@code tick}. */
+	/** Client ticks since {@code tick}, a value read from {@link #current()} earlier; negative if it's in the future. */
 	public static long since(long tick) {
 		return current - tick;
 	}
 
+	/** Core's: counts one tick, called once at the start of every client tick. */
 	@ApiStatus.Internal
 	public static void advance() {
 		current++;

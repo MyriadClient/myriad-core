@@ -10,7 +10,8 @@ import java.util.function.BiConsumer;
 
 /**
  * Highlights that fade in when they appear and fade out when they go, keyed by whatever you highlight (block
- * positions, entity ids). Tell it what should show; it hands back each key with its current opacity.
+ * positions, entity ids). Tell it what should show; it hands back each key with its current opacity. Not thread-safe:
+ * use it on the render thread.
  *
  * <pre>{@code
  * private final FadeMap<BlockPos> placing = new FadeMap<>(150, 300);
@@ -32,6 +33,7 @@ public final class FadeMap<K> {
 		long last = System.currentTimeMillis();
 	}
 
+	/** A map whose keys take {@code fadeInMs} to fade in and {@code fadeOutMs} to fade out (at least 1 ms each). */
 	public FadeMap(long fadeInMs, long fadeOutMs) {
 		this.fadeInMs = Math.max(1, fadeInMs);
 		this.fadeOutMs = Math.max(1, fadeOutMs);
@@ -66,11 +68,15 @@ public final class FadeMap<K> {
 		entries.clear();
 	}
 
+	/** Whether nothing is showing or still fading out. */
 	public boolean isEmpty() {
 		return entries.isEmpty();
 	}
 
-	/** Calls {@code draw} with each key and its opacity (0..1), advancing the fades. */
+	/**
+	 * Calls {@code draw} with each key and its opacity (0..1), advancing the fades by the time since the last call and
+	 * dropping keys that have faded out. Call it once a frame; the fades only move when it's called.
+	 */
 	public void forEach(BiConsumer<K, Float> draw) {
 		long now = System.currentTimeMillis();
 		for (Iterator<Map.Entry<K, Entry>> it = entries.entrySet().iterator(); it.hasNext(); ) {

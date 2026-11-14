@@ -1,11 +1,21 @@
 package dev.myriadclient.api.event;
 
-/** Common handler priorities. Any int works; higher runs first. */
+/**
+ * Common handler priorities, for {@link Subscribe#priority()} and
+ * {@link EventBus#listen(Class, int, java.util.function.Consumer)}. Any int works; higher runs first, and handlers of
+ * equal priority run in the order they subscribed. Core's own services handle {@code TickEvent.Pre} far above these
+ * ({@link #BEFORE_ACTIONS}, {@link #JOBS}), so an addon's handlers at the usual levels run after them.
+ */
 public final class Priority {
+	/** Before almost every other handler: to see an event first, or to cancel it before others act on it. */
 	public static final int HIGHEST = 200;
+	/** Before the default. */
 	public static final int HIGH = 100;
+	/** The default. */
 	public static final int NORMAL = 0;
+	/** After the default: to react to what other handlers left. */
 	public static final int LOW = -100;
+	/** After almost every other handler: to have the last word on what an event carries. */
 	public static final int LOWEST = -200;
 	/**
 	 * For a {@code TickEvent.Pre} handler that has to reach the server before any of this tick's actions: core sends

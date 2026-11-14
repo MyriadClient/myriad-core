@@ -16,10 +16,10 @@ class CheckApiOnlyTest {
 			"import dev.myriadclient.api.Myriad;",
 			"import dev.myriadclient.impl.MyriadImpl;",
 			"import dev.myriadclient.essentials.modules.Sprint;",
-			"\tvar ui = dev.myriadclient.impl.ui.DesktopScreen.class;");
+			"\tvar ui = dev.myriadclient.impl.ui.UiScreen.class;");
 		assertEquals(List.of(
 			"Addon.java:4: import dev.myriadclient.impl.MyriadImpl;",
-			"Addon.java:6: var ui = dev.myriadclient.impl.ui.DesktopScreen.class;"), CheckApiOnly.violations("Addon.java", lines));
+			"Addon.java:6: var ui = dev.myriadclient.impl.ui.UiScreen.class;"), CheckApiOnly.violations("Addon.java", lines));
 	}
 
 	@Test

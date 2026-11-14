@@ -3,6 +3,7 @@ package dev.myriadclient.api.render;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.setting.ActionSetting;
 import dev.myriadclient.api.setting.BoolSetting;
 import dev.myriadclient.api.setting.ChoiceSetting;
@@ -12,9 +13,8 @@ import dev.myriadclient.api.setting.SavedSettings;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.util.ColorUtil;
-import dev.myriadclient.api.util.MyriadId;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -39,26 +39,35 @@ import java.util.function.Supplier;
  * options' names.
  */
 public final class RenderSettings implements RenderLook {
+	/** The fill's name ({@link HighlightStyle.Fill#name()}); read it as a fill with {@link #fill()}. */
 	public final ChoiceSetting fill;
+	/** How opaque the fill is, 0..1, times the colour's own alpha. */
 	public final DoubleSetting fillOpacity;
 	/** Opens the Render window at the fill's own options, when the fill picked has any ({@link HighlightStyle.Fill#options}). */
-	@ApiStatus.AvailableSince("1.5.0")
+	@ApiStatus.AvailableSince("1.5")
 	public final ActionSetting fillOptions;
 	/** A patterned fill's size and spacing (the dots', or an addon fill's scale), in pixels. */
 	public final DoubleSetting patternSpacing;
+	/** The size of a patterned fill's marks, in pixels. */
 	public final DoubleSetting patternSize;
+	/** Box mode: the width of a box's edges in pixels, 0 for faces only. */
 	public final DoubleSetting lineWidth;
+	/** Shader mode: the outline's width in pixels, 0 for none. */
 	public final DoubleSetting outlineWidth;
+	/** Shader mode: how far a soft glow reaches beyond the outline, in pixels; 0 for none. */
 	public final DoubleSetting glow;
+	/** Shader mode: whether the colour fades to {@link #gradientColor} towards the bottom. */
 	public final BoolSetting gradient;
+	/** Shader mode: the colour a gradient fades to. */
 	public final ColorSetting gradientColor;
 	/** Null when built with {@link Builder#noThroughWalls()}: the look keeps its default's. */
 	public final @Nullable BoolSetting throughWalls;
 
 	private final boolean defaultThroughWalls;
-	private HighlightStyle style;
+	private @Nullable HighlightStyle style;
 	private long builtFrame = -1;
 
+	/** Starts the options, which {@link Builder#build()} adds to {@code group} (usually the module's "Render" group). */
 	public static Builder builder(SettingGroup group) {
 		return new Builder(group);
 	}
@@ -113,11 +122,13 @@ public final class RenderSettings implements RenderLook {
 		return f != HighlightStyle.Fill.NONE && f != HighlightStyle.Fill.SOLID;
 	}
 
+	/** The Through Walls option, or the defaults' when built without one. */
 	@Override
 	public boolean throughWalls() {
 		return throughWalls == null ? defaultThroughWalls : throughWalls.get();
 	}
 
+	/** The Line Width option. */
 	@Override
 	public float lineWidth() {
 		return lineWidth.getFloat();
@@ -157,7 +168,7 @@ public final class RenderSettings implements RenderLook {
 	/**
 	 * Carries saved options of the looks before this one (a {@code BoxStyle} and a {@code HighlightSettings} in group
 	 * {@code group}, their names after {@code name} if any) over to a {@link RenderSettings} there, for a module's
-	 * {@code migrateSettings}: the fill, shared by both modes now, is the shader one's if it was saved, else the box's
+	 * {@code migrateSettings}: the fill, which both modes share, is the shader one's if it was saved, else the box's
 	 * (its Shape: edges only means no fill, faces only means no edges); Dot Spacing and Dot Size become the pattern's.
 	 */
 	public static void migrate(SavedSettings saved, String group, @Nullable String name) {
@@ -237,6 +248,7 @@ public final class RenderSettings implements RenderLook {
 			return this;
 		}
 
+		/** Adds the options to the group, in the order the Render group shows them, and returns the look they make. */
 		public RenderSettings build() {
 			return new RenderSettings(this);
 		}

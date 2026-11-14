@@ -95,7 +95,7 @@ final class HotbarRestore {
 			left = true;
 			// Every slot whose pair is free in this tick: both slots' last change (and the hotbar slot's last use)
 			// answered, so a slot swapped just now waits (a click on an old view would disagree with the server).
-			if (!inFlight.swappable(s) || !inFlight.settled(m)) continue;
+			if (!inFlight.swappable(s) || !(m < 9 ? inFlight.swappable(m) : inFlight.settled(m))) continue;
 			if (!clicked && !gate.safeToClick() && !(++waited > WAIT_FOR_STILL && gate.prepareClick())) return;
 			if (!clicks.canClick(1)) return;
 			clicks.clickSwap(m, s);
@@ -105,25 +105,33 @@ final class HotbarRestore {
 	}
 
 	/**
-	 * The inventory slot (9-35) to swap with hotbar slot {@code s} next. Best one holding what {@code s} held (or empty,
-	 * for a slot that was empty) whose own item is what's in {@code s} now, so both go home; else the home of what's in
-	 * {@code s} now, while something else that was moved sits there (that one comes into {@code s} and goes home next);
-	 * else any slot holding what {@code s} held. Each swap puts at least one item where it was. -1 if there's none.
+	 * The slot to swap with hotbar slot {@code s} next: an inventory slot (9-35), or another hotbar slot the build used
+	 * that doesn't hold its own item (a build moves what it displaced along the hotbar too). Best one holding what
+	 * {@code s} held (or empty, for a slot that was empty) whose own item is what's in {@code s} now, so both go home;
+	 * else a hotbar slot holding what {@code s} held; else the home of what's in {@code s} now, while something else that
+	 * was moved sits there (that one comes into {@code s} and goes home next); else any inventory slot holding what
+	 * {@code s} held. Each swap puts at least one item where it was. -1 if there's none.
 	 */
 	private int source(int s) {
 		var inv = mc.player.getInventory();
 		Item here = inv.getItem(s).isEmpty() ? null : inv.getItem(s).getItem();
-		int any = -1, home = -1;
-		for (int m = 9; m < 36; m++) {
+		int any = -1, home = -1, along = -1;
+		for (int m = 0; m < 36; m++) {
 			ItemStack there = inv.getItem(m);
+			boolean hotbar = m < 9;
+			if (hotbar && (m == s || !used.get(m) || inventory.lent(m) || same(there, before[m]))) continue;
 			if (same(there, before[s])) {
 				if (before[m] == here) return m;
-				if (any < 0) any = m;
-			} else if (here != null && before[m] == here && !same(there, before[m]) && home < 0) {
+				if (hotbar) {
+					if (before[s] != null && along < 0) along = m;
+				} else if (any < 0) {
+					any = m;
+				}
+			} else if (!hotbar && here != null && before[m] == here && !same(there, before[m]) && home < 0) {
 				home = m;
 			}
 		}
-		return home >= 0 ? home : any;
+		return along >= 0 ? along : home >= 0 ? home : any;
 	}
 
 	/** Whether a build moved something into hotbar slot {@code s} that hasn't gone back yet. */

@@ -6,7 +6,7 @@ import dev.myriadclient.api.setting.RegistryListSetting;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.Settings;
-import dev.myriadclient.api.util.Entities;
+import dev.myriadclient.api.world.Entities;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -16,6 +16,7 @@ import net.minecraft.world.entity.decoration.ItemFrame;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
 import net.minecraft.world.entity.vehicle.VehicleEntity;
+import org.jspecify.annotations.Nullable;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -32,19 +33,32 @@ import java.util.Set;
  * }</pre>
  */
 public final class EntityGroups {
+	/** The groups, each with its setting name and default theme colour. */
 	public enum Group {
+		/** Other players who aren't friends (fake ones included). */
 		PLAYERS("Players", SettingColor.Mode.ACCENT),
+		/** Players on your friends list. */
 		FRIENDS("Friends", SettingColor.Mode.CYAN),
+		/** You, shown only in third person. */
 		SELF("Self", SettingColor.Mode.TEXT),
+		/** Hostile mobs ({@link Entities.Kind#HOSTILE}). */
 		MONSTERS("Monsters", SettingColor.Mode.RED),
+		/** Passive mobs ({@link Entities.Kind#PASSIVE}). */
 		ANIMALS("Animals", SettingColor.Mode.GREEN),
+		/** End crystals. */
 		CRYSTALS("Crystals", SettingColor.Mode.MAGENTA),
+		/** Dropped items. */
 		ITEMS("Items", SettingColor.Mode.YELLOW),
+		/** Thrown ender pearls. */
 		PEARLS("Pearls", SettingColor.Mode.SECONDARY),
+		/** Boats and minecarts. */
 		VEHICLES("Vehicles", SettingColor.Mode.BLUE),
+		/** Armour stands. */
 		ARMOR_STANDS("Armor Stands", SettingColor.Mode.TEXT),
+		/** Item frames, glowing ones included. */
 		ITEM_FRAMES("Item Frames", SettingColor.Mode.TEXT);
 
+		/** The name of its toggle and colour setting ("Players", "Armor Stands"). */
 		public final String title;
 		/** The theme colour the group defaults to. */
 		public final SettingColor.Mode color;
@@ -61,7 +75,10 @@ public final class EntityGroups {
 	private final RegistryListSetting<EntityType<?>> others;
 	private final ColorSetting otherColor;
 
-	/** Adds an "Entities" group of toggles and a "Colors" group to {@code settings}. */
+	/**
+	 * Adds an "Entities" group of toggles (one per {@link Group}, then Invisibles and an Others list) and a "Colors"
+	 * group to {@code settings}, with the groups in {@code onByDefault} switched on.
+	 */
 	public EntityGroups(Settings settings, Set<Group> onByDefault) {
 		SettingGroup sgTargets = settings.group("Entities");
 		SettingGroup sgColors = settings.group("Colors");
@@ -75,8 +92,11 @@ public final class EntityGroups {
 		otherColor = sgColors.color("Others").defaultValue(SettingColor.role(SettingColor.Mode.MAGENTA)).visible(() -> !others.get().isEmpty()).build();
 	}
 
-	/** Which group {@code e} belongs to, or null for none of them. */
-	public static Group of(Entity e) {
+	/**
+	 * Which group {@code e} belongs to, or null for none of them. The local player is {@link Group#SELF}; friends are
+	 * {@link Group#FRIENDS}, not players.
+	 */
+	public static @Nullable Group of(Entity e) {
 		if (e == Minecraft.getInstance().player) return Group.SELF;
 		if (e instanceof EndCrystal) return Group.CRYSTALS;
 		if (e instanceof ItemEntity) return Group.ITEMS;
@@ -92,7 +112,10 @@ public final class EntityGroups {
 		};
 	}
 
-	/** The colour to draw {@code e} in, or 0 when it isn't selected. Yourself only counts in third person. */
+	/**
+	 * The ARGB colour to draw {@code e} in, or 0 when it isn't selected (dead, invisible with Invisibles off, or in no
+	 * group that's on nor the Others list). Yourself only counts in third person.
+	 */
 	public int color(Entity e) {
 		if (!e.isAlive()) return 0;
 		if (e.isInvisible() && !invisibles.get()) return 0;
@@ -102,6 +125,7 @@ public final class EntityGroups {
 		return others.contains(e.getType()) ? otherColor.argb() : 0;
 	}
 
+	/** Whether group {@code g}'s toggle is on. */
 	public boolean isOn(Group g) {
 		return enabled.get(g).get();
 	}

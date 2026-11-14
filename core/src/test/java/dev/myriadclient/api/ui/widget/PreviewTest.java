@@ -1,6 +1,7 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
+import com.mojang.blaze3d.platform.InputConstants;
+import dev.myriadclient.api.ui.draw.Canvas;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Proxy;
@@ -23,20 +24,20 @@ class PreviewTest {
 	@Test
 	void aDragTurnsItAndTipsItNoFurtherThanStraightDown() {
 		Preview p = laidOut();
-		assertTrue(p.mouseClicked(100, 60, 0));
-		p.mouseDragged(110, 60, 0, 10, 0);
+		assertTrue(p.mouseClicked(100, 60, InputConstants.MOUSE_BUTTON_LEFT));
+		p.mouseDragged(110, 60, InputConstants.MOUSE_BUTTON_LEFT, 10, 0);
 		assertEquals(-22, p.yaw(), 1e-4);
-		p.mouseDragged(110, 400, 0, 0, 0);
+		p.mouseDragged(110, 400, InputConstants.MOUSE_BUTTON_LEFT, 0, 0);
 		assertEquals(90, p.pitch(), 1e-4);
-		assertTrue(p.mouseReleased(110, 400, 0));
-		assertFalse(p.mouseDragged(120, 400, 0, 10, 0), "dragged after the release");
+		assertTrue(p.mouseReleased(110, 400, InputConstants.MOUSE_BUTTON_LEFT));
+		assertFalse(p.mouseDragged(120, 400, InputConstants.MOUSE_BUTTON_LEFT, 10, 0), "dragged after the release");
 	}
 
 	@Test
 	void aRightDragMovesIt() {
 		Preview p = laidOut();
-		p.mouseClicked(100, 60, 1);
-		p.mouseDragged(105, 63, 1, 5, 3);
+		p.mouseClicked(100, 60, InputConstants.MOUSE_BUTTON_RIGHT);
+		p.mouseDragged(105, 63, InputConstants.MOUSE_BUTTON_RIGHT, 5, 3);
 		assertEquals(5, p.panX(), 1e-4);
 		assertEquals(3, p.panY(), 1e-4);
 		assertEquals(-30, p.yaw(), 1e-4, "turned by a right-drag");
@@ -46,13 +47,13 @@ class PreviewTest {
 	void aWindowPassingNoMovementStillTurnsAndMovesIt() {
 		// The window passes no movement with a drag: it's measured from where the mouse was.
 		Preview p = laidOut();
-		p.mouseClicked(100, 60, 0);
-		p.mouseDragged(110, 60, 0, 0, 0);
-		p.mouseDragged(120, 60, 0, 0, 0);
+		p.mouseClicked(100, 60, InputConstants.MOUSE_BUTTON_LEFT);
+		p.mouseDragged(110, 60, InputConstants.MOUSE_BUTTON_LEFT, 0, 0);
+		p.mouseDragged(120, 60, InputConstants.MOUSE_BUTTON_LEFT, 0, 0);
 		assertEquals(-14, p.yaw(), 1e-4);
-		p.mouseReleased(120, 60, 0);
-		p.mouseClicked(120, 60, 1);
-		p.mouseDragged(126, 64, 1, 0, 0);
+		p.mouseReleased(120, 60, InputConstants.MOUSE_BUTTON_LEFT);
+		p.mouseClicked(120, 60, InputConstants.MOUSE_BUTTON_RIGHT);
+		p.mouseDragged(126, 64, InputConstants.MOUSE_BUTTON_RIGHT, 0, 0);
 		assertEquals(6, p.panX(), 1e-4);
 		assertEquals(4, p.panY(), 1e-4);
 	}
@@ -77,12 +78,12 @@ class PreviewTest {
 		holder.add(p);
 		WidgetRoot root = new WidgetRoot(holder);
 		root.render(nothing(), 200, 120, 0, 0);
-		assertTrue(root.mouseClicked(100, 60, 0));
-		assertTrue(root.mouseDragged(110, 60, 0, 0, 0));
+		assertTrue(root.mouseClicked(100, 60, InputConstants.MOUSE_BUTTON_LEFT));
+		assertTrue(root.mouseDragged(110, 60, InputConstants.MOUSE_BUTTON_LEFT, 0, 0));
 		assertEquals(-22, p.yaw(), 1e-4);
-		root.mouseReleased(110, 60, 0);
-		root.mouseClicked(100, 60, 1);
-		root.mouseDragged(104, 63, 1, 0, 0);
+		root.mouseReleased(110, 60, InputConstants.MOUSE_BUTTON_LEFT);
+		root.mouseClicked(100, 60, InputConstants.MOUSE_BUTTON_RIGHT);
+		root.mouseDragged(104, 63, InputConstants.MOUSE_BUTTON_RIGHT, 0, 0);
 		assertEquals(4, p.panX(), 1e-4);
 	}
 
@@ -99,12 +100,12 @@ class PreviewTest {
 	@Test
 	void aDoubleClickPutsItBack() {
 		Preview p = laidOut();
-		p.mouseClicked(100, 60, 0);
-		p.mouseDragged(140, 80, 0, 40, 20);
-		p.mouseReleased(140, 80, 0);
+		p.mouseClicked(100, 60, InputConstants.MOUSE_BUTTON_LEFT);
+		p.mouseDragged(140, 80, InputConstants.MOUSE_BUTTON_LEFT, 40, 20);
+		p.mouseReleased(140, 80, InputConstants.MOUSE_BUTTON_LEFT);
 		p.mouseScrolled(100, 60, 3);
-		p.mouseClicked(100, 60, 0);
-		p.mouseReleased(100, 60, 0);
+		p.mouseClicked(100, 60, InputConstants.MOUSE_BUTTON_LEFT);
+		p.mouseReleased(100, 60, InputConstants.MOUSE_BUTTON_LEFT);
 		assertEquals(-30, p.yaw(), 1e-4);
 		assertEquals(10, p.pitch(), 1e-4);
 		assertEquals(1, p.zoom(), 1e-4);

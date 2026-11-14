@@ -28,14 +28,17 @@ public class RegistryArgumentType<T> implements ArgumentType<T> {
 		this.unknown = new DynamicCommandExceptionType(id -> Component.literal("Unknown " + what + " '" + id + "'"));
 	}
 
+	/** An item argument. */
 	public static RegistryArgumentType<Item> item() {
 		return new RegistryArgumentType<>(BuiltInRegistries.ITEM, "item");
 	}
 
+	/** A block argument. */
 	public static RegistryArgumentType<Block> block() {
 		return new RegistryArgumentType<>(BuiltInRegistries.BLOCK, "block");
 	}
 
+	/** An entity type argument. */
 	public static RegistryArgumentType<EntityType<?>> entityType() {
 		return new RegistryArgumentType<>(BuiltInRegistries.ENTITY_TYPE, "entity type");
 	}
@@ -45,18 +48,34 @@ public class RegistryArgumentType<T> implements ArgumentType<T> {
 		return new RegistryArgumentType<>(registry, what);
 	}
 
+	/**
+	 * The entry parsed for the argument {@code name}, as {@code type}. Brigadier throws {@link
+	 * IllegalArgumentException} if the command has no such argument.
+	 */
 	public static <T> T get(CommandContext<?> ctx, String name, Class<T> type) {
 		return ctx.getArgument(name, type);
 	}
 
+	/**
+	 * The item parsed for the argument {@code name}. Brigadier throws {@link IllegalArgumentException} if the command
+	 * has no such argument.
+	 */
 	public static Item getItem(CommandContext<?> ctx, String name) {
 		return ctx.getArgument(name, Item.class);
 	}
 
+	/**
+	 * The block parsed for the argument {@code name}. Brigadier throws {@link IllegalArgumentException} if the command
+	 * has no such argument.
+	 */
 	public static Block getBlock(CommandContext<?> ctx, String name) {
 		return ctx.getArgument(name, Block.class);
 	}
 
+	/**
+	 * The entity type parsed for the argument {@code name}. Brigadier throws {@link IllegalArgumentException} if the
+	 * command has no such argument.
+	 */
 	public static EntityType<?> getEntityType(CommandContext<?> ctx, String name) {
 		return ctx.getArgument(name, EntityType.class);
 	}

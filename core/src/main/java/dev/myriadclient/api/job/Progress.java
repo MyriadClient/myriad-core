@@ -1,6 +1,6 @@
 package dev.myriadclient.api.job;
 
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * How a {@link Step.Run} stands after a tick. Four states, and the difference between the middle two is the point:
@@ -36,15 +36,18 @@ public final class Progress<T> {
 		this.value = value;
 	}
 
+	/** Still working, nothing to report. One shared instance. */
 	@SuppressWarnings("unchecked")
 	public static <T> Progress<T> running() {
 		return (Progress<T>) RUNNING;
 	}
 
+	/** Can't go on right now, for {@code why}, which may clear: the step keeps being ticked. */
 	public static <T> Progress<T> stuck(Why why) {
 		return new Progress<>(Kind.STUCK, java.util.Objects.requireNonNull(why), null);
 	}
 
+	/** Finished, producing {@code value}. */
 	public static <T> Progress<T> done(T value) {
 		return new Progress<>(Kind.DONE, null, value);
 	}
@@ -54,6 +57,7 @@ public final class Progress<T> {
 		return DONE;
 	}
 
+	/** Can't ever finish from here, for {@code why}; it goes up until a {@code recover} or {@code retry} takes it. */
 	public static <T> Progress<T> failed(Why why) {
 		return new Progress<>(Kind.FAILED, java.util.Objects.requireNonNull(why), null);
 	}
@@ -67,18 +71,22 @@ public final class Progress<T> {
 		return this == PAUSED;
 	}
 
+	/** Whether it's {@link #running()}. */
 	public boolean isRunning() {
 		return kind == Kind.RUNNING;
 	}
 
+	/** Whether it's {@link #stuck}. */
 	public boolean isStuck() {
 		return kind == Kind.STUCK;
 	}
 
+	/** Whether it's {@link #done}. */
 	public boolean isDone() {
 		return kind == Kind.DONE;
 	}
 
+	/** Whether it's {@link #failed}. */
 	public boolean isFailed() {
 		return kind == Kind.FAILED;
 	}
@@ -88,12 +96,16 @@ public final class Progress<T> {
 		return kind == Kind.DONE || kind == Kind.FAILED;
 	}
 
-	/** The reason, when stuck or failed. */
+	/** The reason when stuck or failed; null when running or done. */
 	public @Nullable Why why() {
 		return why;
 	}
 
-	/** The result, when done (null for {@code Void}). */
+	/**
+	 * The result, when done (null for {@code Void}).
+	 *
+	 * @throws IllegalStateException if it isn't done
+	 */
 	public T value() {
 		if (kind != Kind.DONE) throw new IllegalStateException("Not done: " + this);
 		return value;

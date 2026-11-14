@@ -35,7 +35,7 @@ class RenderSettingsTest {
 		assertEquals(0.2, r.fillOpacity.get());
 		assertEquals(1.5, r.lineWidth.get());
 		assertTrue(r.throughWalls());
-		assertEquals(2, r.style().outlineWidth());
+		assertEquals(1, r.style().outlineWidth());
 	}
 
 	@Test

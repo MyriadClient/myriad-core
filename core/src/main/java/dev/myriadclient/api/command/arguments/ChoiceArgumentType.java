@@ -29,14 +29,23 @@ public class ChoiceArgumentType implements ArgumentType<String> {
 		this.strict = strict;
 	}
 
+	/**
+	 * One of {@code choices}, matched ignoring case and given back as the list spells it; anything else is an error.
+	 * {@code choices} is asked at each parse and suggestion, so it can change.
+	 */
 	public static ChoiceArgumentType strict(Supplier<? extends Collection<String>> choices) {
 		return new ChoiceArgumentType(choices, true);
 	}
 
+	/** Any name, given back as typed, with {@code choices} as suggestions. */
 	public static ChoiceArgumentType suggesting(Supplier<? extends Collection<String>> choices) {
 		return new ChoiceArgumentType(choices, false);
 	}
 
+	/**
+	 * The name parsed for the argument {@code name}, without quotes. Brigadier throws {@link IllegalArgumentException}
+	 * if the command has no such argument.
+	 */
 	public static String get(CommandContext<?> ctx, String name) {
 		return ctx.getArgument(name, String.class);
 	}

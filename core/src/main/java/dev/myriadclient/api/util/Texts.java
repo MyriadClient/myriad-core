@@ -13,11 +13,13 @@ import net.minecraft.world.item.ItemStackTemplate;
 
 /**
  * Chat text that does something: run a Myriad command on click, fill the chat box, copy a value, show a tooltip.
- * Build messages from these and send them with {@code Myriad.chat(...)} or a command's {@code info(Text)}.
+ * Build messages from these and send them with {@code Myriad.chat(Component)} or a command's {@code info(Component)}.
  *
  * <pre>{@code
- * info(Text.literal("Saved Home ").append(Texts.coords(pos)).append(" ").append(Texts.command("[remove]", "waypoint remove Home")));
+ * info(Component.literal("Saved Home ").append(Texts.command("[remove]", "waypoint remove Home")));
  * }</pre>
+ *
+ * Every method returns a new {@link MutableComponent}, so more text and styles can be appended to it.
  */
 public final class Texts {
 	private Texts() {
@@ -45,13 +47,16 @@ public final class Texts {
 			.withHoverEvent(new HoverEvent.ShowText(Component.literal("Click to copy").withStyle(ChatFormatting.GRAY))));
 	}
 
-	/** "x y z", copied when clicked. */
+	/**
+	 * "x y z" in grey, copied when clicked. Coordinates in chat end up in screenshots and recordings: show them only
+	 * where the player asked for them (a command's own answer), never in automatic messages.
+	 */
 	public static MutableComponent coords(BlockPos pos) {
 		String c = Format.coords(pos);
 		return copy(c, c).withStyle(ChatFormatting.GRAY);
 	}
 
-	/** {@code text} with a tooltip. */
+	/** A copy of {@code text} that shows {@code tooltip} on hover; {@code text} itself isn't changed. */
 	public static MutableComponent hover(Component text, Component tooltip) {
 		return text.copy().withStyle(s -> s.withHoverEvent(new HoverEvent.ShowText(tooltip)));
 	}
@@ -61,7 +66,10 @@ public final class Texts {
 		return stack.getHoverName().copy().withStyle(s -> s.withHoverEvent(new HoverEvent.ShowItem(ItemStackTemplate.fromStack(stack))));
 	}
 
-	/** {@code text} in an ARGB colour (e.g. a theme colour: {@code Myriad.ui().theme().accent.argb()}). */
+	/**
+	 * {@code text} in an ARGB colour (e.g. a theme colour: {@code Myriad.ui().theme().accent.argb()}); chat has no
+	 * transparency, so the alpha is dropped.
+	 */
 	public static MutableComponent colored(String text, int argb) {
 		return Component.literal(text).withStyle(s -> s.withColor(TextColor.fromRgb(argb & 0xFFFFFF)));
 	}

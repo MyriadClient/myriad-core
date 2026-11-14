@@ -1,7 +1,7 @@
 package dev.myriadclient.api.event.events;
 
-import dev.myriadclient.api.render.RenderMode;
 import dev.myriadclient.api.render.RenderLook;
+import dev.myriadclient.api.render.RenderMode;
 import dev.myriadclient.api.world.ChunkCache;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
@@ -33,12 +33,16 @@ public final class RenderEvent {
 	/** Where the requests go: core's renderer. */
 	@ApiStatus.Internal
 	public interface Sink {
+		/** Core's: an {@link RenderEvent#entity} request. */
 		void entity(Entity entity, RenderLook look, int color);
 
+		/** Core's: a {@link RenderEvent#box} request. */
 		void box(AABB box, RenderLook look, int color, boolean below);
 
+		/** Core's: a {@link RenderEvent#block} request. */
 		void block(BlockPos pos, RenderLook look, int color, boolean below);
 
+		/** Core's: a {@link RenderEvent#chunks} request. */
 		void chunks(ChunkCache<?> cache);
 	}
 
@@ -47,10 +51,12 @@ public final class RenderEvent {
 	private RenderMode mode;
 	private float tickDelta;
 
+	/** Core's; only Myriad makes these. */
 	@ApiStatus.Internal
 	public RenderEvent() {
 	}
 
+	/** Core's: readies the shared instance for this frame. */
 	@ApiStatus.Internal
 	public RenderEvent reset(Sink sink, RenderMode mode, float tickDelta) {
 		this.sink = sink;
@@ -77,7 +83,10 @@ public final class RenderEvent {
 		if ((color >>> 24) != 0) sink.entity(entity, look, color);
 	}
 
-	/** Shows {@code box} (world coordinates). Off-screen boxes are skipped, so pass everything in range. */
+	/**
+	 * Shows {@code box} (world coordinates). Off-screen boxes are skipped, so pass everything in range. A colour with
+	 * zero alpha shows nothing, here and in every request.
+	 */
 	public void box(AABB box, RenderLook look, int color) {
 		if ((color >>> 24) != 0) sink.box(box, look, color, false);
 	}
@@ -103,15 +112,17 @@ public final class RenderEvent {
 		return below;
 	}
 
-	/** {@link RenderEvent#below()}. */
+	/** Requests drawn under every other module's shapes; see {@link RenderEvent#below()}. */
 	public final class Below {
 		private Below() {
 		}
 
+		/** {@link RenderEvent#box}, drawn underneath. */
 		public void box(AABB box, RenderLook look, int color) {
 			if ((color >>> 24) != 0) sink.box(box, look, color, true);
 		}
 
+		/** {@link RenderEvent#block}, drawn underneath. */
 		public void block(BlockPos pos, RenderLook look, int color) {
 			if ((color >>> 24) != 0) sink.block(pos, look, color, true);
 		}

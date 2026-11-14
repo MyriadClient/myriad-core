@@ -1,10 +1,10 @@
 package dev.myriadclient.api.job;
 
 import dev.myriadclient.api.build.Build;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.service.Placement;
-import dev.myriadclient.api.util.MyriadId;
 import net.minecraft.core.BlockPos;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.concurrent.CompletionException;
@@ -25,8 +25,14 @@ import java.util.concurrent.ExecutionException;
  * Two reasons are equal when their code, detail and subject are.
  */
 public final class Why {
-	/** A reason everyone can name. */
+	/**
+	 * A reason everyone can name. Two codes with the same id are equal, so an addon's own can be declared wherever it's
+	 * needed.
+	 *
+	 * @param id the code's id: core's are in the {@code myriad} namespace, an addon's in its own
+	 */
 	public record Code(MyriadId id) {
+		/** A code with this id. */
 		public Code {
 			Objects.requireNonNull(id);
 		}
@@ -52,6 +58,7 @@ public final class Why {
 	public static final Code NO_ITEM = core("no_item");
 	/** No hotbar slot to put it in. */
 	public static final Code NO_SLOT = core("no_slot");
+	/** Too far away to click, open or break from where you are. */
 	public static final Code OUT_OF_REACH = core("out_of_reach");
 	/** Only faces you can't see, and the options want seen ones. */
 	public static final Code NOT_VISIBLE = core("not_visible");
@@ -69,15 +76,18 @@ public final class Why {
 	public static final Code NO_ROOM = core("no_room");
 	/** Nothing to open there. */
 	public static final Code NO_CONTAINER = core("no_container");
+	/** No usable elytra to fly with. */
 	public static final Code NO_ELYTRA = core("no_elytra");
 	/** The wrong block is there and it mustn't be broken; the way is blocked. */
 	public static final Code BLOCKED = core("blocked");
+	/** The block can't be broken: bedrock and the like. */
 	public static final Code UNBREAKABLE = core("unbreakable");
 	/** Breaking it would let a fluid in. */
 	public static final Code FLUID = core("fluid");
 	// Failed (won't clear).
 	/** The server put the block back, or didn't answer. */
 	public static final Code SERVER_REFUSED = core("server_refused");
+	/** It took longer than it was allowed to ({@code timeout}, or a step's own limit). */
 	public static final Code TIMEOUT = core("timeout");
 	/** Baritone isn't installed. */
 	public static final Code NO_PATHING = core("no_pathing");
@@ -97,18 +107,23 @@ public final class Why {
 	private final @Nullable Object subject;
 	private final @Nullable Throwable cause;
 
-	private Why(Code code, String detail, @Nullable Object subject, @Nullable Throwable cause) {
+	private Why(Code code, @Nullable String detail, @Nullable Object subject, @Nullable Throwable cause) {
 		this.code = Objects.requireNonNull(code);
 		this.detail = detail == null ? "" : detail;
 		this.subject = subject;
 		this.cause = cause;
 	}
 
-	public static Why of(Code code, String detail) {
+	/** A reason with a detail for people ("cobblestone"); null or empty for none. */
+	public static Why of(Code code, @Nullable String detail) {
 		return new Why(code, detail, null, null);
 	}
 
-	public static Why of(Code code, String detail, @Nullable Object subject) {
+	/**
+	 * A reason about {@code subject} (a {@code BlockPos}, an {@code Item}, an entity), which a remedy can read back with
+	 * {@link #subject(Class)}. The detail is for people; null or empty for none.
+	 */
+	public static Why of(Code code, @Nullable String detail, @Nullable Object subject) {
 		return new Why(code, detail, subject, null);
 	}
 
@@ -173,6 +188,7 @@ public final class Why {
 		return c == null ? null : of(c, "", pos);
 	}
 
+	/** The code, to match on ({@link #is}). */
 	public Code code() {
 		return code;
 	}
@@ -192,10 +208,12 @@ public final class Why {
 		return type.isInstance(subject) ? type.cast(subject) : null;
 	}
 
+	/** What was thrown, for {@link #ERROR} (and reasons read from a failed future); null otherwise. */
 	public @Nullable Throwable cause() {
 		return cause;
 	}
 
+	/** Whether its code is {@code code}. */
 	public boolean is(Code code) {
 		return this.code.equals(code);
 	}
@@ -218,7 +236,7 @@ public final class Why {
 	}
 
 	@Override
-	public boolean equals(Object o) {
+	public boolean equals(@Nullable Object o) {
 		return o instanceof Why w && w.code.equals(code) && w.detail.equals(detail) && Objects.equals(w.subject, subject);
 	}
 

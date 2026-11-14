@@ -5,6 +5,10 @@ import dev.myriadclient.api.service.TickSpeed;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * The game's tick speed as every module asking for one wants it: each owner's multiplier, multiplied together, read
+ * once a tick by the client's tick loop (a mixin). An owner asking for 1 (or nonsense) is forgotten.
+ */
 public final class TickSpeedManager implements TickSpeed {
 	private final Map<Object, Float> multipliers = new LinkedHashMap<>();
 	private volatile float combined = 1f;

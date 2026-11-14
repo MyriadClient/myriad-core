@@ -1,8 +1,8 @@
 package dev.myriadclient.impl.service;
 
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.service.AntiCheat.Profile;
 import dev.myriadclient.api.service.AntiCheat.ServerSeen;
-import dev.myriadclient.api.util.MyriadId;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

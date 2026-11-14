@@ -2,16 +2,15 @@ package dev.myriadclient.impl.keybind;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.service.KeyAction;
+import dev.myriadclient.api.input.KeyAction;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.service.Notifications;
 import dev.myriadclient.api.ui.ThemeSettings.ModKey;
-import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.impl.CoreAddon;
 import dev.myriadclient.impl.ui.WindowManager;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Myriad's keys in Minecraft's own Controls → Key Binds, under "Myriad", so someone who doesn't know how to open the
@@ -30,8 +29,8 @@ public final class VanillaKeys {
 
 	/** At client init, before the options load. */
 	public static void register() {
-		modKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.myriad.mod_key", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_LEFT_ALT, CATEGORY));
-		openMenu = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.myriad.open_menu", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_UNKNOWN, CATEGORY));
+		modKey = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.myriad.mod_key", InputConstants.Type.KEYBOARD, InputConstants.KEY_LALT, CATEGORY));
+		openMenu = KeyMappingHelper.registerKeyMapping(new KeyMapping("key.myriad.open_menu", InputConstants.Type.KEYBOARD, InputConstants.UNKNOWN.getValue(), CATEGORY));
 	}
 
 	/** Every client tick: a few comparisons. */
@@ -76,26 +75,26 @@ public final class VanillaKeys {
 	}
 
 	private static ModKey modKeyOf(InputConstants.Key key) {
-		if (key.getType() != InputConstants.Type.KEYSYM) return null;
+		if (key.getType() != InputConstants.Type.KEYBOARD) return null;
 		return switch (key.getValue()) {
-			case GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_RIGHT_ALT -> ModKey.ALT;
-			case GLFW.GLFW_KEY_LEFT_SUPER, GLFW.GLFW_KEY_RIGHT_SUPER -> ModKey.SUPER;
-			case GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_RIGHT_CONTROL -> ModKey.CTRL;
+			case InputConstants.KEY_LALT, InputConstants.KEY_RALT -> ModKey.ALT;
+			case InputConstants.KEY_LGUI, InputConstants.KEY_RGUI -> ModKey.SUPER;
+			case InputConstants.KEY_LCONTROL, InputConstants.KEY_RCONTROL -> ModKey.CTRL;
 			default -> null;
 		};
 	}
 
 	private static InputConstants.Key keyOf(ModKey mod) {
-		return InputConstants.Type.KEYSYM.getOrCreate(switch (mod) {
-			case ALT -> GLFW.GLFW_KEY_LEFT_ALT;
-			case SUPER -> GLFW.GLFW_KEY_LEFT_SUPER;
-			case CTRL -> GLFW.GLFW_KEY_LEFT_CONTROL;
+		return InputConstants.Type.KEYBOARD.getOrCreate(switch (mod) {
+			case ALT -> InputConstants.KEY_LALT;
+			case SUPER -> InputConstants.KEY_LGUI;
+			case CTRL -> InputConstants.KEY_LCONTROL;
 		});
 	}
 
 	/** Minecraft's key mappings have no modifiers: a bind with some shows its key alone. */
 	private static InputConstants.Key keyOf(Keybind bind) {
 		if (!bind.isSet()) return InputConstants.UNKNOWN;
-		return (bind.mouse() ? InputConstants.Type.MOUSE : InputConstants.Type.KEYSYM).getOrCreate(bind.code());
+		return (bind.mouse() ? InputConstants.Type.MOUSE : InputConstants.Type.KEYBOARD).getOrCreate(bind.code());
 	}
 }

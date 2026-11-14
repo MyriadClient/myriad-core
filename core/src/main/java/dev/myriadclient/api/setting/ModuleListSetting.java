@@ -4,7 +4,8 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.registry.MyriadId;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -14,10 +15,15 @@ import java.util.function.Supplier;
 
 /**
  * A set of modules, e.g. "pause while any of these are on". Stored by id, so modules from addons that aren't
- * installed (or haven't registered yet) are remembered rather than dropped.
+ * installed (or haven't registered yet) are remembered rather than dropped. Typed as a module's name, which toggles it
+ * in the set.
  */
 public class ModuleListSetting extends Setting<Set<MyriadId>> {
-	public ModuleListSetting(String name, String description, Set<MyriadId> defaultValue, Supplier<Boolean> visible) {
+	/**
+	 * A setting as its {@link Builder} makes it; get one from {@link SettingGroup#modules(String)}, or call this from a
+	 * subclass.
+	 */
+	public ModuleListSetting(String name, @Nullable String description, Set<MyriadId> defaultValue, @Nullable Supplier<Boolean> visible) {
 		super(name, description, defaultValue, visible);
 	}
 
@@ -26,16 +32,18 @@ public class ModuleListSetting extends Setting<Set<MyriadId>> {
 		return new LinkedHashSet<>(v);
 	}
 
+	/** Whether {@code module} is chosen (in the set in effect). */
 	public boolean contains(Module module) {
 		return get().contains(module.id());
 	}
 
+	/** Adds {@code module} to the player's set, or removes it if it's there. */
 	public void toggle(Module module) {
 		if (!value.remove(module.id())) value.add(module.id());
 		changed();
 	}
 
-	/** The chosen modules that are installed. */
+	/** The chosen modules that are installed, in the order chosen; a copy. Ids of modules not installed are skipped. */
 	public List<Module> modules() {
 		List<Module> out = new ArrayList<>();
 		for (MyriadId id : get()) Myriad.modules().get(id).ifPresent(out::add);
@@ -70,7 +78,7 @@ public class ModuleListSetting extends Setting<Set<MyriadId>> {
 		set(ids);
 	}
 
-	/** Toggles one module by name. */
+	/** Toggles one module, by name or id; false if there's no such module. */
 	@Override
 	public boolean parse(String input) {
 		var module = Myriad.modules().byName(input.trim());
@@ -89,7 +97,12 @@ public class ModuleListSetting extends Setting<Set<MyriadId>> {
 		return get().size() + " modules";
 	}
 
+	/** Builds a {@link ModuleListSetting}; empty by default. */
 	public static class Builder extends Setting.Builder<ModuleListSetting.Builder, Set<MyriadId>, ModuleListSetting> {
+		/**
+		 * A builder for a setting called {@code name}; prefer {@link SettingGroup#modules(String)}, which adds it to
+		 * the group.
+		 */
 		public Builder(String name) {
 			super(name, new LinkedHashSet<>());
 		}

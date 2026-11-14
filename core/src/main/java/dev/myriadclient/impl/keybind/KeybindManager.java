@@ -1,13 +1,14 @@
 package dev.myriadclient.impl.keybind;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Priority;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.KeyEvent;
 import dev.myriadclient.api.event.events.MouseButtonEvent;
+import dev.myriadclient.api.input.KeyAction;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.service.KeyAction;
-import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.impl.CoreAddon;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.control.ControlPanelImpl;
@@ -17,7 +18,6 @@ import dev.myriadclient.impl.wheel.WheelImpl;
 import dev.myriadclient.impl.wheel.WheelManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.TitleScreen;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,10 +26,10 @@ import java.util.List;
 public final class KeybindManager {
 	@Subscribe(priority = Priority.HIGH)
 	private void onKey(KeyEvent e) {
-		if (e.action() == GLFW.GLFW_REPEAT) return;
+		if (e.action() == InputConstants.REPEAT) return;
 		var screen = Minecraft.getInstance().gui.screen();
 		boolean titleScreen = screen instanceof TitleScreen || screen instanceof MyriadTitleScreen;
-		// The desktop's shortcuts that open it (mod+1..9, mod+S, mod+Space), in game and on the title screen. Consumed,
+		// The UI's shortcuts that open it (mod+1..9, mod+S, mod+Space), in game and on the title screen. Consumed,
 		// so mod+3 doesn't also pick hotbar slot 3 and mod+Space doesn't jump.
 		if (e.isPress() && (!e.inScreen() || titleScreen) && ((WindowManager) Myriad.ui()).globalKey(e.key(), e.modifiers())) {
 			e.cancel();

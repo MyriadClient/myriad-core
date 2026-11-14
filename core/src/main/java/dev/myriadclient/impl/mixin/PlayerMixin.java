@@ -2,12 +2,13 @@ package dev.myriadclient.impl.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.util.ItemInfo;
+import dev.myriadclient.api.item.ItemInfo;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantments;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
 /**
@@ -16,6 +17,7 @@ import org.spongepowered.asm.mixin.injection.At;
  */
 @Mixin(Player.class)
 public abstract class PlayerMixin {
+	@Unique
 	private boolean myriad$holding() {
 		return (Object) this == Minecraft.getInstance().player && Myriad.isReady() && Myriad.inventory().isHolding();
 	}
@@ -32,11 +34,12 @@ public abstract class PlayerMixin {
 	private double myriad$heldEfficiency(double original) {
 		if (!myriad$holding()) return original;
 		Player self = (Player) (Object) this;
-		return original - efficiency(self.getInventory().getSelectedItem()) + efficiency(Myriad.inventory().serverItem());
+		return original - myriad$efficiency(self.getInventory().getSelectedItem()) + myriad$efficiency(Myriad.inventory().serverItem());
 	}
 
 	/** Vanilla's Efficiency bonus: level² + 1. */
-	private static double efficiency(ItemStack stack) {
+	@Unique
+	private static double myriad$efficiency(ItemStack stack) {
 		int level = ItemInfo.enchantmentLevel(stack, Enchantments.EFFICIENCY);
 		return level > 0 ? level * level + 1 : 0;
 	}

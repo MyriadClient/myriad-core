@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/** Switch, create and delete config profiles. A profile holds module state and the desktop layout. */
+/** Switch, create and delete config profiles. A profile holds module state and the UI layout. */
 public final class ProfilesPanel extends WidgetPanel {
 	private String newName = "";
 

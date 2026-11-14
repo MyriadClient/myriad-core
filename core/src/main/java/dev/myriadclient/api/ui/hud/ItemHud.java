@@ -1,16 +1,27 @@
 package dev.myriadclient.api.ui.hud;
 
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.item.ItemInfo;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
-import dev.myriadclient.api.util.ItemInfo;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.ApiStatus;
 
-/** Durability bars, percentages and colours for HUD elements that show items, so they all look alike. */
+/**
+ * Durability bars, percentages and colours for HUD elements that show items, so they all look alike. Positions and
+ * sizes are in the canvas's units; {@code size} is the item icon's square.
+ */
 public final class ItemHud {
+	/** How an element shows an item's durability: an option for players. */
 	public enum Durability {
-		BAR, PERCENT, BOTH, NONE,
+		/** A coloured bar under the item. */
+		BAR,
+		/** The durability left as a percentage over the item. */
+		PERCENT,
+		/** The bar and the percentage. */
+		BOTH,
+		/** Nothing. */
+		NONE,
 		/** The uses left, as a number (1561 for a new diamond pickaxe). */
 		@ApiStatus.AvailableSince("1.1")
 		NUMBER
@@ -19,11 +30,12 @@ public final class ItemHud {
 	private ItemHud() {
 	}
 
+	/** The fraction of durability left, 0-1, and 1 for items that don't wear out ({@link ItemInfo#durabilityFraction}). */
 	public static float percent(ItemStack stack) {
 		return ItemInfo.durabilityFraction(stack);
 	}
 
-	/** Red at 0%, yellow at 50%, green at 100%. */
+	/** Red at 0%, yellow at 50%, green at 100% ({@code percent} as a 0-1 fraction), opaque ARGB. */
 	public static int durabilityColor(float percent) {
 		return percent > 0.5f
 			? ColorUtil.argb(255, (int) (255 * (1 - (percent - 0.5f) * 2)), 255, 0)
@@ -35,7 +47,7 @@ public final class ItemHud {
 		return mode == Durability.PERCENT || mode == Durability.BOTH || mode == Durability.NUMBER;
 	}
 
-	/** Draws the bar under an item at (x, y) of the given size. */
+	/** Draws the bar under an item at (x, y) of the given size: 80% of its width, along its bottom, on a dark track. */
 	public static void bar(Canvas c, ItemStack stack, float x, float y, float size) {
 		float p = percent(stack);
 		float bw = size * 0.8f, bx = x + (size - bw) / 2, by = y + size - 2;
@@ -43,12 +55,18 @@ public final class ItemHud {
 		c.roundRect(bx, by, Math.max(1, bw * p), 1.25f, 0.6f, durabilityColor(p));
 	}
 
-	/** Draws the percentage centred over an item at x, top at y. */
+	/**
+	 * Draws the percentage centred over an item at x, top at y, in the durability colour; {@code textSize} is the font
+	 * size and {@code shadow} adds the HUD drop shadow.
+	 */
 	public static void percentText(Canvas c, ItemStack stack, float x, float y, float size, float textSize, boolean shadow) {
 		text(c, stack, Math.round(percent(stack) * 100) + "%", x, y, size, textSize, shadow);
 	}
 
-	/** Draws the uses left centred over an item at x, top at y, in the durability colour. */
+	/**
+	 * Draws the uses left centred over an item at x, top at y, in the durability colour. For an item that doesn't wear
+	 * out that's {@link Integer#MAX_VALUE}, so only call it for damageable ones.
+	 */
 	@ApiStatus.AvailableSince("1.1")
 	public static void numberText(Canvas c, ItemStack stack, float x, float y, float size, float textSize, boolean shadow) {
 		text(c, stack, String.valueOf(ItemInfo.durability(stack)), x, y, size, textSize, shadow);

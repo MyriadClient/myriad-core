@@ -1,19 +1,27 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.Bezier;
-import dev.myriadclient.api.render.Canvas;
+import com.mojang.blaze3d.platform.InputConstants;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.Bezier;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.util.ColorUtil;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-/** A switch bound to a boolean. */
+/**
+ * A switch bound to a boolean, drawn at the right of its box. A left click or Enter flips it; h/l (Left/Right) turn it
+ * off and on.
+ */
 public class Toggle extends Widget {
 	private final Supplier<Boolean> getter;
 	private final Consumer<Boolean> setter;
 	private final Animated knob;
 
+	/**
+	 * @param getter the value, read every frame
+	 * @param setter called with the new value when it's flipped
+	 */
 	public Toggle(Supplier<Boolean> getter, Consumer<Boolean> setter) {
 		this.getter = getter;
 		this.setter = setter;
@@ -63,7 +71,7 @@ public class Toggle extends Widget {
 
 	@Override
 	public boolean mouseClicked(float mx, float my, int button) {
-		if (button != 0 || !isHovered(mx, my)) return false;
+		if (button != InputConstants.MOUSE_BUTTON_LEFT || !isHovered(mx, my)) return false;
 		setter.accept(!getter.get());
 		return true;
 	}

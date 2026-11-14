@@ -14,6 +14,7 @@ import dev.myriadclient.api.setting.SettingGroup;
  * }</pre>
  */
 public final class RotationSettings {
+	/** Turn Speed: most degrees to turn per tick, 0-180; 0 (the default) turns at once. */
 	public final IntSetting turnSpeed;
 
 	/** Adds Turn Speed to {@code group}. */

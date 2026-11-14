@@ -12,24 +12,24 @@ import dev.myriadclient.api.command.arguments.Arguments;
 import dev.myriadclient.api.command.arguments.ChoiceArgumentType;
 import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Service;
+import dev.myriadclient.api.integration.Baritone;
 import dev.myriadclient.api.module.Module;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.render.RenderMode;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.setting.EnumSetting;
-import dev.myriadclient.api.util.Baritone;
-import dev.myriadclient.api.util.FakePlayers;
-import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.api.util.Texts;
+import dev.myriadclient.api.world.FakePlayers;
 import dev.myriadclient.impl.Diagnostics;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.dev.Bench;
 import dev.myriadclient.impl.dev.PacketLog;
 import dev.myriadclient.impl.event.MyriadEventBus;
-import dev.myriadclient.impl.render.CoreRenderSettings;
-import dev.myriadclient.impl.render.GpuTimings;
 import dev.myriadclient.impl.event.Profiler;
 import dev.myriadclient.impl.hook.HookManager;
 import dev.myriadclient.impl.network.JoinedVersion;
+import dev.myriadclient.impl.render.CoreRenderSettings;
+import dev.myriadclient.impl.render.GpuTimings;
 import dev.myriadclient.impl.update.UpdateManager;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.InactivityFpsLimit;
@@ -42,8 +42,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Consumer;
 import java.util.Locale;
+import java.util.function.Consumer;
 
 import static dev.myriadclient.api.command.arguments.ModuleArgumentType.module;
 import static dev.myriadclient.api.command.arguments.PlayerArgumentType.player;
@@ -135,7 +135,7 @@ public final class CoreCommands {
 						any = true;
 						String what = switch (s.kind()) {
 							case CHECKING -> "checking…";
-							case UP_TO_DATE -> "up to date";
+							case UP_TO_DATE -> s.message() == null ? "up to date" : "up to date (" + s.message() + ")";
 							case AVAILABLE -> s.version() + " available";
 							case DOWNLOADING -> "downloading " + s.version() + "…";
 							case STAGED -> s.version() + " installs when you quit";
@@ -315,7 +315,7 @@ public final class CoreCommands {
 	 * .bench render: uncapped while it measures (no frame limit, no vsync, no slowing down when you don't touch the
 	 * keys), so what a frame costs shows in its time, all put back after.
 	 */
-	private static void benchRender(boolean compare, Consumer<String> chat) {
+	private static void benchRender(Consumer<String> chat) {
 		Logger log = LoggerFactory.getLogger("Myriad/Bench");
 		var options = Minecraft.getInstance().options;
 		int limit = options.framerateLimit().get();
@@ -324,17 +324,14 @@ public final class CoreCommands {
 		options.framerateLimit().set(260);
 		options.enableVsync().set(false);
 		options.inactivityFpsLimit().set(InactivityFpsLimit.MINIMIZED);
-		int[] reports = {compare ? 2 : 1};
 		Consumer<String> report = r -> {
 			chat.accept(r);
 			log.info("{}", r);
-			if (--reports[0] > 0) return;
 			options.framerateLimit().set(limit);
 			options.enableVsync().set(vsync);
 			options.inactivityFpsLimit().set(inactivity);
 		};
-		if (compare) GpuTimings.compare(600, report);
-		else GpuTimings.measure(600, report);
+		GpuTimings.measure(600, report);
 	}
 
 	/** Dev runs only: what core's hot paths cost here, for the CHANGELOG's numbers. */
@@ -355,17 +352,9 @@ public final class CoreCommands {
 					return SINGLE_SUCCESS;
 				});
 				// What highlights cost the GPU here, for the scene as it is: run it once per look to compare.
-				b.then(literal("render").then(literal("old").executes(c -> {
-					// Draws highlights the way they were before, to compare screenshots: again to put it back.
-					info(GpuTimings.toggleLegacy() ? "Highlights drawn the old way" : "Highlights drawn as they are now");
-					return SINGLE_SUCCESS;
-				})).then(literal("compare").executes(c -> {
-					info("Measuring 600 frames the way highlights were drawn before, then 600 as they are now...");
-					benchRender(true, r -> info(r));
-					return SINGLE_SUCCESS;
-				})).executes(c -> {
+				b.then(literal("render").executes(c -> {
 					info("Measuring 600 frames...");
-					benchRender(false, r -> info(r));
+					benchRender(r -> info(r));
 					return SINGLE_SUCCESS;
 				}));
 			}
@@ -496,7 +485,7 @@ public final class CoreCommands {
 	}
 
 	private static Command menu() {
-		return new Command("menu", "Opens the Myriad menu.", "gui", "desktop") {
+		return new Command("menu", "Opens the Myriad menu.", "gui", "ui") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				// Opening a screen from chat must wait until the chat screen has closed.

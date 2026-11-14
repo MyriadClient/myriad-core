@@ -80,7 +80,7 @@ public final class MenuSync {
 		return false;
 	}
 
-	/** The server sent a menu's whole contents (from ClientPlayNetworkHandlerMixin, after vanilla applied them). */
+	/** The server sent a menu's whole contents (from ClientPacketListenerMixin, after vanilla applied them). */
 	public void onContents(int containerId) {
 		for (Request r : requests) {
 			if (!r.sent || r.menu.containerId != containerId) continue;

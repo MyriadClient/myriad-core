@@ -6,21 +6,35 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a method as an event handler. The method must return {@code void} and take exactly one parameter,
- * the event type. Handlers for a supertype also receive subtypes.
+ * Marks a method as an event handler. The method must return {@code void} and take exactly one parameter, the event
+ * type; it may be private. Handlers for a supertype also receive subtypes ({@code TickEvent} hears both
+ * {@code TickEvent.Pre} and {@code TickEvent.Post}). Instance methods run once their object is subscribed
+ * ({@link EventBus#subscribe(Object)}; a module's while it's on), static ones once their class is
+ * ({@link EventBus#subscribe(Class)}).
  *
  * <pre>{@code
- * @Subscribe
- * private void onTick(TickEvent.Pre event) { ... }
+ * @Subscribe(inGame = true)
+ * private void onTick(TickEvent.Pre event) {
+ *     if (mc.player.getHealth() < 6) warn("Low health");
+ * }
+ *
+ * // Keeps containers open on the server: the close packet never goes out.
+ * @Subscribe(priority = Priority.HIGH, packets = ServerboundContainerClosePacket.class)
+ * private void onClose(PacketEvent.Send event) {
+ *     event.cancel();
+ * }
  * }</pre>
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface Subscribe {
-	/** Higher runs first. See {@link Priority}. */
+	/** Higher runs first; equal priorities run in the order they subscribed. See {@link Priority}. */
 	int priority() default Priority.NORMAL;
 
-	/** If false (default) the handler is skipped once an earlier handler cancelled the event. */
+	/**
+	 * Whether to run for an event an earlier handler {@linkplain Cancellable cancelled}. If false (default) the handler is
+	 * skipped then; if true it runs and can read {@link Cancellable#isCancelled()} or un-cancel it.
+	 */
 	boolean receiveCancelled() default false;
 
 	/**

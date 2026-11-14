@@ -4,13 +4,13 @@ import com.google.gson.JsonArray;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.Addon;
 import dev.myriadclient.api.module.ModuleGroup;
-import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.Rect;
+import dev.myriadclient.api.ui.Ui;
 import dev.myriadclient.api.ui.Window;
 import dev.myriadclient.impl.ui.layout.ColumnsLayout;
 import dev.myriadclient.impl.ui.layout.DwindleLayout;
-import dev.myriadclient.impl.ui.panels.CorePanels;
 import dev.myriadclient.impl.ui.panels.AddonNames;
+import dev.myriadclient.impl.ui.panels.CorePanels;
 import dev.myriadclient.impl.ui.panels.MenuGroups;
 import dev.myriadclient.impl.ui.panels.ModulesPanel;
 
@@ -29,18 +29,18 @@ import java.util.TreeSet;
 /**
  * The menu's group windows: one per module group, placed when the group first appears (on the first run, or when an
  * addon arrives later) and never again, so a window the player closed or moved stays that way. Which groups the
- * desktop has already placed is saved with it.
+ * UI has already placed is saved with it.
  */
 final class GroupWindows {
 	private final WindowManager wm;
-	/** Groups this desktop has already placed, so a group whose window you closed stays closed. */
+	/** Groups this UI has already placed, so a group whose window you closed stays closed. */
 	private final Set<String> seen = new LinkedHashSet<>();
 
 	GroupWindows(WindowManager wm) {
 		this.wm = wm;
 	}
 
-	/** Forgets every group placed (a fresh desktop places them all again). */
+	/** Forgets every group placed (a fresh UI places them all again). */
 	void reset() {
 		seen.clear();
 	}
@@ -92,7 +92,7 @@ final class GroupWindows {
 	}
 
 	/**
-	 * Gives each group the desktop hasn't seen yet a window, one addon at a time, by {@link GroupPlacement}: together
+	 * Gives each group the UI hasn't seen yet a window, one addon at a time, by {@link GroupPlacement}: together
 	 * on the first workspace with room for them, spilling onto the next empty one when there are more than fit.
 	 * Groups already on screen, or placed before and since closed or moved, are left alone.
 	 */
@@ -108,8 +108,8 @@ final class GroupWindows {
 		int capacity = capacity();
 		for (List<ModuleGroup> groups : byAddon.values()) {
 			if (groups.isEmpty()) continue;
-			int[] counts = new int[Desktop.WORKSPACES + 1];
-			for (int i = 1; i <= Desktop.WORKSPACES; i++) counts[i] = wm.workspaces[i].tiling.windows().size();
+			int[] counts = new int[Ui.WORKSPACES + 1];
+			for (int i = 1; i <= Ui.WORKSPACES; i++) counts[i] = wm.workspaces[i].tiling.windows().size();
 			int[] targets = GroupPlacement.place(groups.size(), counts, capacity);
 			TreeSet<Integer> used = new TreeSet<>();
 			for (int ws : targets) used.add(ws);

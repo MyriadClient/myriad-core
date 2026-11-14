@@ -1,9 +1,10 @@
 package dev.myriadclient.api.service;
 
+import dev.myriadclient.api.annotation.RenderThread;
 import dev.myriadclient.api.build.Blueprint;
 import dev.myriadclient.api.build.Build;
-import dev.myriadclient.api.util.RenderThread;
 import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Objects;
@@ -38,7 +39,15 @@ public interface Building {
 	 * what you need with the {@code with} methods, so options added in later versions keep their defaults in your code.
 	 */
 	final class Options {
+		/**
+		 * Lenient servers: {@link Placement.Options#DEFAULT} and {@link Breaking.Options#DEFAULT}, up to 4 placements a
+		 * tick, wrong blocks broken, fluids kept back, settings clicked, bottom up, finishing once done.
+		 */
 		public static final Options DEFAULT = new Options(Placement.Options.DEFAULT, Breaking.Options.DEFAULT, true, true, 4, 0, false, true, Order.BOTTOM_UP);
+		/**
+		 * Servers that check the look of each click: {@link Placement.Options#STRICT} and {@link Breaking.Options#STRICT}
+		 * (turned for breaks too), one placement a tick; otherwise as {@link #DEFAULT}.
+		 */
 		public static final Options STRICT = new Options(Placement.Options.STRICT, Breaking.Options.STRICT, true, true, 1, 0, false, true, Order.BOTTOM_UP);
 
 		private final Placement.Options placing;
@@ -96,12 +105,18 @@ public interface Building {
 			return avoidFluids;
 		}
 
-		/** Most placements and hand clicks (settings) started per tick; breaks go at the breaking service's own pace. */
+		/**
+		 * Most placements and hand clicks (settings) started per tick, at least 1; breaks go at the breaking service's
+		 * own pace.
+		 */
 		public int placesPerTick() {
 			return placesPerTick;
 		}
 
-		/** The priority of this build's breaks against other modules' breaks. */
+		/**
+		 * The priority of this build's breaks against other modules' breaks ({@link Breaking#breakBlock}); 0 by
+		 * default.
+		 */
 		public int priority() {
 			return priority;
 		}
@@ -114,30 +129,37 @@ public interface Building {
 			return keepUp;
 		}
 
+		/** These options with {@link #placing()} set. */
 		public Options withPlacing(Placement.Options placing) {
 			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
+		/** These options with {@link #breaking()} set. */
 		public Options withBreaking(Breaking.Options breaking) {
 			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
+		/** These options with {@link #breakWrong()} set. */
 		public Options withBreakWrong(boolean breakWrong) {
 			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
+		/** These options with {@link #avoidFluids()} set. */
 		public Options withAvoidFluids(boolean avoidFluids) {
 			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
+		/** These options with {@link #placesPerTick()} (at least 1) set. */
 		public Options withPlacesPerTick(int placesPerTick) {
 			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
+		/** These options with {@link #priority()} set. */
 		public Options withPriority(int priority) {
 			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
 
+		/** These options with {@link #keepUp()} set. */
 		public Options withKeepUp(boolean keepUp) {
 			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
 		}
@@ -167,7 +189,7 @@ public interface Building {
 		}
 
 		@Override
-		public boolean equals(Object o) {
+		public boolean equals(@Nullable Object o) {
 			return o instanceof Options x && x.placing.equals(placing) && x.breaking.equals(breaking) && x.breakWrong == breakWrong
 				&& x.avoidFluids == avoidFluids && x.placesPerTick == placesPerTick && x.priority == priority && x.keepUp == keepUp
 				&& x.clickSettings == clickSettings && x.order == order;
@@ -196,12 +218,17 @@ public interface Building {
 		NEAREST
 	}
 
-	/** Starts building {@code blueprint} for {@code owner}. */
+	/**
+	 * Starts building {@code blueprint} for {@code owner}: it plans and acts at the start of each tick, before the
+	 * placement and breaking services send what they're asked. Several builds can run at once, sharing the hotbar and
+	 * the packet budget. It stops when {@code owner} is turned off ({@link #stop}), when you leave the world, or when
+	 * it fails with an error, and finishes by itself once the blueprint is done unless {@link Options#keepUp()}.
+	 */
 	Build start(Object owner, Blueprint blueprint, Options options);
 
-	/** Stops every build {@code owner} started. */
+	/** Stops every build {@code owner} started; their breaks and placements not yet sent are dropped. */
 	void stop(Object owner);
 
-	/** The builds running now. */
+	/** The builds running now, as a new list. */
 	List<Build> running();
 }

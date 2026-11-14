@@ -1,11 +1,12 @@
 package dev.myriadclient.impl.ui.panels;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.ui.Icons;
-import dev.myriadclient.api.ui.Window;
 import dev.myriadclient.api.ui.WidgetPanel;
+import dev.myriadclient.api.ui.Window;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.api.ui.widget.HBox;
@@ -249,7 +250,7 @@ final class WheelView extends WidgetPanel {
 		@Override
 		public boolean mouseClicked(float mx, float my, int button) {
 			boolean header = mx >= x && my >= y && mx < x + width && my < y + ROW + 2;
-			if (button != 0 || !header) return super.mouseClicked(mx, my, button);
+			if (button != InputConstants.MOUSE_BUTTON_LEFT || !header) return super.mouseClicked(mx, my, button);
 			pressY = my;
 			moved = false;
 			return true;
@@ -377,7 +378,7 @@ final class WheelView extends WidgetPanel {
 
 		@Override
 		public boolean mouseClicked(float mx, float my, int button) {
-			if (button != 0 || over < 0 || over >= wheel.slots().size()) return false;
+			if (button != InputConstants.MOUSE_BUTTON_LEFT || over < 0 || over >= wheel.slots().size()) return false;
 			String k = key(wheel.slots().get(over));
 			if (!unfolded.remove(k)) unfolded.add(k);
 			return true;

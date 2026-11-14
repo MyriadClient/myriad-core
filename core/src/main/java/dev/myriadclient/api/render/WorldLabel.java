@@ -1,19 +1,26 @@
 package dev.myriadclient.api.render;
 
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.render.Projection;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 
 /** Labels pinned to points in the world (nametags, logout spots, item names), drawn on the 2D overlay. */
 public final class WorldLabel {
-	/** A piece of a label: text in a colour, or an item icon ({@link #item}). */
+	/**
+	 * A piece of a label: text in a colour, or an item icon ({@link #item}).
+	 *
+	 * @param text  the text; ignored for an item
+	 * @param color the text's ARGB colour
+	 * @param item  the item to show, or {@link ItemStack#EMPTY} for text
+	 */
 	public record Segment(String text, int color, ItemStack item) {
+		/** Text in an ARGB colour. */
 		public Segment(String text, int color) {
 			this(text, color, ItemStack.EMPTY);
 		}
@@ -28,12 +35,21 @@ public final class WorldLabel {
 		}
 	}
 
-	/** Where a label ended up on screen, so callers can stack things above it. */
+	/**
+	 * Where a label ended up on screen, so callers can stack things above it: its top-left corner and size in scaled
+	 * GUI pixels, and the scale it was drawn at.
+	 */
 	public record Placed(float x, float y, float width, float height, float scale) {
 	}
 
+	/** What's drawn behind a label's text. */
 	public enum Background {
-		NONE, PLAIN, ROUNDED
+		/** Nothing: just the text. */
+		NONE,
+		/** A square-cornered box. */
+		PLAIN,
+		/** A box with the theme's rounding. */
+		ROUNDED
 	}
 
 	private static final float PAD_X = 3, PAD_Y = 1.5f, GAP = 3;
@@ -48,8 +64,9 @@ public final class WorldLabel {
 	}
 
 	/**
-	 * Draws {@code segments} side by side, centred on {@code world} with the label's bottom edge there. Returns null
-	 * when the point is behind the camera or off screen.
+	 * Draws {@code segments} side by side, centred on {@code world} with the label's bottom edge there, at
+	 * {@code scale} times the default font size, on {@code bg} in ARGB {@code fill} with an ARGB {@code outline}
+	 * (0 for none). Returns null when the point is behind the camera or well off screen. From a {@code Render2DEvent}.
 	 */
 	public static @Nullable Placed draw(Canvas c, Vec3 world, float scale, List<Segment> segments, Background bg, int fill, int outline, boolean shadow) {
 		Vec3 s = Projection.toScreen(world);

@@ -5,19 +5,19 @@ import dev.myriadclient.api.build.BlockRules;
 import dev.myriadclient.api.build.Blueprint;
 import dev.myriadclient.api.build.Build;
 import dev.myriadclient.api.elytra.Flight;
+import dev.myriadclient.api.integration.Baritone;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.Modules;
+import dev.myriadclient.api.player.Reach;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Building;
 import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Inventory;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
-import dev.myriadclient.api.util.Baritone;
 import dev.myriadclient.api.util.Client;
 import dev.myriadclient.api.util.MathUtil;
-import dev.myriadclient.api.util.MyriadId;
-import dev.myriadclient.api.util.Reach;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -26,7 +26,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -245,6 +245,7 @@ public final class Steps {
 		}.with(options));
 	}
 
+	/** Turns the server-side look to {@code yaw} and {@code pitch} (degrees); as {@link #lookAt}. */
 	public static Step<Void> face(float yaw, float pitch, Rotations.Options options) {
 		return Step.of("Face", () -> new Turning() {
 			@Override
@@ -519,6 +520,7 @@ public final class Steps {
 		});
 	}
 
+	/** {@link #suspend(MyriadId...)} by class: every module of these classes. */
 	@SafeVarargs
 	public static Step<Void> suspend(Class<? extends Module>... modules) {
 		List<Class<? extends Module>> types = List.of(modules);

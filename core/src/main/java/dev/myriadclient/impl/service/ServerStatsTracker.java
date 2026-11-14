@@ -25,6 +25,7 @@ import net.minecraft.world.entity.LivingEntity;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -56,8 +57,8 @@ public final class ServerStatsTracker implements ServerStats {
 	private void onSend(PacketEvent.Send e) {
 		sent.record();
 		int sequence = switch (e.packet()) {
-			case ServerboundUseItemPacket p -> p.getSequence();
-			case ServerboundUseItemOnPacket p -> p.getSequence();
+			case ServerboundUseItemPacket p -> p.sequence();
+			case ServerboundUseItemOnPacket p -> p.sequence();
 			case ServerboundPlayerActionPacket p -> p.getSequence();
 			default -> 0;
 		};
@@ -181,6 +182,15 @@ public final class ServerStatsTracker implements ServerStats {
 	public String address() {
 		Minecraft mc = Minecraft.getInstance();
 		return mc.getCurrentServer() == null || mc.isLocalServer() ? null : mc.getCurrentServer().ip;
+	}
+
+	@Override
+	public @Nullable String serverKey() {
+		Minecraft mc = Minecraft.getInstance();
+		String address = address();
+		if (address != null) return address.toLowerCase(Locale.ROOT);
+		var integrated = mc.getSingleplayerServer();
+		return integrated != null ? "singleplayer:" + integrated.getWorldData().getLevelName() : null;
 	}
 
 	/** The server you're on, remembered when you leave it (the client forgets it once disconnected). */

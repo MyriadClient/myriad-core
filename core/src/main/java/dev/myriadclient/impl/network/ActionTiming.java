@@ -13,8 +13,8 @@ import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerAbilitiesPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import org.jetbrains.annotations.Nullable;
@@ -60,7 +60,7 @@ public final class ActionTiming {
 
 	/** The packets Grim expects before the movement packet, and swings, which have to stay right after their attacks. */
 	public static boolean isAction(Packet<?> p) {
-		if (p instanceof ServerboundSwingPacket) return true;
+		if (p instanceof ServerboundPunchPacket) return true;
 		return p instanceof ServerboundUseItemOnPacket || p instanceof ServerboundUseItemPacket || p instanceof ServerboundAttackPacket
 			|| p instanceof ServerboundInteractPacket || p instanceof ServerboundSetCarriedItemPacket || p instanceof ServerboundPlayerAbilitiesPacket
 			|| p instanceof ServerboundPlayerCommandPacket || p instanceof ServerboundPlayerActionPacket;

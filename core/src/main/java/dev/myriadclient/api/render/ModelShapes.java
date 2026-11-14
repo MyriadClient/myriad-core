@@ -23,7 +23,7 @@ public final class ModelShapes {
 	/** The model drawn again in one translucent colour (ARGB). */
 	public static <S> void fill(SubmitNodeCollector submits, PoseStack poseStack, Model<? super S> model, S state, int color, boolean throughWalls) {
 		submits.submitModel(model, state, poseStack, RenderLayers.flatModel(throughWalls), LightCoordsUtil.FULL_BRIGHT,
-			OverlayTexture.NO_OVERLAY, color, null, 0, null);
+			OverlayTexture.NO_OVERLAY, color, null, 0);
 	}
 
 	/** The edges of every box in the model (ARGB), {@code width} pixels wide. */

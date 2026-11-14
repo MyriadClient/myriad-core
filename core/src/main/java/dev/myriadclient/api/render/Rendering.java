@@ -8,7 +8,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What the rendering helpers ({@link Renderer3D}, {@link WorldMesh}, {@link HighlightStyle}, {@link Ghosts},
@@ -19,7 +19,12 @@ import org.jetbrains.annotations.Nullable;
 public interface Rendering {
 	/** The render types {@link RenderLayers} hands out. */
 	enum Layer {
-		LINES, QUADS, MODEL
+		/** Core's: {@link RenderLayers#lines}. */
+		LINES,
+		/** Core's: {@link RenderLayers#quads}. */
+		QUADS,
+		/** Core's: {@link RenderLayers#flatModel}. */
+		MODEL
 	}
 
 	/** This frame's shape queue. */
@@ -37,10 +42,13 @@ public interface Rendering {
 	/** Compiles a custom highlight fill's shader under {@code shaderId}. */
 	void registerFill(int shaderId, Identifier shader);
 
+	/** Core's: what {@link Ghosts#submit} draws through; {@code style} null for no highlight. */
 	void ghost(Render3DEvent event, LivingEntityRenderState state, Vec3 feet, float alpha, @Nullable HighlightStyle style, int color);
 
+	/** Core's: what {@link RenderStates#entity} reads. */
 	@Nullable Entity entity(EntityRenderState state);
 
+	/** Core's: what {@link RenderLayers} hands out. */
 	RenderType layer(Layer layer, boolean throughWalls);
 
 	/** Draws {@code mesh} every frame while {@code shown}. */

@@ -1,4 +1,6 @@
 pluginManagement {
+	// The dev.myriadclient.addon Gradle plugin, released with core: it builds the example addon here as it builds any addon.
+	includeBuild 'gradle-plugin'
 	repositories {
 		maven {
 			name = 'Fabric'
@@ -12,6 +14,3 @@ pluginManagement {
 rootProject.name = 'myriad-root'
 
 include 'core', 'example-addon'
-
-// The dev.myriadclient.addon Gradle plugin, released with core (`./gradlew :gradle-plugin:build`).
-includeBuild 'gradle-plugin'

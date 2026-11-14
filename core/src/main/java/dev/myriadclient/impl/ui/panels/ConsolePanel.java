@@ -2,16 +2,17 @@ package dev.myriadclient.impl.ui.panels;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.ui.Panel;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.ui.Shortcuts;
 import net.minecraft.client.Minecraft;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -98,10 +99,10 @@ public final class ConsolePanel extends Panel {
 
 	@Override
 	public boolean keyPressed(int key, int scancode, int mods) {
-		// Alt/Super (and Ctrl, apart from the combos below) aren't typing: those keys are the desktop's shortcuts.
-		if ((mods & (GLFW.GLFW_MOD_ALT | GLFW.GLFW_MOD_SUPER)) != 0) return false;
-		switch (key) {
-			case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
+		// Alt/Super (and Ctrl, apart from the combos below) aren't typing: those keys are the UI's shortcuts.
+		if ((mods & (InputConstants.MOD_ALT | InputConstants.MOD_SUPER)) != 0) return false;
+		switch (Keybind.letter(key)) {
+			case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> {
 				String line = input.trim();
 				if (line.startsWith(Myriad.config().commandPrefix())) line = line.substring(Myriad.config().commandPrefix().length());
 				if (!line.isEmpty()) {
@@ -113,16 +114,16 @@ public final class ConsolePanel extends Panel {
 				historyIndex = -1;
 				scroll = 0;
 			}
-			case GLFW.GLFW_KEY_BACKSPACE -> {
+			case InputConstants.KEY_BACKSPACE -> {
 				if (!input.isEmpty()) input = Shortcuts.ctrl(mods) ? "" : input.substring(0, input.length() - 1);
 			}
-			case GLFW.GLFW_KEY_TAB -> input += suggestion;
-			case GLFW.GLFW_KEY_UP -> {
+			case InputConstants.KEY_TAB -> input += suggestion;
+			case InputConstants.KEY_UP -> {
 				if (history.isEmpty()) return true;
 				historyIndex = historyIndex < 0 ? history.size() - 1 : Math.max(0, historyIndex - 1);
 				input = history.get(historyIndex);
 			}
-			case GLFW.GLFW_KEY_DOWN -> {
+			case InputConstants.KEY_DOWN -> {
 				if (historyIndex < 0) return true;
 				historyIndex++;
 				if (historyIndex >= history.size()) {
@@ -130,13 +131,13 @@ public final class ConsolePanel extends Panel {
 					input = "";
 				} else input = history.get(historyIndex);
 			}
-			case GLFW.GLFW_KEY_V -> {
+			case InputConstants.KEY_V -> {
 				if (Shortcuts.ctrl(mods)) input += Minecraft.getInstance().keyboardHandler.getClipboard().replace("\n", " ");
 			}
-			case GLFW.GLFW_KEY_L -> {
+			case InputConstants.KEY_L -> {
 				if (Shortcuts.ctrl(mods)) ConsoleLog.clear();
 			}
-			case GLFW.GLFW_KEY_ESCAPE -> {
+			case InputConstants.KEY_ESCAPE -> {
 				return false;
 			}
 			default -> {

@@ -26,7 +26,9 @@ public interface ReplacementBuilder<S> {
 
 	/**
 	 * Registers it: {@code factory} gets core's implementation and returns yours (usually a subclass of the service's
-	 * {@code Forwarding} class), made the first time it's needed and kept after.
+	 * {@code Forwarding} class), made the first time it applies (the server and profile match) and kept after. A
+	 * factory that throws, or returns something that isn't the service's type, turns the replacement off for the
+	 * session. Call it once per builder.
 	 */
 	Contribution with(Function<? super S, ? extends S> factory);
 }

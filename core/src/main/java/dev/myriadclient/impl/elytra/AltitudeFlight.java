@@ -28,14 +28,25 @@ final class AltitudeFlight extends FlightEngine {
 	/**
 	 * With No Durability's chest swaps: about 18 blocks a second. Down there the climb gains most from about 40 and
 	 * nothing from 33, so the threshold works the other way round: it falls by {@code SLOW_HOLD_GAIN} for every block
-	 * above the cruise height (less climb) and rises below it. {@code SLOW_LATE_SPEED} while chunks still come in late.
+	 * above the cruise height (less climb) and rises below it. Not lowered while the swaps wait for chunks (2b2t's new
+	 * terrain, nearly always): from 36 a climb gives back about a third of the dive, and the flight sank all the way down.
 	 */
-	private static final double SLOW_DIVE_SPEED = 34.5, SLOW_HOLD_GAIN = 0.1, SLOW_MIN_DIVE_SPEED = 33, SLOW_MAX_DIVE_SPEED = 40, SLOW_LATE_SPEED = 36;
+	private static final double SLOW_DIVE_SPEED = 34.5, SLOW_HOLD_GAIN = 0.1, SLOW_MIN_DIVE_SPEED = 33, SLOW_MAX_DIVE_SPEED = 40;
 	/** After a run of setbacks: a gentle descent, no diving or climbing, until the server agrees again. */
 	private static final float STEADY_PITCH = 8;
-	/** Chunks this many seconds of flight ahead that haven't loaded: climb at {@code SLOW_PITCH} (speed for height) down to {@code SLOW_SPEED}. */
-	private static final double LOAD_AHEAD_SECONDS = 4, SLOW_SPEED = 15;
+	/**
+	 * Chunks this many seconds of flight ahead that haven't loaded: climb at {@code SLOW_PITCH} (speed for height) down to
+	 * {@code SLOW_SPEED}. No further: 2b2t sends new terrain just in time, so looking two seconds ahead or more found a
+	 * chunk missing every couple of seconds, and the climbs kept the dive from ever getting fast enough to pull up (the
+	 * flight sank all the way down).
+	 */
+	private static final double LOAD_AHEAD_SECONDS = 1, SLOW_SPEED = 15;
 	private static final float SLOW_PITCH = -20;
+	/**
+	 * Ticks that climb goes on after the last tick a chunk ahead was missing: in new terrain 2b2t sends them a tick or two
+	 * late, one after another, and a climb of single ticks between dives only bleeds speed.
+	 */
+	private static final int LATE_HOLD_TICKS = 10;
 	/** Ground this far ahead raises the cruise height to this much above it. */
 	private static final int TERRAIN_AHEAD = 160;
 	private static final double TERRAIN_CLEARANCE = 24;
@@ -49,6 +60,7 @@ final class AltitudeFlight extends FlightEngine {
 	private Phase phase = Phase.DIVE;
 	private float climbPitch;
 	private double cruiseY = Double.NaN;
+	private int lateHold;
 
 	AltitudeFlight(NoDurability.Owner owner) {
 		super(owner);
@@ -58,6 +70,7 @@ final class AltitudeFlight extends FlightEngine {
 	protected void resetFlight() {
 		phase = Phase.DIVE;
 		cruiseY = Double.NaN;
+		lateHold = 0;
 	}
 
 	@Override
@@ -108,18 +121,17 @@ final class AltitudeFlight extends FlightEngine {
 			spoof(heading, STEADY_PITCH);
 			return State.CRUISING;
 		}
-		// Chunks ahead not in yet: slow down (climbing) until they are, rather than fly into the edge of the world.
-		if (speed > SLOW_SPEED && !loadedAhead(dir, speed * LOAD_AHEAD_SECONDS)) {
-			phase = Phase.DIVE;
+		// Chunks ahead not in yet: no diving into them, a climb (slowing down) until they are, rather than fly into the edge
+		// of the world. A pull-up or climb under way goes on: cut short each time a chunk came late, the cycle never
+		// climbed in new terrain and dived all the way down.
+		if (speed > SLOW_SPEED && !loadedAhead(dir, speed * LOAD_AHEAD_SECONDS)) lateHold = LATE_HOLD_TICKS;
+		else if (lateHold > 0) lateHold--;
+		if (lateHold > 0 && phase == Phase.DIVE) {
 			spoof(heading, SLOW_PITCH);
 			return State.CRUISING;
 		}
 		double diveUntil = Mth.clamp(DIVE_SPEED + HOLD_GAIN * (p.getY() - cruiseY), MIN_DIVE_SPEED, MAX_DIVE_SPEED);
-		if (chestSwaps()) {
-			diveUntil = Mth.clamp(SLOW_DIVE_SPEED - SLOW_HOLD_GAIN * (p.getY() - cruiseY), SLOW_MIN_DIVE_SPEED, SLOW_MAX_DIVE_SPEED);
-			// While No Durability's swaps wait for chunks, the slowest that still climbs.
-			if (noDur.chunksLate()) diveUntil = Math.min(diveUntil, SLOW_LATE_SPEED);
-		}
+		if (chestSwaps()) diveUntil = Mth.clamp(SLOW_DIVE_SPEED - SLOW_HOLD_GAIN * (p.getY() - cruiseY), SLOW_MIN_DIVE_SPEED, SLOW_MAX_DIVE_SPEED);
 		float pitch = switch (phase) {
 			case DIVE -> {
 				if (speed > diveUntil) {

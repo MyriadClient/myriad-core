@@ -6,11 +6,15 @@ import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.SoundEngine;
 import net.minecraft.client.sounds.SoundManager;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+/**
+ * PlaySoundEvent: a sound about to play (now or delayed) can be cancelled before it reaches the sound engine.
+ */
 @Mixin(SoundManager.class)
 public abstract class SoundManagerMixin {
 	@Inject(method = "play", at = @At("HEAD"), cancellable = true)
@@ -23,6 +27,7 @@ public abstract class SoundManagerMixin {
 		if (myriad$cancelled(sound)) ci.cancel();
 	}
 
+	@Unique
 	private static boolean myriad$cancelled(SoundInstance sound) {
 		return Myriad.isReady() && Myriad.events().hasListeners(PlaySoundEvent.class) && Myriad.events().post(new PlaySoundEvent(sound)).isCancelled();
 	}

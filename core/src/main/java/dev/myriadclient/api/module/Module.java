@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.ModuleToggleEvent;
 import dev.myriadclient.api.registry.Identified;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.setting.BoolSetting;
 import dev.myriadclient.api.setting.KeybindSetting;
 import dev.myriadclient.api.setting.SavedSettings;
@@ -11,12 +12,11 @@ import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.Settings;
 import dev.myriadclient.api.ui.widget.Widget;
 import dev.myriadclient.api.util.Client;
-import dev.myriadclient.api.util.MyriadId;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,6 +43,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * Register it from your addon with {@code ctx.registerModule(new Sprint())}. Elsewhere (other modules, mixins, other
  * addons) reach it with {@link Modules#active(Class)}, which returns null while it's off or not installed.
+ * <p>
+ * Turning a module off also ends what it started through core, with it as the owner: its jobs, tick speed changes,
+ * queued breaks, builds and placements, and the modules it {@linkplain Modules#suspend suspended}. Turning it on or
+ * off posts a {@link ModuleToggleEvent} and saves the profile shortly after. Call the methods here on the render
+ * thread.
  */
 public abstract class Module implements Identified {
 	/** The game client. Bound again when Myriad starts, in case this class loaded before the client existed. */
@@ -53,8 +58,8 @@ public abstract class Module implements Identified {
 	private final String path;
 	private final String description;
 	private final List<Tag> tags = new ArrayList<>(1);
-	private ModuleGroup group;
-	private MyriadId id;
+	private @Nullable ModuleGroup group;
+	private @Nullable MyriadId id;
 	private boolean enabled;
 	/** Who holds the module off ({@link Modules#suspend}), by identity; and whether the player has it on meanwhile. */
 	private final List<Object> suspenders = new ArrayList<>(0);
@@ -65,18 +70,29 @@ public abstract class Module implements Identified {
 	private List<String> formerNames = List.of();
 	private List<Class<? extends Module>> conflicts = List.of();
 
+	/** Every setting of the module, in groups: what its settings window shows and the profile saves. */
 	public final Settings settings = new Settings();
+	/** The "General" group, the first in the settings window and open by default: where most settings go. */
 	protected final SettingGroup sgGeneral = settings.group("General");
 
 	private final SettingGroup sgModule = settings.group("Module");
+	/** The key that toggles the module (or holds it on, with {@link #holdMode}); unbound by default. */
 	public final KeybindSetting keybind = sgModule.keybind("Keybind").description("Toggles the module.").build();
+	/**
+	 * Whether the module is on only while {@link #keybind} is held, instead of toggling on each press. Off by default.
+	 */
 	public final BoolSetting holdMode = sgModule.bool("Hold").description("Only active while the keybind is held.").build();
+	/** Whether the module list HUD shows the module while it's on. On by default. */
 	public final BoolSetting visibleInList = sgModule.bool("Show In List").description("Show in the module list HUD.").defaultValue(true).build();
+	/** Whether toggling the module says so in chat (not for {@link #holdMode} or silent toggles). On by default. */
 	public final BoolSetting chatFeedback = sgModule.bool("Chat Feedback").description("Announce toggles in chat.").defaultValue(true).build();
 
 	/**
-	 * @param tag what the module is about (see {@link Tags}): its colour and icon, and {@code #tag} in the launcher.
-	 *            More can be added with {@link #alsoTagged}.
+	 * @param tag         what the module is about (see {@link Tags}): its colour and icon, and {@code #tag} in the
+	 *                    launcher. More can be added with {@link #alsoTagged}.
+	 * @param name        the display name ("Kill Aura"); its snake_case form ({@code kill_aura}) is the module's id path,
+	 *                    so renaming a module needs {@link #formerNames} to keep its saved state
+	 * @param description one sentence for the menu's tooltip and the launcher
 	 */
 	protected Module(Tag tag, String name, String description) {
 		this.tags.add(tag);
@@ -85,6 +101,11 @@ public abstract class Module implements Identified {
 		this.description = description;
 	}
 
+	/**
+	 * {@code <addon id>:<name in snake_case>}, given when the module is registered.
+	 *
+	 * @throws IllegalStateException before the module is registered
+	 */
 	@Override
 	public MyriadId id() {
 		if (id == null) throw new IllegalStateException("Module '" + name + "' is not registered yet");
@@ -98,10 +119,12 @@ public abstract class Module implements Identified {
 		id = MyriadId.of(namespace, path);
 	}
 
+	/** The display name given to the constructor. */
 	public String name() {
 		return name;
 	}
 
+	/** The one-sentence description given to the constructor. */
 	public String description() {
 		return description;
 	}
@@ -116,6 +139,7 @@ public abstract class Module implements Identified {
 		return List.copyOf(tags);
 	}
 
+	/** Whether the module has {@code tag}, as its main tag or one added with {@link #alsoTagged}. */
 	public boolean hasTag(Tag tag) {
 		return tags.contains(tag);
 	}
@@ -129,7 +153,7 @@ public abstract class Module implements Identified {
 	 * The group the module shows in, in the menu: the one its addon registered it into, or the addon's own window
 	 * ({@link ModuleGroup#isAddonWindow()}). Null until it's registered.
 	 */
-	public ModuleGroup group() {
+	public @Nullable ModuleGroup group() {
 		return group;
 	}
 
@@ -139,22 +163,33 @@ public abstract class Module implements Identified {
 		this.group = group;
 	}
 
+	/** Whether the module is on right now (false while it's {@linkplain #isSuspended suspended}). */
 	public boolean isEnabled() {
 		return enabled;
 	}
 
+	/** Turns the module on if it's off and off if it's on, as {@link #setEnabled} does. */
 	public void toggle() {
 		setEnabled(!enabled);
 	}
 
+	/** Shortcut for {@code setEnabled(true)}. */
 	public void enable() {
 		setEnabled(true);
 	}
 
+	/** Shortcut for {@code setEnabled(false)}. */
 	public void disable() {
 		setEnabled(false);
 	}
 
+	/**
+	 * Turns the module on or off, as the player does, with a line in chat if {@link #chatFeedback} is on. Nothing
+	 * happens if it's already that way. Turning it on turns off the modules it {@linkplain #conflictsWith conflicts
+	 * with}, subscribes it to the event bus, starts its {@link #whileEnabled} helpers and calls {@link #onEnable}; if
+	 * that throws, the module stays off and the player is told why. While it's {@linkplain #isSuspended suspended},
+	 * only the player's choice is recorded, and takes effect when the suspension ends.
+	 */
 	public void setEnabled(boolean enable) {
 		setEnabled(enable, true);
 	}
@@ -200,6 +235,9 @@ public abstract class Module implements Identified {
 			Myriad.breaking().cancel(this);
 			Myriad.building().stop(this);
 			Myriad.placement().cancel(this);
+			// The server slot it held and what it borrowed into the hotbar go back now, not when they'd time out.
+			Myriad.inventory().release(this);
+			Myriad.inventory().giveBack(this);
 			try {
 				onDisable();
 			} catch (Throwable t) {
@@ -270,7 +308,8 @@ public abstract class Module implements Identified {
 	/**
 	 * Runs {@code start} each time the module turns on (right away if it already is), before {@link #onEnable}, and
 	 * {@code stop} each time it turns off, after {@link #onDisable}. Helpers that hold resources only while their
-	 * module runs bind themselves here, such as {@code ChunkCache} and {@code WorldMesh}.
+	 * module runs bind themselves here, such as {@code ChunkCache} and {@code WorldMesh}. A binding can't be removed,
+	 * so make them once (in the constructor or a field initialiser).
 	 */
 	public void whileEnabled(Runnable start, Runnable stop) {
 		bindings.add(new Runnable[]{start, stop});
@@ -294,16 +333,24 @@ public abstract class Module implements Identified {
 		return false;
 	}
 
+	/**
+	 * Called when the module turns on, after it's subscribed to the event bus: start what it does. If it throws, the
+	 * module is turned off again and the player told. Does nothing by default.
+	 */
 	protected void onEnable() {
 	}
 
+	/**
+	 * Called when the module turns off, after it's unsubscribed and core has ended its jobs, breaks, builds and
+	 * placements: undo what it changed. An exception is logged and the module stays off. Does nothing by default.
+	 */
 	protected void onDisable() {
 	}
 
 	/**
 	 * The version of this module's settings layout. Bump it when you rename, move or change the meaning of settings,
 	 * and update older saved settings in {@link #migrateSettings}. Settings that keep their group and name need
-	 * nothing: only the ones a user would otherwise lose do.
+	 * nothing: only the ones a user would otherwise lose do. 1 by default.
 	 */
 	public int settingsVersion() {
 		return 1;
@@ -333,7 +380,7 @@ public abstract class Module implements Identified {
 		formerNames = List.of(names);
 	}
 
-	/** The ids this module was saved under before, from {@link #formerNames}. */
+	/** The ids this module was saved under before, from {@link #formerNames}; only once it's registered. */
 	public List<MyriadId> formerIds() {
 		List<MyriadId> ids = new ArrayList<>(formerNames.size());
 		for (String n : formerNames) ids.add(n.indexOf(':') > 0 ? MyriadId.parse(n) : MyriadId.of(id().namespace(), MyriadId.toPath(n)));
@@ -357,8 +404,11 @@ public abstract class Module implements Identified {
 		return null;
 	}
 
-	/** Extra text shown next to the module in the module list, e.g. the current mode. */
-	public String hudInfo() {
+	/**
+	 * Extra text shown next to the module in the module list HUD, e.g. the current mode; null (the default) for none.
+	 * Asked often while the list shows, so keep it cheap.
+	 */
+	public @Nullable String hudInfo() {
 		return null;
 	}
 
@@ -367,28 +417,33 @@ public abstract class Module implements Identified {
 		return mc.level != null && mc.player != null;
 	}
 
+	/** Shows an info notification titled with the module's name. */
 	public void info(String message) {
 		Myriad.notifications().info(name, message);
 	}
 
+	/** Shows a warning notification titled with the module's name. */
 	public void warn(String message) {
 		Myriad.notifications().warn(name, message);
 	}
 
+	/** Shows an error notification titled with the module's name. */
 	public void error(String message) {
 		Myriad.notifications().error(name, message);
 	}
 
-	/** Sends a client-side chat line prefixed with the Myriad tag. */
+	/** Sends a client-side chat line prefixed with the Myriad tag (see {@link Myriad#chat(Component)}). */
 	protected void sendChat(Component text) {
 		Myriad.chat(text);
 	}
 
+	/** The display name. */
 	@Override
 	public String toString() {
 		return name;
 	}
 
+	/** Core's: binds {@link #mc} once the game client exists. */
 	@ApiStatus.Internal
 	public static void bindClient(Minecraft client) {
 		mc = client;

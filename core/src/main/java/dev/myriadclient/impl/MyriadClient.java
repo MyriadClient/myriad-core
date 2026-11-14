@@ -13,13 +13,13 @@ import dev.myriadclient.impl.dev.DevConsole;
 import dev.myriadclient.impl.keybind.VanillaKeys;
 import dev.myriadclient.impl.render.GhostRenderer;
 import dev.myriadclient.impl.render.HighlightRenderer;
-import dev.myriadclient.impl.render.MeshRenderer;
 import dev.myriadclient.impl.render.MyriadPipelines;
 import dev.myriadclient.impl.render.WorldRenderQueue;
 import dev.myriadclient.impl.render.preview.PreviewRenderer;
 import dev.myriadclient.impl.render.title.TitleSceneRenderer;
 import dev.myriadclient.impl.ui.MyriadTitleScreen;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -64,8 +64,8 @@ public class MyriadClient implements ClientModInitializer {
 		});
 
 		// After the tab list, not last: Fabric draws its last layers with the subtitles, which Minecraft defers while a
-		// screen is open, to that screen's background; a screen that draws its own background (and doesn't ask for them)
-		// got Myriad's HUD and every Render2DEvent drawn over it. The tab list is drawn in the HUD's own pass, every frame.
+		// screen is open, to that screen's background, so a screen that draws its own background (and doesn't ask for
+		// them) would get Myriad's HUD and every Render2DEvent drawn over it. The tab list is drawn in the HUD's own pass.
 		HudElementRegistry.attachElementAfter(VanillaHudElements.PLAYER_LIST, Identifier.fromNamespaceAndPath("myriad", "hud"), (ctx, tickCounter) -> {
 			if (bus.hasListeners(Render2DEvent.class)) {
 				myriad.windowManager().draw(ctx, canvas -> bus.post(new Render2DEvent(ctx, canvas, tickCounter.getGameTimeDeltaPartialTick(false))));
@@ -102,19 +102,16 @@ public class MyriadClient implements ClientModInitializer {
 				bus.post(new Render3DEvent(ctx.poseStack(), camera, tickDelta, ctx.submitNodeCollector()));
 			}
 			WorldRenderQueue.INSTANCE.submit(ctx.submitNodeCollector(), ctx.poseStack(), camera);
-			HighlightRenderer.INSTANCE.collectShapes(ctx.submitNodeCollector(), ctx.poseStack());
+			HighlightRenderer.INSTANCE.collectShapes();
 		});
-
-		// Retained meshes (WorldMesh, ChunkCache) draw straight after the per-frame shapes, in the same place in the frame.
-		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register(ctx -> MeshRenderer.draw(ctx.levelState().cameraRenderState));
 
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, mc) -> bus.post(WorldEvent.Join.INSTANCE));
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, mc) -> bus.post(WorldEvent.Leave.INSTANCE));
 
 		ClientLifecycleEvents.CLIENT_STARTED.register(mc -> bus.post(GameReadyEvent.INSTANCE));
 
-		// Dev convenience: -Dmyriad.openDesktop=true opens the desktop the first time the title screen appears.
-		if (Boolean.getBoolean("myriad.openDesktop")) {
+		// Dev convenience: -Dmyriad.openUi=true opens the menu the first time the title screen appears.
+		if (Boolean.getBoolean("myriad.openUi")) {
 			boolean[] done = {false};
 			bus.listen(ScreenOpenEvent.class, e -> {
 				// Myriad's own title screen takes vanilla's place in this same event, maybe before this listener sees it.
@@ -135,11 +132,14 @@ public class MyriadClient implements ClientModInitializer {
 				});
 			});
 		}
-		// Dev scripting: -Dmyriad.devConsole=<file> runs lines appended to that file (see DevConsole), so tests can drive
-		// the game from outside it.
+		// Dev scripting (see DevConsole): in a development environment, steps for test frameworks (Myriad.devSteps());
+		// -Dmyriad.devConsole=<file> also runs the lines appended to that file, so scripts can drive the game from outside it.
 		String devConsole = System.getProperty("myriad.devConsole");
-		if (devConsole != null && !devConsole.isBlank()) {
-			bus.subscribe(new DevConsole(Path.of(devConsole), myriad.commandManager()));
+		boolean inbox = devConsole != null && !devConsole.isBlank();
+		if (inbox || FabricLoader.getInstance().isDevelopmentEnvironment()) {
+			DevConsole console = new DevConsole(inbox ? Path.of(devConsole) : null, myriad.commandManager());
+			bus.subscribe(console);
+			myriad.devSteps(console);
 		}
 		// Dev check: -Dmyriad.auditMixins=true applies every mixin (Myriad's and addons') once the game has started.
 		// Mixins into classes that load late (chat, screens) otherwise only fail when you first open them.

@@ -4,7 +4,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 import dev.myriadclient.api.event.events.KeyEvent;
 import dev.myriadclient.api.event.events.MouseButtonEvent;
-import dev.myriadclient.api.util.Keybind;
+import dev.myriadclient.api.input.Keybind;
+import org.jspecify.annotations.Nullable;
 
 import java.util.function.Supplier;
 
@@ -19,7 +20,11 @@ import java.util.function.Supplier;
  * }</pre>
  */
 public class KeybindSetting extends Setting<Keybind> {
-	public KeybindSetting(String name, String description, Keybind defaultValue, Supplier<Boolean> visible) {
+	/**
+	 * A setting as its {@link Builder} makes it; get one from {@link SettingGroup#keybind(String)}, or call this from a
+	 * subclass.
+	 */
+	public KeybindSetting(String name, @Nullable String description, Keybind defaultValue, @Nullable Supplier<Boolean> visible) {
 		super(name, description, defaultValue, visible);
 	}
 
@@ -56,7 +61,12 @@ public class KeybindSetting extends Setting<Keybind> {
 		return get().displayName();
 	}
 
+	/** Builds a {@link KeybindSetting}; unbound ({@link Keybind#NONE}) by default. */
 	public static class Builder extends Setting.Builder<KeybindSetting.Builder, Keybind, KeybindSetting> {
+		/**
+		 * A builder for a setting called {@code name}; prefer {@link SettingGroup#keybind(String)}, which adds it to
+		 * the group.
+		 */
 		public Builder(String name) {
 			super(name, Keybind.NONE);
 		}

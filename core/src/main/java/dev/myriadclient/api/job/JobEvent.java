@@ -4,7 +4,8 @@ import org.jetbrains.annotations.ApiStatus;
 
 /**
  * Jobs starting, changing and finishing, on the bus: for UIs, and for addons that react to another addon's work (a
- * Discord addon posting when a search lands). Fired on the render thread, on the job's tick.
+ * Discord addon posting when a search lands). Fired on the render thread, on the job's tick (or when it's cancelled).
+ * Not cancellable.
  */
 public abstract class JobEvent {
 	private final Job<?> job;
@@ -13,6 +14,7 @@ public abstract class JobEvent {
 		this.job = job;
 	}
 
+	/** The job it's about. */
 	public Job<?> job() {
 		return job;
 	}
@@ -24,6 +26,7 @@ public abstract class JobEvent {
 
 	/** A job (root or child) started. */
 	public static final class Started extends JobEvent {
+		/** Core's; only Myriad makes these. */
 		@ApiStatus.Internal
 		public Started(Job<?> job) {
 			super(job);
@@ -34,6 +37,7 @@ public abstract class JobEvent {
 	public static final class Changed extends JobEvent {
 		private final Job.State before;
 
+		/** Core's; only Myriad makes these. */
 		@ApiStatus.Internal
 		public Changed(Job<?> job, Job.State before) {
 			super(job);
@@ -48,6 +52,7 @@ public abstract class JobEvent {
 
 	/** Done, failed or cancelled; {@link Job#state()} and {@link Job#why()} say which. */
 	public static final class Finished extends JobEvent {
+		/** Core's; only Myriad makes these. */
 		@ApiStatus.Internal
 		public Finished(Job<?> job) {
 			super(job);

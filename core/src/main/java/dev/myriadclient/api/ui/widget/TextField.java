@@ -1,20 +1,29 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
+import com.mojang.blaze3d.platform.InputConstants;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.ui.Icons;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.InputQuirks;
 import org.jetbrains.annotations.ApiStatus;
-import org.lwjgl.glfw.GLFW;
+import org.jspecify.annotations.Nullable;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
  * Single-line text input. {@code onChange} fires on every edit, {@code onSubmit} on Enter. While unfocused it shows
- * {@code getter}'s value.
+ * {@code getter}'s value; clicking it (or Enter, or {@code /} for the first field in a window) starts editing a copy of
+ * that value, and the field holds keyboard focus until Enter, Escape or a click elsewhere. While focused it takes every
+ * key, so the UI's shortcuts don't fire. Ctrl+Left and Ctrl+Backspace go by words, Ctrl+A/C/V (Cmd on a Mac) select
+ * all, copy and paste; right-click empties it.
+ *
+ * <pre>{@code
+ * content.add(new TextField(() -> filter).onChange(s -> filter = s).search().placeholder("Filter…"));
+ * }</pre>
  */
 public class TextField extends Widget {
 	/** The room a search box's cross takes at its right. */
@@ -26,7 +35,7 @@ public class TextField extends Widget {
 	private Consumer<String> onSubmit = s -> {
 	};
 	private String placeholder = "";
-	private String icon;
+	private @Nullable String icon;
 	private boolean clearable;
 	private String text = "";
 	private int cursor;
@@ -34,51 +43,59 @@ public class TextField extends Widget {
 	private float scrollX;
 	private long blinkStart;
 
+	/** A field showing {@code getter}'s value while it isn't being edited (read every frame). */
 	public TextField(Supplier<String> getter) {
 		this.getter = getter;
 	}
 
+	/** Called with the whole text after every edit while typing (including emptying it). Returns this field. */
 	public TextField onChange(Consumer<String> onChange) {
 		this.onChange = onChange;
 		return this;
 	}
 
+	/** Called with the text when Enter is pressed, before the field lets go of the keyboard. Returns this field. */
 	public TextField onSubmit(Consumer<String> onSubmit) {
 		this.onSubmit = onSubmit;
 		return this;
 	}
 
+	/** Dim text shown while the field is empty and not being edited. Returns this field. */
 	public TextField placeholder(String placeholder) {
 		this.placeholder = placeholder;
 		return this;
 	}
 
-	/** A glyph at the left of the field: a search box's magnifier. */
-	@ApiStatus.AvailableSince("1.4.0")
+	/** A glyph at the left of the field: a search box's magnifier. Returns this field. */
+	@ApiStatus.AvailableSince("1.4")
 	public TextField icon(String glyph) {
 		this.icon = glyph;
 		return this;
 	}
 
-	/** A search box: the magnifier at its left, and a cross at its right that empties it once it holds something. */
-	@ApiStatus.AvailableSince("1.4.0")
+	/**
+	 * A search box: the magnifier at its left, and a cross at its right that empties it once it holds something.
+	 * Returns this field.
+	 */
+	@ApiStatus.AvailableSince("1.4")
 	public TextField search() {
 		this.clearable = true;
 		return icon(Icons.SEARCH);
 	}
 
+	/** What's typed while it's being edited, otherwise {@code getter}'s value. */
 	public String text() {
 		return isFocused() ? text : getter.get();
 	}
 
 	/** Whether the keyboard is typing here. */
-	@ApiStatus.AvailableSince("1.4.0")
+	@ApiStatus.AvailableSince("1.4")
 	public boolean hasFocus() {
 		return isFocused();
 	}
 
 	/** Lets go of the keyboard, as Escape does. */
-	@ApiStatus.AvailableSince("1.4.0")
+	@ApiStatus.AvailableSince("1.4")
 	public void releaseFocus() {
 		blur();
 	}
@@ -92,6 +109,10 @@ public class TextField extends Widget {
 		}
 	}
 
+	/**
+	 * Replaces what's being typed with {@code s}, the cursor at its end, and calls {@code onChange}. While the field
+	 * isn't focused it shows {@code getter}'s value regardless.
+	 */
 	public void setText(String s) {
 		text = s;
 		cursor = s.length();
@@ -171,7 +192,7 @@ public class TextField extends Widget {
 			text = getter.get();
 			focus();
 		}
-		if (button == 1 || overClear(mx, my)) {
+		if (button == InputConstants.MOUSE_BUTTON_RIGHT || overClear(mx, my)) {
 			setText("");
 		}
 		cursor = text.length();
@@ -199,16 +220,16 @@ public class TextField extends Widget {
 	public boolean keyPressed(int key, int scancode, int mods) {
 		if (!isFocused()) return false;
 		blinkStart = System.nanoTime();
-		boolean ctrl = (mods & GLFW.GLFW_MOD_CONTROL) != 0;
+		boolean ctrl = (mods & InputConstants.MOD_CONTROL) != 0;
 		// Select all, copy and paste take Cmd too on a Mac, as Minecraft's own text fields do.
 		boolean edit = ctrl || (mods & InputQuirks.EDIT_SHORTCUT_KEY_MODIFIER) != 0;
-		switch (key) {
-			case GLFW.GLFW_KEY_ESCAPE -> blur();
-			case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
+		switch (Keybind.letter(key)) {
+			case InputConstants.KEY_ESCAPE -> blur();
+			case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> {
 				onSubmit.accept(text);
 				blur();
 			}
-			case GLFW.GLFW_KEY_BACKSPACE -> {
+			case InputConstants.KEY_BACKSPACE -> {
 				if (selectAll) {
 					setText("");
 					selectAll = false;
@@ -219,7 +240,7 @@ public class TextField extends Widget {
 					onChange.accept(text);
 				}
 			}
-			case GLFW.GLFW_KEY_DELETE -> {
+			case InputConstants.KEY_DELETE -> {
 				if (selectAll) {
 					setText("");
 					selectAll = false;
@@ -228,29 +249,29 @@ public class TextField extends Widget {
 					onChange.accept(text);
 				}
 			}
-			case GLFW.GLFW_KEY_LEFT -> {
+			case InputConstants.KEY_LEFT -> {
 				cursor = ctrl ? wordStart(cursor) : Math.max(0, cursor - 1);
 				selectAll = false;
 			}
-			case GLFW.GLFW_KEY_RIGHT -> {
+			case InputConstants.KEY_RIGHT -> {
 				cursor = Math.min(text.length(), cursor + 1);
 				selectAll = false;
 			}
-			case GLFW.GLFW_KEY_HOME -> cursor = 0;
-			case GLFW.GLFW_KEY_END -> cursor = text.length();
-			case GLFW.GLFW_KEY_A -> {
+			case InputConstants.KEY_HOME -> cursor = 0;
+			case InputConstants.KEY_END -> cursor = text.length();
+			case InputConstants.KEY_A -> {
 				if (edit) selectAll = true;
 			}
-			case GLFW.GLFW_KEY_C -> {
+			case InputConstants.KEY_C -> {
 				if (edit) Minecraft.getInstance().keyboardHandler.setClipboard(text);
 			}
-			case GLFW.GLFW_KEY_V -> {
+			case InputConstants.KEY_V -> {
 				if (edit) insert(Minecraft.getInstance().keyboardHandler.getClipboard().replace("\n", " "));
 			}
 			default -> {
 			}
 		}
-		// Swallow everything while focused so desktop shortcuts don't fire mid-typing.
+		// Swallow everything while focused so UI shortcuts don't fire mid-typing.
 		return true;
 	}
 

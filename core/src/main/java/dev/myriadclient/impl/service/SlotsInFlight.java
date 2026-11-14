@@ -1,6 +1,6 @@
 package dev.myriadclient.impl.service;
 
-import dev.myriadclient.api.util.Slots;
+import dev.myriadclient.api.item.Slots;
 import dev.myriadclient.api.util.Ticks;
 import dev.myriadclient.impl.MyriadImpl;
 

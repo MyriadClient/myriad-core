@@ -1,11 +1,11 @@
 package dev.myriadclient.impl.ui;
 
 import com.google.gson.JsonObject;
-import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Rect;
 import dev.myriadclient.api.ui.ThemeSettings;
+import dev.myriadclient.api.ui.Ui;
 import dev.myriadclient.api.ui.Window;
 import dev.myriadclient.impl.ui.panels.CorePanels;
 
@@ -31,7 +31,7 @@ final class HudElements {
 
 	/** The HUD element of this type, if it's on the HUD. */
 	Optional<WindowImpl> element(PanelType type) {
-		for (WindowImpl w : wm.workspaces[Desktop.HUD_WORKSPACE].floating) if (w.type == type && w.isHudElement()) return Optional.of(w);
+		for (WindowImpl w : wm.workspaces[Ui.HUD_WORKSPACE].floating) if (w.type == type && w.isHudElement()) return Optional.of(w);
 		return Optional.empty();
 	}
 
@@ -40,7 +40,7 @@ final class HudElements {
 		if (!type.isHud() || element(type).isPresent()) return;
 		Panel panel = wm.createPanel(type, new JsonObject());
 		if (panel == null) return;
-		WindowImpl w = new WindowImpl(wm, wm.nextUid++, type, new JsonObject(), panel, Desktop.HUD_WORKSPACE);
+		WindowImpl w = new WindowImpl(wm, wm.nextUid++, type, new JsonObject(), panel, Ui.HUD_WORKSPACE);
 		w.floating = true;
 		placeDefault(w);
 		wm.insert(w, true);
@@ -66,7 +66,7 @@ final class HudElements {
 			((WindowImpl) open.get()).fullscreen = false;
 			return;
 		}
-		wm.openPanel(CorePanels.HUD_ELEMENTS, new JsonObject(), Desktop.HUD_WORKSPACE, true).ifPresent(w -> ((WindowImpl) w).placed = false);
+		wm.openPanel(CorePanels.HUD_ELEMENTS, new JsonObject(), Ui.HUD_WORKSPACE, true).ifPresent(w -> ((WindowImpl) w).placed = false);
 	}
 
 	/**
@@ -75,13 +75,13 @@ final class HudElements {
 	 */
 	void adoptStrays() {
 		for (WindowImpl w : new ArrayList<>(wm.windows)) {
-			if (w.workspace == Desktop.HUD_WORKSPACE) continue;
+			if (w.workspace == Ui.HUD_WORKSPACE) continue;
 			if (w.isHudEditor()) {
-				wm.moveToWorkspace(w, Desktop.HUD_WORKSPACE);
+				wm.moveToWorkspace(w, Ui.HUD_WORKSPACE);
 			} else if (w.type.isHud() && element(w.type).isPresent()) {
 				wm.closeWindow(w);
 			} else if (w.type.isHud()) {
-				wm.moveToWorkspace(w, Desktop.HUD_WORKSPACE);
+				wm.moveToWorkspace(w, Ui.HUD_WORKSPACE);
 				placeDefault(w);
 			}
 		}
@@ -97,7 +97,7 @@ final class HudElements {
 
 	/** The sidebar, if it's on the HUD workspace. */
 	Optional<WindowImpl> editor() {
-		for (WindowImpl w : wm.workspaces[Desktop.HUD_WORKSPACE].floating) if (w.isHudEditor()) return Optional.of(w);
+		for (WindowImpl w : wm.workspaces[Ui.HUD_WORKSPACE].floating) if (w.isHudEditor()) return Optional.of(w);
 		return Optional.empty();
 	}
 

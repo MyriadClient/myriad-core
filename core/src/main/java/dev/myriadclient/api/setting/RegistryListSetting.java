@@ -9,6 +9,7 @@ import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -19,18 +20,26 @@ import java.util.function.Supplier;
 
 /**
  * A set of entries from a vanilla registry (blocks, items, entity types, status effects, …). Edited in the UI with
- * an inline searchable picker. Command input: {@code add <id>}, {@code remove <id>}, {@code clear}.
+ * an inline searchable picker. Command input: {@code add <id>}, {@code remove <id>}, {@code clear}. Saved by id; ids
+ * no longer in the registry are dropped when loading.
  */
 public class RegistryListSetting<T> extends Setting<Set<T>> {
 	private final Registry<T> registry;
 	private final Predicate<T> filter;
 
-	public RegistryListSetting(String name, String description, Set<T> defaultValue, Supplier<Boolean> visible, Registry<T> registry, Predicate<T> filter) {
+	/**
+	 * A setting as its {@link Builder} makes it; get one from {@link SettingGroup#registryList} or the shortcuts beside
+	 * it, or call this from a subclass.
+	 *
+	 * @param filter which entries may be picked; null for all
+	 */
+	public RegistryListSetting(String name, @Nullable String description, Set<T> defaultValue, @Nullable Supplier<Boolean> visible, Registry<T> registry, @Nullable Predicate<T> filter) {
 		super(name, description, defaultValue, visible);
 		this.registry = registry;
 		this.filter = filter == null ? t -> true : filter;
 	}
 
+	/** The registry the entries come from. */
 	public Registry<T> registry() {
 		return registry;
 	}
@@ -40,18 +49,22 @@ public class RegistryListSetting<T> extends Setting<Set<T>> {
 		return filter.test(t);
 	}
 
+	/** Whether {@code t} is in the set in effect. */
 	public boolean contains(T t) {
 		return get().contains(t);
 	}
 
+	/** Adds {@code t} to the player's set, if the filter {@linkplain #accepts accepts} it. */
 	public void add(T t) {
 		if (accepts(t) && value.add(t)) changed();
 	}
 
+	/** Removes {@code t} from the player's set. */
 	public void remove(T t) {
 		if (value.remove(t)) changed();
 	}
 
+	/** Removes {@code t} if it's in the set, otherwise adds it (if accepted). */
 	public void toggle(T t) {
 		if (contains(t)) remove(t);
 		else add(t);
@@ -119,20 +132,27 @@ public class RegistryListSetting<T> extends Setting<Set<T>> {
 		return get().size() + " selected" + (ids.isEmpty() ? "" : ": " + String.join(", ", ids.subList(0, Math.min(5, ids.size()))) + (ids.size() > 5 ? ", …" : ""));
 	}
 
+	/** Builds a {@link RegistryListSetting}; empty by default. */
 	public static class Builder<T> extends Setting.Builder<RegistryListSetting.Builder<T>, Set<T>, RegistryListSetting<T>> {
 		private final Registry<T> registry;
-		private Predicate<T> filter;
+		private @Nullable Predicate<T> filter;
 
+		/**
+		 * A builder for a setting called {@code name}; prefer {@link SettingGroup#registryList}, which adds it to the
+		 * group.
+		 */
 		public Builder(String name, Registry<T> registry) {
 			super(name, Set.of());
 			this.registry = registry;
 		}
 
+		/** The entries it starts with. */
 		@SafeVarargs
 		public final RegistryListSetting.Builder<T> defaultValue(T... values) {
 			return defaultValue(new LinkedHashSet<>(List.of(values)));
 		}
 
+		/** Only entries passing {@code filter} can be picked (e.g. only blocks with a collision shape). */
 		public RegistryListSetting.Builder<T> filter(Predicate<T> filter) {
 			this.filter = filter;
 			return this;
@@ -144,18 +164,24 @@ public class RegistryListSetting<T> extends Setting<Set<T>> {
 		}
 	}
 
+	/** A builder for a set of blocks, not added to any group; prefer {@link SettingGroup#blocks(String)}. */
 	public static RegistryListSetting.Builder<Block> blocks(String name) {
 		return new RegistryListSetting.Builder<>(name, BuiltInRegistries.BLOCK);
 	}
 
+	/** A builder for a set of items, not added to any group; prefer {@link SettingGroup#items(String)}. */
 	public static RegistryListSetting.Builder<Item> items(String name) {
 		return new RegistryListSetting.Builder<>(name, BuiltInRegistries.ITEM);
 	}
 
+	/** A builder for a set of entity types, not added to any group; prefer {@link SettingGroup#entityTypes(String)}. */
 	public static RegistryListSetting.Builder<EntityType<?>> entityTypes(String name) {
 		return new RegistryListSetting.Builder<>(name, BuiltInRegistries.ENTITY_TYPE);
 	}
 
+	/**
+	 * A builder for a set of status effects, not added to any group; prefer {@link SettingGroup#statusEffects(String)}.
+	 */
 	public static RegistryListSetting.Builder<MobEffect> statusEffects(String name) {
 		return new RegistryListSetting.Builder<>(name, BuiltInRegistries.MOB_EFFECT);
 	}

@@ -1,15 +1,15 @@
 package dev.myriadclient.api.render;
 
-import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.MeshData;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.module.Module;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.function.Consumer;
 
@@ -25,8 +25,9 @@ import java.util.function.Consumer;
  * private void onTick(TickEvent.Post e) {
  *     if (!changed) return;
  *     mesh.build(m -> {
- *         for (BlockPos pos : found) m.blockShape(pos, fill, line, ShapeMode.BOTH, true);
+ *         for (BlockPos pos : found) m.blockShape(pos, fill, line, Renderer3D.ShapeMode.BOTH, true);
  *     });
+ *     changed = false;
  * }
  * }</pre>
  *
@@ -42,7 +43,7 @@ public final class WorldMesh implements AutoCloseable {
 	private final int[] indexCounts = new int[MeshBuilder.LAYERS];
 	private final String label;
 	private double originX, originY, originZ;
-	private AABB bounds;
+	private @Nullable AABB bounds;
 	private boolean active, visible = true, closed, registered;
 
 	private WorldMesh(String label, boolean active) {
@@ -65,7 +66,10 @@ public final class WorldMesh implements AutoCloseable {
 		return mesh;
 	}
 
-	/** Replaces the mesh's shapes with what {@code shapes} adds, stored relative to the camera's block. */
+	/**
+	 * Replaces the mesh's shapes with what {@code shapes} adds, stored relative to the camera's block. If
+	 * {@code shapes} throws, the mesh is left as it was and the exception passes on.
+	 */
 	public void build(Consumer<MeshBuilder> shapes) {
 		Vec3 camera = Minecraft.getInstance().gameRenderer.mainCamera().position();
 		build(Math.floor(camera.x), Math.floor(camera.y), Math.floor(camera.z), shapes);
@@ -118,16 +122,18 @@ public final class WorldMesh implements AutoCloseable {
 		this.visible = visible;
 	}
 
+	/** Whether it's shown ({@link #setVisible}); a visible mesh still draws nothing while empty or its module is off. */
 	public boolean isVisible() {
 		return visible;
 	}
 
+	/** Whether it holds no shapes: never built, cleared, or built with nothing. */
 	public boolean isEmpty() {
 		for (GpuBuffer b : buffers) if (b != null) return false;
 		return true;
 	}
 
-	/** Frees the mesh for good. */
+	/** Frees the mesh for good; building it afterwards throws {@link IllegalStateException}. */
 	@Override
 	public void close() {
 		clear();
@@ -150,36 +156,43 @@ public final class WorldMesh implements AutoCloseable {
 
 	// ---- for the renderer ------------------------------------------------------------------------------------------
 
+	/** Core's: whether the renderer draws it this frame. */
 	@ApiStatus.Internal
 	public boolean shouldDraw() {
 		return active && visible && registered;
 	}
 
+	/** Core's: one layer's vertex buffer, null if the layer is empty. */
 	@ApiStatus.Internal
 	public @Nullable GpuBuffer buffer(int layer) {
 		return buffers[layer];
 	}
 
+	/** Core's: how many indices one layer draws. */
 	@ApiStatus.Internal
 	public int indexCount(int layer) {
 		return indexCounts[layer];
 	}
 
+	/** Core's: the box around every shape, in world coordinates, for culling; null while empty. */
 	@ApiStatus.Internal
-	public AABB bounds() {
+	public @Nullable AABB bounds() {
 		return bounds;
 	}
 
+	/** Core's: the x the shapes are stored relative to. */
 	@ApiStatus.Internal
 	public double originX() {
 		return originX;
 	}
 
+	/** Core's: the y the shapes are stored relative to. */
 	@ApiStatus.Internal
 	public double originY() {
 		return originY;
 	}
 
+	/** Core's: the z the shapes are stored relative to. */
 	@ApiStatus.Internal
 	public double originZ() {
 		return originZ;

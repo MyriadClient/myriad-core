@@ -1,10 +1,12 @@
 package dev.myriadclient.api.control;
 
 import com.google.gson.JsonElement;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.addon.AddonContext;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.setting.Setting;
-import dev.myriadclient.api.util.Keybind;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -27,7 +29,7 @@ import java.util.function.Consumer;
  *     .module(tunnel, m -> m.set(tunnel.width, 3).set(tunnel.height, 3))
  *     .module(autoTool)
  *     .module("myriad-essentials:nuker", m -> m.set("range", "4"))
- *     .keybind(Keybind.key(GLFW.GLFW_KEY_G))
+ *     .keybind(Keybind.key(InputConstants.KEY_G))
  *     .build());
  * }</pre>
  * Register it after the modules it names (their ids come from registering them).
@@ -53,10 +55,12 @@ public final class ControlPreset {
 		return Collections.unmodifiableMap(copy);
 	}
 
+	/** Starts a preset called {@code name}, the name players see (they can rename it). */
 	public static Builder builder(String name) {
 		return new Builder(name);
 	}
 
+	/** The name it starts with. */
 	public String name() {
 		return name;
 	}
@@ -76,10 +80,12 @@ public final class ControlPreset {
 		return values;
 	}
 
+	/** The bind it starts with; {@link Keybind#NONE} unless the builder gave one. */
 	public Keybind keybind() {
 		return keybind;
 	}
 
+	/** Builds a {@link ControlPreset}; each module is listed once, however often it's added. */
 	public static final class Builder {
 		private final String name;
 		private final List<String> modules = new ArrayList<>();
@@ -129,6 +135,7 @@ public final class ControlPreset {
 			return this;
 		}
 
+		/** The finished preset, immutable; the builder can go on to make another. */
 		public ControlPreset build() {
 			return new ControlPreset(this);
 		}
@@ -137,16 +144,19 @@ public final class ControlPreset {
 	/** The settings one module takes while the panel is on. */
 	public static final class ModuleSettings {
 		private final Builder builder;
-		private final Module module;
+		private final @Nullable Module module;
 		private final String id;
 
-		private ModuleSettings(Builder builder, Module module, String id) {
+		private ModuleSettings(Builder builder, @Nullable Module module, String id) {
 			this.builder = builder;
 			this.module = module;
 			this.id = id;
 		}
 
-		/** {@code setting} (one of this module's) at {@code value} while the panel is on. */
+		/**
+		 * {@code setting} (one of this module's) at {@code value} while the panel is on. Only for a module given by
+		 * instance: throws {@link IllegalArgumentException} if the setting isn't its own or the module was given by id.
+		 */
 		public <T> ModuleSettings set(Setting<T> setting, T value) {
 			if (module == null || !module.settings.all().contains(setting)) {
 				throw new IllegalArgumentException(setting.name() + " isn't a setting of " + (module != null ? module.name() : id));

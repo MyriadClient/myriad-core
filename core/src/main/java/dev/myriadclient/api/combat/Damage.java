@@ -1,7 +1,7 @@
 package dev.myriadclient.api.combat;
 
-import dev.myriadclient.api.util.Entities;
-import dev.myriadclient.api.util.ItemInfo;
+import dev.myriadclient.api.item.ItemInfo;
+import dev.myriadclient.api.world.Entities;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
@@ -25,7 +25,11 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.function.Predicate;
 
-/** Client-side estimates of damage the server would deal, for predicting lethal hits. */
+/**
+ * Client-side estimates of damage the server would deal, for predicting lethal hits. Results are in health points
+ * (2 to a heart), after armour, toughness, Resistance and Protection, but not absorption: compare them with
+ * {@code Targets.health(entity)}, which includes it. Call them in game only (they read the client world).
+ */
 public final class Damage {
 	private static Minecraft mc() {
 		return Minecraft.getInstance();
@@ -35,7 +39,10 @@ public final class Damage {
 	private Damage() {
 	}
 
-	/** Damage an explosion of {@code power} at {@code center} would deal to {@code target} after armour and effects. */
+	/**
+	 * Damage an explosion of {@code power} (a crystal 6, a bed or anchor 5, a creeper 3) at {@code center} would deal to
+	 * {@code target} after armour and effects, scaled by difficulty for players; 0 beyond twice the power in blocks.
+	 */
 	public static float explosion(LivingEntity target, Vec3 center, float power) {
 		return explosion(target, target.position(), target.getBoundingBox(), center, power, NO_OVERRIDES);
 	}
@@ -66,16 +73,23 @@ public final class Damage {
 		return reduce(target, damage, true);
 	}
 
+	/** Damage an end crystal at {@code crystal} (see {@link Crystals#position}) would deal to {@code target}. */
 	public static float crystal(LivingEntity target, Vec3 crystal) {
 		return explosion(target, crystal, 6);
 	}
 
-	/** Crystal damage against where {@code target} will be in {@code ticks} ticks. */
+	/**
+	 * Crystal damage against where {@code target} will be in {@code predictTicks} ticks ({@link Entities#predict}),
+	 * with the blocks {@code asAir} accepts treated as gone.
+	 */
 	public static float crystal(LivingEntity target, Vec3 crystal, int predictTicks, Predicate<BlockPos> asAir) {
 		return explosion(target, Entities.predict(target, predictTicks), Entities.predictBox(target, predictTicks), crystal, 6, asAir);
 	}
 
-	/** A bed exploding at {@code bed} (in the Nether or End). */
+	/**
+	 * Damage a bed exploding at {@code bed} (in the Nether or End) would deal to {@code target}; both halves of the bed
+	 * count as gone. The dimension isn't checked.
+	 */
 	public static float bed(LivingEntity target, BlockPos bed) {
 		// The bed (both halves) is gone by the time it explodes: its own blocks don't shield anyone.
 		BlockPos other = bed;
@@ -87,7 +101,10 @@ public final class Damage {
 		return explosion(target, target.position(), target.getBoundingBox(), Vec3.atCenterOf(bed), 5, p -> p.equals(bed) || p.equals(half));
 	}
 
-	/** A respawn anchor exploding at {@code anchor} (outside the Nether). */
+	/**
+	 * Damage a respawn anchor exploding at {@code anchor} (outside the Nether) would deal to {@code target}; the
+	 * dimension isn't checked.
+	 */
 	public static float anchor(LivingEntity target, BlockPos anchor) {
 		// The anchor is gone by the time it explodes: it doesn't shield anyone from itself.
 		return explosion(target, target.position(), target.getBoundingBox(), Vec3.atCenterOf(anchor), 5, p -> p.equals(anchor));
@@ -123,7 +140,10 @@ public final class Damage {
 		return hit != null;
 	}
 
-	/** Applies armour, toughness, resistance and protection enchantments. */
+	/**
+	 * {@code damage} after {@code target}'s armour, toughness, Resistance and Protection (and Blast Protection, counted
+	 * double, when {@code blast}), capped at vanilla's 20 protection points.
+	 */
 	public static float reduce(LivingEntity target, float damage, boolean blast) {
 		var source = mc().level.damageSources().generic();
 		damage = CombatRules.getDamageAfterAbsorb(target, damage, source, target.getArmorValue(), (float) target.getAttributeValue(Attributes.ARMOR_TOUGHNESS));
@@ -138,7 +158,10 @@ public final class Damage {
 		return CombatRules.getDamageAfterMagicAbsorb(damage, Math.min(protection, 20));
 	}
 
-	/** Fall damage for falling {@code distance} blocks, after armour. */
+	/**
+	 * Fall damage for falling {@code distance} blocks onto a normal block, after the safe fall distance (Jump Boost
+	 * included), Feather Falling and Protection; 0 for a short fall. Landing on water, hay or slime isn't considered.
+	 */
 	public static float fall(LivingEntity target, float distance) {
 		var effect = target.getEffect(MobEffects.JUMP_BOOST);
 		float safe = (float) target.getAttributeValue(Attributes.SAFE_FALL_DISTANCE) + (effect == null ? 0 : effect.getAmplifier() + 1);
@@ -150,7 +173,11 @@ public final class Damage {
 		return CombatRules.getDamageAfterMagicAbsorb(damage, Math.min(protection + featherFalling * 3, 20));
 	}
 
-	/** A rough melee hit from {@code attacker} right now (charge, sharpness, crits). */
+	/**
+	 * A rough melee hit from {@code attacker} on {@code target} right now: its attack damage and Sharpness, scaled by its
+	 * attack charge, times 1.5 if it would crit, after {@code target}'s armour. Other enchantments and effects on the
+	 * attacker beyond its attributes aren't counted.
+	 */
 	public static float melee(Player attacker, LivingEntity target) {
 		float base = (float) attacker.getAttributeValue(Attributes.ATTACK_DAMAGE);
 		int sharpness = ItemInfo.enchantmentLevel(attacker.getMainHandItem(), Enchantments.SHARPNESS);

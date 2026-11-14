@@ -1,119 +1,64 @@
 package dev.myriadclient.api.registry;
 
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.registry.MyriadId;
+import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.IdentityHashMap;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /**
- * An ordered, namespaced registry. Every entry remembers which addon registered it so a failing addon's
- * contributions can be rolled back and the UI can show where things came from. Reading it ({@link #values()}, a
- * for-each, {@link #size()}) takes no lock and copies nothing: it reads the snapshot taken at the last change, so it's
- * fine every frame.
+ * An ordered, namespaced registry of one kind of thing (modules, commands, panels, themes...), from {@code Myriad}'s
+ * accessors. Every entry remembers which addon registered it, so a failing addon's contributions can be rolled back and
+ * the UI can show where things came from. It's read-only here: an addon adds its entries through its
+ * {@link dev.myriadclient.api.addon.AddonContext} ({@code registerModules}, {@code registerCommand}, ...), which names it
+ * as their owner.
+ * <p>
+ * Reading ({@link #values()}, a for-each, {@link #size()}) takes no lock and copies nothing: it reads the snapshot taken
+ * at the last change, so it's fine every frame.
+ *
+ * <pre>{@code
+ * for (Theme theme : Myriad.themes()) ...;
+ * Myriad.commands().get(MyriadId.of("myriad", "friend")).ifPresent(c -> ...);
+ * }</pre>
  */
-public class Registry<T extends Identified> implements Iterable<T> {
-	private final String name;
-	private final Map<MyriadId, T> entries = new LinkedHashMap<>();
-	private final Map<T, String> owners = new IdentityHashMap<>();
-	private final List<Consumer<T>> addListeners = new CopyOnWriteArrayList<>();
-	private final List<Consumer<T>> removeListeners = new CopyOnWriteArrayList<>();
-	/** The entries in order, copied on every change (rare) so reads (every frame) need neither a lock nor a copy. */
-	private volatile List<T> snapshot = List.of();
+@ApiStatus.NonExtendable
+public interface Registry<T extends Identified> extends Iterable<T> {
+	/** What the registry holds, for messages ("module", "theme"). */
+	String name();
 
-	public Registry(String name) {
-		this.name = name;
-	}
+	/** The entry with {@code id}; empty if there's none. */
+	Optional<T> get(MyriadId id);
 
-	public String name() {
-		return name;
-	}
+	/** The entry whose class is exactly {@code type} (not a subclass); empty if there's none. */
+	<C extends T> Optional<C> get(Class<C> type);
 
-	/**
-	 * Registers an entry. {@code owner} is the mod id of the registering addon. Most addon code should use the
-	 * registrars on {@code AddonContext}, which fill this in.
-	 */
-	public synchronized T register(T entry, String owner) {
-		MyriadId id = entry.id();
-		if (entries.containsKey(id)) throw new IllegalArgumentException("Duplicate " + name + " id: " + id);
-		entries.put(id, entry);
-		owners.put(entry, owner);
-		snapshot = List.copyOf(entries.values());
-		for (Consumer<T> l : addListeners) l.accept(entry);
-		return entry;
-	}
+	/** Whether an entry has {@code id}. */
+	boolean contains(MyriadId id);
 
-	public synchronized boolean unregister(MyriadId id) {
-		T removed = entries.remove(id);
-		if (removed == null) return false;
-		owners.remove(removed);
-		snapshot = List.copyOf(entries.values());
-		for (Consumer<T> l : removeListeners) l.accept(removed);
-		return true;
-	}
+	/** The mod id of the addon that registered {@code entry}; null if it isn't registered. */
+	@Nullable String ownerOf(T entry);
 
-	/** Removes everything {@code owner} registered. Returns the removed entries. */
-	public synchronized List<T> unregisterAll(String owner) {
-		List<T> removed = new ArrayList<>();
-		for (T t : List.copyOf(entries.values())) {
-			if (owner.equals(owners.get(t))) {
-				unregister(t.id());
-				removed.add(t);
-			}
-		}
-		return removed;
-	}
-
-	public synchronized Optional<T> get(MyriadId id) {
-		return Optional.ofNullable(entries.get(id));
-	}
-
-	public <C extends T> Optional<C> get(Class<C> type) {
-		for (T t : snapshot) if (t.getClass() == type) return Optional.of(type.cast(t));
-		return Optional.empty();
-	}
-
-	public synchronized boolean contains(MyriadId id) {
-		return entries.containsKey(id);
-	}
-
-	/** Mod id of the addon that registered {@code entry}, or {@code null}. */
-	public synchronized String ownerOf(T entry) {
-		return owners.get(entry);
-	}
-
-	public synchronized List<T> ownedBy(String owner) {
-		List<T> list = new ArrayList<>();
-		for (T t : entries.values()) if (owner.equals(owners.get(t))) list.add(t);
-		return list;
-	}
+	/** Everything the addon with mod id {@code owner} registered, in order; a copy. */
+	List<T> ownedBy(String owner);
 
 	/** Every entry in order, as of the last change: unmodifiable, and the same instance until something changes. */
-	public Collection<T> values() {
-		return snapshot;
-	}
+	Collection<T> values();
 
-	public int size() {
-		return snapshot.size();
-	}
+	/** How many entries there are. */
+	int size();
 
-	public void onAdd(Consumer<T> listener) {
-		addListeners.add(listener);
-	}
+	/**
+	 * Calls {@code listener} with each entry registered from now on (on the thread that registers it, the render
+	 * thread), not with those already there. A listener can't be removed.
+	 */
+	void onAdd(Consumer<T> listener);
 
-	public void onRemove(Consumer<T> listener) {
-		removeListeners.add(listener);
-	}
-
-	@Override
-	public Iterator<T> iterator() {
-		return snapshot.iterator();
-	}
+	/**
+	 * Calls {@code listener} with each entry removed from now on (an addon that failed, say). A listener can't be
+	 * removed.
+	 */
+	void onRemove(Consumer<T> listener);
 }

@@ -48,7 +48,7 @@ class GroupPlacementTest {
 	}
 
 	@Test
-	void aFullDesktopStillPlacesEverything() {
+	void aFullUiStillPlacesEverything() {
 		int[] full = counts(8, 8, 8, 8, 8, 8, 8, 8, 7);
 		assertArrayEquals(new int[]{9, 9}, GroupPlacement.place(2, full, CAPACITY));
 		int[] crowded = counts(9, 9, 9, 9, 9, 9, 9, 9, 9);

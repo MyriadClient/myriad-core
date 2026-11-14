@@ -62,11 +62,6 @@ final class TransferPlanner {
 		this.shiftClicks = shiftClicks;
 	}
 
-	/** Whether the cursor holds a stack this plan picked up. */
-	boolean carrying() {
-		return origin >= 0;
-	}
-
 	/**
 	 * The next click, or null when there's nothing more to do: {@code remaining} items have gone (it's only read with
 	 * the cursor empty), nothing left to move has room, or the cursor holds something this plan didn't pick up.

@@ -4,4 +4,7 @@
  * dev.myriadclient.api.job.Steps} has the services as steps; {@link dev.myriadclient.api.job.Step.Run} is how to write
  * your own. Render thread only.
  */
+@NullMarked
 package dev.myriadclient.api.job;
+
+import org.jspecify.annotations.NullMarked;

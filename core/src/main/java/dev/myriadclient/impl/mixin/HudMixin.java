@@ -3,12 +3,12 @@ package dev.myriadclient.impl.mixin;
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import dev.myriadclient.api.Myriad;
-import com.mojang.blaze3d.pipeline.RenderPipeline;
-import dev.myriadclient.api.util.Slots;
+import dev.myriadclient.api.item.Slots;
 import dev.myriadclient.impl.ui.ThemedHud;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.DeltaTracker;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.Hud;
@@ -16,6 +16,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -37,6 +38,7 @@ public abstract class HudMixin {
 	}
 
 	/** Whether this frame's hotbar and what sits on it were moved up off the screen's edge (see ThemedHud#MARGIN). */
+	@Unique
 	private boolean myriad$lifted;
 
 	@Inject(method = "extractHotbarAndDecorations", at = @At("HEAD"))
@@ -56,20 +58,20 @@ public abstract class HudMixin {
 
 	/** The hotbar's pieces, drawn in the theme while it's on (see ThemedHud). */
 	@WrapOperation(method = "extractItemHotbar", at = @At(value = "INVOKE",
-		target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIII)V"))
+		target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIII)V"))
 	private void myriad$hotbarSprite(GuiGraphicsExtractor graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h, Operation<Void> original) {
 		if (!ThemedHud.hotbar(graphics, sprite, x, y)) original.call(graphics, pipeline, sprite, x, y, w, h);
 	}
 
 	/** Hearts and food, each icon in the theme where Minecraft draws it (its wave, shake and flashing are Minecraft's own). */
 	@WrapOperation(method = {"extractHeart", "extractFood"}, at = @At(value = "INVOKE",
-		target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIII)V"))
+		target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIII)V"))
 	private void myriad$statusIcon(GuiGraphicsExtractor graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h, Operation<Void> original) {
 		if (!ThemedHud.statusIcon(graphics, sprite, x, y)) original.call(graphics, pipeline, sprite, x, y, w, h);
 	}
 
 	@WrapOperation(method = "extractArmor", at = @At(value = "INVOKE",
-		target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIII)V"))
+		target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIII)V"))
 	private static void myriad$armorIcon(GuiGraphicsExtractor graphics, RenderPipeline pipeline, Identifier sprite, int x, int y, int w, int h, Operation<Void> original) {
 		if (!ThemedHud.statusIcon(graphics, sprite, x, y)) original.call(graphics, pipeline, sprite, x, y, w, h);
 	}

@@ -39,8 +39,10 @@ public interface NoDurability {
 			return false;
 		}
 
+		/** Hears a message for the player about how it's going (a module passes it to its own {@code info}). */
 		void info(String message);
 
+		/** Hears a problem the player should fix (no chestplate to swap with, no room in the hotbar). */
 		void warn(String message);
 	}
 

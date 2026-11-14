@@ -1,17 +1,19 @@
 package dev.myriadclient.impl.ui;
 
 import com.google.gson.JsonObject;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.control.ControlPanel;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.job.Job;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.Tag;
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.Canvas;
-import dev.myriadclient.api.render.FontFamily;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.ThemeSettings;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.Canvas;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.api.util.FuzzyMatch;
 import dev.myriadclient.impl.MyriadImpl;
@@ -22,7 +24,6 @@ import dev.myriadclient.impl.ui.panels.CorePanels;
 import dev.myriadclient.impl.ui.panels.MenuGroups;
 import dev.myriadclient.impl.wheel.WheelImpl;
 import net.minecraft.client.Minecraft;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -35,7 +36,7 @@ import java.util.Set;
  * A rofi/wofi-style launcher: fuzzy search over modules, panels, categories, themes, profiles and workspaces.
  * Enter (or a click) runs the selection; Shift+Enter (a Shift or right click) runs its alternate action (e.g. open a
  * module's settings instead of toggling it). Mod+Space also opens it on its own over the game ({@link LauncherScreen}): what it runs there that
- * needs the desktop (a panel, a group's window, settings) opens the menu first, the rest happens without it.
+ * needs the UI (a panel, a group's window, settings) opens the menu first, the rest happens without it.
  */
 final class Launcher {
 	private static final float WIDTH = 260, ROW = 15, MAX_ROWS = 10;
@@ -45,8 +46,8 @@ final class Launcher {
 	}
 
 	/**
-	 * {@code inPlace}: {@link #run} works without the desktop showing (toggling a module, applying a theme).
-	 * {@code source}: the addon it comes from ("" for the player's own and the desktop's), for {@code @addon} filters.
+	 * {@code inPlace}: {@link #run} works without the UI showing (toggling a module, applying a theme).
+	 * {@code source}: the addon it comes from ("" for the player's own and the UI's), for {@code @addon} filters.
 	 * {@code tags}: what it is (module, panel, control…) and, for modules, their tags and group, for {@code #tag}.
 	 */
 	private record Entry(String icon, String title, String hint, Runnable run, Runnable alt, Kind kind, boolean inPlace, String source, Set<String> tags) {
@@ -66,7 +67,7 @@ final class Launcher {
 	private final WindowManager wm;
 	private final Animated open = new Animated(0);
 	private boolean visible;
-	/** Shown on its own over the game, not inside the desktop. */
+	/** Shown on its own over the game, not inside the UI. */
 	private boolean standalone;
 	private String query = "";
 	private int selected;
@@ -100,7 +101,7 @@ final class Launcher {
 	void hide() {
 		visible = false;
 		// On its own its screen closes with it, so nothing would draw the fade out: it would play the next time the
-		// desktop draws instead, a launcher closing over a workspace that just opened.
+		// UI draws instead, a launcher closing over a workspace that just opened.
 		if (standalone) open.snap(0);
 	}
 
@@ -312,7 +313,7 @@ final class Launcher {
 		int i = (int) ((my - y - 24) / ROW);
 		if (my >= y + 24 && i >= 0 && i < rows && first + i < results.size()) {
 			// A right click, or a click with Shift held as Shift+Enter, runs the alternate action.
-			run(results.get(first + i), button == 1 || shift);
+			run(results.get(first + i), button == InputConstants.MOUSE_BUTTON_RIGHT || shift);
 		}
 		return true;
 	}
@@ -320,35 +321,35 @@ final class Launcher {
 	private void run(Entry e, boolean alt) {
 		hide();
 		Runnable r = alt && e.alt != null ? e.alt : e.run;
-		// On its own over the game: what needs the desktop opens it first, so the window it opens shows.
+		// On its own over the game: what needs the UI opens it first, so the window it opens shows.
 		if (standalone && (r != e.run || !e.inPlace)) wm.open();
 		r.run();
 	}
 
 	boolean keyPressed(int key, int mods) {
 		if (!visible) return false;
-		switch (key) {
-			case GLFW.GLFW_KEY_ESCAPE -> hide();
-			case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
-				if (!results.isEmpty()) run(results.get(selected), (mods & GLFW.GLFW_MOD_SHIFT) != 0);
+		switch (Keybind.letter(key)) {
+			case InputConstants.KEY_ESCAPE -> hide();
+			case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> {
+				if (!results.isEmpty()) run(results.get(selected), (mods & InputConstants.MOD_SHIFT) != 0);
 			}
-			case GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_TAB -> selected = Math.min(results.size() - 1, selected + 1);
-			case GLFW.GLFW_KEY_UP -> selected = Math.max(0, selected - 1);
+			case InputConstants.KEY_DOWN, InputConstants.KEY_TAB -> selected = Math.min(results.size() - 1, selected + 1);
+			case InputConstants.KEY_UP -> selected = Math.max(0, selected - 1);
 			// Walker/fzf style: Ctrl+j/k or Ctrl+n/p move the selection (Cmd too on a Mac).
-			case GLFW.GLFW_KEY_J, GLFW.GLFW_KEY_N -> {
+			case InputConstants.KEY_J, InputConstants.KEY_N -> {
 				if (Shortcuts.ctrl(mods)) selected = Math.min(results.size() - 1, selected + 1);
 			}
-			case GLFW.GLFW_KEY_K, GLFW.GLFW_KEY_P -> {
+			case InputConstants.KEY_K, InputConstants.KEY_P -> {
 				if (Shortcuts.ctrl(mods)) selected = Math.max(0, selected - 1);
 			}
-			case GLFW.GLFW_KEY_BACKSPACE -> {
+			case InputConstants.KEY_BACKSPACE -> {
 				if (!query.isEmpty()) {
 					query = Shortcuts.ctrl(mods) ? "" : query.substring(0, query.length() - 1);
 					selected = 0;
 					refresh();
 				}
 			}
-			case GLFW.GLFW_KEY_V -> {
+			case InputConstants.KEY_V -> {
 				if (Shortcuts.ctrl(mods)) {
 					query += Minecraft.getInstance().keyboardHandler.getClipboard();
 					refresh();
@@ -362,8 +363,7 @@ final class Launcher {
 
 	boolean charTyped(char chr) {
 		if (!visible) return false;
-		long window = Minecraft.getInstance().getWindow().handle();
-		boolean ctrl = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS;
+		boolean ctrl = InputConstants.isKeyDown(InputConstants.KEY_LCONTROL) || InputConstants.isKeyDown(InputConstants.KEY_RCONTROL);
 		// Not the space of the mod+Space that opened it.
 		if (chr >= 32 && chr != 127 && !ctrl && !wm.modHeld()) {
 			query += chr;

@@ -27,14 +27,20 @@ public final class Async {
 	private Async() {
 	}
 
+	/**
+	 * The shared pool itself (half the processors, between 2 and 6 daemon threads named "Myriad Worker n"), for APIs that
+	 * take an {@link java.util.concurrent.Executor}. Don't shut it down.
+	 */
 	public static ExecutorService executor() {
 		return POOL;
 	}
 
+	/** Runs {@code task} on the pool; the future completes when it's done, exceptionally if it threw. */
 	public static CompletableFuture<Void> run(Runnable task) {
 		return CompletableFuture.runAsync(task, POOL);
 	}
 
+	/** Runs {@code task} on the pool; the future completes with its result, exceptionally if it threw. */
 	public static <T> CompletableFuture<T> supply(Supplier<T> task) {
 		return CompletableFuture.supplyAsync(task, POOL);
 	}

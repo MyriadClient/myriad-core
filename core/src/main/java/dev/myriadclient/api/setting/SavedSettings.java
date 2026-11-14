@@ -2,7 +2,8 @@ package dev.myriadclient.api.setting;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.registry.MyriadId;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Optional;
 import java.util.function.UnaryOperator;
@@ -23,6 +24,10 @@ import java.util.function.UnaryOperator;
 public final class SavedSettings {
 	private final JsonObject json;
 
+	/**
+	 * A view of {@code json}, a module's saved settings; changes write straight into it. Core makes these for {@code
+	 * migrateSettings}.
+	 */
 	public SavedSettings(JsonObject json) {
 		this.json = json;
 	}
@@ -32,11 +37,16 @@ public final class SavedSettings {
 		return json;
 	}
 
+	/** The saved value of {@code setting} in {@code group}; empty if it's at its default (not saved). */
 	public Optional<JsonElement> get(String group, String setting) {
 		JsonObject g = groupOrNull(group);
 		return g == null ? Optional.empty() : Optional.ofNullable(g.get(MyriadId.toPath(setting)));
 	}
 
+	/**
+	 * Saves {@code value} for {@code setting} in {@code group}, making the group if needed and replacing what was
+	 * there.
+	 */
 	public void set(String group, String setting, JsonElement value) {
 		String g = MyriadId.toPath(group);
 		if (!json.has(g) || !json.get(g).isJsonObject()) json.add(g, new JsonObject());
@@ -59,6 +69,7 @@ public final class SavedSettings {
 		set(toGroup, toSetting, value.get());
 	}
 
+	/** Renames a setting within its group: {@link #move} to the same group. */
 	public void rename(String group, String oldName, String newName) {
 		move(group, oldName, group, newName);
 	}
@@ -82,7 +93,7 @@ public final class SavedSettings {
 		else set(group, setting, mapped);
 	}
 
-	private JsonObject groupOrNull(String group) {
+	private @Nullable JsonObject groupOrNull(String group) {
 		JsonElement g = json.get(MyriadId.toPath(group));
 		return g != null && g.isJsonObject() ? g.getAsJsonObject() : null;
 	}

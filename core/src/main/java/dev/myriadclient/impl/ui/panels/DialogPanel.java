@@ -1,9 +1,9 @@
 package dev.myriadclient.impl.ui.panels;
 
 import com.google.gson.JsonObject;
-import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.ui.Rect;
 import dev.myriadclient.api.ui.WidgetPanel;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
@@ -12,12 +12,12 @@ import dev.myriadclient.api.ui.widget.Widget;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntFunction;
 import java.util.function.Supplier;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * A small floating question with confirm and cancel buttons (Desktop.confirm), or one that answers itself as cancel
+ * A small floating question with confirm and cancel buttons (Ui.confirm), or one that answers itself as cancel
  * after a while unless it's confirmed (a change you have to say you keep). Never saved with the layout.
  */
 public final class DialogPanel extends WidgetPanel {

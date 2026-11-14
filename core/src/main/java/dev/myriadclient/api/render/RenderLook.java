@@ -20,9 +20,10 @@ public interface RenderLook {
 	/** {@code color} for a box's edges in {@link RenderMode#BOX}; 0 for no edges. */
 	int boxLine(int color);
 
-	/** A box's edge width in {@link RenderMode#BOX}. */
+	/** A box's edge width in pixels in {@link RenderMode#BOX}. */
 	float lineWidth();
 
+	/** Whether boxes show through walls (drawn without depth testing) in {@link RenderMode#BOX}. */
 	boolean throughWalls();
 
 	/** Draws {@code box} as a {@link RenderMode#BOX} box in this look onto {@code shapes} (sets its line width). */

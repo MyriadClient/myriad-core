@@ -12,6 +12,7 @@ import dev.myriadclient.api.ui.widget.Toggle;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.ui.widget.Widget;
 
+/** One module's settings in a window of its own, group by group, as its row in a group window shows them unfolded. */
 public final class ModuleSettingsPanel extends WidgetPanel {
 	private final Module module;
 

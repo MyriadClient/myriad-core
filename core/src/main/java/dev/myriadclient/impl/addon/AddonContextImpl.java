@@ -11,25 +11,30 @@ import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.HookBuilder;
 import dev.myriadclient.api.hook.ReplacementBuilder;
 import dev.myriadclient.api.hook.Service;
+import dev.myriadclient.api.input.KeyAction;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.module.Tags;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.service.AntiCheat;
-import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.ui.BarWidget;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.SettingWidgets;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.layout.Layout;
-import dev.myriadclient.api.util.Keybind;
-import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.control.ControlManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * One addon's {@link AddonContext}: everything it registers goes into core's registries under its mod id (so it's
+ * rolled back together if the addon fails, and the UI can say where things came from), its logger is named after it,
+ * and its storage is {@code myriad/addons/<mod id>}.
+ */
 final class AddonContextImpl implements AddonContext {
 	private final Addon addon;
 	private final MyriadImpl myriad;

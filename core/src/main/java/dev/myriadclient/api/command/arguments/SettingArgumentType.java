@@ -15,7 +15,17 @@ import net.minecraft.network.chat.Component;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * A setting id of the module parsed by a preceding {@link ModuleArgumentType} argument named {@code module}.
+ * A setting id of the module parsed by a preceding {@link ModuleArgumentType} argument named {@code module}: its id
+ * ({@code range}), or {@code group.id} where two groups share one. Parsed as a plain word; {@link #get} looks it up.
+ * Suggests the module's saved settings (not buttons).
+ *
+ * <pre>{@code
+ * b.then(argument("module", Arguments.module()).then(argument("setting", SettingArgumentType.setting())
+ *     .then(argument("value", SettingValueArgumentType.value()).executes(c -> {
+ *         Setting<?> s = SettingArgumentType.get(c, "module", "setting");
+ *         ...
+ *     }))));
+ * }</pre>
  */
 public class SettingArgumentType implements ArgumentType<String> {
 	private static final DynamicCommandExceptionType NO_SUCH_SETTING =
@@ -27,10 +37,16 @@ public class SettingArgumentType implements ArgumentType<String> {
 		this.moduleArg = moduleArg;
 	}
 
+	/** A setting argument, for the module of the argument named {@code module}. */
 	public static SettingArgumentType setting() {
 		return new SettingArgumentType("module");
 	}
 
+	/**
+	 * The setting named by the argument {@code name}, of the module parsed for the argument {@code moduleArg}.
+	 *
+	 * @throws CommandSyntaxException if the module has no such setting
+	 */
 	public static Setting<?> get(CommandContext<?> ctx, String moduleArg, String name) throws CommandSyntaxException {
 		Module m = ModuleArgumentType.get(ctx, moduleArg);
 		String id = ctx.getArgument(name, String.class);

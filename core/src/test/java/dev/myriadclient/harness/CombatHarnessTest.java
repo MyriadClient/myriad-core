@@ -1,6 +1,6 @@
 package dev.myriadclient.harness;
 
-import dev.myriadclient.api.util.Interactions;
+import dev.myriadclient.api.player.Interactions;
 import net.minecraft.world.entity.monster.zombie.Zombie;
 import org.junit.jupiter.api.Test;
 
@@ -22,7 +22,7 @@ class CombatHarnessTest {
 				h.player.setYRot(10);
 				Interactions.attack(zombie, true);
 			}).tick();
-			assertEquals(List.of("Attack", "Swing", "MovePlayer"), h.kinds(1));
+			assertEquals(List.of("Attack", "Punch", "MovePlayer"), h.kinds(1));
 		}
 	}
 }

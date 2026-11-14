@@ -68,9 +68,9 @@ public final class JoinedVersion {
 		translated = false;
 		if (connection == null || !FabricLoader.getInstance().isModLoaded("viafabricplus")) return;
 		try {
-			Object api = Class.forName("com.viaversion.viafabricplus.ViaFabricPlus").getMethod("getImpl").invoke(null);
-			Method target = Class.forName("com.viaversion.viafabricplus.api.ViaFabricPlusBase").getMethod("getTargetVersion", Connection.class);
-			Object version = target.invoke(api, connection);
+			Object api = Class.forName("com.viaversion.viafabricplus.ViaFabricPlusImpl").getMethod("impl").invoke(null);
+			Method target = Class.forName("com.viaversion.viafabricplus.api.ViaFabricPlusAPI").getMethod("targetVersion");
+			Object version = target.invoke(api);
 			if (version == null) return;
 			Class<?> type = version.getClass();
 			int number = (int) type.getMethod("getVersion").invoke(version);

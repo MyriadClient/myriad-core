@@ -5,7 +5,7 @@ import dev.myriadclient.api.event.events.HighlightEvent;
 import dev.myriadclient.api.setting.SettingGroup;
 import net.minecraft.resources.Identifier;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,8 +29,8 @@ import java.util.Map;
  * @see HighlightEvent
  */
 public final class HighlightStyle {
-	/** A crisp 2 px outline, through walls. */
-	public static final HighlightStyle OUTLINE = new HighlightStyle(2, 0, 0.6f, Fill.NONE, 0.25f, 3, 1, 0, false, true, true);
+	/** A crisp 1 px outline, through walls. */
+	public static final HighlightStyle OUTLINE = new HighlightStyle(1, 0, 0.6f, Fill.NONE, 0.25f, 3, 1, 0, false, true, true);
 	/** A thin outline with a soft 8 px glow, through walls. */
 	public static final HighlightStyle GLOW = OUTLINE.withOutlineWidth(1).withGlow(8);
 
@@ -141,22 +141,27 @@ public final class HighlightStyle {
 		return outlineWidth + glow;
 	}
 
+	/** This style with an outline {@code outlineWidth} scaled pixels wide (clamped to 0..16; 0 for none). */
 	public HighlightStyle withOutlineWidth(float outlineWidth) {
 		return new HighlightStyle(outlineWidth, glow, glowStrength, fill, fillOpacity, dotSpacing, dotSize, gradient, hasGradient, throughWalls, distanceScaling);
 	}
 
+	/** This style with a glow reaching {@code glow} scaled pixels past the outline (clamped to 0..32; 0 for none). */
 	public HighlightStyle withGlow(float glow) {
 		return new HighlightStyle(outlineWidth, glow, glowStrength, fill, fillOpacity, dotSpacing, dotSize, gradient, hasGradient, throughWalls, distanceScaling);
 	}
 
+	/** This style with the glow starting at {@code glowStrength} opacity (clamped to 0..1). */
 	public HighlightStyle withGlowStrength(float glowStrength) {
 		return new HighlightStyle(outlineWidth, glow, glowStrength, fill, fillOpacity, dotSpacing, dotSize, gradient, hasGradient, throughWalls, distanceScaling);
 	}
 
+	/** This style with {@code fill} inside the silhouette. */
 	public HighlightStyle withFill(Fill fill) {
 		return new HighlightStyle(outlineWidth, glow, glowStrength, fill, fillOpacity, dotSpacing, dotSize, gradient, hasGradient, throughWalls, distanceScaling);
 	}
 
+	/** This style with the fill at {@code fillOpacity} (clamped to 0..1), times the colour's alpha. */
 	public HighlightStyle withFillOpacity(float fillOpacity) {
 		return new HighlightStyle(outlineWidth, glow, glowStrength, fill, fillOpacity, dotSpacing, dotSize, gradient, hasGradient, throughWalls, distanceScaling);
 	}
@@ -171,20 +176,24 @@ public final class HighlightStyle {
 		return new HighlightStyle(outlineWidth, glow, glowStrength, fill, fillOpacity, dotSpacing, dotSize, bottomColor, true, throughWalls, distanceScaling);
 	}
 
+	/** This style in the highlight's colour alone, with no gradient. */
 	public HighlightStyle withoutGradient() {
 		return new HighlightStyle(outlineWidth, glow, glowStrength, fill, fillOpacity, dotSpacing, dotSize, 0, false, throughWalls, distanceScaling);
 	}
 
+	/** This style drawn through walls or only where visible; see {@link #throughWalls()}. */
 	public HighlightStyle withThroughWalls(boolean throughWalls) {
 		return new HighlightStyle(outlineWidth, glow, glowStrength, fill, fillOpacity, dotSpacing, dotSize, gradient, hasGradient, throughWalls, distanceScaling);
 	}
 
+	/** This style with outlines and glows thinning with distance or not; see {@link #distanceScaling()}. */
 	public HighlightStyle withDistanceScaling(boolean distanceScaling) {
 		return new HighlightStyle(outlineWidth, glow, glowStrength, fill, fillOpacity, dotSpacing, dotSize, gradient, hasGradient, throughWalls, distanceScaling);
 	}
 
+	/** Equal when every property is (the gradient colour only counts when there is a gradient). */
 	@Override
-	public boolean equals(Object o) {
+	public boolean equals(@Nullable Object o) {
 		return o instanceof HighlightStyle s && s.outlineWidth == outlineWidth && s.glow == glow && s.glowStrength == glowStrength
 			&& s.fill == fill && s.fillOpacity == fillOpacity && s.dotSpacing == dotSpacing && s.dotSize == dotSize
 			&& s.hasGradient == hasGradient && (!hasGradient || s.gradient == gradient) && s.throughWalls == throughWalls
@@ -231,7 +240,7 @@ public final class HighlightStyle {
 		/** Addons' fills are numbered from here (the shaders tell them apart by number). */
 		private static final int FIRST_CUSTOM = 16;
 		/** How many options a fill's shader can read ({@link #options(SettingGroup)}). */
-		@ApiStatus.AvailableSince("1.5.0")
+		@ApiStatus.AvailableSince("1.5")
 		public static final int MAX_OPTIONS = 16;
 
 		private final String id;
@@ -263,18 +272,19 @@ public final class HighlightStyle {
 		 * returns its colour (alpha 0 leaves it clear); outlines and glow are drawn around it as for any fill:
 		 * <pre>{@code
 		 * #version 330
-		 * #moj_import <myriad:highlight_fill.glsl>
+		 * #extension GL_ARB_separate_shader_objects : require
+		 * #include <myriad:highlight_fill.glsl>
 		 *
 		 * vec4 customFill(HighlightFill f) {
 		 *     // f.pixel, f.local (from the highlight's bottom-left), f.size, f.color (gradient applied), f.opacity,
 		 *     // f.spacing and f.dotSize (the style's dot settings, in pixels: use them as the pattern's scale),
-		 *     // f.scale (pixels per GUI pixel), f.time (seconds); since 1.5.0 the surface under the pixel: f.hasDepth,
+		 *     // f.scale (pixels per GUI pixel), f.time (seconds); the surface under the pixel: f.hasDepth,
 		 *     // f.depth (blocks from the camera), f.position and f.normal (view space: x right, y up, towards you z > 0)
 		 *     float stripe = step(0.5, fract((f.local.x + f.local.y) / f.spacing));
 		 *     return vec4(f.color.rgb, f.color.a * f.opacity * stripe);
 		 * }
 		 * }</pre>
-		 * Since 1.5.0 the shader also gets the surface under each pixel (its depth, facing and place on the highlighted
+		 * The shader also gets the surface under each pixel (its depth, facing and place on the highlighted
 		 * thing, how it bends) and helpers that measure from it (distance to the face's or silhouette's edge, wider
 		 * cavity); {@code myriad:highlight_fill.glsl} lists them. A fill can have options ({@link #options(SettingGroup)})
 		 * and read the scene under it ({@link #readsScene(boolean)}).
@@ -329,7 +339,7 @@ public final class HighlightStyle {
 		 *
 		 * @return this fill
 		 */
-		@ApiStatus.AvailableSince("1.5.0")
+		@ApiStatus.AvailableSince("1.5")
 		public Fill options(SettingGroup options) {
 			if (!isCustom()) throw new IllegalStateException("Only an addon's fill has options: " + name);
 			this.options = options;
@@ -345,7 +355,7 @@ public final class HighlightStyle {
 		 *
 		 * @return this fill
 		 */
-		@ApiStatus.AvailableSince("1.5.0")
+		@ApiStatus.AvailableSince("1.5")
 		public Fill readsScene(boolean reads) {
 			if (!isCustom()) throw new IllegalStateException("Only an addon's fill reads the scene: " + name);
 			readsScene = reads;
@@ -353,13 +363,13 @@ public final class HighlightStyle {
 		}
 
 		/** Whether the fill reads the scene under it ({@link #readsScene(boolean)}). */
-		@ApiStatus.AvailableSince("1.5.0")
+		@ApiStatus.AvailableSince("1.5")
 		public boolean readsScene() {
 			return readsScene;
 		}
 
 		/** The fill's own options ({@link #options(SettingGroup)}), or null for none. */
-		@ApiStatus.AvailableSince("1.5.0")
+		@ApiStatus.AvailableSince("1.5")
 		public @Nullable SettingGroup options() {
 			return options;
 		}

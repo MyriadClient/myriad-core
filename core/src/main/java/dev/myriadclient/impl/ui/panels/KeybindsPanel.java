@@ -6,8 +6,9 @@ import com.google.gson.JsonObject;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.Addon;
+import dev.myriadclient.api.input.KeyAction;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.service.KeyAction;
 import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.WidgetPanel;
@@ -18,9 +19,8 @@ import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.ui.widget.Widget;
-import dev.myriadclient.api.util.Keybind;
 import dev.myriadclient.impl.MyriadImpl;
-import dev.myriadclient.impl.ui.DesktopBinds;
+import dev.myriadclient.impl.ui.UiBinds;
 import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.wheel.WheelImpl;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -86,7 +86,7 @@ public final class KeybindsPanel extends WidgetPanel {
 			Section c = categories.computeIfAbsent(k.getCategory(), cat -> global.child(cat.label().getString()));
 			c.row(Component.translatable(k.getName()).getString(), () -> bindOf(k), b -> {
 				// Minecraft's binds hold one key: modifiers are dropped.
-				k.setKey(!b.isSet() ? InputConstants.UNKNOWN : (b.mouse() ? InputConstants.Type.MOUSE : InputConstants.Type.KEYSYM).getOrCreate(b.code()));
+				k.setKey(!b.isSet() ? InputConstants.UNKNOWN : (b.mouse() ? InputConstants.Type.MOUSE : InputConstants.Type.KEYBOARD).getOrCreate(b.code()));
 				KeyMapping.resetMapping();
 				mc.options.save();
 			});
@@ -99,8 +99,7 @@ public final class KeybindsPanel extends WidgetPanel {
 		if (key.equals(InputConstants.UNKNOWN)) return Keybind.NONE;
 		return switch (key.getType()) {
 			case MOUSE -> Keybind.mouse(key.getValue());
-			case KEYSYM -> Keybind.key(key.getValue());
-			case SCANCODE -> Keybind.NONE;
+			case KEYBOARD -> Keybind.key(key.getValue());
 		};
 	}
 
@@ -114,7 +113,7 @@ public final class KeybindsPanel extends WidgetPanel {
 			Widget row = Myriad.ui().settingWidgets().create(s);
 			if (row != null) menu.body.add(row);
 		}
-		for (DesktopBinds.Bind b : wm.binds().values()) {
+		for (UiBinds.Bind b : wm.binds().values()) {
 			menu.row(b.name, () -> b.bind, k -> {
 				b.bind = k;
 				Myriad.config().markDirty();

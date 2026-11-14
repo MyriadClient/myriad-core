@@ -5,9 +5,9 @@ import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Match;
 import dev.myriadclient.api.hook.Service;
 import dev.myriadclient.api.registry.Identified;
+import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Rotations;
-import dev.myriadclient.api.util.MyriadId;
 import dev.myriadclient.impl.event.MyriadEventBus;
 import org.junit.jupiter.api.Test;
 

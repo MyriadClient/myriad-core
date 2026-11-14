@@ -3,7 +3,7 @@
 // colour (alpha 0 leaves it clear):
 //
 //     #version 330
-//     #moj_import <myriad:highlight_fill.glsl>
+//     #include <myriad:highlight_fill.glsl>
 //
 //     vec4 customFill(HighlightFill f) {
 //         float stripe = step(0.5, fract((f.local.x + f.local.y) / f.spacing));
@@ -28,7 +28,7 @@
 // It runs once more per frame for its own highlights' insides (MYRIAD_FILL_ID is its number); the main pass (number 0)
 // draws everything else.
 
-#moj_import <myriad:highlight.glsl>
+#include <myriad:highlight.glsl>
 
 #ifndef MYRIAD_FILL_ID
 #define MYRIAD_FILL_ID 0
@@ -280,7 +280,7 @@ float highlightFaceEdgeDistance(HighlightFill f, float reach) {
 }
 #endif
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 const int FILL_NONE = 0;
 const int FILL_DOTS = 2;
@@ -293,17 +293,12 @@ vec4 colorAt(int id) {
     return mix(highlightData(id, 0), highlightData(id, 1), t);
 }
 
-// Outline (and, outside silhouettes, glow) coverage of highlight id at squared distance d2 from its nearest pixel.
-float edgeAlpha(int id, float d2, bool glow) {
+// Outline coverage of highlight id at squared distance d2 from its nearest pixel (the glow beyond it has its own field).
+float edgeAlpha(int id, float d2) {
     vec4 shape = highlightData(id, 3);
     // From this pixel's centre to the silhouette's edge, half a pixel short of the nearest mask pixel's centre.
     float edge = sqrt(d2) - 0.5;
-    float alpha = clamp(shape.x + 0.5 - edge, 0.0, 1.0);
-    if (glow && shape.y > 0.0) {
-        float g = clamp((edge - shape.x) / shape.y, 0.0, 1.0);
-        alpha = max(alpha, shape.z * (1.0 - g) * (1.0 - g));
-    }
-    return alpha;
+    return clamp(shape.x + 0.5 - edge, 0.0, 1.0);
 }
 
 // The glow field at this pixel: its distance blended between the four nearest field texels that have one, and the id
@@ -446,7 +441,7 @@ void main() {
         // The later highlight draws the shared edge, over the earlier one.
         if (other > id) {
             lineColor = colorAt(other);
-            lineAlpha = edgeAlpha(other, best, false) * lineColor.a;
+            lineAlpha = edgeAlpha(other, best) * lineColor.a;
         }
         float alpha = lineAlpha + fillAlpha * (1.0 - lineAlpha);
         if (alpha <= 0.0) discard;
@@ -457,7 +452,6 @@ void main() {
 
     // Outlines and glow outside silhouettes belong to the main pass.
     if (MYRIAD_FILL_ID != 0) discard;
-    bool legacy = highlightLegacy();
     float best = 1e9;
     int nearest = -1;
     if (hereNear % 256 != NONE) {
@@ -466,7 +460,7 @@ void main() {
         nearest = unpack16(here.g);
     }
     // The outline's reach only: the glow comes from its distance field below.
-    int radius = legacy ? highlightRadius() : highlightBoundaryRadius();
+    int radius = highlightBoundaryRadius();
     for (int d = 1; d <= radius; d++) {
         float dy2 = float(d * d);
         if (dy2 >= best) break;
@@ -488,11 +482,11 @@ void main() {
     float alpha = 0.0;
     if (nearest >= 0) {
         color = colorAt(nearest);
-        alpha = edgeAlpha(nearest, best, legacy) * color.a;
+        alpha = edgeAlpha(nearest, best) * color.a;
     }
     int glowId;
     float glowDist;
-    if (!legacy && highlightGlows() && glowAt(p, glowId, glowDist)) {
+    if (highlightGlows() && glowAt(p, glowId, glowDist)) {
         vec4 glowColor = colorAt(glowId);
         float glow = glowAlpha(glowId, glowDist) * glowColor.a;
         if (glowId == nearest || alpha <= 0.0) {

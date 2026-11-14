@@ -1,8 +1,8 @@
 package dev.myriadclient.impl.service;
 
-import dev.myriadclient.api.service.Containers;
+import dev.myriadclient.api.item.ItemMatch;
 import dev.myriadclient.api.service.Containers.Click;
-import dev.myriadclient.api.util.ItemMatch;
+import dev.myriadclient.api.service.Containers;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ChestMenu;

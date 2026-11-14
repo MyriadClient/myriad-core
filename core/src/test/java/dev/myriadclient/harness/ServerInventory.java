@@ -70,7 +70,7 @@ public final class ServerInventory {
 		switch (packet) {
 			case ServerboundSetCarriedItemPacket p -> held = p.getSlot();
 			case ServerboundContainerClickPacket p when p.containerId() == 0 -> click(p);
-			case ServerboundUseItemPacket p -> use(p.getHand() == InteractionHand.MAIN_HAND ? HOTBAR + held : OFF_HAND);
+			case ServerboundUseItemPacket p -> use(p.hand() == InteractionHand.MAIN_HAND ? HOTBAR + held : OFF_HAND);
 			case ServerboundPlayerActionPacket p when p.getAction() == ServerboundPlayerActionPacket.Action.SWAP_ITEM_WITH_OFFHAND -> {
 				ItemStack s = slots[HOTBAR + held];
 				slots[HOTBAR + held] = slots[OFF_HAND];

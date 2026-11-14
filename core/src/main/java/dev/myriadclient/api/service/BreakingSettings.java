@@ -17,6 +17,7 @@ import java.util.function.Supplier;
  * }</pre>
  */
 public final class BreakingSettings {
+	/** The choice the Mode setting offers. */
 	public enum Mode {
 		/** As fast as the server takes without refusing a finish: {@link Breaking.Options#forServer()}. */
 		PACKET,
@@ -27,7 +28,12 @@ public final class BreakingSettings {
 		FAST
 	}
 
+	/** Mode: how fast blocks are broken ({@link Mode#PACKET} by default). */
 	public final EnumSetting<Mode> mode;
+	/**
+	 * Double Break: mine a second block while the server finishes the first, where blocks finish early (on by default;
+	 * shown only where it can apply).
+	 */
 	public final BoolSetting doubleBreak;
 
 	/** Adds Mode and Double Break to {@code group}. */
@@ -44,7 +50,10 @@ public final class BreakingSettings {
 			.defaultValue(true).visible(() -> visible.get() && (mode.get() == Mode.FAST || AntiCheat.inEffect().breakTiming() != AntiCheat.BreakTiming.CHECKED)).build();
 	}
 
-	/** {@link Breaking.Options#forServer()} in this mode. */
+	/**
+	 * {@link Breaking.Options#forServer()} in this mode, with double break where the mode finishes blocks early. Reads
+	 * the settings afresh on each call, so ask each time rather than keeping the result.
+	 */
 	public Breaking.Options options() {
 		return options(AntiCheat.inEffect());
 	}

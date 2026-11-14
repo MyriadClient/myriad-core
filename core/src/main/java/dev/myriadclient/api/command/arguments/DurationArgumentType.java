@@ -9,6 +9,7 @@ import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -16,18 +17,23 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * A length of time, as milliseconds: {@code 500ms}, {@code 20t} (ticks), {@code 10s}, {@code 5m}, {@code 2h}, or
- * combined ({@code 1m30s}). A bare number means seconds.
+ * A length of time, as milliseconds: {@code 500ms}, {@code 20t} (ticks of 50 ms), {@code 10s}, {@code 5m}, {@code 2h},
+ * {@code 1d}, or combined ({@code 1m30s}). Fractions work ({@code 1.5s}), a bare number means seconds, and case doesn't
+ * matter.
  */
 public class DurationArgumentType implements ArgumentType<Long> {
 	private static final Pattern PART = Pattern.compile("(\\d+(?:\\.\\d+)?)(ms|t|s|m|h|d)?");
 	private static final DynamicCommandExceptionType INVALID = new DynamicCommandExceptionType(v -> Component.literal("'" + v + "' isn't a duration (try 10s, 5m, 20t)"));
 
+	/** A duration argument. */
 	public static DurationArgumentType duration() {
 		return new DurationArgumentType();
 	}
 
-	/** The duration in milliseconds. */
+	/**
+	 * The duration parsed for the argument {@code name}, in milliseconds. Brigadier throws {@link
+	 * IllegalArgumentException} if the command has no such argument.
+	 */
 	public static long get(CommandContext<?> ctx, String name) {
 		return ctx.getArgument(name, Long.class);
 	}
@@ -44,8 +50,8 @@ public class DurationArgumentType implements ArgumentType<Long> {
 		return ms;
 	}
 
-	/** Parses a duration string to milliseconds, or null if it isn't one. */
-	public static Long parse(String raw) {
+	/** Parses a duration string to milliseconds, rounded, or null if it isn't one (or is empty). */
+	public static @Nullable Long parse(String raw) {
 		String s = raw.toLowerCase();
 		Matcher m = PART.matcher(s);
 		int pos = 0;

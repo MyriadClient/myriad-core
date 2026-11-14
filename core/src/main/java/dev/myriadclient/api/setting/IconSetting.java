@@ -1,6 +1,7 @@
 package dev.myriadclient.api.setting;
 
 import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.util.function.Supplier;
 
@@ -11,7 +12,11 @@ import java.util.function.Supplier;
 public class IconSetting extends StringSetting {
 	private String fallback = "";
 
-	public IconSetting(String name, String description, String defaultValue, Supplier<Boolean> visible) {
+	/**
+	 * A setting as its {@link Builder} makes it; get one from {@link SettingGroup#icon(String)}, or call this from a
+	 * subclass.
+	 */
+	public IconSetting(String name, @Nullable String description, String defaultValue, @Nullable Supplier<Boolean> visible) {
 		super(name, description, defaultValue, visible);
 	}
 
@@ -21,20 +26,25 @@ public class IconSetting extends StringSetting {
 	}
 
 	/** What the picker shows for "the default", if its owner said; empty otherwise. */
-	@ApiStatus.AvailableSince("1.4.0")
+	@ApiStatus.AvailableSince("1.4")
 	public String fallback() {
 		return fallback;
 	}
 
+	/** Builds an {@link IconSetting}; empty (the default icon) by default. */
 	public static class Builder extends Setting.Builder<IconSetting.Builder, String, IconSetting> {
 		private String fallback = "";
 
+		/**
+		 * A builder for a setting called {@code name}; prefer {@link SettingGroup#icon(String)}, which adds it to the
+		 * group.
+		 */
 		public Builder(String name) {
 			super(name, "");
 		}
 
 		/** The glyph its owner shows without a choice, for the picker to show as "the default". */
-		@ApiStatus.AvailableSince("1.4.0")
+		@ApiStatus.AvailableSince("1.4")
 		public Builder fallback(String glyph) {
 			this.fallback = glyph;
 			return this;

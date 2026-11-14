@@ -2,8 +2,8 @@ package dev.myriadclient.api.hook;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.AddonContext;
-import dev.myriadclient.api.util.MyriadId;
-import org.jetbrains.annotations.Nullable;
+import dev.myriadclient.api.registry.MyriadId;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.Objects;
@@ -27,31 +27,41 @@ import java.util.function.Function;
  * }</pre>
  * Keep hooks for decisions other addons have a reason to make differently (per module, per server), and call them
  * where the answer is needed rather than every frame where you can avoid it.
+ * <p>
+ * Calls may come from any thread the owner calls from; core's own hooks are called on the render thread.
  *
  * @param <I> what a call says (immutable; a record)
- * @param <O> the answer
+ * @param <O> the answer (nullable where the hook says null means something, as {@code Placement.AIM} does)
  */
-public final class Hook<I, O> {
+public final class Hook<I, O extends @Nullable Object> {
 	private static final List<Hook<?, ?>> ALL = new CopyOnWriteArrayList<>();
 
 	private final MyriadId id;
 	private final String name;
 	private final String description;
 
-	private Hook(MyriadId id, String name, String description) {
+	private Hook(MyriadId id, String name, @Nullable String description) {
 		this.id = Objects.requireNonNull(id);
 		this.name = Objects.requireNonNull(name);
 		this.description = description == null ? "" : description;
 	}
 
-	public static <I, O> Hook<I, O> of(MyriadId id, String name, String description) {
+	/**
+	 * Declares a hook. Make it once, as a {@code static final} constant: each call adds to {@link #all()}, and
+	 * contributions find it by identity.
+	 *
+	 * @param id          unique, in your addon's namespace ({@code my-addon:may_swap})
+	 * @param name        what the Hooks window shows ("May swap")
+	 * @param description one sentence for the Hooks window; null for none
+	 */
+	public static <I, O extends @Nullable Object> Hook<I, O> of(MyriadId id, String name, @Nullable String description) {
 		Hook<I, O> hook = new Hook<>(id, name, description);
 		ALL.add(hook);
 		return hook;
 	}
 
 	/** {@link #of(MyriadId, String, String)} with the id as text ({@code "my-addon:may_swap"}). */
-	public static <I, O> Hook<I, O> of(String id, String name, String description) {
+	public static <I, O extends @Nullable Object> Hook<I, O> of(String id, String name, @Nullable String description) {
 		return of(MyriadId.parse(id), name, description);
 	}
 
@@ -60,20 +70,24 @@ public final class Hook<I, O> {
 		return List.copyOf(ALL);
 	}
 
+	/** The id it was declared with. */
 	public MyriadId id() {
 		return id;
 	}
 
+	/** The name the Hooks window shows; also the default label of a contribution to it. */
 	public String name() {
 		return name;
 	}
 
+	/** What it decides, for the Hooks window; empty if none was given. */
 	public String description() {
 		return description;
 	}
 
 	/**
-	 * The answer for {@code input}: the matching contributions', most specific first, else {@code fallback}'s.
+	 * The answer for {@code input}: the matching contributions', most specific first, else {@code fallback}'s. Before
+	 * Myriad has started, or with no contribution on, {@code fallback} answers directly.
 	 *
 	 * @param caller   who the call is for (your module, usually: contributions can match it); may be null
 	 * @param fallback the answer without contributions, and what the last of them gets from {@link HookCall#proceed()}

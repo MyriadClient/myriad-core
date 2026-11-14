@@ -4,7 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,7 +34,10 @@ public final class ConfigShare {
 		this.json = json;
 	}
 
-	/** Wraps a document (a copy of it). */
+	/**
+	 * Wraps a document (a copy of it); throws {@link IllegalArgumentException} if it has no {@code format} this version
+	 * reads.
+	 */
 	public static ConfigShare of(JsonObject json) {
 		Objects.requireNonNull(json);
 		int format = json.has("format") ? json.get("format").getAsInt() : -1;
@@ -42,6 +45,10 @@ public final class ConfigShare {
 		return new ConfigShare(json.deepCopy());
 	}
 
+	/**
+	 * Reads a document from JSON text, as {@link #toString()} writes it; throws {@link IllegalArgumentException} if it
+	 * isn't a JSON object of a format this version reads (Gson's own exception for malformed JSON).
+	 */
 	public static ConfigShare parse(String json) {
 		JsonElement e = JsonParser.parseString(json);
 		if (!e.isJsonObject()) throw new IllegalArgumentException("Not a config share");
@@ -53,10 +60,12 @@ public final class ConfigShare {
 		return json.deepCopy();
 	}
 
+	/** Its title, "Shared config" if it has none. */
 	public String title() {
 		return string("title", "Shared config");
 	}
 
+	/** Its description, empty if it has none. */
 	public String description() {
 		return string("description", "");
 	}
@@ -86,6 +95,7 @@ public final class ConfigShare {
 		return modules().isEmpty() && controlPanels().isEmpty() && ids("wheels", "name").isEmpty() && !hasTheme();
 	}
 
+	/** The document as compact JSON text, which {@link #parse} reads back. */
 	@Override
 	public String toString() {
 		return json.toString();

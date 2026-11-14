@@ -1,17 +1,18 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.Bezier;
-import dev.myriadclient.api.render.Canvas;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.Bezier;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.util.ColorUtil;
 import org.jetbrains.annotations.ApiStatus;
 
 import java.util.List;
 
 /**
- * Shows a child clipped to a viewport with smooth scrolling. With {@code fill} the viewport is the height it is
- * given by {@link #setViewportHeight}; otherwise it sizes to its content up to {@code maxHeight}. The child's width
- * leaves room for the bar whether it's showing or not, so nothing moves when the content outgrows the view.
+ * Shows a child clipped to a viewport with smooth scrolling (24 units a wheel notch, once the child doesn't use the
+ * wheel itself). Given a height by {@link #setViewportHeight}, the viewport is that tall; otherwise it sizes to its
+ * content up to {@code maxHeight}. The child's width leaves room for the bar whether it's showing or not, so nothing
+ * moves when the content outgrows the view. The mouse only reaches the child inside the viewport.
  */
 public class ScrollView extends Widget {
 	private final Widget child;
@@ -19,19 +20,27 @@ public class ScrollView extends Widget {
 	private final Animated offset = new Animated(0);
 	private float target, contentHeight, viewport = -1, gutter = 4;
 
+	/**
+	 * @param child     what scrolls
+	 * @param maxHeight the tallest it grows to fit its content, in UI units, before it scrolls (ignored once
+	 *                  {@link #setViewportHeight} gave it a height)
+	 */
 	public ScrollView(Widget child, float maxHeight) {
 		this.child = child;
 		this.maxHeight = maxHeight;
 	}
 
 	/** The width kept free for the bar, 4 unless given: less if the child's own padding already leaves the room. */
-	@ApiStatus.AvailableSince("1.4.0")
+	@ApiStatus.AvailableSince("1.4")
 	public ScrollView gutter(float width) {
 		gutter = width;
 		return this;
 	}
 
-	/** Fixed viewport height (used by panels to fill their area). */
+	/**
+	 * Fixed viewport height in UI units (used by panels to fill their area); a negative one goes back to sizing to the
+	 * content.
+	 */
 	public void setViewportHeight(float h) {
 		viewport = h;
 	}
@@ -99,7 +108,7 @@ public class ScrollView extends Widget {
 		if (isVisible()) child.collectNavigable(out);
 	}
 
-	/** Scrolls so the span [top, bottom] (panel coordinates) is inside the viewport. */
+	/** Scrolls (smoothly) so the span [top, bottom] (panel coordinates) is inside the viewport, with a small margin. */
 	public void ensureVisible(float top, float bottom) {
 		float margin = 6;
 		if (top < y + margin) target -= (y + margin) - top;
@@ -107,10 +116,12 @@ public class ScrollView extends Widget {
 		target = Math.max(0, target);
 	}
 
+	/** How far it's scrolled (or scrolling to), in UI units from the top. */
 	public float scroll() {
 		return target;
 	}
 
+	/** Jumps to {@code value} UI units from the top, kept within the content once it's laid out. */
 	public void setScroll(float value) {
 		target = value;
 		offset.snap(value);

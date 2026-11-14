@@ -1,12 +1,13 @@
 package dev.myriadclient.impl.ui.panels;
 
+import com.mojang.blaze3d.Blaze3D;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.Addon;
 import dev.myriadclient.api.addon.AddonSettings;
 import dev.myriadclient.api.addon.AddonState;
-import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.ui.TitleControl;
 import dev.myriadclient.api.ui.WidgetPanel;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Heading;
@@ -17,8 +18,8 @@ import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.addon.AddonLoader;
 import dev.myriadclient.impl.update.UpdateManager;
-import net.minecraft.util.Util;
 
+import java.net.URI;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -152,9 +153,9 @@ public final class AddonsPanel extends WidgetPanel {
 			if (started != null) body.add(new Label(started.describe(failed())).dim());
 			// Links from the addon's fabric.mod.json "contact" block.
 			HBox links = new HBox(4);
-			addon.homepage().ifPresent(url -> links.add(new Button(" Website", () -> Util.getPlatform().openUri(url))).tooltip(url));
-			addon.sources().ifPresent(url -> links.add(new Button(" Source", () -> Util.getPlatform().openUri(url))).tooltip(url));
-			addon.issues().ifPresent(url -> links.add(new Button(" Issues", () -> Util.getPlatform().openUri(url))).tooltip(url));
+			addon.homepage().ifPresent(url -> links.add(new Button(" Website", () -> Blaze3D.openUri(URI.create(url)))).tooltip(url));
+			addon.sources().ifPresent(url -> links.add(new Button(" Source", () -> Blaze3D.openUri(URI.create(url)))).tooltip(url));
+			addon.issues().ifPresent(url -> links.add(new Button(" Issues", () -> Blaze3D.openUri(URI.create(url)))).tooltip(url));
 			if (!links.children().isEmpty()) body.add(links);
 			buildUpdate(body, updates.state(id));
 			for (AddonSettings s : Myriad.addonSettings().ownedBy(id)) {
@@ -171,14 +172,14 @@ public final class AddonsPanel extends WidgetPanel {
 					if (u.kind() == UpdateManager.Kind.FAILED) body.add(new Note("Updating to " + u.version() + " failed: " + u.message()).error());
 					HBox row = new HBox(4);
 					row.add(new Button(" Update to " + u.version(), () -> updates.update(id)).accent()).tooltip("Downloads it now; it installs when you quit");
-					if (u.releaseUrl() != null) row.add(new Button(" Release notes", () -> Util.getPlatform().openUri(u.releaseUrl()))).tooltip(u.releaseUrl());
+					if (u.releaseUrl() != null) row.add(new Button(" Release notes", () -> Blaze3D.openUri(URI.create(u.releaseUrl())))).tooltip(u.releaseUrl());
 					body.add(row);
 				}
 				case CHECKING -> body.add(new Label("Checking for updates…").dim());
 				case DOWNLOADING -> body.add(new Label("Downloading " + u.version() + "…").dim());
 				case STAGED -> body.add(new Note(u.version() + " is downloaded and installs when you quit."
 					+ (u.message() != null ? " " + u.message() + "." : "")).color(() -> theme().green.argb()));
-				case UP_TO_DATE -> body.add(new Label("Up to date.").dim());
+				case UP_TO_DATE -> body.add(new Label(u.message() == null ? "Up to date." : "Up to date. " + u.message() + ".").dim());
 				case UNKNOWN, DEV_BUILD, NO_SOURCE -> body.add(new Label(u.message() + ".").dim());
 			}
 		}

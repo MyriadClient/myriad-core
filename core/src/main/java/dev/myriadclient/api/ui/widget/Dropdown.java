@@ -1,8 +1,9 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.Bezier;
-import dev.myriadclient.api.render.Canvas;
+import com.mojang.blaze3d.platform.InputConstants;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.Bezier;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.util.ColorUtil;
 
 import java.util.List;
@@ -10,7 +11,17 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-/** Pick one of several values: click to expand the options inline. */
+/**
+ * Pick one of several values: click to expand the options inline (the widget grows, pushing what's below down).
+ * Right-click, Enter, or h/l with the keyboard selection on it step through the values without opening it. The
+ * current value is highlighted in the list.
+ *
+ * <pre>{@code
+ * content.add(new Dropdown<>(() -> List.of(Mode.values()), mode::get, mode::set, m -> m.name().toLowerCase()));
+ * }</pre>
+ *
+ * @param <T> the value type; values are compared with {@code equals}
+ */
 public class Dropdown<T> extends Widget {
 	private final Supplier<List<T>> options;
 	private final Supplier<T> getter;
@@ -19,6 +30,12 @@ public class Dropdown<T> extends Widget {
 	private final Animated open = new Animated(0);
 	private boolean expanded;
 
+	/**
+	 * @param options the values to choose from, asked every frame (keep it non-empty)
+	 * @param getter  the current value, read every frame
+	 * @param setter  called with the value picked
+	 * @param names   what each value is called on screen
+	 */
 	public Dropdown(Supplier<List<T>> options, Supplier<T> getter, Consumer<T> setter, Function<T, String> names) {
 		this.options = options;
 		this.getter = getter;
@@ -74,8 +91,8 @@ public class Dropdown<T> extends Widget {
 	public boolean mouseClicked(float mx, float my, int button) {
 		if (!isHovered(mx, my)) return false;
 		if (my < y + ROW) {
-			if (button == 0) expanded = !expanded;
-			else if (button == 1) cycle(1);
+			if (button == InputConstants.MOUSE_BUTTON_LEFT) expanded = !expanded;
+			else if (button == InputConstants.MOUSE_BUTTON_RIGHT) cycle(1);
 			return true;
 		}
 		if (expanded) {

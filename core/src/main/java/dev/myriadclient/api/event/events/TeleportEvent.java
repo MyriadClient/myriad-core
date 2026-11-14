@@ -11,6 +11,7 @@ import org.jetbrains.annotations.ApiStatus;
 public final class TeleportEvent {
 	private final Vec3 from, to;
 
+	/** Core's; only Myriad makes these. */
 	@ApiStatus.Internal
 	public TeleportEvent(Vec3 from, Vec3 to) {
 		this.from = from;

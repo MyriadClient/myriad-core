@@ -2,8 +2,8 @@ package dev.myriadclient.api.job;
 
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.Modules;
-import dev.myriadclient.api.util.MyriadId;
-import org.jetbrains.annotations.Nullable;
+import dev.myriadclient.api.registry.MyriadId;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -184,11 +184,11 @@ final class Policies {
 	}
 
 	static final class WhenStuck<T> extends Wrap<T> {
-		private final @Nullable Why.Code code;
+		private final Why.@Nullable Code code;
 		private final int ticks;
 		private final Function<Why, ? extends Step<?>> remedy;
 
-		WhenStuck(Step<T> inner, @Nullable Why.Code code, int ticks, Function<Why, ? extends Step<?>> remedy) {
+		WhenStuck(Step<T> inner, Why.@Nullable Code code, int ticks, Function<Why, ? extends Step<?>> remedy) {
 			super(inner);
 			this.code = code;
 			this.ticks = Math.max(0, ticks);

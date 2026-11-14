@@ -7,7 +7,7 @@ import net.minecraft.core.BlockPos;
  * as early as it lets them without being refused.
  * <p>
  * Grim times a break from its start packet: it expects {@code ceil(1 / damage) * 50} ms, where damage is the best
- * progress per tick it has seen for the block it was last told to start (sampled on every movement and swing packet,
+ * progress per tick it has seen for the block it was last told to start (sampled on every movement and punch (swing) packet,
  * with the Efficiency it has had back from the server). A finish sooner than that adds the shortfall to a balance
  * (one finish within 25 ms of its time instead takes 10% off it); a start sooner than 275 ms after the last finish adds
  * {@code 300 - gap} to another (a later one takes 10% off). Past 1000 on either, it refuses the packet. Both are kept
@@ -39,7 +39,7 @@ final class GrimBreakTiming {
 		maxDamage = damage;
 	}
 
-	/** Grim samples the block it's timing on every movement and swing packet. */
+	/** Grim samples the block it's timing on every movement and punch (swing) packet. */
 	void sampled(double damage) {
 		if (target != null) maxDamage = Math.max(maxDamage, damage);
 	}

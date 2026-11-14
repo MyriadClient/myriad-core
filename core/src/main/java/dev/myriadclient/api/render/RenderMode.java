@@ -10,9 +10,12 @@ import dev.myriadclient.api.Myriad;
  * the ones for that mode.
  */
 public enum RenderMode {
-	SHADER, BOX;
+	/** Outlines, glow and fills traced around the exact shape of things, by a post-processing shader. */
+	SHADER,
+	/** Boxes of lines and translucent faces, cheaper on a weak GPU. */
+	BOX;
 
-	/** The mode that's on. */
+	/** The mode that's on, as the player chose it. */
 	public static RenderMode current() {
 		return Myriad.render().mode();
 	}

@@ -7,6 +7,13 @@ import dev.myriadclient.api.util.Ticks;
 import dev.myriadclient.impl.MyriadImpl;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.FurnaceResultSlot;
+import net.minecraft.world.inventory.GrindstoneMenu;
+import net.minecraft.world.inventory.LoomMenu;
+import net.minecraft.world.inventory.MerchantResultSlot;
+import net.minecraft.world.inventory.NonInteractiveResultSlot;
+import net.minecraft.world.inventory.ResultContainer;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -20,7 +27,8 @@ import org.jetbrains.annotations.Nullable;
  * answer only updates a copy of what the server says: the screen, and your next click's prediction, stay on what the
  * server will have once it has your clicks. When a round trip passes without one and what it said disagrees, the
  * server is asked for the whole menu, so a click it refused still shows. Core's own work in the menu (a sort, a transfer, asking for the menu) checks what
- * the server really has, so while that runs answers go in as they come.
+ * the server really has, so while that runs answers go in as they come. Result slots, which only the server fills,
+ * always take its answers.
  */
 public final class HandClicks {
 	private final Minecraft mc = Minecraft.getInstance();
@@ -58,6 +66,10 @@ public final class HandClicks {
 	/** The server sent one slot of {@code containerId} (after the game applied it). */
 	public void slot(int containerId, int slot) {
 		if (!keeping(containerId) || slot < 0 || slot >= shown.length) return;
+		if (serverMade(menu, slot)) {
+			shown[slot] = menu.getSlot(slot).getItem().copy();
+			return;
+		}
 		if (server == null) {
 			server = shown.clone();
 			serverCarried = shownCarried;
@@ -96,9 +108,23 @@ public final class HandClicks {
 		return impl.containerTracker().working(menu) || impl.menuSync().asking(menu);
 	}
 
+	/**
+	 * A result slot (crafting, anvil, smithing, stonecutter, cartography, grindstone, loom, furnace output, a trade,
+	 * the crafter's): the server works out what it holds and the client doesn't (it has no recipes), so what a click
+	 * left there is a guess and the server's word always goes in. Held back, the output stayed blank while you filled
+	 * the grid with a stack on the cursor, and after taking a result.
+	 */
+	private static boolean serverMade(AbstractContainerMenu menu, int index) {
+		Slot slot = menu.getSlot(index);
+		return slot.container instanceof ResultContainer || slot instanceof FurnaceResultSlot || slot instanceof MerchantResultSlot
+			|| slot instanceof NonInteractiveResultSlot || menu instanceof GrindstoneMenu && index == GrindstoneMenu.RESULT_SLOT
+			|| menu instanceof LoomMenu loom && slot == loom.getResultSlot();
+	}
+
 	private void restore() {
 		for (int i = 0; i < shown.length && i < menu.slots.size(); i++) {
-			if (!ItemStack.matches(menu.getSlot(i).getItem(), shown[i])) menu.getSlot(i).set(shown[i].copy());
+			if (serverMade(menu, i)) shown[i] = menu.getSlot(i).getItem().copy();
+			else if (!ItemStack.matches(menu.getSlot(i).getItem(), shown[i])) menu.getSlot(i).set(shown[i].copy());
 		}
 		if (!ItemStack.matches(menu.getCarried(), shownCarried)) menu.setCarried(shownCarried.copy());
 	}
@@ -119,7 +145,9 @@ public final class HandClicks {
 
 	private boolean disagrees() {
 		if (!ItemStack.matches(menu.getCarried(), serverCarried)) return true;
-		for (int i = 0; i < server.length && i < menu.slots.size(); i++) if (!ItemStack.matches(menu.getSlot(i).getItem(), server[i])) return true;
+		for (int i = 0; i < server.length && i < menu.slots.size(); i++) {
+			if (!serverMade(menu, i) && !ItemStack.matches(menu.getSlot(i).getItem(), server[i])) return true;
+		}
 		return false;
 	}
 

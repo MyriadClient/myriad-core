@@ -21,8 +21,8 @@ import java.util.function.ToDoubleFunction;
 /**
  * What {@code Myriad.rotations()}, {@code inventory()}, {@code placement()} and {@code breaking()} return: each call
  * that names an owner goes to the implementation for that owner ({@link HookManager#current(Service, Object)}: a
- * replacement scoped to its addon, the one for everyone, or core's); the rest go to the one for everyone. Generated
- * from the services' methods; keep in step with them.
+ * replacement scoped to its addon, the one for everyone, or core's); the rest go to the one for everyone. Written out
+ * from the services' methods: ServiceCoverageTest fails when a service gains a method a router doesn't hand on.
  */
 final class ServiceRouters {
 	private ServiceRouters() {
@@ -187,6 +187,11 @@ final class ServiceRouters {
 		@Override
 		public boolean safeToClick() {
 			return all().safeToClick();
+		}
+
+		@Override
+		public boolean containerOpen() {
+			return all().containerOpen();
 		}
 
 		@Override

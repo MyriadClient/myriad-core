@@ -1,13 +1,16 @@
 package dev.myriadclient.impl.render;
 
-import com.mojang.blaze3d.GpuFormat;
-import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.commands.CommandEncoder;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.events.HighlightEvent;
 import dev.myriadclient.api.render.HighlightStyle;
@@ -24,7 +27,6 @@ import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MappableRingBuffer;
-import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
@@ -35,7 +37,6 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
-import org.joml.Vector4f;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -118,8 +119,16 @@ public final class HighlightRenderer {
 	/** Per shapes layer: its mask. */
 	private final TextureTarget[] masks = new TextureTarget[3];
 	private MappableRingBuffer buffer;
+	private ByteBufferBuilder shapeMemory;
+	/** Per shapes layer: its boxes' vertices. */
+	private final GpuBuffer[] shapeVertices = new GpuBuffer[3];
 
 	private HighlightRenderer() {
+	}
+
+	/** Resources reloaded: shaders may have changed. */
+	public void resourcesReloaded() {
+		HighlightPasses.fillsReloaded();
 	}
 
 	/** Advances every time the level is extracted; styles built from settings are cached per frame. */
@@ -239,59 +248,51 @@ public final class HighlightRenderer {
 		state.outlineColor = encode(id, highlights.groupOf[id]);
 	}
 
-	/** Takes the frame's shapes from {@link RenderRouter} and submits their boxes to the shapes masks. */
-	public void collectShapes(SubmitNodeCollector collector, PoseStack poseStack) {
+	/** Takes the frame's shapes from {@link RenderRouter} and clears the masks they're drawn into. */
+	public void collectShapes() {
 		if (!armed || !RenderRouter.INSTANCE.anyShapes()) return;
 		RenderRouter.INSTANCE.shapesTo(this);
-		for (int l : SHAPE_LAYERS) collectShapes(l, collector, poseStack);
+		for (int l : SHAPE_LAYERS) clearMask(l);
 	}
 
-	private void collectShapes(int layer, SubmitNodeCollector collector, PoseStack poseStack) {
+	private void clearMask(int layer) {
 		if (layers[layer].count == 0) return;
-		// Clear the mask now: the boxes are drawn into it during the frame's outline pass, the meshes after.
 		RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
-		TextureTarget mask = masks[layer];
-		if (mask == null) mask = masks[layer] = new TextureTarget("Myriad highlight " + layers[layer].name, main.width, main.height, true, GpuFormat.RGBA8_UNORM);
-		else if (mask.width != main.width || mask.height != main.height) mask.resize(main.width, main.height);
-		RenderSystem.getDevice().createCommandEncoder().clearColorAndDepthTextures(mask.getColorTexture(), new Vector4f(0), mask.getDepthTexture(), 0.0);
+		masks[layer] = HighlightPasses.clearedMask(masks[layer], "Myriad highlight " + layers[layer].name, main.width, main.height);
 		masked[layer] = true;
-		if (shapeColors[layer].isEmpty()) return;
-		FloatArrayList boxes = shapeBoxes[layer];
-		IntArrayList ids = shapeColors[layer];
-		// Drawn later in the frame: hand the lists over and start new ones.
-		shapeBoxes[layer] = new FloatArrayList(boxes.size());
-		shapeColors[layer] = new IntArrayList(ids.size());
-		collector.submitCustomGeometry(poseStack, layer == BELOW ? MyriadPipelines.HIGHLIGHT_SHAPES_BELOW : MyriadPipelines.HIGHLIGHT_SHAPES, (pose, buf) -> {
+	}
+
+	/** The frame's boxes into their masks. */
+	private void drawShapes(CommandEncoder encoder) {
+		for (int l : SHAPE_LAYERS) {
+			if (!masked[l] || shapeColors[l].isEmpty()) continue;
+			if (shapeMemory == null) shapeMemory = new ByteBufferBuilder(4096);
+			BufferBuilder buf = new BufferBuilder(shapeMemory, PrimitiveTopology.QUADS, DefaultVertexFormat.POSITION_COLOR);
+			FloatArrayList boxes = shapeBoxes[l];
+			IntArrayList ids = shapeColors[l];
 			for (int n = 0; n < ids.size(); n++) {
 				int i = n * 6, c = ids.getInt(n);
 				float x0 = boxes.getFloat(i), y0 = boxes.getFloat(i + 1), z0 = boxes.getFloat(i + 2);
 				float x1 = boxes.getFloat(i + 3), y1 = boxes.getFloat(i + 4), z1 = boxes.getFloat(i + 5);
-				quad(buf, pose, c, x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1);
-				quad(buf, pose, c, x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0);
-				quad(buf, pose, c, x0, y0, z0, x0, y1, z0, x1, y1, z0, x1, y0, z0);
-				quad(buf, pose, c, x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1);
-				quad(buf, pose, c, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0);
-				quad(buf, pose, c, x1, y0, z0, x1, y1, z0, x1, y1, z1, x1, y0, z1);
+				quad(buf, c, x0, y0, z0, x1, y0, z0, x1, y0, z1, x0, y0, z1);
+				quad(buf, c, x0, y1, z0, x0, y1, z1, x1, y1, z1, x1, y1, z0);
+				quad(buf, c, x0, y0, z0, x0, y1, z0, x1, y1, z0, x1, y0, z0);
+				quad(buf, c, x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1);
+				quad(buf, c, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0);
+				quad(buf, c, x1, y0, z0, x1, y1, z0, x1, y1, z1, x1, y0, z1);
 			}
-		});
+			try (MeshData mesh = buf.buildOrThrow()) {
+				shapeVertices[l] = HighlightPasses.drawShapes(encoder, masks[l], mesh, shapeVertices[l]);
+			}
+		}
 	}
 
-	/** The shapes mask, for the shapes render type's output target. */
-	public RenderTarget shapeMask() {
-		return masks[SHAPES];
-	}
-
-	/** The below-shapes mask, for that render type's output target. */
-	public RenderTarget belowMask() {
-		return masks[BELOW];
-	}
-
-	private static void quad(VertexConsumer buf, PoseStack.Pose pose, int c, float ax, float ay, float az, float bx, float by, float bz,
+	private static void quad(VertexConsumer buf, int c, float ax, float ay, float az, float bx, float by, float bz,
 							 float cx, float cy, float cz, float dx, float dy, float dz) {
-		buf.addVertex(pose, ax, ay, az).setColor(c);
-		buf.addVertex(pose, bx, by, bz).setColor(c);
-		buf.addVertex(pose, cx, cy, cz).setColor(c);
-		buf.addVertex(pose, dx, dy, dz).setColor(c);
+		buf.addVertex(ax, ay, az).setColor(c);
+		buf.addVertex(bx, by, bz).setColor(c);
+		buf.addVertex(cx, cy, cz).setColor(c);
+		buf.addVertex(dx, dy, dz).setColor(c);
 	}
 
 	/** A box (world coordinates). Off-screen shapes are skipped, so callers can pass everything in range. */
@@ -398,9 +399,9 @@ public final class HighlightRenderer {
 	}
 
 	/** The level camera, at the start of {@code LevelRenderer.render}. */
-	public void camera(Vec3 pos, Matrix4fc modelView, Frustum frustum, boolean outlinesShown) {
+	public void camera(Vec3 pos, Matrix4fc viewRotation, Frustum frustum, boolean outlinesShown) {
 		this.frustum = frustum;
-		highlights.camera(pos, modelView);
+		highlights.camera(pos, viewRotation);
 		this.outlinesShown = outlinesShown;
 	}
 
@@ -418,12 +419,15 @@ public final class HighlightRenderer {
 	}
 
 	/**
-	 * Right after the masks are drawn, before translucent terrain: draw retained meshes into the shapes mask, then for
-	 * each layer resolve hidden pixels and run the row pass.
+	 * Right after the outline pass drew the entity mask, before translucent terrain: draw the frame's boxes and retained
+	 * meshes into the shapes masks, then for each layer resolve hidden pixels and run the row pass.
 	 */
-	public void afterMask() {
+	public void afterMask(boolean outlinesDrawn) {
 		for (Layer l : layers) l.prepared = false;
-		boolean entities = ownsOutlines(), shapes = false;
+		// Only once the outline pass has run: vanilla skips it (and clearing the target) in a frame where nothing was drawn
+		// with an outline, though a highlight was asked for (a picked-up item's render state, made as it's taken, goes to
+		// the pickup animation with its outline taken off), and the target still held an earlier frame's silhouettes.
+		boolean entities = ownsOutlines() && outlinesDrawn, shapes = false;
 		for (int l : SHAPE_LAYERS) shapes |= masked[l] && layers[l].count > 0;
 		if (!entities && !shapes) return;
 		RenderTarget main = Minecraft.getInstance().gameRenderer.mainRenderTarget();
@@ -438,6 +442,7 @@ public final class HighlightRenderer {
 		GpuBuffer gpuData = HighlightPasses.write(buffer, radius, boundary, highlights.data, 0, highlights.count, highlights.projection.invert(toView),
 			highlights.viewToWorld(toWorld));
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+		if (shapes) drawShapes(encoder);
 		if (shapes && !meshes.isEmpty()) HighlightPasses.drawMeshes(encoder, gpuData, meshes, masks, masked, highlights);
 		GpuTimings.end(GpuTimings.Pass.MASKS);
 		for (int l : SHAPE_LAYERS) if (masked[l] && layers[l].count > 0) HighlightPasses.prepare(encoder, layers[l], masks[l], main, gpuData, radius, boundary, w, h);

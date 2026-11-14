@@ -16,4 +16,7 @@
  * Use an event when you want to react to or adjust something alongside everyone else; use a hook when there's one
  * answer to give, and the most specific contribution should give it.
  */
+@NullMarked
 package dev.myriadclient.api.hook;
+
+import org.jspecify.annotations.NullMarked;

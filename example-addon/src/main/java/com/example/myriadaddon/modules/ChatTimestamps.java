@@ -1,8 +1,8 @@
 package com.example.myriadaddon.modules;
 
-import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.Modules;
+import dev.myriadclient.api.module.Tags;
 import dev.myriadclient.api.setting.ColorSetting;
 import dev.myriadclient.api.setting.EnumSetting;
 import dev.myriadclient.api.setting.SettingColor;
@@ -16,7 +16,7 @@ import java.time.format.DateTimeFormatter;
  * Prefixes chat messages with the time they arrived.
  *
  * <p>There's no Myriad event for "a chat line is being added", so this module is driven by a mixin
- * ({@code ChatHudMixin}). That's the standard shape for mixin-driven modules:
+ * ({@code ChatComponentMixin}). That's the standard shape for mixin-driven modules:
  * <ul>
  *   <li>the module holds the settings and the logic, in a static method the mixin calls;</li>
  *   <li>that method looks the module up with {@link Modules#active(Class)}, which is null while it's off (or before

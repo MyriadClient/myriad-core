@@ -1,6 +1,7 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 
-#moj_import <myriad:highlight.glsl>
+#include <myriad:highlight.glsl>
 
 // Drops the pixels of depth-tested highlights that the world hides. Depth is reversed (1 is near), and a silhouette
 // drawn over its own entity has the same depth as it, so only a clear difference counts as hidden.
@@ -8,7 +9,7 @@ uniform sampler2D Mask;
 uniform sampler2D MaskDepth;
 uniform sampler2D SceneDepth;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
     ivec2 p = ivec2(gl_FragCoord.xy);

@@ -20,7 +20,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Jobs driving the real services: what their steps report, and that they let go of what they started. */
@@ -46,7 +45,7 @@ class JobsHarnessTest {
 			Job<Void> job = place(h, pos, Placement.Options.forServer());
 			assertEquals(1, h.sent(ServerboundUseItemOnPacket.class).size());
 			assertTrue(job.state().isActive(), "done before the server answered");
-			h.serverBlock(pos, Blocks.OBSIDIAN.defaultBlockState()).ack(h.sent(ServerboundUseItemOnPacket.class).getFirst().getSequence()).tick();
+			h.serverBlock(pos, Blocks.OBSIDIAN.defaultBlockState()).ack(h.sent(ServerboundUseItemOnPacket.class).getFirst().sequence()).tick();
 			assertEquals(Job.State.DONE, job.state(), "why: " + job.why());
 		}
 	}
@@ -57,7 +56,7 @@ class JobsHarnessTest {
 			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
 			BlockPos pos = new BlockPos(1, 1, 0);
 			Job<Void> job = place(h, pos, Placement.Options.forServer());
-			h.serverBlock(pos, Blocks.AIR.defaultBlockState()).ack(h.sent(ServerboundUseItemOnPacket.class).getFirst().getSequence()).tick();
+			h.serverBlock(pos, Blocks.AIR.defaultBlockState()).ack(h.sent(ServerboundUseItemOnPacket.class).getFirst().sequence()).tick();
 			assertEquals(Job.State.FAILED, job.state());
 			assertEquals(Why.SERVER_REFUSED, job.why().code());
 		}
@@ -121,7 +120,7 @@ class JobsHarnessTest {
 				Map<BlockPos, Target> blocks = Map.of(above, Target.state(Blocks.OBSIDIAN.defaultBlockState()), below, Target.state(Blocks.OBSIDIAN.defaultBlockState()));
 				Myriad.jobs().start("builder", Steps.build(Blueprint.of(blocks), Building.Options.forServer().withPlacesPerTick(1).withOrder(order)));
 				h.ticks(2);
-				var first = h.sent(ServerboundUseItemOnPacket.class).getFirst().getHitResult().getBlockPos();
+				var first = h.sent(ServerboundUseItemOnPacket.class).getFirst().hitResult().getBlockPos();
 				BlockPos placed = first.equals(new BlockPos(1, 1, 1)) || first.equals(above) ? above : below;
 				assertEquals(order == Building.Order.NEAREST ? above : below, placed, order + " placed " + placed + " first (clicked " + first + ")");
 			}

@@ -7,11 +7,11 @@ import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.ScreenOpenEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.api.item.Slots;
+import dev.myriadclient.api.player.Interactions;
+import dev.myriadclient.api.player.Reach;
 import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Placement;
-import dev.myriadclient.api.util.Interactions;
-import dev.myriadclient.api.util.Reach;
-import dev.myriadclient.api.util.Slots;
 import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.util.Clock;
@@ -21,6 +21,7 @@ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
+import net.minecraft.util.Prediction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -33,8 +34,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.WeakHashMap;
@@ -43,7 +44,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 
 /**
- * Follows the open container from the network handler's open/contents packets (see ClientPlayNetworkHandlerMixin),
+ * Follows the open container from the network handler's open/contents packets (see ClientPacketListenerMixin),
  * and remembers the last block clicked so a container knows where it came from.
  */
 public final class ContainerTracker implements Containers {
@@ -95,7 +96,7 @@ public final class ContainerTracker implements Containers {
 		this.sync = sync;
 	}
 
-	// ---- called from ClientPlayNetworkHandlerMixin (render thread, after vanilla handled the packet) ---------------
+	// ---- called from ClientPacketListenerMixin (render thread, after vanilla handled the packet) ---------------
 
 	public void onOpened(int syncId) {
 		closeTracked();
@@ -142,7 +143,7 @@ public final class ContainerTracker implements Containers {
 	@Subscribe(packets = ServerboundUseItemOnPacket.class)
 	private void onSend(PacketEvent.Send e) {
 		if (e.packet() instanceof ServerboundUseItemOnPacket p) {
-			lastClicked = p.getHitResult().getBlockPos().immutable();
+			lastClicked = p.hitResult().getBlockPos().immutable();
 			lastClickedAt = Clock.millis();
 		}
 	}
@@ -482,7 +483,7 @@ public final class ContainerTracker implements Containers {
 			mc.player.inventoryMenu.setCarried(ItemStack.EMPTY);
 			if (back >= 0) {
 				// Where the server puts it, the same way.
-				inventory.placeItemBackInInventory(carried);
+				inventory.placeItemBackInInventory(carried, Prediction.PREDICTED);
 				mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId, Slots.playerScreen(back), 0, ContainerInput.PICKUP, mc.player);
 			}
 		}

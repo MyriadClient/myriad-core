@@ -2,13 +2,13 @@ package dev.myriadclient.impl.ui;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import dev.myriadclient.api.render.Animated;
-import dev.myriadclient.api.render.Bezier;
-import dev.myriadclient.api.ui.Desktop;
 import dev.myriadclient.api.ui.Panel;
 import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Rect;
+import dev.myriadclient.api.ui.Ui;
 import dev.myriadclient.api.ui.Window;
+import dev.myriadclient.api.ui.draw.Animated;
+import dev.myriadclient.api.ui.draw.Bezier;
 import dev.myriadclient.impl.ui.panels.CorePanels;
 
 /** A window: a panel plus its placement and animation state. */
@@ -20,7 +20,7 @@ public final class WindowImpl implements Window {
 	Panel panel;
 	int workspace;
 	boolean floating, fullscreen;
-	/** Floating geometry in UI units (desktop windows). */
+	/** Floating geometry in UI units (UI windows). */
 	Rect floatRect;
 	/** HUD placement (workspace 0 HUD elements). */
 	PanelType.Anchor anchor = PanelType.Anchor.TOP_LEFT;
@@ -28,7 +28,6 @@ public final class WindowImpl implements Window {
 
 	final Animated ax = new Animated(0), ay = new Animated(0), aw = new Animated(0), ah = new Animated(0);
 	final Animated opacity = new Animated(0);
-	final Animated focusGlow = new Animated(0);
 	boolean placed;
 	boolean closing;
 	Rect target = Rect.ZERO;
@@ -43,7 +42,7 @@ public final class WindowImpl implements Window {
 		panel.attach(this);
 	}
 
-	/** Where it is and what its panel holds, for the desktop's save; read back by {@link #restore}. */
+	/** Where it is and what its panel holds, for the UI's save; read back by {@link #restore}. */
 	JsonObject save() {
 		JsonObject j = new JsonObject();
 		j.addProperty("uid", uid);
@@ -78,7 +77,7 @@ public final class WindowImpl implements Window {
 
 	/** Takes back what {@link #save} wrote (the uid, type, args and workspace made the window). */
 	void restore(JsonObject j) {
-		floating = workspace == Desktop.HUD_WORKSPACE || j.has("floating") && j.get("floating").getAsBoolean();
+		floating = workspace == Ui.HUD_WORKSPACE || j.has("floating") && j.get("floating").getAsBoolean();
 		fullscreen = j.has("fullscreen") && j.get("fullscreen").getAsBoolean();
 		if (j.has("rect")) {
 			JsonArray r = j.getAsJsonArray("rect");
@@ -106,7 +105,7 @@ public final class WindowImpl implements Window {
 
 	/** True for HUD elements: HUD-capable panels living on the HUD workspace (drawn in game). */
 	boolean isHudElement() {
-		return workspace == Desktop.HUD_WORKSPACE && type.isHud();
+		return workspace == Ui.HUD_WORKSPACE && type.isHud();
 	}
 
 	/** The HUD workspace's sidebar: it's placed by the screen edge, and can't be moved, closed or made fullscreen. */

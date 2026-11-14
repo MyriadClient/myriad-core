@@ -1,6 +1,6 @@
 package dev.myriadclient.api.job;
 
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A step running: made by {@link Step#open} for one start, ticked by the {@link Slot} it runs in. Once {@link #step()}

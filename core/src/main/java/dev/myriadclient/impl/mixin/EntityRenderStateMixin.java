@@ -6,6 +6,10 @@ import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 
+/**
+ * Gives every entity render state the entity it was built from (EntityRenderStateAccess, set by EntityRendererMixin),
+ * as render code later only has the state.
+ */
 @Mixin(EntityRenderState.class)
 public abstract class EntityRenderStateMixin implements EntityRenderStateAccess {
 	@Unique

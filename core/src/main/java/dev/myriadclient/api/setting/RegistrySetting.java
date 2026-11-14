@@ -7,32 +7,44 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-/** One entry of a game registry: a single item (what to place), block (what to mine), and so on. */
+/**
+ * One entry of a game registry: a single item (what to place), block (what to mine), and so on. Typed and saved by id
+ * ({@code obsidian}, {@code minecraft:obsidian}); entries the builder's filter rejects can't be picked.
+ */
 public class RegistrySetting<T> extends Setting<T> {
 	private final Registry<T> registry;
 	private final Predicate<T> filter;
 
-	public RegistrySetting(String name, String description, T defaultValue, Supplier<Boolean> visible, Registry<T> registry, Predicate<T> filter) {
+	/**
+	 * A setting as its {@link Builder} makes it; get one from {@link SettingGroup#item}, {@link SettingGroup#block},
+	 * {@link SettingGroup#sound} or {@link SettingGroup#registry}, or call this from a subclass.
+	 *
+	 * @param filter which entries may be picked; null for all
+	 */
+	public RegistrySetting(String name, @Nullable String description, T defaultValue, @Nullable Supplier<Boolean> visible, Registry<T> registry, @Nullable Predicate<T> filter) {
 		super(name, description, defaultValue, visible);
 		this.registry = registry;
 		this.filter = filter == null ? t -> true : filter;
 	}
 
+	/** The registry the entry comes from. */
 	public Registry<T> registry() {
 		return registry;
 	}
 
+	/** Whether {@code t} may be picked: it passes the builder's filter. */
 	public boolean accepts(T t) {
 		return filter.test(t);
 	}
 
 	@Override
-	protected T validate(T v) {
+	protected T validate(@Nullable T v) {
 		return v == null || !accepts(v) ? value == null ? defaultValue : value : v;
 	}
 
@@ -67,10 +79,15 @@ public class RegistrySetting<T> extends Setting<T> {
 		return id == null ? "" : id.getPath();
 	}
 
+	/** Builds a {@link RegistrySetting}, starting at the default given to the constructor. */
 	public static class Builder<T> extends Setting.Builder<RegistrySetting.Builder<T>, T, RegistrySetting<T>> {
 		private final Registry<T> registry;
-		private Predicate<T> filter;
+		private @Nullable Predicate<T> filter;
 
+		/**
+		 * A builder for a setting called {@code name}; prefer {@link SettingGroup#registry}, which adds it to the
+		 * group.
+		 */
 		public Builder(String name, Registry<T> registry, T defaultValue) {
 			super(name, defaultValue);
 			this.registry = registry;

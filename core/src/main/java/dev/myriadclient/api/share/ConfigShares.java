@@ -5,6 +5,7 @@ import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.Tag;
 import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Collection;
 import java.util.List;
@@ -42,23 +43,40 @@ public interface ConfigShares {
 		AS_CONTROL_PANEL
 	}
 
-	/** A share published: its code, its page on the website, and the key that deletes it (kept on this computer). */
+	/**
+	 * A share published from this computer (the key that deletes it is kept here, not in this record).
+	 *
+	 * @param code      its code, {@code myriad_} and six letters or digits
+	 * @param url       its page on the website
+	 * @param title     its title when published
+	 * @param createdAt when it was published, in epoch milliseconds
+	 */
 	record Published(String code, String url, String title, long createdAt) {
 	}
 
-	/** What a share took in: what was applied, and what this install is missing (modules of addons not installed). */
+	/**
+	 * What a share took in.
+	 *
+	 * @param applied what was taken in, for showing the player: module names, "control panel <i>name</i>",
+	 *                "wheel <i>name</i>", "theme"
+	 * @param missing modules this install doesn't have (from addons not installed), as "Name (id)" or the id
+	 */
 	record Applied(List<String> applied, List<String> missing) {
 	}
 
-	/** Puts a share together. */
+	/** Puts a share together. Every method returns this builder; adding the same module twice adds it once. */
 	@ApiStatus.NonExtendable
 	interface Builder {
+		/** Its title on the website and in the list of shares ("Shared config" if not given). */
 		Builder title(String title);
 
+		/** A longer description shown on its page (none if not given). */
 		Builder description(String description);
 
+		/** One module, with its settings and whether it's on. */
 		Builder module(Module module);
 
+		/** Several modules, as {@link #module} each. */
 		Builder modules(Collection<? extends Module> modules);
 
 		/** Every module with {@code tag}, from every addon. */
@@ -79,18 +97,31 @@ public interface ConfigShares {
 		/** Also every module's keybind and hold setting (off by default: binds are personal). */
 		Builder binds(boolean include);
 
+		/** The share as put together so far, with the current settings of everything in it. */
 		ConfigShare build();
 	}
 
+	/** A new, empty builder. */
 	Builder builder();
 
-	/** Uploads {@code share}; the code arrives with the future. Remembered (with its delete key) in {@link #published()}. */
+	/**
+	 * Uploads {@code share}; the code arrives with the future, off the render thread. Remembered (with its delete key)
+	 * in {@link #published()}. Fails with {@link IllegalArgumentException} for an empty share, and with the web
+	 * request's error if the upload fails.
+	 */
 	CompletableFuture<Published> publish(ConfigShare share);
 
-	/** Downloads the share with this code ({@code myriad_JS3k4d}, or its website link). */
+	/**
+	 * Downloads the share with this code ({@code myriad_JS3k4d}, or text containing one such as its website link). The
+	 * future completes off the render thread; it fails with {@link IllegalArgumentException} if there's no code in
+	 * {@code code}, or if the share is in a format this version doesn't read.
+	 */
 	CompletableFuture<ConfigShare> fetch(String code);
 
-	/** Deletes a share you published from this computer. */
+	/**
+	 * Deletes a share you published from this computer and forgets it; fails with {@link IllegalArgumentException} for a
+	 * code that wasn't published from here.
+	 */
 	CompletableFuture<Void> unpublish(String code);
 
 	/** The shares published from this computer, newest first. */
@@ -99,8 +130,8 @@ public interface ConfigShares {
 	/** Takes {@code share} in. Call on the render thread. */
 	Applied apply(ConfigShare share, Apply how);
 
-	/** Whether {@code text} is a share code ({@code myriad_} and six letters or digits). */
-	static boolean isCode(String text) {
+	/** Whether {@code text} is exactly a share code ({@code myriad_} and six letters or digits); false for null. */
+	static boolean isCode(@Nullable String text) {
 		return text != null && text.matches("myriad_[A-Za-z0-9]{6}");
 	}
 }

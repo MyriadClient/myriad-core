@@ -16,6 +16,11 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+/**
+ * The local player's living-entity physics: ItemUseEvent.Finished when eating or drinking ends, a sprint jump along
+ * the yaw sent to the server (rotation move fix), and the elytra's glide held, steered by a pilot or reshaped by
+ * GlideEvent (ElytraManager). Hooked in vanilla's own movement maths so it stays what the server simulates.
+ */
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityMixin {
 	/** The local player finished eating or drinking. */

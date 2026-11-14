@@ -1,9 +1,9 @@
 package dev.myriadclient.api.job;
 
 import dev.myriadclient.api.module.Module;
-import dev.myriadclient.api.util.MyriadId;
+import dev.myriadclient.api.registry.MyriadId;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -50,7 +50,7 @@ public abstract class Step<T> {
 
 	// ---- leaves -------------------------------------------------------------------------------------------------
 
-	/** Runs {@code action} on one tick, then is done. */
+	/** Runs {@code action} on one tick, then is done. A throw fails the step. */
 	public static Step<Void> run(String name, Runnable action) {
 		Objects.requireNonNull(action);
 		return of(name, () -> ctx -> {
@@ -59,7 +59,7 @@ public abstract class Step<T> {
 		});
 	}
 
-	/** Produces {@code value.get()} on one tick. */
+	/** Produces {@code value.get()} on one tick, read when the step runs (not when it's built). A throw fails it. */
 	public static <T> Step<T> supply(String name, Supplier<T> value) {
 		Objects.requireNonNull(value);
 		return of(name, () -> ctx -> Progress.done(value.get()));
@@ -189,7 +189,7 @@ public abstract class Step<T> {
 		return new Policies.Named<>(this, Objects.requireNonNull(name), null);
 	}
 
-	/** A name that changes as it runs ("Visiting chest 3 of 8"). */
+	/** A name that changes as it runs ("Visiting chest 3 of 8"); a null from {@code live} shows the step's own name. */
 	public Step<T> named(Supplier<String> live) {
 		return new Policies.Named<>(this, null, Objects.requireNonNull(live));
 	}
@@ -256,6 +256,7 @@ public abstract class Step<T> {
 		return new Policies.Suspending<>(this, List.of(modules), List.of());
 	}
 
+	/** {@link #suspending(MyriadId...)} by class: every module of these classes. */
 	@SafeVarargs
 	public final Step<T> suspending(Class<? extends Module>... modules) {
 		return new Policies.Suspending<>(this, List.of(), List.of(modules));
@@ -281,6 +282,7 @@ public abstract class Step<T> {
 
 	// ---- about the step -----------------------------------------------------------------------------------------
 
+	/** Its name, as the Jobs window shows it: what {@link #named} gave it, or what made it. */
 	public abstract String name();
 
 	/** The tree, one line per step, policies as pills: what the Jobs window shows for a job that hasn't started. */
@@ -342,6 +344,7 @@ public abstract class Step<T> {
 		default void pause(JobContext ctx) {
 		}
 
+		/** The job was resumed after {@link #pause}: carry on. */
 		default void resume(JobContext ctx) {
 		}
 

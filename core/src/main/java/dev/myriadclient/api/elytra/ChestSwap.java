@@ -44,7 +44,8 @@ public interface ChestSwap {
 	/**
 	 * Starts the glide again on the server: the elytra goes on if it isn't, and the start is sent. The caller sends the
 	 * answers {@link GlideHold} held first, presses jump this tick (released the tick before, as Grim expects) and swaps
-	 * the chestplate back on after, if it wants to.
+	 * the chestplate back on after, if it wants to. False, with nothing sent, if no elytra is worn and none could be
+	 * swapped on.
 	 */
 	boolean startGlide();
 

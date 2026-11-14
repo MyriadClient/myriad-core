@@ -1,19 +1,23 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
 import dev.myriadclient.api.setting.StringListSetting;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.util.ColorUtil;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/** Edits a {@link StringListSetting}: one chip per entry (click × to remove) plus an input to add. */
+/**
+ * Edits a {@link StringListSetting}: one chip per entry (click × to remove) plus an input to add. Enter in the input
+ * adds what's typed, trimmed, unless it's blank.
+ */
 public class StringListEditor extends Widget {
 	private final StringListSetting setting;
 	private final TextField input;
 	/** Remove-button hit boxes from the last render: x, y, w, h, index. */
 	private final List<float[]> removeButtons = new ArrayList<>();
 
+	/** An editor for {@code setting}, reading and changing it live. */
 	public StringListEditor(StringListSetting setting) {
 		this.setting = setting;
 		this.input = new TextField(() -> "").placeholder("Add…").onSubmit(s -> {

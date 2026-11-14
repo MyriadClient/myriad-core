@@ -6,13 +6,14 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.api.network.Packets;
+import dev.myriadclient.api.player.Interactions;
+import dev.myriadclient.api.player.Mining;
+import dev.myriadclient.api.player.Reach;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.PacketLimits;
-import dev.myriadclient.api.util.BlockInfo;
-import dev.myriadclient.api.util.Mining;
-import dev.myriadclient.api.util.Packets;
-import dev.myriadclient.api.util.Reach;
 import dev.myriadclient.api.util.Threads;
+import dev.myriadclient.api.world.BlockInfo;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
@@ -23,7 +24,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.LiquidBlock;
@@ -226,9 +227,9 @@ public final class BreakManager implements Breaking {
 
 	/**
 	 * Follows Grim's timing from every dig packet that goes out, ours or anyone's (vanilla mining included): starts and
-	 * finishes, and the samples it takes on movement and swing packets. Lowest priority: what's really sent.
+	 * finishes, and the samples it takes on movement and punch (swing) packets. Lowest priority: what's really sent.
 	 */
-	@Subscribe(priority = Priority.LOWEST, packets = {ServerboundPlayerActionPacket.class, ServerboundMovePlayerPacket.class, ServerboundSwingPacket.class})
+	@Subscribe(priority = Priority.LOWEST, packets = {ServerboundPlayerActionPacket.class, ServerboundMovePlayerPacket.class, ServerboundPunchPacket.class})
 	private void onSend(PacketEvent.Send e) {
 		if (e.isCancelled() || mc.player == null || mc.level == null) return;
 		long now = Clock.millis();
@@ -236,7 +237,7 @@ public final class BreakManager implements Breaking {
 			case ServerboundPlayerActionPacket p when p.getAction() == Action.START_DESTROY_BLOCK -> grim.started(p.getPos(), grimDamage(p.getPos()), now);
 			case ServerboundPlayerActionPacket p when p.getAction() == Action.STOP_DESTROY_BLOCK -> grim.finished(now);
 			case ServerboundMovePlayerPacket m -> sampleGrim();
-			case ServerboundSwingPacket s -> {
+			case ServerboundPunchPacket s -> {
 				swungTick = tick;
 				sampleGrim();
 			}
@@ -390,7 +391,7 @@ public final class BreakManager implements Breaking {
 			}
 			mc.level.destroyBlockProgress(CRACK_PRIMARY, p.pos, Math.min(9, (int) (p.progress * 10)));
 			// Holding the attack button swings every tick; packet mining only swings to start and finish.
-			if (p.options.swing() && !p.packet()) mc.player.swing(InteractionHand.MAIN_HAND);
+			if (p.options.swing() && !p.packet()) Interactions.swing(InteractionHand.MAIN_HAND);
 			if (done && budget(1) && aim.canAct(p)) {
 				tools.withTool(slot, () -> finishWith(p, Action.STOP_DESTROY_BLOCK, true, p.packet()));
 				if (p.packet()) rebreakReady = true;
@@ -581,8 +582,8 @@ public final class BreakManager implements Breaking {
 	 * options want the hand to swing, otherwise only sent, unless a swing already went out this tick.
 	 */
 	private void swing(BreakJob j) {
-		if (j.options.swing()) mc.player.swing(InteractionHand.MAIN_HAND);
-		else if (swungTick != tick && mc.getConnection() != null) mc.getConnection().send(new ServerboundSwingPacket(InteractionHand.MAIN_HAND));
+		if (j.options.swing()) Interactions.swing(InteractionHand.MAIN_HAND);
+		else if (swungTick != tick && mc.getConnection() != null) mc.getConnection().send(ServerboundPunchPacket.INSTANCE);
 	}
 
 	/** Vanilla's pause after a finish is over, in ticks and in real time. */

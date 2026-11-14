@@ -17,14 +17,20 @@ public final class RateCounter {
 	private final AtomicLongArray counts = new AtomicLongArray(BUCKETS);
 	private final AtomicLongArray stamps = new AtomicLongArray(BUCKETS);
 
+	/** A counter over the last second. */
 	public RateCounter() {
 		this(1000);
 	}
 
+	/**
+	 * A counter over the last {@code windowMs} milliseconds, kept in 20 buckets, so events drop out of {@link #count()}
+	 * a twentieth of the window at a time.
+	 */
 	public RateCounter(long windowMs) {
 		this.bucketMs = Math.max(1, windowMs / BUCKETS);
 	}
 
+	/** Counts one event now. Safe from any thread. */
 	public void record() {
 		long slot = now() / bucketMs;
 		int i = (int) (slot % BUCKETS);
@@ -44,6 +50,7 @@ public final class RateCounter {
 		return (int) n;
 	}
 
+	/** Forgets every event counted so far. */
 	public void clear() {
 		for (int i = 0; i < BUCKETS; i++) {
 			stamps.set(i, Long.MIN_VALUE);

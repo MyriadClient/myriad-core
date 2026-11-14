@@ -2,6 +2,7 @@ package dev.myriadclient.api.setting;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -19,32 +20,42 @@ import java.util.function.Supplier;
 public class EnumSetSetting<E extends Enum<E>> extends Setting<Set<E>> {
 	private final Class<E> type;
 
-	public EnumSetSetting(String name, String description, Class<E> type, Set<E> defaultValue, Supplier<Boolean> visible) {
+	/**
+	 * A setting as its {@link Builder} makes it; get one from {@link SettingGroup#enumSet(String, Class)}, or call this
+	 * from a subclass.
+	 */
+	public EnumSetSetting(String name, @Nullable String description, Class<E> type, Set<E> defaultValue, @Nullable Supplier<Boolean> visible) {
 		super(name, description, EnumSet.copyOf(defaultValue.isEmpty() ? EnumSet.noneOf(type) : defaultValue), visible);
 		this.type = type;
 	}
 
+	/** The enum the constants come from. */
 	public Class<E> type() {
 		return type;
 	}
 
+	/** Every constant of the enum, in declaration order; a new array each call. */
 	public E[] values() {
 		return type.getEnumConstants();
 	}
 
+	/** Whether {@code e} is in the set in effect. */
 	public boolean contains(E e) {
 		return get().contains(e);
 	}
 
+	/** Adds {@code e} to the player's set, or removes it if it's there. */
 	public void toggle(E e) {
 		if (!value.remove(e)) value.add(e);
 		changed();
 	}
 
+	/** Adds {@code e} to the player's set. */
 	public void add(E e) {
 		if (value.add(e)) changed();
 	}
 
+	/** Removes {@code e} from the player's set. */
 	public void remove(E e) {
 		if (value.remove(e)) changed();
 	}
@@ -74,7 +85,7 @@ public class EnumSetSetting<E extends Enum<E>> extends Setting<Set<E>> {
 		set(set);
 	}
 
-	private E find(String s) {
+	private @Nullable E find(String s) {
 		String in = s.trim();
 		for (E e : values()) {
 			if (e.name().equalsIgnoreCase(in) || EnumSetting.displayName(e).equalsIgnoreCase(in) || EnumSetting.displayName(e).replace(" ", "").equalsIgnoreCase(in)) return e;
@@ -122,14 +133,20 @@ public class EnumSetSetting<E extends Enum<E>> extends Setting<Set<E>> {
 		return String.join(", ", get().stream().map(EnumSetting::displayName).toList());
 	}
 
+	/** Builds an {@link EnumSetSetting}; empty by default. */
 	public static class Builder<E extends Enum<E>> extends Setting.Builder<EnumSetSetting.Builder<E>, Set<E>, EnumSetSetting<E>> {
 		private final Class<E> type;
 
+		/**
+		 * A builder for a setting called {@code name}; prefer {@link SettingGroup#enumSet(String, Class)}, which adds
+		 * it to the group.
+		 */
 		public Builder(String name, Class<E> type) {
 			super(name, EnumSet.noneOf(type));
 			this.type = type;
 		}
 
+		/** The constants it starts with. */
 		@SafeVarargs
 		public final Builder<E> defaultValue(E... values) {
 			this.defaultValue = values.length == 0 ? EnumSet.noneOf(type) : EnumSet.copyOf(Arrays.asList(values));

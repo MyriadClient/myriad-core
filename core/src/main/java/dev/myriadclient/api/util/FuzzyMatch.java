@@ -9,12 +9,17 @@ import java.util.Locale;
  * letters don't count, so short queries stay precise.
  */
 public final class FuzzyMatch {
+	/** What {@link #score} returns when the query doesn't match at all. */
 	public static final int NO_MATCH = -1;
 
 	private FuzzyMatch() {
 	}
 
-	/** Higher is better; {@link #NO_MATCH} if {@code query} doesn't match. A blank query matches everything with 0. */
+	/**
+	 * How well {@code query} matches {@code text}, ignoring case: higher is better, and within a tier shorter texts and
+	 * earlier matches score higher, so sorting by it descending puts the best result first. {@link #NO_MATCH} if
+	 * {@code query} doesn't match; a blank query matches everything with 0.
+	 */
 	public static int score(String text, String query) {
 		String q = normalize(query);
 		if (q.isEmpty()) return 0;
@@ -34,6 +39,7 @@ public final class FuzzyMatch {
 		return fuzzy < 0 ? NO_MATCH : 1_000 + fuzzy - t.length();
 	}
 
+	/** Whether {@code query} matches {@code text} in any tier, for filtering without ranking. */
 	public static boolean matches(String text, String query) {
 		return score(text, query) != NO_MATCH;
 	}

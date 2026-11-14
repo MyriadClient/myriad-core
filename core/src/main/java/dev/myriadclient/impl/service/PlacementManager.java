@@ -8,14 +8,15 @@ import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.ScreenOpenEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.api.player.Interactions;
+import dev.myriadclient.api.player.Reach;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
-import dev.myriadclient.api.util.BlockInfo;
 import dev.myriadclient.api.util.MathUtil;
-import dev.myriadclient.api.util.Reach;
 import dev.myriadclient.api.util.Threads;
+import dev.myriadclient.api.world.BlockInfo;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
@@ -24,12 +25,12 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractSignEditScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
-import net.minecraft.network.protocol.game.ServerboundSwingPacket;
+import net.minecraft.network.protocol.game.ServerboundPunchPacket;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.SignItem;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -324,7 +325,7 @@ public final class PlacementManager implements Placement {
 		// Clicking the empty space itself: an air placement.
 		boolean air = airClick(target, pos);
 		placedUnseen.add(pos);
-		if (placing(slot).getItem() instanceof SignItem) signPlacedAt = Clock.millis();
+		if (placing(slot).is(ItemTags.SIGNS)) signPlacedAt = Clock.millis();
 		InventoryManager inventory = MyriadImpl.get().inventoryManager() instanceof InventoryManager i ? i : null;
 		if (inventory != null) inventory.slotUsed(slot);
 		if (inventory != null && inventory.undoSlotThisTick() == slot) {
@@ -336,7 +337,7 @@ public final class PlacementManager implements Placement {
 			});
 		} else Myriad.inventory().silentSwap(slot, () -> {
 			if (air && inventory != null) {
-				// Swap the block to the off hand, place it from there, swing that hand, and swap back: how 2b2t clients
+				// Swap the block to the off hand, place it from there, swing that hand (the server only hears a swing, 26.3 sends no hand), and swap back: how 2b2t clients
 				// place against air there, past its Grim. Back first thing next tick: Grim (PacketOrderG) cancels an off
 				// hand swap after a placement in the same tick, which would leave the block in your off hand. Meanwhile
 				// what was in the off hand (a totem) is in the hand the server holds, where it still saves you. Both
@@ -352,7 +353,7 @@ public final class PlacementManager implements Placement {
 			} else {
 				sneaking(o, target, () -> {
 					mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, target);
-					if (o.swing() && AntiCheat.inEffect().checksSwings()) mc.player.swing(InteractionHand.MAIN_HAND);
+					if (o.swing() && AntiCheat.inEffect().checksSwings()) Interactions.swing(InteractionHand.MAIN_HAND);
 				});
 			}
 		});
@@ -455,8 +456,8 @@ public final class PlacementManager implements Placement {
 	 */
 	private void swing(InteractionHand hand, boolean visible) {
 		if (!AntiCheat.inEffect().checksSwings()) return;
-		if (visible) mc.player.swing(hand);
-		else mc.getConnection().send(new ServerboundSwingPacket(hand));
+		if (visible) Interactions.swing(hand);
+		else mc.getConnection().send(ServerboundPunchPacket.INSTANCE);
 	}
 
 	/**

@@ -1,12 +1,13 @@
 package dev.myriadclient.api.service;
 
+import dev.myriadclient.api.annotation.RenderThread;
 import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Replacement;
 import dev.myriadclient.api.hook.Service;
-import dev.myriadclient.api.util.RenderThread;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Objects;
 
@@ -31,8 +32,11 @@ import java.util.Objects;
 @ApiStatus.NonExtendable
 @RenderThread
 public interface Rotations {
+	/** For looks that can give way to anything: idle aiming, a look that only helps. */
 	int PRIORITY_LOW = 0;
+	/** For a module's ordinary aiming. */
 	int PRIORITY_NORMAL = 50;
+	/** For looks an action depends on this tick: placements and breaks that are checked against the look use it. */
 	int PRIORITY_HIGH = 100;
 
 	/**
@@ -88,20 +92,23 @@ public interface Rotations {
 			return moveFix;
 		}
 
+		/** Whether it snaps at once ({@link #turnSpeed()} is 0). */
 		public boolean isInstant() {
 			return turnSpeed <= 0;
 		}
 
+		/** These options with {@link #turnSpeed()} set, in degrees per tick (negative counts as 0). */
 		public Options withTurnSpeed(float turnSpeed) {
 			return new Options(turnSpeed, moveFix);
 		}
 
+		/** These options with {@link #moveFix()} set. */
 		public Options withMoveFix(boolean moveFix) {
 			return new Options(turnSpeed, moveFix);
 		}
 
 		@Override
-		public boolean equals(Object o) {
+		public boolean equals(@Nullable Object o) {
 			return o instanceof Options other && other.turnSpeed == turnSpeed && other.moveFix == moveFix;
 		}
 
@@ -116,7 +123,11 @@ public interface Rotations {
 		}
 	}
 
-	/** Requests a rotation for the next movement packet, applied instantly. */
+	/**
+	 * Requests a rotation for this tick's movement packet, applied instantly. Yaw and pitch in degrees; {@link Float#NaN}
+	 * for an axis you leave to others (both NaN asks for nothing). Pitch is clamped to -90..90. A request lasts one
+	 * tick: ask again every tick you need it.
+	 */
 	default void request(Object owner, float yaw, float pitch, int priority) {
 		request(owner, yaw, pitch, priority, Options.INSTANT, null);
 	}
@@ -131,15 +142,22 @@ public interface Rotations {
 	}
 
 	/**
-	 * The full form. {@code afterSent} (may be null) runs only once the sent rotation has reached the target, which
-	 * with a turn speed can take a few ticks of requesting.
+	 * The full form. {@code afterSent} (may be null) runs on the render thread once the movement packet carrying this
+	 * rotation has gone out and the sent rotation has reached the target on every axis you asked for, which with a turn
+	 * speed can take a few ticks of requesting. {@code owner} is who the {@link #TURN} hook and replacements of this
+	 * service see as the caller.
 	 */
-	void request(Object owner, float yaw, float pitch, int priority, Options options, Runnable afterSent);
+	void request(Object owner, float yaw, float pitch, int priority, Options options, @Nullable Runnable afterSent);
 
+	/** Requests the look from your eyes to {@code target} for this tick, applied instantly ({@link #request}). */
 	default void lookAt(Object owner, Vec3 target, int priority) {
 		lookAt(owner, target, priority, Options.INSTANT);
 	}
 
+	/**
+	 * Requests the look from your eyes to {@code target} for this tick, applied as {@code options} say
+	 * ({@link #request}).
+	 */
 	default void lookAt(Object owner, Vec3 target, int priority, Options options) {
 		float[] r = anglesTo(target);
 		request(owner, r[0], r[1], priority, options, null);
@@ -158,7 +176,7 @@ public interface Rotations {
 	 * The rotation this tick's movement packet will carry, {yaw, pitch}, fixed from now on: requests made later this
 	 * tick no longer change it. For packets that carry a rotation of their own (using an item), which Grim
 	 * (BadPacketsJ) wants equal to the tick's. Item-use packets are given it automatically, except thrown items (a
-	 * pearl): those keep their own aim, and fix the tick's rotation to it.
+	 * pearl): those keep their own aim, and fix the tick's rotation to it. A new array each call.
 	 */
 	float[] rotationForAction();
 
@@ -174,6 +192,7 @@ public interface Rotations {
 	 */
 	float serverYaw();
 
+	/** The pitch the server currently believes the player has, in degrees; see {@link #serverYaw()}. */
 	float serverPitch();
 
 	/** Whether the server already believes you face {@code yaw}/{@code pitch}, within {@code tolerance} degrees per axis. */
@@ -182,18 +201,27 @@ public interface Rotations {
 		return dy <= tolerance && Math.abs(pitch - serverPitch()) <= tolerance;
 	}
 
-	/** Yaw and pitch from the player's eyes to {@code target}. */
+	/** Yaw and pitch, in degrees, from the player's eyes to {@code target}, as a new array {yaw, pitch}. Needs a world. */
 	float[] anglesTo(Vec3 target);
 
-	/** One step of a rotation turning towards its target, for {@link #TURN}: angles in degrees, speed 0 = snap. */
+	/**
+	 * One step of a rotation turning towards its target, for {@link #TURN}: angles in degrees, speed 0 = snap.
+	 *
+	 * @param from where the axis was in the last rotation sent
+	 * @param to the target
+	 * @param speed the request's {@link Options#turnSpeed()}, in degrees per tick (0: snap)
+	 * @param yaw whether this is the yaw axis (wraps around) rather than pitch
+	 */
 	record Turn(float from, float to, float speed, boolean yaw) {
 	}
 
 	/**
 	 * Where a rotation is this tick, turning from the last one sent towards its target (core: at most the request's
-	 * turn speed, the short way round for yaw). Called for the request winning each axis, with its owner as caller.
+	 * turn speed, the short way round for yaw). Called for the request winning each axis, with its owner as caller, and
+	 * with no caller while a rotation eases back to where you look. Null or NaN leaves core's step; a pitch is clamped
+	 * to -90..90.
 	 */
-	Hook<Turn, Float> TURN = Hook.of("myriad:rotation_turn", "Rotation turn",
+	Hook<Turn, @Nullable Float> TURN = Hook.of("myriad:rotation_turn", "Rotation turn",
 		"How a rotation turns towards its target each tick.");
 
 	/**
@@ -205,12 +233,13 @@ public interface Rotations {
 		/** The service this one wraps: core's own. */
 		protected final Rotations core;
 
+		/** Wraps {@code core}, the service handed to your replacement's factory. */
 		protected Forwarding(Rotations core) {
 			this.core = Objects.requireNonNull(core);
 		}
 
 		@Override
-		public void request(Object owner, float yaw, float pitch, int priority, Options options, Runnable afterSent) {
+		public void request(Object owner, float yaw, float pitch, int priority, Options options, @Nullable Runnable afterSent) {
 			core.request(owner, yaw, pitch, priority, options, afterSent);
 		}
 

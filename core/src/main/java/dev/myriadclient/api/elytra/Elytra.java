@@ -1,7 +1,7 @@
 package dev.myriadclient.api.elytra;
 
+import dev.myriadclient.api.annotation.RenderThread;
 import dev.myriadclient.api.event.events.GlideEvent;
-import dev.myriadclient.api.util.RenderThread;
 import org.jetbrains.annotations.ApiStatus;
 
 /**
@@ -52,11 +52,19 @@ public interface Elytra {
 	/** Lets {@code pilot} fly the local player until {@link #removePilot}. */
 	void addPilot(Pilot pilot);
 
+	/**
+	 * Stops {@code pilot} flying the local player; nothing happens if it wasn't added. Call it when the module turns
+	 * off.
+	 */
 	void removePilot(Pilot pilot);
 
-	/** A No Durability engine for {@code owner}'s flight: {@link NoDurability#enable() enable} it when the flight starts. */
+	/**
+	 * A new No Durability engine for {@code owner}'s flight: {@link NoDurability#enable() enable} it when the flight
+	 * starts. Each call makes another; keep the one you get.
+	 */
 	NoDurability noDurability(NoDurability.Owner owner);
 
+	/** The chest swapper, shared by every flight. */
 	ChestSwap chestSwap();
 
 	/**
@@ -75,5 +83,6 @@ public interface Elytra {
 	 */
 	Flight control(NoDurability.Owner owner);
 
+	/** The glide hold, shared by every flight; one owner arms it at a time. */
 	GlideHold glideHold();
 }

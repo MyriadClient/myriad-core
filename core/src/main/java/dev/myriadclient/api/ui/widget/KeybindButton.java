@@ -1,17 +1,17 @@
 package dev.myriadclient.api.ui.widget;
 
-import dev.myriadclient.api.render.Canvas;
+import com.mojang.blaze3d.platform.InputConstants;
+import dev.myriadclient.api.input.Keybind;
+import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.util.ColorUtil;
-import dev.myriadclient.api.util.Keybind;
-import net.minecraft.client.Minecraft;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
  * Click, then press a key or mouse button (middle/side) to bind, with any modifiers held. A modifier pressed and let go
- * on its own binds that key (Left Alt). Escape cancels, Backspace/Delete unbinds.
+ * on its own binds that key (Left Alt). Escape cancels, Backspace/Delete unbinds; right-clicking it unbinds too. While
+ * listening it holds keyboard focus, so the UI's shortcuts don't fire.
  */
 public class KeybindButton extends Widget {
 	private final Supplier<Keybind> getter;
@@ -20,6 +20,10 @@ public class KeybindButton extends Widget {
 	/** A modifier pressed while listening, bound on its own if it's let go before any other key; -1 if none. */
 	private int modifierKey = -1, modifierMods;
 
+	/**
+	 * @param getter the current bind, read every frame
+	 * @param setter called with the new bind ({@link Keybind#NONE} when unbound)
+	 */
 	public KeybindButton(Supplier<Keybind> getter, Consumer<Keybind> setter) {
 		this.getter = getter;
 		this.setter = setter;
@@ -34,7 +38,7 @@ public class KeybindButton extends Widget {
 	public void render(Canvas c, float mx, float my) {
 		if (listening && !isFocused()) listening = false;
 		// Let go with nothing else pressed: the modifier itself is the bind (with any other modifiers held then).
-		if (listening && modifierKey >= 0 && GLFW.glfwGetKey(Minecraft.getInstance().getWindow().handle(), modifierKey) != GLFW.GLFW_PRESS) {
+		if (listening && modifierKey >= 0 && !InputConstants.isKeyDown(modifierKey)) {
 			setter.accept(Keybind.key(modifierKey, modifierMods));
 			stop();
 		}
@@ -54,8 +58,8 @@ public class KeybindButton extends Widget {
 	@Override
 	public boolean mouseClicked(float mx, float my, int button) {
 		if (listening) {
-			if (button >= GLFW.GLFW_MOUSE_BUTTON_MIDDLE) {
-				setter.accept(new Keybind(button, true, heldModifiers()));
+			if (button == InputConstants.MOUSE_BUTTON_MIDDLE || button >= InputConstants.MOUSE_BUTTON_4) {
+				setter.accept(new Keybind(button, true, Keybind.heldModifiers()));
 				stop();
 				return true;
 			}
@@ -66,28 +70,13 @@ public class KeybindButton extends Widget {
 			return true;
 		}
 		if (!isHovered(mx, my)) return false;
-		if (button == 0) {
+		if (button == InputConstants.MOUSE_BUTTON_LEFT) {
 			listening = true;
 			focus();
-		} else if (button == 1) {
+		} else if (button == InputConstants.MOUSE_BUTTON_RIGHT) {
 			setter.accept(Keybind.NONE);
 		}
 		return true;
-	}
-
-	/** The modifier keys held now, for a mouse button pressed with them (Ctrl+Mouse5). */
-	private static int heldModifiers() {
-		long w = Minecraft.getInstance().getWindow().handle();
-		int mods = 0;
-		if (held(w, GLFW.GLFW_KEY_LEFT_CONTROL) || held(w, GLFW.GLFW_KEY_RIGHT_CONTROL)) mods |= GLFW.GLFW_MOD_CONTROL;
-		if (held(w, GLFW.GLFW_KEY_LEFT_ALT) || held(w, GLFW.GLFW_KEY_RIGHT_ALT)) mods |= GLFW.GLFW_MOD_ALT;
-		if (held(w, GLFW.GLFW_KEY_LEFT_SHIFT) || held(w, GLFW.GLFW_KEY_RIGHT_SHIFT)) mods |= GLFW.GLFW_MOD_SHIFT;
-		if (held(w, GLFW.GLFW_KEY_LEFT_SUPER) || held(w, GLFW.GLFW_KEY_RIGHT_SUPER)) mods |= GLFW.GLFW_MOD_SUPER;
-		return mods;
-	}
-
-	private static boolean held(long window, int key) {
-		return GLFW.glfwGetKey(window, key) == GLFW.GLFW_PRESS;
 	}
 
 	@Override
@@ -110,10 +99,10 @@ public class KeybindButton extends Widget {
 	/** The modifier flag a modifier key sets, so a bind to that key alone doesn't also require it. */
 	private static int modifierBit(int key) {
 		return switch (key) {
-			case GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_RIGHT_SHIFT -> GLFW.GLFW_MOD_SHIFT;
-			case GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_RIGHT_CONTROL -> GLFW.GLFW_MOD_CONTROL;
-			case GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_RIGHT_ALT -> GLFW.GLFW_MOD_ALT;
-			case GLFW.GLFW_KEY_LEFT_SUPER, GLFW.GLFW_KEY_RIGHT_SUPER -> GLFW.GLFW_MOD_SUPER;
+			case InputConstants.KEY_LSHIFT, InputConstants.KEY_RSHIFT -> InputConstants.MOD_SHIFT;
+			case InputConstants.KEY_LCONTROL, InputConstants.KEY_RCONTROL -> InputConstants.MOD_CONTROL;
+			case InputConstants.KEY_LALT, InputConstants.KEY_RALT -> InputConstants.MOD_ALT;
+			case InputConstants.KEY_LGUI, InputConstants.KEY_RGUI -> InputConstants.MOD_SUPER;
 			default -> 0;
 		};
 	}
@@ -122,11 +111,11 @@ public class KeybindButton extends Widget {
 	public boolean keyPressed(int key, int scancode, int mods) {
 		if (!listening) return false;
 		switch (key) {
-			case GLFW.GLFW_KEY_ESCAPE -> {
+			case InputConstants.KEY_ESCAPE -> {
 			}
-			case GLFW.GLFW_KEY_BACKSPACE, GLFW.GLFW_KEY_DELETE -> setter.accept(Keybind.NONE);
-			case GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_RIGHT_SHIFT, GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_RIGHT_CONTROL,
-				 GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_RIGHT_ALT, GLFW.GLFW_KEY_LEFT_SUPER, GLFW.GLFW_KEY_RIGHT_SUPER -> {
+			case InputConstants.KEY_BACKSPACE, InputConstants.KEY_DELETE -> setter.accept(Keybind.NONE);
+			case InputConstants.KEY_LSHIFT, InputConstants.KEY_RSHIFT, InputConstants.KEY_LCONTROL, InputConstants.KEY_RCONTROL,
+				 InputConstants.KEY_LALT, InputConstants.KEY_RALT, InputConstants.KEY_LGUI, InputConstants.KEY_RGUI -> {
 				// Wait for a non-modifier key (held modifiers are recorded with it), or for this one to be let go alone.
 				modifierKey = key;
 				modifierMods = mods & ~modifierBit(key);

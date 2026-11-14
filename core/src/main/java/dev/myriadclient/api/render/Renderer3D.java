@@ -11,11 +11,29 @@ import net.minecraft.world.phys.Vec3;
  * all handlers ran. Coordinates are absolute world coordinates.
  * <p>
  * These are shortcuts for {@code event.shapes()} (a {@link ShapeBuilder}). For shapes that rarely change, build them
- * once into a {@link WorldMesh} or a {@code ChunkCache} instead of every frame.
+ * once into a {@link WorldMesh} or a {@code ChunkCache} instead of every frame. Colours are ARGB ints; give fills a
+ * low alpha ({@code 0x40...}) so the world shows through.
+ *
+ * <pre>{@code
+ * @Subscribe
+ * private void onRender(Render3DEvent e) {
+ *     for (Entity t : targets.get()) {   // a TickCached list, worked out once a tick
+ *         AABB box = Entities.lerpedBox(t, e.tickDelta());
+ *         Renderer3D.box(box, 0x40FF4040, 0xFFFF4040, Renderer3D.ShapeMode.BOTH, true);
+ *     }
+ *     Renderer3D.circle(mc.player.position(), range.get(), 0x8040A0FF, false);
+ * }
+ * }</pre>
  */
 public final class Renderer3D {
+	/** Which parts of a shape are drawn. */
 	public enum ShapeMode {
-		FILL, LINES, BOTH
+		/** Only the translucent faces. */
+		FILL,
+		/** Only the outline. */
+		LINES,
+		/** Faces and outline. */
+		BOTH
 	}
 
 	private Renderer3D() {
@@ -31,15 +49,17 @@ public final class Renderer3D {
 		Myriad.render().shapes().box(box, fillColor, lineColor, mode, throughWalls);
 	}
 
+	/** A line between two points, in the current {@link #lineWidth}. */
 	public static void line(Vec3 from, Vec3 to, int color, boolean throughWalls) {
 		Myriad.render().shapes().line(from, to, color, throughWalls);
 	}
 
+	/** A line whose colour fades from {@code fromColor} to {@code toColor}. */
 	public static void line(Vec3 from, Vec3 to, int fromColor, int toColor, boolean throughWalls) {
 		Myriad.render().shapes().line(from, to, fromColor, toColor, throughWalls);
 	}
 
-	/** A line from the centre of the screen to {@code to}. */
+	/** A line from the centre of the screen (where the crosshair is) to {@code to}, always drawn through walls. */
 	public static void tracer(Vec3 to, int color) {
 		Myriad.render().tracer(to, color);
 	}

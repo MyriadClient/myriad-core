@@ -1,28 +1,101 @@
 package dev.myriadclient.api.service;
 
+import dev.myriadclient.api.annotation.RenderThread;
 import dev.myriadclient.api.hook.Hook;
 import dev.myriadclient.api.hook.Replacement;
 import dev.myriadclient.api.hook.Service;
-import dev.myriadclient.api.util.Mining;
-import dev.myriadclient.api.util.RenderThread;
-import dev.myriadclient.api.util.Slots;
+import dev.myriadclient.api.item.Slots;
+import dev.myriadclient.api.player.Mining;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
 
-/** Hotbar helpers that track the slot the server thinks is selected. */
+/**
+ * The player's one inventory, shared between every module that wants it: which hotbar slot the server holds, which
+ * items sit in the hotbar, and the clicks that move them. Modules ask here instead of setting the selected slot or
+ * clicking themselves, so that two of them acting in the same tick don't undo each other and nothing goes out that an
+ * anti-cheat refuses.
+ *
+ * <h2>The slot the server holds</h2>
+ * The visible slot ({@link #select}) is yours. A module that needs another item in hand changes only the server's slot
+ * ({@link #serverSlot()}, {@link #serverItem()}):
+ * <ul>
+ * <li>{@link #silentSwap} for one action this tick; the server goes back to the slot it should hold first thing next
+ * tick.</li>
+ * <li>{@link #hold} across ticks, one owner at a time, until {@link #release} or its time runs out
+ * ({@link #holdWeakly} for a hold anyone else's takes over).</li>
+ * </ul>
+ *
+ * <h2>Borrowing and masking</h2>
+ * {@link #borrow} brings an item from the main inventory into the hotbar while it's wanted and puts it back, and what
+ * it displaced, once nobody has asked for it for half a second: a tool used from the inventory leaves the hotbar as it
+ * was, and the hotbar slot keeps showing what was there ({@link #shownInHotbar}). {@link #mask} goes further, keeping
+ * a set of slots looking as they did while an owner moves items among them, so a swap needn't be seen at all
+ * ({@link #shown}, {@link #shownArmor()}). Both lapse on their own once they stop being renewed. {@link #spare} keeps
+ * items out of the "best item" searches, and lasts until its owner withdraws it.
+ *
+ * <h2>Clicks</h2>
+ * Moves ({@link #move}, {@link #merge}, {@link #quickMove}, {@link #gather}, {@link #drop}, {@link #moveToHotbar},
+ * {@link #swapWithOffhand}, {@link #pullToHotbar}, {@link #borrow}) are clicks in your own inventory's menu, which
+ * the server takes without its screen being open, as vanilla's number keys do. Each one returns false (or -1) instead
+ * of clicking when it can't go now, so ask again next tick:
+ * <ul>
+ * <li>A container is open ({@link #containerOpen()} says so for one with its screen up): the server takes clicks only
+ * in the menu it has open. One held open ({@link Containers#hold}) is the exception: it takes the click on its own
+ * slot for the same item.</li>
+ * <li>The click budget is spent: {@link PacketLimits.Kind#INVENTORY}, sized for the strictest servers measured (72 in
+ * any 5 seconds; 2b2t disconnects on the 80th click in about 4). A sort or refill of up to that many clicks goes in
+ * one tick. Wrap a move that must happen whatever the cost (a totem) in {@link PacketLimits#urgent}.</li>
+ * <li>The server hasn't answered the last click on one of the slots yet: with lag, a click made on what the client
+ * still shows would undo what the server already did.</li>
+ * <li>The server would refuse a click now. Grim refuses inventory clicks while you sprint or (depending on the version
+ * it sees you as) hold movement keys; each move calls {@link #prepareClick()} for you, which gets past sprint at once
+ * and lets go of your keys for a tick otherwise.</li>
+ * </ul>
+ * Three methods tell those moments apart:
+ * <ul>
+ * <li>{@link #safeToClick()}: whether a click would go now without changing anything about how you move. Moves that
+ * can wait (refills, tools) wait for it.</li>
+ * <li>{@link #prepareClick()}: call just before clicking; true if a click can go now, and if not, your keys are let go
+ * for the next tick so asking again then works. For moves that can't wait (a totem).</li>
+ * <li>{@link #containerOpen()}: whether a container's screen is up, which none of the moves click past.</li>
+ * </ul>
+ *
+ * <pre>{@code
+ * // A refill that waits for a moment that costs nothing: the moves return false until then.
+ * int slot = Myriad.inventory().findInInventory(s -> s.is(Items.GOLDEN_APPLE));
+ * if (slot != -1 && !Myriad.inventory().containerOpen() && Myriad.inventory().safeToClick()) {
+ *     Myriad.inventory().move(slot, 8);
+ * }
+ *
+ * // A pickaxe from the inventory, held at the server for this tick's mining, back where it was afterwards.
+ * int pick = Myriad.inventory().bestInInventory(s -> s.is(ItemTags.PICKAXES) ? 1 : 0);
+ * int hotbar = pick == -1 ? -1 : Myriad.inventory().borrow(this, pick, s -> false);
+ * if (hotbar != -1) Myriad.inventory().hold(this, hotbar, 2);
+ * }</pre>
+ *
+ * Inventory indexes are {@link Slots}': 0-8 the hotbar, 9-35 the main inventory, 36-39 armour (feet to head), 40 the
+ * off hand. Owners are as everywhere: pass your module.
+ */
 @ApiStatus.NonExtendable
 @RenderThread
 public interface Inventory {
-	/** The hotbar slot (0-8) last sent to the server. */
+	/**
+	 * The hotbar slot (0-8) the server holds: the last one sent, by anyone, or set by the server itself (on join, or by
+	 * a plugin). It differs from the visible slot during a {@link #silentSwap} or a {@link #hold}. Safe to read from any
+	 * thread.
+	 */
 	int serverSlot();
 
-	/** Selects a hotbar slot (client and server). */
+	/**
+	 * Selects hotbar slot {@code hotbarSlot} (0-8) as pressing its number key would: the visible slot changes and the
+	 * server is told at once. Does nothing outside a world or for a slot outside 0-8.
+	 */
 	void select(int hotbarSlot);
 
 	/**
@@ -30,14 +103,20 @@ public interface Inventory {
 	 * holds it too while the action runs, so what it predicts is with that item; the visible slot doesn't change). The
 	 * server goes back to your visible slot, or a {@link #hold}'s, first thing next tick: switching back right after an
 	 * action is what Grim flags. Sends nothing when the server already holds that slot, so swapping to the same slot
-	 * tick after tick costs one switch each way.
+	 * tick after tick costs one switch each way. Where the server doesn't check the order of packets in a tick
+	 * ({@link AntiCheat.Profile#checksPacketOrder()} false, 2b2t) it goes back straight after the action instead, so
+	 * the item never shows in your hand. Does nothing (and doesn't run {@code action}) outside a world or for a slot
+	 * outside 0-8.
 	 */
 	void silentSwap(int hotbarSlot, Runnable action);
 
 	/**
 	 * Holds the server-side slot on {@code hotbarSlot} across ticks without changing the visible slot, until
-	 * {@link #release} or {@code maxTicks} pass. One module holds at a time; returns false if another owner holds.
-	 * Calling it again as the same owner refreshes the timeout (and moves the hold to the new slot).
+	 * {@link #release} or {@code maxTicks} ticks pass (at least one). One module holds at a time; returns false if
+	 * another owner holds, outside a world, or for a slot outside 0-8. Calling it again as the same owner refreshes the
+	 * timeout (and moves the hold to the new slot), so a module that holds while it works asks every tick with a short
+	 * timeout and the hold ends by itself once it stops asking. A hold refused because someone else holds is handed to
+	 * you straight away if theirs ends within a tick of your asking, for a tick or two (ask again to keep it).
 	 * <p>
 	 * Your own right clicks (using an item, placing, eating) use the slot you see: the hold steps aside for them and
 	 * comes back once you're done (it returns false meanwhile). Your left clicks attack and mine with the held item.
@@ -50,15 +129,19 @@ public interface Inventory {
 	 */
 	boolean holdWeakly(Object owner, int hotbarSlot, int maxTicks);
 
-	/** Ends {@code owner}'s hold and syncs the server back to the visible slot. */
+	/**
+	 * Ends {@code owner}'s hold and puts the server back on the visible slot (or straight on the slot of a module whose
+	 * hold was refused in the last tick, see {@link #hold}). Does nothing if {@code owner} doesn't hold.
+	 */
 	void release(Object owner);
 
 	/** Whether any module is holding a slot. */
 	boolean isHolding();
 
 	/**
-	 * The item the server thinks is in your main hand: the held slot's item while a module {@link #hold holds} one,
-	 * otherwise the selected item. Mining speed and tool checks use it, so holding a pickaxe mines at its speed.
+	 * The item the server thinks is in your main hand: the held slot's item while a module {@link #hold holds} one or a
+	 * {@link #silentSwap} hasn't gone back yet, otherwise the selected item; empty outside a world. Mining speed and
+	 * tool checks use it, so holding a pickaxe mines at its speed.
 	 */
 	ItemStack serverItem();
 
@@ -86,20 +169,24 @@ public interface Inventory {
 	 * Asks for items {@code spared} accepts to be left alone, e.g. gear about to break that's been put away to be
 	 * mended later: {@link #bestInHotbar}, {@link #bestInInventory} and the tools breaks pick (see
 	 * {@link Mining#fastestSlot}) pass them over, and modules choosing gear should too
-	 * ({@link #isSpared}). One predicate per {@code owner}; null withdraws it.
+	 * ({@link #isSpared}). One predicate per {@code owner}; null withdraws it. It isn't withdrawn when a module turns
+	 * off: withdraw it yourself.
 	 */
 	void spare(Object owner, @Nullable Predicate<ItemStack> spared);
 
 	/** Whether a module asked for {@code stack} to be left alone ({@link #spare}). */
 	boolean isSpared(ItemStack stack);
 
-	/** Total item count matching across the hotbar, main inventory and off hand. */
+	/**
+	 * Total item count matching across the hotbar, main inventory and off hand (armour isn't counted); 0 outside a
+	 * world.
+	 */
 	int count(Predicate<ItemStack> predicate);
 
 	/**
-	 * Swaps the item at {@code inventoryIndex} (0-35, see {@link Slots}) into hotbar slot
-	 * {@code hotbarSlot}, as pressing a number key over it would. Only works while no container is open; returns
-	 * false otherwise.
+	 * Swaps the item at {@code inventoryIndex} (0-35, see {@link Slots}) into hotbar slot {@code hotbarSlot}, as
+	 * pressing a number key over it would: one click. True at once when they're the same slot. False, with nothing
+	 * done, while a container is open, for bad slots, or when the click can't go now (see the type's notes on clicks).
 	 */
 	boolean moveToHotbar(int inventoryIndex, int hotbarSlot);
 
@@ -122,6 +209,14 @@ public interface Inventory {
 	 * where the server doesn't check this ({@link AntiCheat.Profile#clicksOnlyWhileStill()} is false).
 	 */
 	boolean safeToClick();
+
+	/**
+	 * Whether a container's screen is open (a chest, a furnace, a villager's trades), so a click meant for your own
+	 * inventory would land in it: modules that click on their own (totems, armour) wait until it's closed. Your own
+	 * inventory's screen isn't one, and nor is a container held open without its screen (clicks go past it).
+	 */
+	@ApiStatus.AvailableSince("2.0")
+	boolean containerOpen();
 
 	/**
 	 * Call it just before clicking: true if a click can go now. While you sprint, the server is told you stopped just
@@ -210,9 +305,11 @@ public interface Inventory {
 	int shownArmor();
 
 	// The moves below click in your own inventory screen, which works without opening it (as vanilla's number keys
-	// do). They need no container to be open, and return false otherwise, for bad slots, or when the packet budget
-	// is spent (see PacketLimits; wrap must-happen moves in Myriad.limits().urgent). Indexes are inventory indexes
-	// (see Slots): 0-8 hotbar, 9-35 main, 36-39 armour (feet..head), 40 off hand.
+	// do). They return false, with nothing done, while a container is open (one held open without its screen takes
+	// them), for bad slots, when the packet budget is spent (see PacketLimits; wrap must-happen moves in
+	// Myriad.limits().urgent), while the server hasn't answered the last click on one of the slots, or when the server
+	// would refuse a click now (prepareClick() is called for you, so asking again next tick works). Indexes are
+	// inventory indexes (see Slots): 0-8 hotbar, 9-35 main, 36-39 armour (feet..head), 40 off hand.
 
 	/**
 	 * Moves the stack at {@code from} to {@code to}, swapping with whatever is there (merging if they stack). One click
@@ -245,7 +342,10 @@ public interface Inventory {
 	@ApiStatus.AvailableSince("1.8")
 	boolean gather(int inventoryIndex);
 
-	/** Throws out the stack at {@code inventoryIndex} (or one item). */
+	/**
+	 * Throws the item at {@code inventoryIndex} on the ground, the whole stack or one of it, as the drop key does: one
+	 * click.
+	 */
 	boolean drop(int inventoryIndex, boolean wholeStack);
 
 	/**
@@ -264,8 +364,8 @@ public interface Inventory {
 	/**
 	 * Arranges your own inventory as {@link Containers.View#arrange} does a container's: sorting it, say, with your
 	 * inventory screen open or no screen at all. Slot ids are your inventory menu's: 9-35 the main inventory, 36-44 the
-	 * hotbar, 45 the off hand. Fails if another menu opens meanwhile, or once you click in it yourself (what the
-	 * arrangement holds on the cursor is put down first).
+	 * hotbar, 45 the off hand. Completes with whether the layout was reached. Fails if another menu opens meanwhile, or
+	 * once you click in it yourself (what the arrangement holds on the cursor is put down first).
 	 *
 	 * <pre>{@code
 	 * int[] main = IntStream.range(9, 36).toArray();
@@ -277,6 +377,10 @@ public interface Inventory {
 	/**
 	 * The last movement the server saw, for {@link #CLICK_READY}: whether it had sprint on, a movement key or jump
 	 * down, and sneak.
+	 *
+	 * @param sprinting whether the server last heard you sprinting
+	 * @param keys whether a movement key or jump was down in the last input the server heard
+	 * @param sneaking whether sneak was down in the last input the server heard
 	 */
 	record ClickMoment(boolean sprinting, boolean keys, boolean sneaking) {
 	}
@@ -297,6 +401,7 @@ public interface Inventory {
 		/** The service this one wraps: core's own. */
 		protected final Inventory core;
 
+		/** Wraps {@code core}, the service handed to your replacement's factory. */
 		protected Forwarding(Inventory core) {
 			this.core = Objects.requireNonNull(core);
 		}
@@ -394,6 +499,11 @@ public interface Inventory {
 		@Override
 		public boolean safeToClick() {
 			return core.safeToClick();
+		}
+
+		@Override
+		public boolean containerOpen() {
+			return core.containerOpen();
 		}
 
 		@Override

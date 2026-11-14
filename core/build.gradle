@@ -54,6 +54,29 @@ javadoc {
 	options.addStringOption('encoding', 'UTF-8')
 }
 
+// Every public and protected member of the API has a doc comment: javadoc's full lint, failing on "no comment" only
+// (@param and @return tags stay optional; the docs are prose). Icons' glyph constants are documented as a set.
+tasks.register("checkApiDocs") {
+	group = "verification"
+	description = "Fails if a public or protected API member has no doc comment."
+	def sources = fileTree("src/main/java") { include "dev/myriadclient/api/**/*.java" }
+	inputs.files(sources)
+	def classpath = sourceSets.main.compileClasspath
+	def out = layout.buildDirectory.dir("tmp/checkApiDocs")
+	doLast {
+		def tool = java.util.spi.ToolProvider.findFirst("javadoc").orElseThrow()
+		def errors = new StringWriter()
+		def args = ["-Xdoclint:all", "-Xmaxwarns", "100000", "-quiet", "-encoding", "UTF-8", "-d", out.get().asFile.path,
+			"-classpath", classpath.asPath] + sources.files.collect { it.path }
+		tool.run(new PrintWriter(new StringWriter()), new PrintWriter(errors), args as String[])
+		def missing = errors.toString().readLines().findAll { it.contains("warning: no comment") && !it.contains("/api/ui/Icons.java") }
+		if (!missing.isEmpty()) {
+			throw new GradleException("API members without a doc comment:\n  " + missing.collect { it.replaceFirst(/^.*\/dev\/myriadclient\//, "") }.join("\n  "))
+		}
+	}
+}
+tasks.named("check") { dependsOn "checkApiDocs" }
+
 // Size budget for core's internals (impl): files up to 600 lines, methods up to 60. Warns with the offenders rather than
 // failing; a file may say why it's bigger with a comment starting "// size:".
 tasks.register("checkSizes") {

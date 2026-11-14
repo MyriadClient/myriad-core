@@ -3,9 +3,9 @@ package dev.myriadclient.impl.render;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.AddonContext;
 import dev.myriadclient.api.addon.AddonSettings;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.render.RenderMode;
 import dev.myriadclient.api.setting.EnumSetting;
-import dev.myriadclient.api.util.Keybind;
 
 /** Core's Render settings, saved with the profile: the render mode every module draws in. */
 public final class CoreRenderSettings {

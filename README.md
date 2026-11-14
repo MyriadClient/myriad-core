@@ -1,18 +1,18 @@
 <p align="center"><img src="core/src/main/resources/assets/myriad/icon.png" width="96" alt="Myriad"></p>
 <h1 align="center">Myriad</h1>
-<p align="center">An addon-first utility client for Minecraft 26.2, with a menu that works like a tiling window manager.</p>
+<p align="center">An addon-first utility client for Minecraft 26.3, with a menu that works like a tiling window manager.</p>
 <p align="center"><a href="https://myriadclient.dev/"><b>myriadclient.dev</b></a></p>
 <p align="center">
   <a href="https://github.com/MyriadClient/myriad-core/releases"><img src="https://img.shields.io/github/v/release/MyriadClient/myriad-core?label=release" alt="Release"></a>
   <a href="https://github.com/MyriadClient/myriad-core/actions/workflows/build.yml"><img src="https://github.com/MyriadClient/myriad-core/actions/workflows/build.yml/badge.svg" alt="Build"></a>
-  <img src="https://img.shields.io/badge/Minecraft-26.2-5c9e4f" alt="Minecraft 26.2">
+  <img src="https://img.shields.io/badge/Minecraft-26.3-5c9e4f" alt="Minecraft 26.3">
   <img src="https://img.shields.io/badge/Fabric-Mojang%20names-8e6fd6" alt="Fabric, Mojang names">
   <img src="https://img.shields.io/badge/license-CC0-3b7dd8" alt="CC0">
 </p>
 
 ![The Myriad menu: Essentials' group windows tiled by the Dwindle layout](docs/screenshots/menu-dwindle.png)
 
-Myriad is built like a desktop, not a click-GUI. The menu is a window manager modelled on
+Myriad is built like a tiling window manager, not a click-GUI. The menu is a window manager modelled on
 [Hyprland](https://hyprland.org): workspaces, tiled or floating windows, layouts, a launcher, and everything reachable
 from the keyboard. The core ships **no modules at all**. Every feature, including the stock set, is an addon written
 against the public API, so the client is whatever addons you put next to it.
@@ -32,7 +32,7 @@ against the public API, so the client is whatever addons you put next to it.
 
 ## Install
 
-1. [Fabric Loader](https://fabricmc.net/use/) for Minecraft 26.2, and [Fabric API](https://modrinth.com/mod/fabric-api).
+1. [Fabric Loader](https://fabricmc.net/use/) for Minecraft 26.3, and [Fabric API](https://modrinth.com/mod/fabric-api).
 2. Put `myriad-<v>.jar` from the [latest release](https://github.com/MyriadClient/myriad-core/releases/latest) in `mods/`,
    with `myriad-essentials-<v>.jar` from [its releases](https://github.com/MyriadClient/myriad-essentials/releases/latest)
    and any other addons.
@@ -53,7 +53,7 @@ the Addons window.
 |---|---|---|
 | **Myriad Essentials** | The stock modules: Offhand, Kill Aura, Elytra Fly, Packet Mine, Scaffold, ESP, Nametags and the rest, with the HUD elements. Built like any other addon, on the public API, versioned on its own; remove it and Myriad boots with an empty module list. | [MyriadClient/myriad-essentials](https://github.com/MyriadClient/myriad-essentials) |
 | **Myriad Boze** | Every module of the [Boze](https://boze.dev) client in Myriad's menu, with Boze installed alongside: Boze's modules appear in windows named after Boze's own categories, with their settings, keybinds and on/off state in sync both ways, and the two friend lists kept the same. Boze stays the owner of its config and keys; Myriad is a second front end. | [MyriadClient/myriad-boze](https://github.com/MyriadClient/myriad-boze) |
-| **Myriad Omarchy** | A theme that follows your [Omarchy](https://omarchy.org) system theme: switch themes on the desktop and the menu follows. | [MyriadClient/myriad-omarchy](https://github.com/MyriadClient/myriad-omarchy) |
+| **Myriad Omarchy** | A theme that follows your [Omarchy](https://omarchy.org) system theme: switch themes on the UI and the menu follows. | [MyriadClient/myriad-omarchy](https://github.com/MyriadClient/myriad-omarchy) |
 
 For writing your own: [myriad-addon-template](https://github.com/MyriadClient/myriad-addon-template) to start from and
 [`example-addon/`](example-addon) to read. See [Writing an addon](#writing-an-addon).
@@ -82,7 +82,7 @@ Requires JDK 25+.
 ./gradlew :core:runClient                # core only (no modules)
 ./gradlew :example-addon:runClient       # core + the released Essentials + the example addon
 ./gradlew :example-addon:runClient -PessentialsDir=../myriad-essentials   # …with the Essentials jar built in that checkout
-./gradlew :example-addon:runClient -PopenDesktop   # …and open the menu on the title screen
+./gradlew :example-addon:runClient -PopenUi   # …and open the menu on the title screen
 ./gradlew :example-addon:runClient -PquickPlay="New World"   # …or load straight into a singleplayer world
 ./gradlew :example-addon:runClient -PscreenshotEvery=10   # …saving a screenshot every 10 s (run/screenshots)
 ./gradlew :example-addon:runClient -PquickPlayServer=localhost:25565 -Pusername=GrimTester   # …or join a server
@@ -126,7 +126,7 @@ single key, like Right Shift, bind **Open Menu** there or under Keybindings → 
   workspace with room for them; an addon that doesn't fit gets a workspace of its own (continuing onto the next empty
   one if it has more windows than fit), and a notification says where. A workspace holds as many windows
   as fit side by side at a readable width, so a fresh install with many addons comes up as one tidy workspace per
-  addon rather than one crowded one. Only windows the desktop hasn't seen are placed: what you've arranged stays put. A window you close stays closed (the launcher reopens it).
+  addon rather than one crowded one. Only windows the UI hasn't seen are placed: what you've arranged stays put. A window you close stays closed (the launcher reopens it).
   **Merge** windows by dragging one by its title bar onto another's title bar: each group becomes a section, and the
   icon on a section's header moves it back out to its own window.
 - Windows can be **tiled**, **floating** or **fullscreen**. Drag the gaps between tiles to resize them.

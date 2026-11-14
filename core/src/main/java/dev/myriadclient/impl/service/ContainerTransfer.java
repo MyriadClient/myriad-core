@@ -1,9 +1,9 @@
 package dev.myriadclient.impl.service;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.item.Slots;
 import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.PacketLimits;
-import dev.myriadclient.api.util.Slots;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ChestMenu;

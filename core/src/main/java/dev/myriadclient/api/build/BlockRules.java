@@ -22,8 +22,7 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.block.state.properties.SlabType;
-import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,9 +34,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * simulating the click), which grow with more of the same item (candles, sea pickles, layers, double slabs), which a
  * bare-hand click cycles afterwards (repeater delay, comparator mode, note, open, lever), and which the game keeps
  * changing on its own (connections, power, age), which a build can't hold and ignores. Core's building and
- * {@code Placement.solve} work from these.
+ * {@code Placement.solve} work from these, and so can an addon that builds or checks schematics itself.
+ *
+ * <pre>{@code
+ * if (BlockRules.placedWithNeighbour(target)) continue;          // the door's top half comes with its bottom
+ * int needed = BlockRules.count(target);                          // three candles: three of the item
+ * boolean done = BlockRules.matches(level.getBlockState(pos), target, true);
+ * }</pre>
  */
-@ApiStatus.Internal
 public final class BlockRules {
 	/** Properties the click sets: the face clicked, where on it, and which way you look. */
 	public static final List<Property<?>> PLACED = List.of(

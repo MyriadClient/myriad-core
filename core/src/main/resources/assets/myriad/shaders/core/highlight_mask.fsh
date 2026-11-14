@@ -1,14 +1,15 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 
-#moj_import <minecraft:dynamictransforms.glsl>
-#moj_import <myriad:highlight.glsl>
+#include <minecraft:dynamictransforms.glsl>
+#include <myriad:highlight.glsl>
 
 // A retained mesh drawn into the shapes mask. The colour modulator holds the first id of the mesh's palette (as an
 // encoded outline colour's red and green bytes) and each vertex's red channel its palette index; the merge group is
 // read from the highlight's data, as the mask stores it next to the id.
-in vec4 vertexColor;
+layout(location = 0) in vec4 vertexColor;
 
-out vec4 fragColor;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
     int base = int(ColorModulator.r * 255.0 + 0.5) | (int(ColorModulator.g * 255.0 + 0.5) << 8);

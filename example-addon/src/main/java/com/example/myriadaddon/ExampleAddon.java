@@ -18,6 +18,7 @@ import com.example.myriadaddon.panels.WaypointsPanel;
 import com.example.myriadaddon.settings.RangeSetting;
 import com.example.myriadaddon.stats.SessionStats;
 import com.example.myriadaddon.waypoints.WaypointStore;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.addon.AddonContext;
 import dev.myriadclient.api.addon.MyriadAddon;
@@ -25,6 +26,7 @@ import dev.myriadclient.api.control.ControlPreset;
 import dev.myriadclient.api.event.events.HighlightEvent;
 import dev.myriadclient.api.hook.Match;
 import dev.myriadclient.api.hook.Service;
+import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.render.HighlightStyle;
@@ -35,12 +37,10 @@ import dev.myriadclient.api.ui.PanelType;
 import dev.myriadclient.api.ui.Theme;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Slider;
-import dev.myriadclient.api.util.Keybind;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Player;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * The example addon: a small but complete feature (waypoints) plus a few standalone modules, written the way a real
@@ -120,7 +120,7 @@ public final class ExampleAddon implements MyriadAddon {
 		ctx.registerHud("Session Stats", "", () -> new SessionStatsHud(stats));
 
 		// 5. Global key actions: work in game, rebindable in the Keybinds panel (mod+K).
-		ctx.registerKeyAction("Add Waypoint", Keybind.key(GLFW.GLFW_KEY_B, GLFW.GLFW_MOD_ALT), () -> {
+		ctx.registerKeyAction("Add Waypoint", Keybind.key(InputConstants.KEY_B, InputConstants.MOD_ALT), () -> {
 			var player = Minecraft.getInstance().player;
 			if (player == null) return;
 			String name = waypoints.nextName("Waypoint");

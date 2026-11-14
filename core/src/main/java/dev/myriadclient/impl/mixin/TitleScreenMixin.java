@@ -7,6 +7,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
 /**
@@ -16,7 +17,8 @@ import org.spongepowered.asm.mixin.injection.At;
 @Mixin(TitleScreen.class)
 public abstract class TitleScreenMixin extends Screen {
 	/** Minecraft's rows are 24 apart. */
-	private static final int ROW = 24;
+	@Unique
+	private static final int MYRIAD$ROW = 24;
 
 	protected TitleScreenMixin(Component title) {
 		super(title);
@@ -25,8 +27,8 @@ public abstract class TitleScreenMixin extends Screen {
 	@ModifyExpressionValue(method = "init", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/TitleScreen;createNormalMenuOptions(II)I"))
 	private int myriad$menuButton(int lastRow) {
 		Button button = MenuButton.create(200);
-		button.setPosition(width / 2 - 100, lastRow + ROW);
+		button.setPosition(width / 2 - 100, lastRow + MYRIAD$ROW);
 		addRenderableWidget(button);
-		return lastRow + ROW;
+		return lastRow + MYRIAD$ROW;
 	}
 }

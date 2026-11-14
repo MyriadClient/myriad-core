@@ -9,6 +9,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The shapes Myriad can draw in the world, in absolute world coordinates. The same calls work on both kinds of
@@ -25,28 +26,35 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * @see Render3DEvent
  */
 public abstract class ShapeBuilder {
+	/** The line width in pixels a builder starts with. */
 	public static final float DEFAULT_LINE_WIDTH = 2f;
 
 	/** Positions are stored relative to this point, subtracted in doubles so they stay precise far from spawn. */
 	protected double originX, originY, originZ;
+	/** The width in pixels of lines added now; see {@link #lineWidth(float)}. */
 	protected float lineWidth = DEFAULT_LINE_WIDTH;
 
+	/** For core's two targets (and a test harness's); addons get a builder from an event or a mesh, never make one. */
 	protected ShapeBuilder() {
 	}
 
-	/** Line width in pixels for the lines added after this call. */
+	/** Line width in pixels for the lines added after this call; returns this builder. */
 	public ShapeBuilder lineWidth(float width) {
 		this.lineWidth = width;
 		return this;
 	}
 
+	/** The width in pixels of lines added now. */
 	public float lineWidth() {
 		return lineWidth;
 	}
 
 	// ---- boxes -----------------------------------------------------------------------------------------------------
 
-	/** A box with a translucent fill and/or outline. */
+	/**
+	 * A box with a translucent fill and/or outline, as {@code mode} says; each part is skipped if its colour is fully
+	 * transparent.
+	 */
 	public final void box(AABB box, int fillColor, int lineColor, Renderer3D.ShapeMode mode, boolean throughWalls) {
 		if (mode != Renderer3D.ShapeMode.LINES) boxFill(box, fillColor, throughWalls);
 		if (mode != Renderer3D.ShapeMode.FILL) boxLines(box, lineColor, throughWalls);
@@ -87,6 +95,7 @@ public abstract class ShapeBuilder {
 
 	// ---- lines and quads -------------------------------------------------------------------------------------------
 
+	/** A line between two points in one colour, in the current {@link #lineWidth()}. */
 	public final void line(Vec3 from, Vec3 to, int color, boolean throughWalls) {
 		line(from.x, from.y, from.z, to.x, to.y, to.z, color, color, throughWalls);
 	}
@@ -96,6 +105,7 @@ public abstract class ShapeBuilder {
 		line(from.x, from.y, from.z, to.x, to.y, to.z, fromColor, toColor, throughWalls);
 	}
 
+	/** A line from (x1, y1, z1) to (x2, y2, z2) fading from {@code fromColor} to {@code toColor}, with no vectors made. */
 	public final void line(double x1, double y1, double z1, double x2, double y2, double z2, int fromColor, int toColor, boolean throughWalls) {
 		emitLine(throughWalls, (float) (x1 - originX), (float) (y1 - originY), (float) (z1 - originZ),
 			(float) (x2 - originX), (float) (y2 - originY), (float) (z2 - originZ), fromColor, toColor, lineWidth);
@@ -124,21 +134,28 @@ public abstract class ShapeBuilder {
 
 	/**
 	 * The block at {@code pos} as its real shape (slabs, stairs, chests, fences), not a full cube: filled with its
-	 * boxes and outlined along its edges. Draws a full cube for air, so a block that's about to be placed shows too.
+	 * boxes and outlined along its edges. Draws a full cube for air, so a block that's about to be placed shows too, and
+	 * outside a world.
 	 */
 	public final void blockShape(BlockPos pos, int fillColor, int lineColor, Renderer3D.ShapeMode mode, boolean throughWalls) {
 		Minecraft mc = Minecraft.getInstance();
 		blockShape(pos, mc.level == null ? null : mc.level.getBlockState(pos), fillColor, lineColor, mode, throughWalls);
 	}
 
-	/** Like {@link #blockShape(BlockPos, int, int, Renderer3D.ShapeMode, boolean)} with a state you already have. */
-	public final void blockShape(BlockPos pos, BlockState state, int fillColor, int lineColor, Renderer3D.ShapeMode mode, boolean throughWalls) {
+	/**
+	 * Like {@link #blockShape(BlockPos, int, int, Renderer3D.ShapeMode, boolean)} with a state you already have (or
+	 * want to show there); null draws a full cube.
+	 */
+	public final void blockShape(BlockPos pos, @Nullable BlockState state, int fillColor, int lineColor, Renderer3D.ShapeMode mode, boolean throughWalls) {
 		Minecraft mc = Minecraft.getInstance();
 		VoxelShape shape = state == null || mc.level == null ? Shapes.block() : state.getShape(mc.level, pos);
 		shape(shape, pos.getX(), pos.getY(), pos.getZ(), fillColor, lineColor, mode, throughWalls);
 	}
 
-	/** A voxel shape (block-local, 0..1) placed at {@code x, y, z}: its boxes filled and its edges outlined. */
+	/**
+	 * A voxel shape (block-local, 0..1) placed at {@code x, y, z}: its boxes filled and its edges outlined. An empty
+	 * shape draws a full cube.
+	 */
 	public final void shape(VoxelShape shape, double x, double y, double z, int fillColor, int lineColor, Renderer3D.ShapeMode mode, boolean throughWalls) {
 		if (shape.isEmpty()) shape = Shapes.block();
 		if (mode != Renderer3D.ShapeMode.LINES && (fillColor >>> 24) != 0) {
@@ -166,7 +183,10 @@ public abstract class ShapeBuilder {
 		boxFill(b, color, throughWalls);
 	}
 
-	/** A flat ring around {@code center} (e.g. a range indicator at the player's feet). */
+	/**
+	 * A flat ring of lines at {@code center}'s height, {@code radius} blocks round it (e.g. a range indicator at the
+	 * player's feet); 24 to 128 segments depending on its size.
+	 */
 	public final void circle(Vec3 center, double radius, int color, boolean throughWalls) {
 		int segments = Math.clamp((int) (radius * 12), 24, 128);
 		double px = center.x + radius, pz = center.z;
