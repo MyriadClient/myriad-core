@@ -194,7 +194,8 @@ public final class AddonPlugin implements Plugin<Project> {
 		Provider<String> version = project.provider(() -> project.getVersion().toString());
 		Provider<String> myriad = project.provider(() -> String.valueOf(project.findProperty("myriad_version")));
 		Provider<String> minecraft = project.provider(() -> String.valueOf(project.findProperty("minecraft_version")));
-		project.getTasks().named("processResources", ProcessResources.class, t -> {
+		// The in-game tests' fabric.mod.json too (see gametests).
+		project.getTasks().withType(ProcessResources.class).matching(t -> t.getName().equals("processResources") || t.getName().equals("processGametestResources")).configureEach(t -> {
 			t.getInputs().property("version", version);
 			t.getInputs().property("myriad_version", myriad);
 			t.getInputs().property("minecraft_version", minecraft);
