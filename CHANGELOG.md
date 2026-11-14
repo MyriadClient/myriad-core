@@ -16,6 +16,17 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=1.0.0"}`) and can check `Myriad.isAtLeast("1.1.0")` for newer features.
 
+## 1.8.1
+
+- **Updates only offer what runs on your Minecraft.** The update check reads a repository's releases instead of only the
+  newest, and offers the newest one made for the Minecraft you're playing (a release says which in a `Minecraft:` line of
+  its notes, which the release workflow now adds; one without it counts as any). A newer release only for another
+  Minecraft version isn't offered: it's mentioned once, and shown under the addon in Addons and `.update`.
+- **Altitude holds its height in fresh terrain.** With No Durability's chest swaps, chunks arriving just in time (2b2t's
+  new terrain) kept cutting dives short and capping them below the speed a pull-up needs, so the flight sank lower and
+  lower. It looks one second ahead instead of four, carries on with a climb it has started, keeps climbing for half a
+  second after the last missing chunk, and no longer caps the dive while chunks come in late.
+
 ## 1.8.0
 
 - **Inventory work goes at the speed the server really allows.** The click budget now follows what 2b2t was measured to

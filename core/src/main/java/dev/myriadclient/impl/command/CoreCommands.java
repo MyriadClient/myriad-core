@@ -135,7 +135,7 @@ public final class CoreCommands {
 						any = true;
 						String what = switch (s.kind()) {
 							case CHECKING -> "checking…";
-							case UP_TO_DATE -> "up to date";
+							case UP_TO_DATE -> s.message() == null ? "up to date" : "up to date (" + s.message() + ")";
 							case AVAILABLE -> s.version() + " available";
 							case DOWNLOADING -> "downloading " + s.version() + "…";
 							case STAGED -> s.version() + " installs when you quit";

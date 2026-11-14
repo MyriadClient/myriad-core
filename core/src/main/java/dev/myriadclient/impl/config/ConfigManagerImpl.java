@@ -115,6 +115,11 @@ public final class ConfigManagerImpl implements ConfigManager {
 					}
 				}
 				if (o.has("checkUpdates")) myriad.updates().setCheckEnabled(o.get("checkUpdates").getAsBoolean());
+				if (o.has("updatesNoted") && o.get("updatesNoted").isJsonArray()) {
+					List<String> noted = new ArrayList<>();
+					for (JsonElement e : o.getAsJsonArray("updatesNoted")) if (e.isJsonPrimitive()) noted.add(e.getAsString());
+					myriad.updates().setNoted(noted);
+				}
 				if (o.has("keyActions") && o.get("keyActions").isJsonObject()) rawKeyActions = o.getAsJsonObject("keyActions");
 			});
 			// Before 0.3.2, Open Menu was Right Shift by default and saved as such; it's unbound now (mod+1..9 opens the
@@ -198,6 +203,9 @@ public final class ConfigManagerImpl implements ConfigManager {
 		for (String h : myriad.antiCheat().knownServers()) known.add(h);
 		global.add("knownGrimServers", known);
 		global.addProperty("checkUpdates", myriad.updates().checkEnabled());
+		JsonArray noted = new JsonArray();
+		for (String n : myriad.updates().noted()) noted.add(n);
+		if (!noted.isEmpty()) global.add("updatesNoted", noted);
 		JsonObject keys = rawKeyActions.deepCopy();
 		keys.addProperty("_version", 2);
 		for (KeyAction a : myriad.keyActions()) keys.addProperty(a.id().toString(), a.bind().serialize());

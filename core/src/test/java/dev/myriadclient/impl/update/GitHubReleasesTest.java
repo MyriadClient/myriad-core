@@ -1,7 +1,9 @@
 package dev.myriadclient.impl.update;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.fabricmc.loader.api.Version;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -65,5 +67,46 @@ class GitHubReleasesTest {
 		assertTrue(GitHubReleases.isNewer("1.0.0", "1.0.0-beta.2"));
 		assertFalse(GitHubReleases.isNewer("0.1.1", "0.1.1"));
 		assertFalse(GitHubReleases.isNewer("0.1.0", "0.1.1"));
+	}
+
+	private static String release(String version, String body, boolean prerelease) {
+		return """
+			{"tag_name": "v%s", "html_url": "https://github.com/MyriadClient/myriad-core/releases/tag/v%s", "prerelease": %s,
+			 "body": "%s", "assets": [{"name": "myriad-%s.jar", "size": 1, "browser_download_url": "https://dl/%s"}]}"""
+			.formatted(version, version, prerelease, body, version, version);
+	}
+
+	private static GitHubReleases.Found find(String minecraft, String... releases) throws Exception {
+		JsonArray list = JsonParser.parseString("[" + String.join(",", releases) + "]").getAsJsonArray();
+		return GitHubReleases.find(list, "myriad-1.8.0.jar", "1.8.0", Version.parse(minecraft));
+	}
+
+	@Test
+	void readsWhichMinecraftAReleaseIsFor() {
+		JsonObject json = JsonParser.parseString(release("2.0.0", "## 2.0.0\\n\\nNotes.\\n\\nMinecraft: ~26.3\\n", false)).getAsJsonObject();
+		GitHubReleases.Release r = GitHubReleases.parse(json, "myriad-1.8.0.jar", "1.8.0");
+		assertEquals("~26.3", r.minecraft());
+		assertEquals("26.3", r.minecraftShown());
+		assertNull(GitHubReleases.parse(JsonParser.parseString(release("1.8.0", "Notes.", false)).getAsJsonObject(), null, "1.7.2").minecraft());
+	}
+
+	@Test
+	void offersOnlyAReleaseForTheRunningMinecraft() throws Exception {
+		// Newest first, as GitHub lists them: 2.0.0 is for 26.3 only, 1.8.1 for 26.2; 1.7.2 says nothing (any).
+		String r200 = release("2.0.0", "Minecraft: ~26.3", false), r181 = release("1.8.1", "Minecraft: ~26.2", false), r172 = release("1.7.2", "", false);
+		GitHubReleases.Found on262 = find("26.2", r200, r181, r172);
+		assertEquals("1.8.1", on262.forThisMinecraft().version());
+		assertEquals("2.0.0", on262.newest().version());
+		assertEquals("2.0.0", find("26.3", r200, r181, r172).forThisMinecraft().version());
+		// A release that doesn't say which Minecraft is taken for any.
+		assertEquals("1.7.2", find("26.2", r200, r172).forThisMinecraft().version());
+	}
+
+	@Test
+	void leavesOutPreReleasesAndOrdersByVersion() throws Exception {
+		GitHubReleases.Found f = find("26.2", release("1.9.0-beta.1", "Minecraft: ~26.2", true), release("1.8.0", "Minecraft: ~26.2", false),
+			release("1.8.1", "Minecraft: ~26.2", false));
+		assertEquals("1.8.1", f.forThisMinecraft().version());
+		assertEquals("1.8.1", f.newest().version());
 	}
 }

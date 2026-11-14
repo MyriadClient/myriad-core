@@ -37,6 +37,8 @@ jobs:
           version=${GITHUB_REF_NAME#v}
           awk -v v="$version" '/^## /{p = ($2 == v)} p' CHANGELOG.md > notes.md
           [ -s notes.md ] || echo "Myriad $version" > notes.md
+          # Which Minecraft it's for, from the built jar's fabric.mod.json: the update check only offers releases for the player's.
+          printf '\nMinecraft: %s\n' "$(unzip -p core/build/libs/myriad-$version.jar fabric.mod.json | jq -r '.depends.minecraft')" >> notes.md
       - name: create the release
         uses: softprops/action-gh-release@v2
         with:
