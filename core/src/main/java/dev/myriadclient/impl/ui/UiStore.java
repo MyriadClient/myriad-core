@@ -90,6 +90,7 @@ final class UiStore {
 			for (WindowImpl w : byUid.values()) if (!placed.contains(w)) ws.tiling.add(w, null);
 		}
 		wm.hud.adoptStrays();
+		wm.tidyFullscreen();
 		wm.markDirty();
 	}
 
@@ -162,6 +163,7 @@ final class UiStore {
 		wm.groups.tidy();
 		wm.groups.placeNewGroups(true);
 		wm.hud.adoptStrays();
+		wm.tidyFullscreen();
 		wm.modulesChanged = false;
 	}
 

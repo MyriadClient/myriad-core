@@ -17,6 +17,17 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.1.1
+
+### Fixes
+
+- **One fullscreen window per workspace.** Making a window fullscreen takes the others on its workspace out of
+  fullscreen, as does moving a fullscreen window onto a workspace that has one. Several could be fullscreen at once,
+  stacked over each other, and closing the top one showed the next instead of the workspace. A saved layout with more
+  than one keeps the focused one (else the topmost).
+
+No API changes.
+
 ## 2.1.0
 
 ### Fixes

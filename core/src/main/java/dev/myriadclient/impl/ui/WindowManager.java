@@ -440,7 +440,22 @@ public final class WindowManager implements Ui {
 		}
 		ws.focused = w;
 		w.placed = false;
+		if (w.fullscreen) soleFullscreen(w);
 		markDirty();
+	}
+
+	/** Takes the other windows on {@code w}'s workspace out of fullscreen: one fullscreen window per workspace. */
+	void soleFullscreen(WindowImpl w) {
+		for (WindowImpl o : windows) if (o != w && o.workspace == w.workspace) o.fullscreen = false;
+	}
+
+	/** One fullscreen window per workspace in a loaded layout (older versions let there be more): the focused one, else the topmost. */
+	void tidyFullscreen() {
+		for (Workspace ws : workspaces) {
+			WindowImpl keep = ws.focused != null && ws.focused.fullscreen ? ws.focused : null;
+			if (keep == null) for (WindowImpl w : ws.drawOrder()) if (w.fullscreen) keep = w;
+			if (keep != null) soleFullscreen(keep);
+		}
 	}
 
 	void safe(WindowImpl w, Runnable r) {

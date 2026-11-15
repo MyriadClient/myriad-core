@@ -178,6 +178,7 @@ public final class WindowImpl implements Window {
 	public void setFullscreen(boolean fullscreen) {
 		if (isHudEditor()) return;
 		this.fullscreen = fullscreen;
+		if (fullscreen) wm.soleFullscreen(this);
 		wm.markDirty();
 	}
 
