@@ -94,7 +94,8 @@ final class PlacementAim {
 	 * looking is refused by servers that check clicks, so null if none qualifies.
 	 */
 	Aim airHit(BlockPos pos, double range, boolean rotate) {
-		Aim look = lookHit(Myriad.rotations().serverYaw(), Myriad.rotations().serverPitch(), pos, null, range);
+		float[] has = PlacementManager.serverLook();
+		Aim look = lookHit(has[0], has[1], pos, null, range);
 		if (look != null || !rotate) return look;
 		Aim best = null;
 		double bestDistance = Double.MAX_VALUE;

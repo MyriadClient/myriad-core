@@ -1,6 +1,7 @@
 package dev.myriadclient.impl.service;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.api.item.ItemInfo;
 import dev.myriadclient.api.player.Mining;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.Inventory;
@@ -8,6 +9,8 @@ import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
@@ -80,10 +83,37 @@ final class BreakTools {
 	int slotFor(Breaking.Options o, BlockState state, BlockPos pos) {
 		int selected = mc.player.getInventory().getSelectedSlot();
 		if (!o.autoTool()) return selected;
+		if (wantsSilk(state, pos)) {
+			int silk = silkSlot(0, 9);
+			if (silk >= 0) return silk;
+		}
 		int best = Mining.fastestSlot(state, 0, 9);
 		// What you hold is passed over too when it's spared (an ender chest's plain pickaxe, while one with Silk Touch is wanted).
 		boolean spared = Myriad.inventory().isSpared(mc.player.getInventory().getItem(selected));
 		return best < 0 || !spared && Mining.delta(state, pos, selected) >= Mining.delta(state, pos, best) ? selected : best;
+	}
+
+	/**
+	 * Whether a Silk Touch tool should mine {@code state}, when you have one: a block that breaks at once (a flower,
+	 * glow lichen, grass), or one no tool mines faster than a hand (glass, a pane), where Silk Touch costs nothing and
+	 * often makes the drop. Not where a tool is faster (ores, stone): the fastest tool goes there, as before, so a Silk
+	 * Touch pickaxe doesn't take a diamond ore's diamonds.
+	 */
+	private boolean wantsSilk(BlockState state, BlockPos pos) {
+		if (state.getDestroySpeed(mc.level, pos) == 0) return true;
+		var inv = mc.player.getInventory();
+		for (int i = 0; i < 36; i++) if (inv.getItem(i).getDestroySpeed(state) > 1) return false;
+		return true;
+	}
+
+	/** The slot in [from, to) holding a Silk Touch tool that isn't spared (worn down to be mended), or -1. */
+	private int silkSlot(int from, int to) {
+		var inv = mc.player.getInventory();
+		for (int i = from; i < to; i++) {
+			ItemStack s = inv.getItem(i);
+			if (!s.isEmpty() && ItemInfo.enchantmentLevel(s, Enchantments.SILK_TOUCH) > 0 && !Myriad.inventory().isSpared(s)) return i;
+		}
+		return -1;
 	}
 
 	/** The break waiting for its better tool to come in (it doesn't start until then), or null. */
@@ -112,12 +142,14 @@ final class BreakTools {
 		toolComing = null;
 		if (j == null || !j.options.autoTool()) return;
 		BlockState state = mc.level.getBlockState(j.pos);
-		int from = Mining.fastestSlot(state, 9, 36);
-		if (from < 0 || Mining.delta(state, j.pos, from) <= Mining.delta(state, j.pos, slotFor(j.options, state, j.pos))) return;
+		// A Silk Touch tool the block wants, only in the inventory: brought in as a faster tool would be.
+		boolean silk = wantsSilk(state, j.pos) && silkSlot(0, 9) < 0;
+		int from = silk ? silkSlot(9, 36) : Mining.fastestSlot(state, 9, 36);
+		if (from < 0 || !silk && Mining.delta(state, j.pos, from) <= Mining.delta(state, j.pos, slotFor(j.options, state, j.pos))) return;
 		// A tool that's worse for this block makes room for it. While you move it takes a tick longer (your keys are
 		// released first); a break that hasn't started waits for it rather than start with a worse tool, as packet
 		// breaks are timed by the tool they start with.
-		if (Myriad.inventory().borrow(owner, from, s -> s.getDestroySpeed(state) > 1) < 0 && j.phase == BreakJob.Phase.QUEUED) {
+		if (Myriad.inventory().borrow(owner, from, s -> s.getDestroySpeed(state) > 1 || silk) < 0 && j.phase == BreakJob.Phase.QUEUED) {
 			toolWait = j == toolWaitJob ? toolWait + 1 : 0;
 			toolWaitJob = j;
 			if (toolWait < TOOL_WAIT_TICKS) toolComing = j;

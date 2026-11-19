@@ -12,6 +12,7 @@ import dev.myriadclient.api.util.MathUtil;
 import dev.myriadclient.api.util.Threads;
 import dev.myriadclient.impl.network.JoinedVersion;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.protocol.game.ServerboundAcceptTeleportationPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.util.Mth;
@@ -20,6 +21,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ProjectileItem;
 import net.minecraft.world.phys.Vec3;
+
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -228,9 +231,20 @@ public final class RotationManager implements Rotations {
 	@Subscribe(priority = Priority.LOWEST)
 	private synchronized void onSend(PacketEvent.Send e) {
 		if (e.isCancelled()) return;
-		if (e.packet() instanceof ServerboundMovePlayerPacket p && p.hasRotation()) {
-			serverYaw = p.getYRot(0);
-			serverPitch = p.getXRot(0);
+		if (e.packet() instanceof ServerboundAcceptTeleportationPacket t) {
+			afterTeleport.teleported(t);
+		} else if (e.packet() instanceof ServerboundMovePlayerPacket p) {
+			boolean dropped = afterTeleport.drops(p);
+			if (p.hasRotation()) {
+				if (dropped && !lookKept) {
+					// Its look never reached the server: it keeps the one before (see keptLook) till another goes.
+					keptYaw = serverYaw;
+					keptPitch = serverPitch;
+				}
+				lookKept = dropped;
+				serverYaw = p.getYRot(0);
+				serverPitch = p.getXRot(0);
+			}
 		} else if (e.packet() instanceof ServerboundUseItemPacket p && useTurns() && (p.yRot() != serverYaw || p.xRot() != serverPitch)) {
 			sendRotation = true;
 		}
@@ -239,6 +253,76 @@ public final class RotationManager implements Rotations {
 	@Subscribe
 	private synchronized void onTeleport(TeleportEvent e) {
 		lookSetByServer = true;
+	}
+
+	private final AfterTeleport afterTeleport = new AfterTeleport();
+	/**
+	 * Whether the server ignored the last rotation sent (see {@link AfterTeleport}) and still has {@link #keptYaw}.
+	 * {@link #serverYaw} stays the last numbers sent (what Grim saw, and what the next packet is compared with).
+	 */
+	private boolean lookKept;
+	private float keptYaw, keptPitch;
+
+	/**
+	 * The look the server really has when it ignored the last one sent (see {@link AfterTeleport}), else null: placements
+	 * go by it, since a block's facing comes from it. The next rotation sent puts it right (send one with
+	 * {@link #sendRotationThisTick()}: the same numbers again go out nudged).
+	 */
+	public synchronized float @Nullable [] keptLook() {
+		return lookKept ? new float[]{keptYaw, keptPitch} : null;
+	}
+
+	/**
+	 * Bukkit servers (Paper, Spigot) ignore one movement packet after a teleport: the first that moves you more than a
+	 * sixteenth of a block or turns you more than 10° from the last one they noted, unless it starts exactly where they
+	 * have you, look written the same (their {@code justTeleported}: the packet's move event fires and they return before
+	 * applying it). After a teleport to -90 the camera's 270 is a different look to them, so the next real turn (a
+	 * placement's) was lost, and a block placed by it faced the old look. Followed here from the teleport's answer; a
+	 * vanilla server applies the packet anyway, which costs only the look sent once more.
+	 */
+	private static final class AfterTeleport {
+		private boolean armed;
+		/** What the server last noted (its "from"), and where it has you (wrapped look, as its location gives it). */
+		private double noteX, noteY, noteZ, atX, atY, atZ;
+		private float noteYaw, notePitch, atYaw, atPitch;
+
+		void teleported(ServerboundAcceptTeleportationPacket t) {
+			armed = true;
+			noteX = atX = t.x();
+			noteY = atY = t.y();
+			noteZ = atZ = t.z();
+			noteYaw = t.yRot();
+			notePitch = t.xRot();
+			atYaw = Mth.wrapDegrees(t.yRot());
+			atPitch = Mth.wrapDegrees(t.xRot());
+		}
+
+		/** Whether the server ignores movement packet {@code p}; follows what it notes either way. */
+		boolean drops(ServerboundMovePlayerPacket p) {
+			if (!armed) return false;
+			double x = p.hasPosition() ? p.getX(0) : atX, y = p.hasPosition() ? p.getY(0) : atY, z = p.hasPosition() ? p.getZ(0) : atZ;
+			float yaw = p.hasRotation() ? p.getYRot(0) : atYaw, pitch = p.hasRotation() ? p.getXRot(0) : atPitch;
+			double moved = (noteX - x) * (noteX - x) + (noteY - y) * (noteY - y) + (noteZ - z) * (noteZ - z);
+			if (moved > 1 / 256.0 || Math.abs(noteYaw - yaw) + Math.abs(notePitch - pitch) > 10) {
+				boolean fromHere = noteX == atX && noteY == atY && noteZ == atZ && Float.floatToIntBits(noteYaw) == Float.floatToIntBits(atYaw)
+					&& Float.floatToIntBits(notePitch) == Float.floatToIntBits(atPitch);
+				noteX = x;
+				noteY = y;
+				noteZ = z;
+				noteYaw = yaw;
+				notePitch = pitch;
+				if (!fromHere) {
+					armed = false;
+					return true;
+				}
+			}
+			atX = x;
+			atY = y;
+			atZ = z;
+			atYaw = Mth.wrapDegrees(yaw);
+			atPitch = Mth.wrapDegrees(pitch);
+			return false;
+		}
 	}
 
 	/** 1.21's protocol: the first whose use carries a rotation the server turns the player to. */

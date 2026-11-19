@@ -23,7 +23,7 @@ import java.util.function.BooleanSupplier;
 /**
  * Runs builds ({@link BuildRun}, one each): ticks them before the placement and breaking services act this tick, so
  * what's planned now goes out now, and tells them when the server changes a block or moves you. What all builds share
- * lives here: one inventory move a tick between them, and each item's hotbar slot worked out once a tick.
+ * lives here: the inventory moves each tick between them, and each item's hotbar slot worked out once a tick.
  */
 public final class BuildManager implements Building {
 	private final Minecraft mc = Minecraft.getInstance();
@@ -31,6 +31,8 @@ public final class BuildManager implements Building {
 	private final List<BuildRun> builds = new ArrayList<>();
 	/** Each item's hotbar slot this tick (or why there's none), asked once however many positions want it. */
 	private final Reference2IntOpenHashMap<Item> slots = new Reference2IntOpenHashMap<>();
+	/** Whether a build ran last tick: the tick after the last one ends, the inventory is resynced. */
+	private boolean hadBuilds;
 	/**
 	 * Inventory moves for builds this tick, and the most: each block moved in is placed in the same tick, so a build of
 	 * more kinds than the hotbar holds goes at the pace of one whose blocks are all there (the placement budget, 9 in
@@ -69,9 +71,13 @@ public final class BuildManager implements Building {
 	private void onTick(TickEvent.Pre e) {
 		builds.removeIf(b -> !b.isRunning());
 		if (builds.isEmpty() && MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory) inventory.buildsDone();
-		if (builds.isEmpty() || mc.player == null || mc.level == null) return;
 		materialMoves = 0;
 		slots.clear();
+		// The last build ended (the Printer turned off): once the hotbar is back, the server is asked for the inventory as
+		// it has it, so whatever the client got wrong along the way is put right.
+		if (builds.isEmpty() && hadBuilds && MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory) inventory.resyncAfterRestore();
+		hadBuilds = !builds.isEmpty();
+		if (builds.isEmpty() || mc.player == null || mc.level == null) return;
 		for (BuildRun b : new ArrayList<>(builds)) {
 			try {
 				b.tick();
@@ -97,6 +103,7 @@ public final class BuildManager implements Building {
 	private void onLeave(WorldEvent.Leave e) {
 		for (BuildRun b : new ArrayList<>(builds)) b.stop();
 		builds.clear();
+		hadBuilds = false;
 	}
 
 	/** {@code item}'s hotbar slot (or why there's none) if a build already worked it out this tick, else {@link Integer#MIN_VALUE}. */

@@ -16,7 +16,6 @@ import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.util.MathUtil;
 import dev.myriadclient.api.util.Threads;
-import dev.myriadclient.api.world.BlockInfo;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.network.ActionTiming;
 import dev.myriadclient.impl.network.BlockAckTracker;
@@ -127,6 +126,12 @@ public final class PlacementManager implements Placement {
 		return solver.solve(pos.immutable(), wanted, placing(hotbarSlot), o);
 	}
 
+	/** {@link #solve} with {@code stack} wherever it is (an inventory slot it would be brought from), for builds. */
+	Solution solveWith(BlockPos pos, BlockState wanted, ItemStack stack, Options o) {
+		if (mc.player == null) return Solution.none(Check.UNAVAILABLE);
+		return solver.solve(pos.immutable(), wanted, stack, o);
+	}
+
 	/** Whether the look after a solved click is still to go out this tick: a break's turn now would take its place. */
 	boolean followPending() {
 		return follow.pending();
@@ -148,7 +153,12 @@ public final class PlacementManager implements Placement {
 		if (!context.getClickedPos().equals(pos)) return Attempt.refused(pos, Check.OCCUPIED);
 		Check check = spaceCheck(pos, co, context);
 		if (!check.ok()) return Attempt.refused(pos, check);
-		if (!c.turns()) return submit(owner, pos, new PlacementAim.Aim(c.hit(), mc.player.getEyeHeight()), hotbarSlot, co);
+		if (!c.turns()) {
+			// Solved with the look the server has now: held for the next tick (after an aimed click), it would go out after
+			// this tick's movement packet and be placed with that packet's look instead (a furnace facing you). Next tick.
+			if (ActionTiming.get().isLate()) return Attempt.refused(pos, Check.RATE_LIMITED);
+			return submit(owner, pos, new PlacementAim.Aim(c.hit(), mc.player.getEyeHeight()), hotbarSlot, co);
+		}
 		// One look at a time: it joins the clicks waiting if they want the same one, otherwise it's asked for again later
 		// (queued behind a different look, it would only run out of time waiting).
 		for (Queued q : queue) {
@@ -265,6 +275,12 @@ public final class PlacementManager implements Placement {
 		return new Attempt(pos, Check.OK, result);
 	}
 
+	/** Whether a placement from hotbar {@code slot} is waiting for its look: the slot's item mustn't change before it goes. */
+	boolean queuedFrom(int slot) {
+		for (Queued q : queue) if (!q.use && q.slot == slot && !q.result.isDone()) return true;
+		return false;
+	}
+
 	/** Whether a placement at {@code pos} is still waiting for its look: a use click there goes after it. */
 	private boolean placementQueued(BlockPos pos) {
 		for (Queued q : queue) if (!q.use && q.pos.equals(pos) && !q.result.isDone()) return true;
@@ -306,8 +322,7 @@ public final class PlacementManager implements Placement {
 	private Attempt submit(Object owner, BlockPos pos, PlacementAim.Aim aim, int slot, Options o) {
 		if (!o.rotate() && (!handsFree(slot) || airClick(aim.hit(), pos) && !airReady(slot))) return Attempt.refused(pos, Check.RATE_LIMITED);
 		// A sneak click's input packets aren't held over to the next tick as the click would be: it waits for a tick's start.
-		if (!o.rotate() && o.sneak() && ActionTiming.get().isLate() && BlockInfo.isClickable(mc.level.getBlockState(aim.hit().getBlockPos())))
-			return Attempt.refused(pos, Check.RATE_LIMITED);
+		if (!o.rotate() && o.sneak() && ActionTiming.get().isLate()) return Attempt.refused(pos, Check.RATE_LIMITED);
 		BlockPos key = pos.immutable();
 		CompletableFuture<Boolean> result = new CompletableFuture<>();
 		pending.put(key, result);
@@ -326,13 +341,13 @@ public final class PlacementManager implements Placement {
 		// Clicking the empty space itself: an air placement.
 		boolean air = airClick(target, pos);
 		placedUnseen.add(pos);
-		if (placing(slot).is(ItemTags.SIGNS)) signPlacedAt = Clock.millis();
+		if (placing(slot).is(ItemTags.SIGNS) || placing(slot).is(ItemTags.HANGING_SIGNS)) signPlacedAt = Clock.millis();
 		InventoryManager inventory = MyriadImpl.get().inventoryManager() instanceof InventoryManager i ? i : null;
 		if (inventory != null) inventory.slotUsed(slot);
 		if (inventory != null && inventory.undoSlotThisTick() == slot) {
 			// This slot's block is in the off hand for this tick's air placements: this one goes from there too (against
 			// air or a block), with no swap of its own, so a whole burst rides on one swap.
-			sneaking(o, target, () -> {
+			sneaking(o, () -> {
 				mc.gameMode.useItemOn(mc.player, InteractionHand.OFF_HAND, target);
 				swing(InteractionHand.OFF_HAND, o.swing());
 			});
@@ -346,13 +361,13 @@ public final class PlacementManager implements Placement {
 				// (OffHandWatch).
 				inventory.airSwapping(slot);
 				inventory.swapHands();
-				sneaking(o, target, () -> {
+				sneaking(o, () -> {
 					mc.gameMode.useItemOn(mc.player, InteractionHand.OFF_HAND, target);
 					swing(InteractionHand.OFF_HAND, o.swing());
 				});
 				inventory.afterSwap(inventory::swapHands);
 			} else {
-				sneaking(o, target, () -> {
+				sneaking(o, () -> {
 					mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, target);
 					if (o.swing() && AntiCheat.inEffect().checksSwings()) Interactions.swing(InteractionHand.MAIN_HAND);
 				});
@@ -410,12 +425,12 @@ public final class PlacementManager implements Placement {
 	}
 
 	/**
-	 * Runs {@code click} on {@code target} as if sneaking if {@code o} asks for it (see {@link Options#sneak()}) and the
-	 * clicked block would act on a plain click; other clicks need no sneak, so they don't send its input packets.
+	 * Runs {@code click} as if sneaking if {@code o} asks for it (see {@link Options#sneak()}), whatever is clicked: a chest
+	 * placed against the floor beside another stays single only if the server sees the sneak key down.
 	 */
-	private void sneaking(Options o, BlockHitResult target, Runnable click) {
+	private void sneaking(Options o, Runnable click) {
 		Runnable seen = () -> asServerSees(click);
-		if (o.sneak() && mc.level != null && BlockInfo.isClickable(mc.level.getBlockState(target.getBlockPos()))) SneakClick.during(seen);
+		if (o.sneak()) SneakClick.during(seen);
 		else seen.run();
 	}
 
@@ -427,7 +442,8 @@ public final class PlacementManager implements Placement {
 	private void asServerSees(Runnable click) {
 		LocalPlayer p = mc.player;
 		float yaw = p.getYRot(), pitch = p.getXRot(), yawO = p.yRotO, pitchO = p.xRotO;
-		float serverYaw = Myriad.rotations().serverYaw(), serverPitch = Myriad.rotations().serverPitch();
+		float[] look = serverLook();
+		float serverYaw = look[0], serverPitch = look[1];
 		if (yaw == serverYaw && pitch == serverPitch) {
 			click.run();
 			return;
@@ -543,7 +559,10 @@ public final class PlacementManager implements Placement {
 	@Subscribe(priority = RotationManager.ACT_PRIORITY - 10)
 	private void onClickTime(TickEvent.Pre e) {
 		if (mc.player == null) return;
-		float yaw = Myriad.rotations().serverYaw(), pitch = Myriad.rotations().serverPitch();
+		float[] has = serverLook();
+		float yaw = has[0], pitch = has[1];
+		// The server ignored the last look sent (just after a teleport): it goes again, and what waits for it waits.
+		if (!queue.isEmpty() && MyriadImpl.get().rotationManager().keptLook() != null) Myriad.rotations().sendRotationThisTick();
 		float headYaw = Float.isNaN(yawTickAgo) ? yaw : yawTickAgo;
 		yawTickAgo = yaw;
 		follow.check(yaw, pitch);
@@ -622,6 +641,15 @@ public final class PlacementManager implements Placement {
 		}
 		click(q.pos, hit, q.slot, q.options, q.result);
 		follow.after(c, q.sendYaw, q.sendPitch, q.result);
+	}
+
+	/**
+	 * The look the server has, as a block placed now would come out by: the last one sent, unless it ignored that one
+	 * (see {@code RotationManager.keptLook}).
+	 */
+	static float[] serverLook() {
+		float[] kept = MyriadImpl.get().rotationManager().keptLook();
+		return kept != null ? kept : new float[]{Myriad.rotations().serverYaw(), Myriad.rotations().serverPitch()};
 	}
 
 	static boolean near(float yaw, float pitch, float toYaw, float toPitch) {

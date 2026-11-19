@@ -174,7 +174,8 @@ final class ClickSolver {
 		boolean anyResult = false;
 		try {
 			// The look the server already has: no turn at all.
-			float sy = Myriad.rotations().serverYaw(), sp = Myriad.rotations().serverPitch();
+			float[] has = PlacementManager.serverLook();
+			float sy = has[0], sp = has[1];
 			for (Candidate c : candidates) {
 				if (strict && !looksAt(sy, sp, c.hit)) continue;
 				BlockState r = simulate(item, stack, c.hit, pos, sy, sp, c.sneak);
@@ -188,7 +189,7 @@ final class ClickSolver {
 					float[] a = MathUtil.anglesTo(from, c.hit.getLocation());
 					BlockState r = simulate(item, stack, c.hit, pos, a[0], a[1], c.sneak);
 					if (r != null) anyResult = true;
-					if (r == null || !expect.test(r) || !steady(item, stack, c.hit, pos, a[0], a[1], c.sneak, expect)) continue;
+					if (r == null || !expect.test(r) || !steady(item, stack, c.hit, pos, from, a[0], a[1], c.sneak, expect)) continue;
 					return found(pos, c, a[0], a[1], true, Float.NaN, Float.NaN, wanted, count);
 				}
 				// No look at a point gives it: a clean rotation that does, looking at the point in the packet after. Not
@@ -201,6 +202,8 @@ final class ClickSolver {
 							if (r != null) anyResult = true;
 							if (r == null || !expect.test(r)) continue;
 							float[] a = MathUtil.anglesTo(from, c.hit.getLocation());
+							// The look after it has to give the same: the server may apply the click a packet late, with
+							// that look (Grim holds placements for the next movement packet), and a furnace would face it.
 							return found(pos, c, b[0], b[1], false, a[0], a[1], wanted, count);
 						}
 					}
@@ -258,10 +261,24 @@ final class ClickSolver {
 		return ray != null && ray.getDirection() == hit.getDirection();
 	}
 
-	/** Whether the click still comes out right with the look off by {@link #TOLERANCE} each way. */
-	private boolean steady(BlockItem item, ItemStack stack, BlockHitResult hit, BlockPos pos, float yaw, float pitch, boolean sneak, Expect expect) {
+	/** Whether looking along {@code yaw}/{@code pitch} from {@code from} lands on {@code hit}'s face of its block's outline. */
+	private boolean looksAt(Vec3 from, float yaw, float pitch, BlockHitResult hit) {
+		BlockPos pos = hit.getBlockPos();
+		var shape = mc.level.getBlockState(pos).getShape(mc.level, pos);
+		if (shape.isEmpty()) return looksAt(yaw, pitch, hit);
+		BlockHitResult ray = shape.clip(from, from.add(Vec3.directionFromRotation(pitch, yaw).scale(8)), pos);
+		return ray != null && ray.getDirection() == hit.getDirection();
+	}
+
+	/**
+	 * Whether the click still comes out right with the look off by {@link #TOLERANCE} each way, the look from {@code from}
+	 * (where your eyes will be when it goes, a tick on) still landing on the same face: a point by a chest's top edge is
+	 * clicked on the top by a look a hair higher, and a side seen almost edge on is missed once you've moved.
+	 */
+	private boolean steady(BlockItem item, ItemStack stack, BlockHitResult hit, BlockPos pos, Vec3 from, float yaw, float pitch, boolean sneak, Expect expect) {
 		for (float dy : new float[]{-TOLERANCE, TOLERANCE}) {
 			for (float dp : new float[]{-TOLERANCE, TOLERANCE}) {
+				if (!looksAt(from, yaw + dy, pitch + dp, hit)) return false;
 				BlockState r = simulate(item, stack, hit, pos, yaw + dy, pitch + dp, sneak);
 				if (r == null || !expect.test(r)) return false;
 			}

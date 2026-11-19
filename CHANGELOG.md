@@ -17,6 +17,75 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.2.0
+
+### Building
+
+- **The hotbar as a cache, out of sight.** A block a build needs from the inventory is brought into a hotbar slot other
+  than the one you hold with a number-key swap, and stays there while the build runs: each kind costs one click however
+  often the build comes back to it (your own items are moved aside first, so up to 8 kinds sit ready). Once no build is
+  running, everything goes back where it was, and the server is then asked for your inventory, so whatever the client
+  got wrong along the way is put right. Meanwhile every slot a build touched, hotbar and inventory, shows what it held
+  before, and the slot you hold is never used: your hand and hotbar look untouched the whole time. The Printer test with
+  a full hotbar and every block in the inventory: nothing seen to move, everything back at the end.
+- **No cap per tick.** Builds place as fast as the server takes placements (core keeps within its limit, 9 in 300 ms
+  on Paper); Actions Per Tick is gone (`BuildingSettings.actionsPerTick` is deprecated, hidden and ignored). Everything
+  in reach of a standing Printer test (9 kinds, all from the inventory): 6 ticks, from 10.
+- **A kind at a time.** Every block of a kind that can be placed in reach goes before the next kind is brought in,
+  those in the hotbar before those in the inventory, and what's about to drop out of reach behind you first. A block
+  brought in is placed in the same tick as its swap.
+- **Chests come out as the schematic has them.** A chest beside another one stays single (the click is made sneaking,
+  whatever face it's against: before, the sneak was only sent for a click on a block that opens), and half of a double
+  chest is placed single until its other half is placed against it.
+- A turned click aims at a point the look still lands on with a slightly different angle, from where your eyes will be
+  when it goes: one by an edge of a chest's side was taken by the server on its top, and a side seen almost edge on
+  was missed once you'd run on, so a log or top slab placed against it never came out.
+- What `MaterialSource.container` and `shulkerBoxes` fetch goes into the main inventory, and into the hotbar only once
+  the main inventory is full.
+- **Blocks placed facing the way they should after a teleport.** Paper and Spigot ignore the first movement packet
+  after a teleport that turns you more than 10° (or moves you a sixteenth of a block) unless it starts exactly where they
+  have you, written the same: after a teleport to -90, the camera's 270 doesn't. The look a placement turned to was
+  lost, and a furnace or chest placed by it came out facing your own look. Core now follows that rule after every
+  teleport: placements go by the look the server kept, the look is sent again the next tick, and the placement waits
+  for it.
+- A block placed with the look the server has now no longer goes out while the tick's actions are held back after an
+  aimed click: sent a tick late, after a movement packet with another look, it came out facing that one.
+- A block a build placed wrong is still its own while it breaks it to try again: a break that didn't go through left
+  it as someone else's block, never redone.
+- A module's hanging sign doesn't open the sign editor either.
+- A borrowed bucket goes back after it's filled or emptied (`Inventory.borrow`).
+
+### Elytra
+
+- **Altitude holds its height in new terrain.** Where chunks come in just in time (2b2t, nearly always), each late one
+  turned the dive into a slowing climb, and the dive never got fast enough to pull up again: the flight sank in
+  half-made climbs all the way to the ground. Now it only waits for chunks while what they hide could be in the way
+  (lower than 64 above the ground loaded around you). Tested over new terrain with the server's chunks held back:
+  before, 199 down to -15 in a minute; now it holds.
+- **No Durability's glide no longer drops** when its swapping stops in mid-air (ground or late chunks ahead): the start
+  it made then waited for the last swap's answer only on the regular path, so with jitter it went out on a moment
+  already past (the elytra seemingly on, the chestplate still on at the server), was refused, and the glide dropped. 1
+  to 5 drops a minute before over new terrain under lag, none since.
+- **A rocket no longer lifts a glide the server has ended.** Touching the ground mid-glide (taking off low, gliding
+  down) ends the glide on the server at once, on the client only a round trip later; a rocket used just before boosted
+  you off the ground meanwhile into a glide that then dropped in mid-air, 5 to 7 blocks up and rising (and a fall from
+  there). Now the boost is left out once the glide has touched the ground, as the server leaves it out. Vanilla does the
+  same under lag; tested taking off with rockets under 250 ms.
+
+### Inventory
+
+- **A shift-click on a crafting result shows what it made.** The game predicts one craft, the server makes as many
+  as the grid holds; the prediction was kept on screen (grid still full, crafted items missing) until the menu was
+  opened again. Answers kept off the screen while your clicks are on their way are never just dropped now: if the
+  server disagrees, it's asked for the menu.
+- **Breaks pick Silk Touch where it costs nothing**: for a block that breaks at once, or that no tool mines faster
+  than a hand (glass, panes), the breaking service mines with a Silk Touch tool if you have one, brought in from the
+  inventory as a faster tool is. Where a tool is faster (ores, stone) the fastest still goes, so a Silk Touch pickaxe
+  doesn't take a diamond ore's diamonds.
+- A module looked up by the id it had before a rename finds it (`Module.formerNames`), not only its saved settings.
+
+API: `BuildingSettings.actionsPerTick` is deprecated; nothing else changed.
+
 ## 2.1.1
 
 ### Fixes

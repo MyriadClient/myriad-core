@@ -3,6 +3,7 @@ package dev.myriadclient.impl.service;
 import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.impl.MyriadImpl;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -15,7 +16,10 @@ import java.util.BitSet;
  * held when it first moved something ({@link #begin}), and once it ends ({@link #finish}) each hotbar slot it used gets
  * its item back, one click each, all in one tick at a moment the server takes clicks, and what it brought in goes back to the slot it
  * came from where that's free. Worked out from where things are at the end rather than by undoing each move, since a
- * block moved aside is often brought back into another slot later, which an undo list can't follow.
+ * block moved aside is often brought back into another slot later, which an undo list can't follow. Meanwhile every slot
+ * it touched, hotbar and inventory, shows what it held before ({@link #shown}). Once the last build has ended and the
+ * hotbar is back ({@link #resyncWhenDone}), the server is asked for the inventory as it has it, so anything the client got
+ * wrong along the way is put right.
  */
 final class HotbarRestore {
 	/** Ticks a restore waits for a moment you aren't moving before releasing your keys for one. */
@@ -32,7 +36,9 @@ final class HotbarRestore {
 	private @Nullable Item[] before;
 	/** Hotbar slots a build moved things into. */
 	private final BitSet used = new BitSet(9);
-	private boolean building, restoring;
+	/** Every slot (0-35) a build's moves touched, for what they show meanwhile. */
+	private final BitSet touched = new BitSet(36);
+	private boolean building, restoring, resync;
 	private int waited, ticks;
 
 	HotbarRestore(InventoryManager inventory, InventoryClicks clicks, ClickGate gate, SlotsInFlight inFlight) {
@@ -47,15 +53,32 @@ final class HotbarRestore {
 	 * as it should be remembers the inventory; a build starting while an earlier one's restore is under way takes that
 	 * over, so the hotbar ends as it was before either.
 	 */
-	void begin(int hotbarSlot) {
+	void begin(int hotbarSlot, int from) {
 		if (before == null) {
 			var inv = mc.player.getInventory();
 			before = new Item[36];
 			for (int i = 0; i < 36; i++) before[i] = inv.getItem(i).isEmpty() ? null : inv.getItem(i).getItem();
 		}
 		used.set(hotbarSlot);
+		touched.set(hotbarSlot);
+		if (from >= 0 && from < 36) touched.set(from);
 		building = true;
+		resync = false;
 		restoring = false;
+	}
+
+	/**
+	 * The last build has ended: once the hotbar is back (now, if nothing was moved), the inventory is resynced. A build
+	 * starting before then calls it off ({@link #begin}).
+	 */
+	void resyncWhenDone() {
+		resync = true;
+		if (!restoring && !building) askForInventory();
+	}
+
+	private void askForInventory() {
+		resync = false;
+		if (mc.player != null) MyriadImpl.get().menuSync().refresh(mc.player.inventoryMenu);
 	}
 
 	/** The builds are done with the hotbar: put it back. */
@@ -145,20 +168,21 @@ final class HotbarRestore {
 	 * that was there is back or gone).
 	 */
 	@Nullable ItemStack shown(int s) {
-		if (!uses(s) || mc.player == null) return null;
+		if (before == null || s < 0 || s >= 36 || !touched.get(s) || mc.player == null) return null;
 		var inv = mc.player.getInventory();
 		Item was = before[s];
 		if (same(inv.getItem(s), was)) return null;
 		if (was == null) return ItemStack.EMPTY;
 		ItemStack any = null;
-		for (int m = 9; m < 36; m++) {
+		for (int m = 0; m < 36; m++) {
 			ItemStack there = inv.getItem(m);
-			if (!there.is(was)) continue;
+			if (m == s || !there.is(was)) continue;
 			// Best the one moved out of here (it wasn't there before), else any of the kind.
 			if (before[m] != was) return there;
 			if (any == null) any = there;
 		}
-		return any;
+		// Used up: shown as gone.
+		return any != null ? any : ItemStack.EMPTY;
 	}
 
 	private static boolean same(ItemStack stack, @Nullable Item item) {
@@ -169,11 +193,14 @@ final class HotbarRestore {
 		restoring = false;
 		before = null;
 		used.clear();
+		touched.clear();
+		if (resync && !building) askForInventory();
 	}
 
 	@Subscribe
 	private void onLeave(WorldEvent.Leave e) {
 		building = false;
+		resync = false;
 		done();
 	}
 }

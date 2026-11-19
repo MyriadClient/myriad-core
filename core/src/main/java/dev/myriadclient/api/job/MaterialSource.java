@@ -30,17 +30,22 @@ public interface MaterialSource {
 	 */
 	Step<Integer> fetch(Predicate<ItemStack> what, int count);
 
-	/** The container at {@code pos} (a chest, a barrel): opened, taken from, closed. */
+	/**
+	 * The container at {@code pos} (a chest, a barrel): opened, taken from, closed. What's taken goes into the main
+	 * inventory, leaving your hotbar as it is (a build brings a block into the hotbar when it places it); into the hotbar
+	 * only once the main inventory has no room.
+	 */
 	static MaterialSource container(BlockPos pos) {
 		return (what, count) -> Steps.openContainer(pos, OPEN_TICKS, Placement.Options.forServer())
-			.then(view -> Steps.take(view, what, Containers.Transfer.upTo(count)))
+			.then(view -> intoInventory(view, what, count))
 			.then(moved -> Steps.closeContainer().then(Step.supply("Taken", () -> moved)))
 			.named("From a container");
 	}
 
 	/**
 	 * The shulker boxes in your inventory that hold any: the fullest opened ({@link Steps#inItem}) and taken from, then
-	 * the next, until there's enough, no box holds any, or a box gave nothing (your inventory is full).
+	 * the next, until there's enough, no box holds any, or a box gave nothing (your inventory is full). What's taken goes
+	 * into the main inventory first, as from a {@link #container}.
 	 */
 	static MaterialSource shulkerBoxes() {
 		return (what, count) -> {
@@ -50,7 +55,7 @@ public interface MaterialSource {
 				int box = Myriad.inventory().bestInInventory(s -> ItemInfo.isShulkerBox(s) ? held(s, what) : 0);
 				int missing = count - (Myriad.inventory().count(what) - before[0]);
 				if (box < 0 || missing <= 0) return Step.nothing();
-				return Steps.inItem(box, view -> Steps.take(view, what, Containers.Transfer.upTo(missing)))
+				return Steps.inItem(box, view -> intoInventory(view, what, missing))
 					.then(moved -> Step.run("Took " + moved, () -> gaveNothing[0] = moved == 0));
 			});
 			return Step.run("Count", () -> before[0] = Myriad.inventory().count(what))
@@ -58,6 +63,12 @@ public interface MaterialSource {
 				.then(Step.supply("Taken", () -> Myriad.inventory().count(what) - before[0]))
 				.named("From shulker boxes");
 		};
+	}
+
+	/** Up to {@code count} of {@code what} from {@code view} into the main inventory, then (for what didn't fit) the hotbar. */
+	private static Step<Integer> intoInventory(Containers.View view, Predicate<ItemStack> what, int count) {
+		return Steps.take(view, what, Containers.Transfer.upTo(count).withoutHotbar()).then(moved -> moved >= count ? Step.supply("Taken", () -> moved)
+			: Steps.take(view, what, Containers.Transfer.upTo(count - moved)).then(more -> Step.supply("Taken", () -> moved + more)));
 	}
 
 	private static int held(ItemStack box, Predicate<ItemStack> what) {

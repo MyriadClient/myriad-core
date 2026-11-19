@@ -144,6 +144,18 @@ public abstract class LocalPlayerMixin {
 		return myriad$event != null ? myriad$event.onGround : original;
 	}
 
+	/**
+	 * Touching the ground mid-glide: the server ends the glide there at once, the client only once that word comes back a
+	 * round trip later. Meanwhile a rocket's boost is left out on the client (see ElytraManager.landedInGlide), as the
+	 * server gives none to a glide it has ended: a rocket used just before (taking off low, or gliding down) lifted you
+	 * off the ground, a glide the server had already ended, which then dropped in mid-air.
+	 */
+	@Inject(method = "aiStep", at = @At("TAIL"))
+	private void myriad$landedInGlide(CallbackInfo ci) {
+		LocalPlayer self = (LocalPlayer) (Object) this;
+		ElytraManager.landingTick(self.onGround(), self.isFallFlying());
+	}
+
 	/** Glide hold: the server stopping the glide is undone on the client while it's held. */
 	@Inject(method = "onSyncedDataUpdated", at = @At("TAIL"))
 	private void myriad$keepGliding(EntityDataAccessor<?> accessor, CallbackInfo ci) {

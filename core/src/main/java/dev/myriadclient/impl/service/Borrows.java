@@ -7,8 +7,11 @@ import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.service.PacketLimits;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.SolidBucketItem;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -114,11 +117,19 @@ final class Borrows {
 		return null;
 	}
 
-	/** The borrowed item (or nothing, if it was used up) is still in its slot, and what it displaced at home. */
+	/**
+	 * The borrowed item (or nothing, if it was used up, or what using it made of it: a bucket filled or emptied) is still
+	 * in its slot, and what it displaced at home.
+	 */
 	boolean intact(Borrow b) {
 		var inv = mc.player.getInventory();
 		ItemStack here = inv.getItem(b.slot), home = inv.getItem(b.home);
-		return (here.isEmpty() || here.is(b.item)) && (b.displaced == null ? home.isEmpty() : home.is(b.displaced));
+		return (here.isEmpty() || here.is(b.item) || bucket(here.getItem()) && bucket(b.item)) && (b.displaced == null ? home.isEmpty() : home.is(b.displaced));
+	}
+
+	/** A bucket, empty or holding something: using one turns it into another. */
+	private static boolean bucket(Item item) {
+		return item == Items.BUCKET || item == Items.MILK_BUCKET || item instanceof BucketItem || item instanceof SolidBucketItem;
 	}
 
 	/**

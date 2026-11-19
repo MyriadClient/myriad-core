@@ -7,6 +7,7 @@ import dev.myriadclient.api.util.Ticks;
 import dev.myriadclient.impl.MyriadImpl;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.FurnaceResultSlot;
 import net.minecraft.world.inventory.GrindstoneMenu;
 import net.minecraft.world.inventory.LoomMenu;
@@ -38,21 +39,33 @@ public final class HandClicks {
 	private @Nullable ItemStack[] shown;
 	private ItemStack shownCarried = ItemStack.EMPTY;
 	private long clickedAt = Long.MIN_VALUE / 2;
+	/** How long answers are kept after that click: a round trip as it was then (the estimate moves as answers come in). */
+	private long keepFor;
 	/** What the server last said, while answers are kept off the screen; null when none came. */
 	private @Nullable ItemStack[] server;
 	private ItemStack serverCarried = ItemStack.EMPTY;
 
-	/** You clicked in {@code menu} (after the game predicted the click). */
-	public void clicked(AbstractContainerMenu menu) {
+	/**
+	 * You clicked slot {@code index} of {@code menu} with {@code input} (after the game predicted the click). A shift click
+	 * on a result slot isn't kept: the game predicts one craft (it has no recipes to know the next), the server makes as
+	 * many as the grid holds, and keeping the prediction showed the grid still full and the crafted items missing until
+	 * the menu was opened again. The server's answers go straight in instead.
+	 */
+	public void clicked(AbstractContainerMenu menu, int index, ContainerInput input) {
 		if (busy(menu) || mc.player == null || mc.player.isCreative()) {
 			forget();
 			return;
 		}
-		if (this.menu != menu) forget();
+		if (input == ContainerInput.QUICK_MOVE && index >= 0 && index < menu.slots.size() && serverMade(menu, index)) {
+			settle();
+			return;
+		}
+		if (this.menu != menu) settle();
 		this.menu = menu;
 		shown = copy(menu);
 		shownCarried = menu.getCarried().copy();
 		clickedAt = Ticks.current();
+		keepFor = window();
 	}
 
 	/** The server sent {@code containerId}'s whole menu (after the game applied it). */
@@ -92,8 +105,9 @@ public final class HandClicks {
 	 */
 	private boolean keeping(int containerId) {
 		if (menu == null || shown == null || mc.player == null || menu.containerId != containerId) return false;
-		if (mc.player.containerMenu == menu && !busy(menu) && Ticks.current() - clickedAt <= window()) return true;
-		forget();
+		if (mc.player.containerMenu == menu && !busy(menu) && Ticks.current() - clickedAt <= keepFor) return true;
+		// What was kept off the screen isn't simply dropped: if the server disagrees, it's asked for the menu.
+		settle();
 		return false;
 	}
 
@@ -168,7 +182,7 @@ public final class HandClicks {
 	@Subscribe(priority = 960)
 	private void onTick(TickEvent.Pre e) {
 		if (menu == null) return;
-		if (mc.player == null || mc.player.containerMenu != menu || Ticks.current() - clickedAt > window() || busy(menu)) settle();
+		if (mc.player == null || mc.player.containerMenu != menu || Ticks.current() - clickedAt > keepFor || busy(menu)) settle();
 	}
 
 	@Subscribe

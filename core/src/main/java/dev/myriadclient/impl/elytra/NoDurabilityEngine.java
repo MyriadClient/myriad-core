@@ -362,6 +362,12 @@ final class NoDurabilityEngine implements NoDurability {
 		return n != null && n.breaks.stopped();
 	}
 
+	/** Whether the engine that runs is swapping (the glide held through the server's stops). */
+	public static boolean swappingNow() {
+		NoDurabilityEngine n = active();
+		return n != null && n.swapping;
+	}
+
 	/** Whether the local player counts as gliding through the breaks. */
 	public static boolean holdsGlide() {
 		NoDurabilityEngine n = active();
@@ -463,6 +469,14 @@ final class NoDurabilityEngine implements NoDurability {
 				ChestSwapper.restoreElytra();
 			}
 			if (cleared || ++finishWait <= roundTripTicks() + 4) return;
+		}
+		// What's worn is the server's word only once the last swap is answered: a start made on a moment already past (the
+		// elytra seemingly on, the chestplate still on at the server) is refused, and the glide dropped with nothing left
+		// holding it. The regular starts wait for this too (see equipped). Not when there's no next tick to wait in (turned
+		// off, a chunk ahead): then at once, as before.
+		if (inAir && cleared && !now && !ChestSwapper.settled()) {
+			finishing = true;
+			return;
 		}
 		swapping = finishing = equipping = recovering = confirming = false;
 		armTicks = 0;

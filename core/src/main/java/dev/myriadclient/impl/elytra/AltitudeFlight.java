@@ -47,6 +47,12 @@ final class AltitudeFlight extends FlightEngine {
 	 * late, one after another, and a climb of single ticks between dives only bleeds speed.
 	 */
 	private static final int LATE_HOLD_TICKS = 10;
+	/**
+	 * Higher than this above the highest ground loaded ahead (and this far behind), chunks that haven't come in are flown
+	 * into as if they had: ground that rises this much within a chunk or two is rare, and it'd show in time to pull up.
+	 */
+	private static final double UNSEEN_CLEARANCE = 64;
+	private static final int UNSEEN_BEHIND = 64;
 	/** Ground this far ahead raises the cruise height to this much above it. */
 	private static final int TERRAIN_AHEAD = 160;
 	private static final double TERRAIN_CLEARANCE = 24;
@@ -99,7 +105,8 @@ final class AltitudeFlight extends FlightEngine {
 		cruiseY = Math.max(cruiseY, Double.isNaN(height) ? cruiseY : height);
 		// Higher ground ahead raises the cruise height in time to clear it (it's never lowered again by itself).
 		Vec3 dir = Vec3.directionFromRotation(0, heading);
-		cruiseY = Math.max(cruiseY, groundAhead(dir, TERRAIN_AHEAD) + TERRAIN_CLEARANCE);
+		double ahead = groundAhead(dir, TERRAIN_AHEAD);
+		cruiseY = Math.max(cruiseY, ahead + TERRAIN_CLEARANCE);
 
 		double speed = p.getDeltaMovement().length() * 20;
 		// Too close to clear by cruising: pull up and keep climbing (slowing down if it must: settling onto a slope
@@ -124,7 +131,11 @@ final class AltitudeFlight extends FlightEngine {
 		// Chunks ahead not in yet: no diving into them, a climb (slowing down) until they are, rather than fly into the edge
 		// of the world. A pull-up or climb under way goes on: cut short each time a chunk came late, the cycle never
 		// climbed in new terrain and dived all the way down.
-		if (speed > SLOW_SPEED && !loadedAhead(dir, speed * LOAD_AHEAD_SECONDS)) lateHold = LATE_HOLD_TICKS;
+		// Only where what they hide could be in the way: well above all the ground loaded around you, the cycle goes on (2b2t
+		// sends new terrain just in time, nearly always: waiting at every late chunk, the flight sank all the way down).
+		double seen = Math.max(ahead, groundAhead(dir.reverse(), UNSEEN_BEHIND));
+		boolean aboveUnseen = seen > Double.NEGATIVE_INFINITY && p.getY() - seen > UNSEEN_CLEARANCE;
+		if (speed > SLOW_SPEED && !aboveUnseen && !loadedAhead(dir, speed * LOAD_AHEAD_SECONDS)) lateHold = LATE_HOLD_TICKS;
 		else if (lateHold > 0) lateHold--;
 		if (lateHold > 0 && phase == Phase.DIVE) {
 			spoof(heading, SLOW_PITCH);

@@ -51,6 +51,15 @@ public final class ModuleRegistryImpl extends RegistryImpl<Module> implements Mo
 		return removed;
 	}
 
+	/** The module with {@code id}, or the one saved under it before a rename ({@link Module#formerIds()}). */
+	@Override
+	public synchronized Optional<Module> get(MyriadId id) {
+		Optional<Module> m = super.get(id);
+		if (m.isPresent()) return m;
+		for (Module module : values()) if (module.formerIds().contains(id)) return Optional.of(module);
+		return Optional.empty();
+	}
+
 	@Override
 	public <C extends Module> Optional<C> get(Class<C> type) {
 		return Optional.ofNullable(type.cast(byClass.get(type)));

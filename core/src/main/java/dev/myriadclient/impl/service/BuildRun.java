@@ -15,11 +15,16 @@ import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -212,6 +217,10 @@ final class BuildRun implements Build {
 		places.clear();
 		clicks.clear();
 		chunk = null;
+		// Moving: what's about to drop out of reach behind you goes before the block in hand's other places.
+		Vec3 motion = mc.player.getDeltaMovement();
+		boolean moving = motion.horizontalDistanceSqr() > 0.0025;
+		double leavingFrom = Math.max(0, o.placing().range() - 1.5);
 		blueprint.near(eyes, reach + 1, (pos, target) -> {
 			BlockState current = blockAt(pos);
 			// The same state object: done, and by far the commonest case once something's built.
@@ -235,17 +244,60 @@ final class BuildRun implements Build {
 			switch (kind) {
 				// Top down, so falling blocks land in space that's already clear; then nearest first.
 				case BREAK -> breaks.add(key((long) (4095 - height) << 24 | distance, i));
-				// Blocks the click doesn't shape first, then the others; bottom up (unless the order is nearest); nearest first.
+				// Blocks the click doesn't shape first, then the others; what's about to drop out of reach behind you; each
+				// block in hand before any other, then those elsewhere in the hotbar, then those in the inventory (each swap
+				// in costs a click), one kind at a time; bottom up (unless the order is nearest); nearest first.
 				case PLACE, GROW -> {
 					BlockState shaped = target.orientedState();
-					long layer = options.order() == Building.Order.BOTTOM_UP ? (long) height << 24 : 0;
-					places.add(key((shaped != null && BlockRules.oriented(shaped) ? 1L << 36 : 0) | layer | distance, i));
+					long layer = options.order() == Building.Order.BOTTOM_UP ? (long) height << 16 : 0;
+					double dx = pos.getX() + 0.5 - eyes.x, dz = pos.getZ() + 0.5 - eyes.z;
+					boolean leaving = moving && dx * motion.x + dz * motion.z < 0 && distance > leavingFrom * leavingFrom * 256;
+					long hand = (leaving ? 0 : 1L << 38) | (long) handTier(target) << 36 | (long) rank(target) << 28;
+					places.add(key((shaped != null && BlockRules.oriented(shaped) ? 1L << 39 : 0) | hand | layer | Math.min(distance, 0xFFFF), i));
 				}
 				case CLICK -> clicks.add(key(distance, i));
 				default -> {
 				}
 			}
 		});
+	}
+
+	/** Each item's {@link #handTier} this tick. */
+	private final Reference2IntOpenHashMap<Item> tiers = new Reference2IntOpenHashMap<>();
+	private int tiersTick = Integer.MIN_VALUE;
+
+	/**
+	 * How near to hand {@code target}'s block is: 0 in the slot you have selected, 1 elsewhere in the hotbar, 2 in the
+	 * inventory or nowhere (a target any of several items fits counts as 1).
+	 */
+	private int handTier(Target target) {
+		if (!(target instanceof Target.Exact exact)) return 1;
+		if (tiersTick != tick) {
+			tiers.clear();
+			tiersTick = tick;
+		}
+		Item item = BlockRules.item(exact.state());
+		int t = tiers.getOrDefault(item, -1);
+		if (t >= 0) return t;
+		var inv = mc.player.getInventory();
+		t = inv.getItem(inv.getSelectedSlot()).is(item) ? 0 : Myriad.inventory().findInHotbar(s -> s.is(item)) >= 0 ? 1 : 2;
+		tiers.put(item, t);
+		return t;
+	}
+
+	/** Each item's place in the order its kind is built in, from the first time this build met it (up to 255). */
+	private final Reference2IntOpenHashMap<Item> ranks = new Reference2IntOpenHashMap<>();
+
+	/** {@code target}'s block's rank: its kind goes out together, not one of each in turn (255 for targets any of several items fit). */
+	private int rank(Target target) {
+		if (!(target instanceof Target.Exact exact)) return 255;
+		Item item = BlockRules.item(exact.state());
+		int r = ranks.getOrDefault(item, -1);
+		if (r < 0) {
+			r = Math.min(ranks.size(), 254);
+			ranks.put(item, r);
+		}
+		return r;
 	}
 
 	/** Breaks first (top down), then placements, then clicks into a setting, within this tick's share. */
@@ -258,7 +310,9 @@ final class BuildRun implements Build {
 			int i = index(breaks.getLong(k));
 			Breaking.Attempt a = Myriad.breaking().breakBlock(this, at(i), o.priority(), o.breaking());
 			if (a.accepted()) {
-				if (placed.remove(work.getLong(i))) repairs.addTo(work.getLong(i), 1);
+				// Still its own while the break goes on: one that doesn't go through is tried again (up to REPAIRS), not
+				// left as someone else's block.
+				if (placed.contains(work.getLong(i))) repairs.addTo(work.getLong(i), 1);
 				breaking++;
 				a.result().whenComplete((ok, t) -> breaking--);
 				set(i, Status.WAITING);
@@ -333,6 +387,7 @@ final class BuildRun implements Build {
 		if (!refusedUntil.isEmpty() && refusedUntil.containsKey(pos.asLong())) return Status.REFUSED;
 		if (want.isAir()) return wrong(pos, current, true, o);
 		if (current.is(want.getBlock())) {
+			if (halfAlone(pos, current, want)) return Status.WAITING;
 			if (!BlockRules.placedMatches(current, want)) return wrong(pos, current, false, o);
 			int have = BlockRules.count(current), need = BlockRules.count(want);
 			if (have > need) return wrong(pos, current, false, o);
@@ -347,6 +402,17 @@ final class BuildRun implements Build {
 		if (!BlockRules.placeable(want)) return Status.UNSUPPORTED;
 		if (BlockRules.falls(mc.level, pos, want)) return Status.NO_SUPPORT;
 		return reachable(pos, o, PLACE);
+	}
+
+	/**
+	 * A single chest where half of a double one is wanted, the other half's space still empty: placed single first, it
+	 * becomes the half once the other is placed against it (no click joins two chests already standing).
+	 */
+	private boolean halfAlone(BlockPos pos, BlockState current, BlockState want) {
+		if (!(want.getBlock() instanceof ChestBlock) || want.getValue(ChestBlock.TYPE) == ChestType.SINGLE) return false;
+		if (current.getValue(ChestBlock.TYPE) != ChestType.SINGLE || current.getValue(ChestBlock.FACING) != want.getValue(ChestBlock.FACING)) return false;
+		BlockState other = blockAt(pos.relative(ChestBlock.getConnectedDirection(want)));
+		return other != null && other.canBeReplaced();
 	}
 
 	/** The cheap part of planning a position with any other target. */
@@ -410,6 +476,20 @@ final class BuildRun implements Build {
 		Status held = held(at);
 		if (held != null) return held;
 		BlockState want = target.orientedState();
+		// Half of a double chest whose other half isn't there yet: single for now, joined when the other is placed against it.
+		if (want != null && want.getBlock() instanceof ChestBlock && want.getValue(ChestBlock.TYPE) != ChestType.SINGLE
+			&& blockAt(at.relative(ChestBlock.getConnectedDirection(want))) instanceof BlockState other && other.canBeReplaced())
+			want = want.setValue(ChestBlock.TYPE, ChestType.SINGLE);
+		// A shaped block's click is worked out first, with its stack wherever it is: one that can't go from here yet
+		// (nothing to click, the wrong angle) neither brings its block into the hotbar nor holds up the one there.
+		Placement.Solution early = null;
+		if (want != null && target instanceof Target.Exact exact) {
+			Item item = BlockRules.item(exact.state());
+			ItemStack stack = materials.stackOf(item);
+			if (stack == null) return Status.NO_ITEM;
+			early = manager.placement().solveWith(at, want, stack, o.placing());
+			if (!early.found()) return hold(at.immutable(), status(early.check()));
+		}
 		int slot = target instanceof Target.Exact exact ? materials.slotFor(BlockRules.item(exact.state())) : materials.slotFor(target);
 		if (slot == -2) return Status.NO_ITEM;
 		if (slot == -3) return Status.NO_SLOT;
@@ -423,7 +503,7 @@ final class BuildRun implements Build {
 			track(pos, a);
 			return Status.WAITING;
 		}
-		Placement.Solution solution = Myriad.placement().solve(pos, want, slot, o.placing());
+		Placement.Solution solution = early != null ? early : Myriad.placement().solve(pos, want, slot, o.placing());
 		if (!solution.found()) return hold(pos, status(solution.check()));
 		Placement.Click click = solution.click();
 		Placement.Attempt a = Myriad.placement().place(this, click, slot, o.placing());
@@ -553,7 +633,7 @@ final class BuildRun implements Build {
 		workStatus.set(i, (byte) s.ordinal());
 	}
 
-	/** A sort key (up to 43 bits, smaller first) and a position's index (up to a million) in one long. */
+	/** A sort key (up to 43 bits, smaller first; placements use 40) and a position's index (up to a million) in one long. */
 	private static long key(long order, int index) {
 		return order << 20 | index;
 	}

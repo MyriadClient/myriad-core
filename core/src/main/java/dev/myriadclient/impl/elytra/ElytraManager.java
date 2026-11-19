@@ -160,6 +160,23 @@ public final class ElytraManager implements Elytra {
 		return NoDurabilityEngine.holdsGlide() || pilotHoldsGlide();
 	}
 
+	/** The local player touched the ground in this glide (the server has ended it; the client hasn't heard yet). */
+	private static boolean landedInGlide;
+
+	/**
+	 * After the local player's move each tick: touching the ground while gliding (not a pilot's bounce, nor No
+	 * Durability holding the glide through the server's stops) marks the glide ended, until the client stops gliding.
+	 */
+	public static void landingTick(boolean onGround, boolean gliding) {
+		if (!gliding) landedInGlide = false;
+		else if (onGround && !holdsGlide() && !NoDurabilityEngine.swappingNow()) landedInGlide = true;
+	}
+
+	/** Whether the local player's glide has touched the ground, ended on the server: a rocket boosts nothing then. */
+	public static boolean landedInGlide() {
+		return landedInGlide;
+	}
+
 	/** Whether No Durability holds the local player still this tick. */
 	public static boolean holdsStill() {
 		return NoDurabilityEngine.holdsStill();

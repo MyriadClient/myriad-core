@@ -10,7 +10,10 @@ import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Building;
 import dev.myriadclient.api.service.Placement;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
+import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -142,43 +145,46 @@ class JobsHarnessTest {
 	}
 
 	@Test
-	void aBuildPutsBackWhatItBroughtIntoTheHotbarAndNeverUsesTheSelectedSlot() {
+	void aBuildKeepsTheSelectedSlotShowsTheInventoryAsItWasAndPutsItBack() {
 		try (Harness h = standing()) {
 			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
-			// The selected slot (0) and slot 5 empty, the rest sticks; glass and cobblestone in the inventory.
-			h.give(0, ItemStack.EMPTY);
+			// A sword selected (slot 0) and slot 5 empty, the rest sticks; glass and cobblestone in the inventory.
+			h.give(0, new ItemStack(Items.DIAMOND_SWORD));
 			for (int i = 1; i < 9; i++) if (i != 5) h.give(i, new ItemStack(Items.STICK));
 			h.give(20, new ItemStack(Items.GLASS, 16)).give(21, new ItemStack(Items.COBBLESTONE, 16));
+			Item[] start = items(h);
 			Map<BlockPos, Target> blocks = new HashMap<>();
 			blocks.put(new BlockPos(1, 1, 0), Target.exact(Blocks.GLASS.defaultBlockState()));
 			blocks.put(new BlockPos(1, 1, 1), Target.exact(Blocks.COBBLESTONE.defaultBlockState()));
 			Job<Void> job = Myriad.jobs().start("builder", Steps.build(Blueprint.of(blocks), Building.Options.forServer()));
-			boolean sawGlass = false, sawCobble = false;
 			// Room to spare: solving clicks stops at a millisecond of real time a tick, so a cold JVM or a GC pause can
-			// put a placement off a tick or two (one run in eleven missed the cobblestone with 10 ticks).
+			// put a placement off a tick or two.
 			for (int t = 0; t < 20; t++) {
 				h.tick();
-				for (int i = 1; i < 9; i++) {
-					sawGlass |= h.player.getInventory().getItem(i).is(Items.GLASS);
-					sawCobble |= h.player.getInventory().getItem(i).is(Items.COBBLESTONE);
-				}
-				assertTrue(h.player.getInventory().getItem(0).isEmpty(), "the selected slot took a block at tick " + t);
+				// The selected slot is never used, and every slot shows what it held, wherever the blocks are.
+				assertTrue(h.player.getInventory().getItem(0).is(Items.DIAMOND_SWORD), "slot 0 holds " + h.player.getInventory().getItem(0) + " at tick " + t);
+				for (int i = 0; i < 36; i++) assertEquals(start[i], item(Myriad.inventory().shown(i)), "slot " + i + " shows " + Myriad.inventory().shown(i) + " at tick " + t);
 			}
-			// Both in one tick: the empty slot 5 takes one, a stick's slot the other (the stick goes back after).
-			assertTrue(sawGlass && sawCobble, "glass and cobblestone into the hotbar: " + sawGlass + ", " + sawCobble);
+			assertEquals(2, h.sent(ServerboundUseItemOnPacket.class).size(), "placements");
+			// Each block one click in; nothing goes back until the build is over.
+			var swaps = h.sent(ServerboundContainerClickPacket.class).stream().filter(c -> c.containerInput() == ContainerInput.SWAP).toList();
+			assertEquals(2, swaps.size(), swaps.size() + " swaps while building");
+			for (var c : swaps) assertTrue(c.buttonNum() != 0, "a swap with the selected slot");
 			job.cancel();
 			h.ticks(10);
 			var inv = h.player.getInventory();
-			assertTrue(inv.getItem(5).isEmpty(), "slot 5 holds " + inv.getItem(5));
-			for (int i = 1; i < 9; i++) if (i != 5) assertTrue(inv.getItem(i).is(Items.STICK), "slot " + i + " holds " + inv.getItem(i));
-			assertTrue(inv.getItem(20).is(Items.GLASS), "slot 20 holds " + inv.getItem(20));
-			assertTrue(inv.getItem(21).is(Items.COBBLESTONE), "slot 21 holds " + inv.getItem(21));
+			Item[] end = items(h);
+			for (int i = 0; i < 36; i++) assertEquals(start[i] == Items.GLASS || start[i] == Items.COBBLESTONE ? end[i] == null ? null : start[i] : start[i], end[i],
+				"slot " + i + " holds " + inv.getItem(i));
 			assertEquals(0, inv.getSelectedSlot());
+			// Two back, and once the inventory is back, the server is asked for it (a click outside the window, -999).
+			assertTrue(h.sent(ServerboundContainerClickPacket.class).stream().filter(c -> c.containerInput() == ContainerInput.SWAP).count() <= 4, "too many swaps");
+			assertEquals(1, h.sent(ServerboundContainerClickPacket.class).stream().filter(c -> c.slotNum() == -999).count(), "the inventory wasn't resynced once");
 		}
 	}
 
 	@Test
-	void aBuildBorrowsASlotOfAFullHotbarWithoutShowingItAndPutsItBack() {
+	void aFullHotbarLendsOtherSlotsThanTheSelectedOneAndGetsEverythingBack() {
 		try (Harness h = standing()) {
 			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
 			// Every hotbar slot holds something of yours; the glass is only in the inventory.
@@ -187,21 +193,27 @@ class JobsHarnessTest {
 			h.give(20, new ItemStack(Items.GLASS, 16));
 			Job<Void> job = Myriad.jobs().start("builder", Steps.build(Blueprint.of(Map.of(new BlockPos(1, 1, 0), Target.exact(Blocks.GLASS.defaultBlockState()))),
 				Building.Options.forServer()));
-			int borrowed = -1;
-			for (int t = 0; t < 10 && borrowed < 0; t++) {
-				h.tick();
-				for (int i = 1; i < 9; i++) if (h.player.getInventory().getItem(i).is(Items.GLASS)) borrowed = i;
-			}
-			assertTrue(borrowed > 0, "no hotbar slot took the glass");
-			assertTrue(Myriad.inventory().shownInHotbar(borrowed).is(Items.STICK), "slot " + borrowed + " shows " + Myriad.inventory().shownInHotbar(borrowed));
-			assertEquals(borrowed, Myriad.inventory().shownInHotbar(borrowed).getCount(), "slot " + borrowed + " shows another slot's sticks");
-			job.cancel();
 			h.ticks(10);
+			assertEquals(1, h.sent(ServerboundUseItemOnPacket.class).size(), "placements");
+			assertTrue(h.player.getInventory().getItem(0).is(Items.DIAMOND_SWORD), "slot 0 holds " + h.player.getInventory().getItem(0));
+			job.cancel();
+			h.ticks(30);
 			var inv = h.player.getInventory();
 			for (int i = 1; i < 9; i++) assertTrue(inv.getItem(i).is(Items.STICK) && inv.getItem(i).getCount() == i, "slot " + i + " holds " + inv.getItem(i));
+			assertTrue(inv.getItem(0).is(Items.DIAMOND_SWORD), "slot 0 holds " + inv.getItem(0));
 			assertTrue(inv.getItem(20).is(Items.GLASS), "slot 20 holds " + inv.getItem(20));
-			assertTrue(inv.getItem(0).is(Items.DIAMOND_SWORD));
 		}
+	}
+
+	/** The item in each inventory slot (0-35), null for empty. */
+	private static Item[] items(Harness h) {
+		Item[] items = new Item[36];
+		for (int i = 0; i < 36; i++) items[i] = item(h.player.getInventory().getItem(i));
+		return items;
+	}
+
+	private static Item item(ItemStack stack) {
+		return stack.isEmpty() ? null : stack.getItem();
 	}
 
 	@Test

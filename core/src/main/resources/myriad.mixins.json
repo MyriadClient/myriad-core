@@ -28,6 +28,7 @@
 		"ClientLevelMixin",
 		"ClientPacketListenerMixin",
 		"CommandSuggestionsMixin",
+		"FireworkRocketEntityMixin",
 		"compat.entityculling.ClientLevelEntityCullingMixin",
 		"compat.iris.IrisHandRendererMixin",
 		"ConnectionMixin",

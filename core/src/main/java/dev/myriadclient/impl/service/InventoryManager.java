@@ -625,9 +625,14 @@ public final class InventoryManager implements Inventory {
 		return inFlight.swappable(slot);
 	}
 
-	/** A build moves a material into {@code hotbarSlot}: see {@link HotbarRestore#begin}. */
-	void buildMoves(int hotbarSlot) {
-		restore.begin(hotbarSlot);
+	/** A build moves a material from inventory slot {@code from} into {@code hotbarSlot}: see {@link HotbarRestore#begin}. */
+	void buildMoves(int hotbarSlot, int from) {
+		restore.begin(hotbarSlot, from);
+	}
+
+	/** The last build ended: the inventory is resynced once the restore is done (see {@link HotbarRestore#resyncWhenDone}). */
+	void resyncAfterRestore() {
+		restore.resyncWhenDone();
 	}
 
 	/** An air placement is about to swap hotbar slot {@code hotbarSlot}'s block into the off hand: see {@link OffHandWatch}. */

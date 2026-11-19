@@ -55,12 +55,14 @@ class SettingsGroupsTest {
 		assertFalse(b.breaking.mode.isVisible());
 		b.breakWrong.set(true);
 		assertTrue(b.breaking.mode.isVisible());
+		// Actions Per Tick is gone: hidden, and whatever it says, builds aren't capped per tick.
+		assertFalse(b.actionsPerTick.isVisible());
 		b.actionsPerTick.set(4);
 		Building.Options o = b.options(GRIM, 4);
 		assertEquals(Placement.Options.STRICT.withRange(4), o.placing());
 		assertEquals(Breaking.Options.PACKET.withRange(4), o.breaking());
 		assertTrue(o.breakWrong());
-		assertEquals(4, o.placesPerTick());
+		assertEquals(Integer.MAX_VALUE, o.placesPerTick());
 		assertTrue(new BuildingSettings(new Settings().group("General"), true).breakWrong.get());
 	}
 }

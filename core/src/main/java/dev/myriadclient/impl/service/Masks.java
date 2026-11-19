@@ -82,8 +82,9 @@ final class Masks {
 		if (mc.player == null || !InventoryClicks.valid(index)) return ItemStack.EMPTY;
 		var inv = mc.player.getInventory();
 		ItemStack real = inv.getItem(index);
-		// A build's material in a hotbar slot you don't hold shows what was there, through the build's own swaps too.
-		if (Slots.isHotbar(index) && index != inv.getSelectedSlot()) {
+		// A slot a build moved things through shows what was there, through the build's own swaps too (never the slot you
+		// hold, which builds leave alone).
+		if (!Slots.isHotbar(index) || index != inv.getSelectedSlot()) {
 			ItemStack was = restore.shown(index);
 			if (was != null) return was;
 		}

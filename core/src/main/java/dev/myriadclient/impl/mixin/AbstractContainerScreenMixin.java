@@ -160,6 +160,7 @@ public abstract class AbstractContainerScreenMixin {
 	/** Your click went to the server: what it made stays on screen while answers to older ones arrive (HandClicks). */
 	@Inject(method = "slotClicked(Lnet/minecraft/world/inventory/Slot;IILnet/minecraft/world/inventory/ContainerInput;)V", at = @At("TAIL"))
 	private void myriad$clicked(Slot slot, int slotId, int button, ContainerInput input, CallbackInfo ci) {
-		if (Myriad.isReady() && MyriadImpl.get() != null) MyriadImpl.get().handClicks().clicked(((AbstractContainerScreen<?>) (Object) this).getMenu());
+		if (Myriad.isReady() && MyriadImpl.get() != null) MyriadImpl.get().handClicks().clicked(((AbstractContainerScreen<?>) (Object) this).getMenu(),
+			slot != null ? slot.index : slotId, input);
 	}
 }
