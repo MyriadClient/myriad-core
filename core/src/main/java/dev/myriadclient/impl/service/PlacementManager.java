@@ -561,12 +561,15 @@ public final class PlacementManager implements Placement {
 		if (mc.player == null) return;
 		float[] has = serverLook();
 		float yaw = has[0], pitch = has[1];
-		// The server ignored the last look sent (just after a teleport): it goes again, and what waits for it waits.
-		if (!queue.isEmpty() && MyriadImpl.get().rotationManager().keptLook() != null) Myriad.rotations().sendRotationThisTick();
+		// The server ignored the last look sent (just after a teleport): it goes again, and what waits for it waits. Nothing
+		// is clicked meanwhile: Grim doesn't ignore that look, so a click under the look the server kept is checked
+		// (RotationPlace) against the one Grim has, and fails.
+		boolean kept = !queue.isEmpty() && MyriadImpl.get().rotationManager().keptLook() != null;
+		if (kept) Myriad.rotations().sendRotationThisTick();
 		float headYaw = Float.isNaN(yawTickAgo) ? yaw : yawTickAgo;
 		yawTickAgo = yaw;
 		follow.check(yaw, pitch);
-		if (queue.isEmpty()) return;
+		if (queue.isEmpty() || kept) return;
 		// Solved clicks and the rest never share a tick: the look after a solved click moves on (to its aim), so a click
 		// that only happened to fall under its look would be checked by Grim (RotationPlace) against that next look and
 		// fail. Whichever kind is first goes.
