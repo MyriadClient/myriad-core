@@ -17,6 +17,45 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.3.0
+
+### Inventory
+
+- **The inventory stays in step with the server.** Core now keeps a ledger of every change the client makes to the open
+  menu, whoever makes it (a module, a screen click, a block placed, food eaten), and weighs every slot the server sends
+  against it by value: the result of a change on its way is the server catching up, a whole-menu packet showing a slot as
+  it was before a change is one sent before the server got there (kept off the screen), anything else is the server's
+  own word. What changes are done is decided by the order the server takes clicks in, never by a timer: once it shows
+  the result of one click, every click before it was taken too. The menu always shows the ledger's view, so a stale
+  update no longer flickers back, or gets a placement or a click made from it; tested under 100 ms of lag with every
+  click answered: no frame showing anything other than what the server would hold, across the inventory and box suites.
+- **Clicks the server says nothing about are checked.** A server answers a click that came out as predicted with
+  nothing, and one an anti-cheat drops likewise. Once clicking stops with changes still unconfirmed, one click that
+  changes nothing goes out vouching for what the client holds in those slots, and the server answers with just the slots
+  it disagrees on: a few bytes, where asking for the whole menu costs a full refresh (15 to 20 KB on 2b2t with shulker
+  boxes). Never while a build runs, mid-drag, or with clicks short in the budget.
+- **What borrowed slots show is exact.** While a borrow or a build has things out, every slot shows what it held
+  before, followed through the swaps rather than guessed by kind, its count as it is now. The slot you hold shows what
+  you'd use, unless it's on its way back to you.
+- **Your hand first.** Scrolling onto a hotbar slot a module or a build borrowed gives it back at once (and doesn't
+  select your old slot again), and your own clicks in the inventory screen act on what it shows: clicking where your
+  sword shows takes your sword, wherever the borrow put it.
+- **Instant use from the inventory** (`Inventory.useFromInventory`): an item in the inventory is swapped into the hotbar,
+  used through a silent swap and swapped back, both swaps or neither; on servers that don't check packet order in a tick
+  (2b2t) all before anything is drawn, so it never shows.
+- The inventory refresh no longer throws out what the server has on the cursor: it asks with a shift-click on no slot,
+  which the server ignores whatever the cursor holds, instead of a click outside the window.
+- A build takes the smallest stack of a material from the inventory, so it uses one stack up before starting another.
+- Recipe book placements count against the inventory click budget, as 2b2t counts them.
+- A borrow's return no longer lets go of your keys when it can't click anyway (a container a module holds open): sneak
+  flickered on and off while Remote Ender Chest held the ender chest.
+- A borrow isn't forgotten while one of its items is on your cursor.
+- Logging what the ledger finds: `-Dmyriad.ledgerLog=true`; `-Dmyriad.ledger=shadow` has it only watch.
+
+### API
+
+- `Inventory.useFromInventory(owner, index, action)`.
+
 ## 2.2.0
 
 ### Building
