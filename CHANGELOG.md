@@ -17,6 +17,31 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.4.0
+
+### Anti-cheat
+
+- **Vanilla picked by hand has no packet budgets.** Clicks, breaks and places go as fast as modules make them, where
+  the budgets otherwise follow Paper's and 2b2t's limits (72 clicks in 5 seconds, 80 block actions in half a second,
+  9 uses and places in 300 ms). Meant for real vanilla servers and singleplayer: a Paper server still drops places past
+  its limit and kicks past 500 packets in 7 seconds. Vanilla picked by Auto, as nothing was detected, keeps them.
+- **A profile picked by hand that doesn't match the server is pointed out**, once a join: Grim detected while Vanilla
+  is picked, say, when the server may refuse what modules do. `.anticheat` shows what was detected next to the pick.
+
+### Inventory
+
+- **Closing a container while a sort runs no longer drops a stack into your inventory.** The screen closes at once; the
+  container stays open on the server only till the sort has put down what it carried, then closes. A sort you stop by
+  clicking also puts back what it parked in your inventory to make room.
+- The creative inventory works again: the click ledger stood in its way, as its item picker shares your inventory's
+  menu id with other slots.
+
+### Building
+
+- **No placement clicks under a look the server kept after a teleport.** Paper ignores the first big turn after a
+  teleport, but Grim doesn't, so a click made under the look the server kept was flagged (RotationPlace): placements
+  now wait the tick it takes to send the look again.
+
 ## 2.3.0
 
 ### Inventory
