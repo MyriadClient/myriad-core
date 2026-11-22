@@ -8,6 +8,7 @@ import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.registry.MyriadId;
 import dev.myriadclient.api.service.AntiCheat;
+import dev.myriadclient.api.service.Notifications;
 import dev.myriadclient.api.service.ServerStats;
 import dev.myriadclient.impl.network.JoinedVersion;
 import dev.myriadclient.impl.network.KnownServers;
@@ -53,6 +54,8 @@ public final class AntiCheatTracker implements AntiCheat {
 	private int pingsAtDetect;
 	private volatile @Nullable String host;
 	private volatile boolean singleplayer;
+	/** The detected profile last warned about as differing from the one picked (see {@link #warnMismatch}), this join. */
+	private @Nullable Profile warned;
 
 	public AntiCheatTracker() {
 		for (Profile p : new Profile[]{Profile.VANILLA, Profile.GRIM, Profile.GRIM_2B2T, Profile.NCP}) profiles.register(p, "myriad");
@@ -125,6 +128,7 @@ public final class AntiCheatTracker implements AntiCheat {
 		String address = Myriad.server().address();
 		host = address == null ? null : normalize(address);
 		singleplayer = Myriad.server().isSingleplayer();
+		warned = null;
 		detect();
 	}
 
@@ -142,6 +146,19 @@ public final class AntiCheatTracker implements AntiCheat {
 		ServerSeen seen = new ServerSeen(host, singleplayer, pingsAtDetect, inGame ? joinedProtocol() : -1);
 		Profile p = DETECT.hooked() ? DETECT.call(null, seen, this::guess) : null;
 		detected = p != null ? p : guess(seen);
+		if (inGame) warnMismatch();
+	}
+
+	/**
+	 * A profile picked by hand while the server looks like another (an anti-cheat seen where none is picked, say): said
+	 * once a join, as what modules do may then be refused (a click not facing what it clicks, a burst past a limit).
+	 */
+	private void warnMismatch() {
+		Profile c = chosen, d = detected;
+		if (c == null || d.equals(Profile.VANILLA) || d.equals(c) || d.equals(warned) || !Myriad.isReady()) return;
+		warned = d;
+		Myriad.notifications().send("Anti-cheat", d.name() + " detected, but " + c.name() + " is picked: the server may refuse what modules do. "
+			+ "Auto picks for you.", Notifications.Level.WARNING, 8000, "myriad:anticheat_mismatch");
 	}
 
 	/** Core's own guess: a known Grim host (2b2t's own profile there) or the pings, then a known NoCheatPlus host, else the vanilla server. */

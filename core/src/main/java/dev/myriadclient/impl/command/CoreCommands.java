@@ -60,7 +60,7 @@ public final class CoreCommands {
 		AntiCheat.Profile detected = ac.detected();
 		String status = ac.choice() == null
 			? "Anti-cheat: Auto (" + (detected.equals(AntiCheat.Profile.VANILLA) ? "Vanilla, none detected)" : detected.name() + " detected)")
-			: "Anti-cheat: " + ac.profile().name();
+			: "Anti-cheat: " + ac.profile().name() + (detected.equals(AntiCheat.Profile.VANILLA) || detected.equals(ac.choice()) ? "" : " (picked; " + detected.name() + " detected)");
 		return Minecraft.getInstance().getConnection() == null ? status : status + ", joined as " + JoinedVersion.get().describe();
 	}
 
