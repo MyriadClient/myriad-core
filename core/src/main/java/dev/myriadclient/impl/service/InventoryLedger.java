@@ -12,6 +12,7 @@ import dev.myriadclient.impl.service.SlotLedger.Verdict;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.network.HashedStack;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
 import net.minecraft.world.entity.player.Inventory;
@@ -169,10 +170,24 @@ public final class InventoryLedger {
 			answered, vouched);
 	}
 
-	/** Follows the player's open menu, starting over from what it shows when that's another one. */
+	/**
+	 * Follows the player's open menu, starting over from what it shows when that's another one. Not in creative: the
+	 * inventory is yours to set there (the server takes each slot as sent, no clicks), and the creative screen's own menu
+	 * has your inventory's id with slots numbered nothing like it, so the server's slots would land in its grid.
+	 */
 	private boolean follow() {
 		if (mc.player == null) return false;
 		AbstractContainerMenu open = mc.player.containerMenu;
+		if (mc.player.isCreative() || open instanceof CreativeModeInventoryScreen.ItemPickerMenu) {
+			if (menu != null) {
+				menu = null;
+				seen.clear();
+				beforeClick = null;
+				differing.clear();
+				check = null;
+			}
+			return false;
+		}
 		if (open == menu) return true;
 		menu = open;
 		List<ItemStack> now = new ArrayList<>(open.slots.size());
