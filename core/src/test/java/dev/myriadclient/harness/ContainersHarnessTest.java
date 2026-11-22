@@ -187,7 +187,8 @@ class ContainersHarnessTest {
 	@Test
 	void aSortStoppedWithSomethingOnTheCursorPutsItDownFirst() {
 		try (Harness h = besideAChest()) {
-			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
+			// Vanilla's rules with the budgets: Vanilla picked by hand has none.
+			Myriad.antiCheat().choose(AntiCheat.Profile.NCP);
 			// Stone and dirt in turn: more clicks than the budget takes in a tick, so a tick can end with a stack on the cursor.
 			List<ItemStack> contents = new java.util.ArrayList<>();
 			for (int i = 0; i < 24; i++) contents.add(new ItemStack(i % 2 == 0 ? Items.STONE : Items.DIRT, 1 + i % 5));

@@ -91,7 +91,8 @@ public interface AntiCheat {
 	final class Profile implements Identified {
 		/**
 		 * Only the vanilla server's own limits: instant rotations, any face, breaking as soon as the server accepts it,
-		 * inventory clicks at any time.
+		 * inventory clicks at any time. Picked by hand (rather than detected), it also lifts the packet budgets
+		 * ({@link PacketLimits}), which follow Paper's and 2b2t's limits.
 		 */
 		public static final Profile VANILLA = new Profile(MyriadId.of("myriad", "vanilla"), "Vanilla", false, false, false, false, false, BreakTiming.SERVER, 9,
 			true, true);

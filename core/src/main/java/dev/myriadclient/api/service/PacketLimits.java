@@ -14,7 +14,8 @@ import org.jetbrains.annotations.ApiStatus;
  * if (!Myriad.limits().canSend(PacketLimits.Kind.INTERACT, 1)) return; // next tick
  * }</pre>
  *
- * Wrap actions that must happen whatever the cost, like putting a totem in your off hand, in {@link #urgent}.
+ * Wrap actions that must happen whatever the cost, like putting a totem in your off hand, in {@link #urgent}. With
+ * {@link AntiCheat.Profile#VANILLA} picked by hand (not detected by Auto) there's no budget: everything fits.
  * <p>
  * Counting and checking are lock-free and safe from any thread; packets are counted on whichever thread sends them.
  */

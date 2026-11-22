@@ -87,9 +87,28 @@ class PlacementHarnessTest {
 	}
 
 	@Test
+	void vanillaPickedByHandHasNoBudgetAndAutosVanillaDoes() {
+		for (AntiCheat.Profile choice : new AntiCheat.Profile[]{AntiCheat.Profile.VANILLA, null}) {
+			try (Harness h = Harness.start()) {
+				Myriad.antiCheat().choose(choice);
+				assertEquals(AntiCheat.Profile.VANILLA, Myriad.antiCheat().profile());
+				for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) h.level.set(new BlockPos(x, 0, z), Blocks.STONE.defaultBlockState());
+				h.standAt(0.5, 1, 0.5, 0, 90).give(0, new ItemStack(Items.STONE, 64));
+				h.onTick(() -> {
+					for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
+						if (x != 0 || z != 0) Myriad.placement().place(this, new BlockPos(x, 1, z), 0, Placement.Options.forServer());
+					}
+				}).tick();
+				assertEquals(choice != null ? 24 : 9, h.sent(ServerboundUseItemOnPacket.class).size(), choice != null ? "picked by hand" : "Auto");
+			}
+		}
+	}
+
+	@Test
 	void nineInteractionsGoOutInAWindowAndTheRestAreHeldBack() {
 		try (Harness h = Harness.start()) {
-			Myriad.antiCheat().choose(AntiCheat.Profile.VANILLA);
+			// Vanilla's rules with the budgets: Vanilla picked by hand has none.
+			Myriad.antiCheat().choose(AntiCheat.Profile.NCP);
 			for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) h.level.set(new BlockPos(x, 0, z), Blocks.STONE.defaultBlockState());
 			h.standAt(0.5, 1, 0.5, 0, 90).give(0, new ItemStack(Items.STONE, 64));
 			List<Placement.Attempt> attempts = new ArrayList<>();

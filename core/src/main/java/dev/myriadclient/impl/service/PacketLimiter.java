@@ -1,5 +1,6 @@
 package dev.myriadclient.impl.service;
 
+import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.util.RateCounter;
@@ -25,7 +26,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * ({@code spam-limiter.incoming-packet-threshold}, 300 ms by default): it keeps 9 use and place packets in a window
  * starting at a packet, and silently drops the rest, so 30 a second at best. Here it's the same 9 in any 300 ms, so
  * builds get that whole 30 a second (a wider margin would hold them to about 27), and a burst of 9 (a surround) still goes
- * at once. Lock-free: every packet sent passes through here on whichever thread sends it.
+ * at once. With Vanilla picked by hand (not just detected), none of this applies: a vanilla server limits none of them.
+ * Lock-free: every packet sent passes through here on whichever thread sends it.
  */
 public final class PacketLimiter implements PacketLimits {
 	private static final int WINDOW_MS = 500;
@@ -80,8 +82,16 @@ public final class PacketLimiter implements PacketLimits {
 		};
 	}
 
+	/** Whether Vanilla was picked by hand: then there's no budget (see the class doc). Auto's Vanilla keeps it. */
+	private static boolean lifted() {
+		if (!Myriad.isReady()) return false;
+		AntiCheat.Profile chosen = Myriad.antiCheat().choice();
+		return chosen != null && chosen.id().equals(AntiCheat.Profile.VANILLA.id());
+	}
+
 	@Override
 	public boolean canSend(Kind kind, int packets) {
+		if (lifted()) return true;
 		if (urgentDepth.get() > 0) return kind != Kind.INVENTORY || used(kind) + packets <= INVENTORY_CEILING;
 		return used(kind) + packets <= limit(kind);
 	}
@@ -94,6 +104,7 @@ public final class PacketLimiter implements PacketLimits {
 	/** Interactions are the anti-cheat profile's budget (9 in Myriad's, for Paper's limiter); the rest are fixed. */
 	@Override
 	public int limit(Kind kind) {
+		if (lifted()) return Integer.MAX_VALUE;
 		if (kind == Kind.INTERACT) return AntiCheat.inEffect().interactionBudget();
 		return kind == Kind.INVENTORY && testInventoryLimit > 0 ? testInventoryLimit : LIMITS.get(kind);
 	}

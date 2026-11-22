@@ -63,8 +63,8 @@ public final class ProfilesPanel extends WidgetPanel {
 			c -> Myriad.antiCheat().choose(c.orElse(null)), c -> c.map(AntiCheat.Profile::name).orElse("Auto")), 1);
 		content.add(ac);
 		content.add(new Label(() -> CoreCommands.antiCheatStatus() + ". Grim makes modules rotate before acting, click only faces you "
-			+ "can see and wait for safe moments; Vanilla acts as fast as the vanilla server allows; NoCheatPlus is Vanilla with "
-			+ "a loosely checked glide.").dim());
+			+ "can see and wait for safe moments; Vanilla acts as fast as the vanilla server allows (picked here, also with no "
+			+ "click, break or place limits, which Paper servers enforce); NoCheatPlus is Vanilla with a loosely checked glide.").dim());
 	}
 
 	private static List<Optional<AntiCheat.Profile>> antiCheatChoices() {
