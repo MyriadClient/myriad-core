@@ -37,6 +37,9 @@ test {
 	doFirst { workingDir.mkdirs() }
 	// Dev checks on, as in the dev clients: a service called off the render thread is logged (Threads.assertRender).
 	systemProperty "myriad.dev", "true"
+	// The harness's server sets the client's slots straight away rather than sending packets, which the inventory
+	// ledger would take for the client's own changes: it only watches here.
+	systemProperty "myriad.ledger", "shadow"
 	testLogging {
 		events "passed", "skipped", "failed"
 		exceptionFormat = "full"

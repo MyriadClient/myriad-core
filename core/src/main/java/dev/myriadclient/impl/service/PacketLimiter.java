@@ -4,6 +4,7 @@ import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.util.RateCounter;
 import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ServerboundPlaceRecipePacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
@@ -18,7 +19,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * burst can't spend a whole second's worth at once. Inventory clicks follow 2b2t, the strictest measured: it drops you
  * (the proxy's "lost connection") on the 80th click within about 4 seconds, whatever the clicks do, and 79 at once or
  * 79 every 4 seconds pass. Here it's 72 in any 5 seconds, a margin for clicks bunching up on their way: a sort, a
- * refill or a move of up to 72 clicks goes in one tick, and a long run settles at about 14 a second. Urgent clicks may
+ * refill or a move of up to 72 clicks goes in one tick, and a long run settles at about 14 a second. Recipe book
+ * placements count with them (2b2t's proxy counts them too). Urgent clicks may
  * go past the 72 but not to the 80th. Interactions follow Paper's spam limiter
  * ({@code spam-limiter.incoming-packet-threshold}, 300 ms by default): it keeps 9 use and place packets in a window
  * starting at a packet, and silently drops the rest, so 30 a second at best. Here it's the same 9 in any 300 ms, so
@@ -70,6 +72,9 @@ public final class PacketLimiter implements PacketLimits {
 			case ServerboundPlayerActionPacket p -> Kind.BLOCK_ACTION;
 			case ServerboundUseItemOnPacket p -> Kind.INTERACT;
 			case ServerboundUseItemPacket p -> Kind.INTERACT;
+			// A recipe book placement counts as a click there: a crafting run of clicks and placements, under 80 clicks
+			// alone, was dropped as if over.
+			case ServerboundPlaceRecipePacket p -> Kind.INVENTORY;
 			// Attacks and using items on entities aren't counted: Paper's limiter only takes uses and placements.
 			default -> null;
 		};

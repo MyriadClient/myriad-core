@@ -70,6 +70,7 @@ import dev.myriadclient.impl.service.FriendsManager;
 import dev.myriadclient.impl.service.HandClicks;
 import dev.myriadclient.impl.service.InventoryManager;
 import dev.myriadclient.impl.service.JobRunner;
+import dev.myriadclient.impl.service.InventoryLedger;
 import dev.myriadclient.impl.service.MenuSync;
 import dev.myriadclient.impl.service.NotificationManager;
 import dev.myriadclient.impl.service.PacketLimiter;
@@ -138,6 +139,7 @@ public final class MyriadImpl implements MyriadApi {
 	private final ServerStatsTracker serverStats = new ServerStatsTracker();
 	private final MenuSync menuSync = new MenuSync();
 	private final HandClicks handClicks = new HandClicks();
+	private final InventoryLedger inventoryLedger = new InventoryLedger();
 	private final ContainerTracker containers = new ContainerTracker(menuSync);
 	private final ContainerTabs containerTabs = new ContainerTabs();
 	private final JobRunner jobs = new JobRunner();
@@ -281,6 +283,7 @@ public final class MyriadImpl implements MyriadApi {
 		events.subscribe(antiCheat);
 		events.subscribe(menuSync);
 		events.subscribe(handClicks);
+		events.subscribe(inventoryLedger);
 		events.subscribe(containers);
 		events.subscribe(containerTabs);
 		events.subscribe(jobs);
@@ -538,6 +541,10 @@ public final class MyriadImpl implements MyriadApi {
 
 	public MenuSync menuSync() {
 		return menuSync;
+	}
+
+	public InventoryLedger inventoryLedger() {
+		return inventoryLedger;
 	}
 
 	public HandClicks handClicks() {

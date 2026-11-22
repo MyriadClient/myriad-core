@@ -177,9 +177,9 @@ class JobsHarnessTest {
 			for (int i = 0; i < 36; i++) assertEquals(start[i] == Items.GLASS || start[i] == Items.COBBLESTONE ? end[i] == null ? null : start[i] : start[i], end[i],
 				"slot " + i + " holds " + inv.getItem(i));
 			assertEquals(0, inv.getSelectedSlot());
-			// Two back, and once the inventory is back, the server is asked for it (a click outside the window, -999).
+			// Two back, and once the inventory is back, the server is asked for it (a shift-click on no slot, -1).
 			assertTrue(h.sent(ServerboundContainerClickPacket.class).stream().filter(c -> c.containerInput() == ContainerInput.SWAP).count() <= 4, "too many swaps");
-			assertEquals(1, h.sent(ServerboundContainerClickPacket.class).stream().filter(c -> c.slotNum() == -999).count(), "the inventory wasn't resynced once");
+			assertEquals(1, h.sent(ServerboundContainerClickPacket.class).stream().filter(c -> c.slotNum() == -1).count(), "the inventory wasn't resynced once");
 		}
 	}
 

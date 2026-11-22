@@ -365,7 +365,7 @@ public final class PlacementManager implements Placement {
 					mc.gameMode.useItemOn(mc.player, InteractionHand.OFF_HAND, target);
 					swing(InteractionHand.OFF_HAND, o.swing());
 				});
-				inventory.afterSwap(inventory::swapHands);
+				inventory.afterSwap(() -> inventory.airSwapBack(slot));
 			} else {
 				sneaking(o, () -> {
 					mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, target);

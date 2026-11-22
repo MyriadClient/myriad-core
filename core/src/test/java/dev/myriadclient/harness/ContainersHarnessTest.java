@@ -222,7 +222,7 @@ class ContainersHarnessTest {
 		int answered = 0;
 		for (int t = 0; t < n; t++) {
 			h.tick();
-			long asks = h.sent(ServerboundContainerClickPacket.class).stream().filter(p -> p.slotNum() == -999).count();
+			long asks = h.sent(ServerboundContainerClickPacket.class).stream().filter(p -> p.slotNum() == -1).count();
 			for (; answered < asks; answered++) dev.myriadclient.impl.MyriadImpl.get().menuSync().onContents(menu.containerId);
 		}
 	}

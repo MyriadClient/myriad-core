@@ -52,7 +52,7 @@ public final class HandClicks {
 	 * the menu was opened again. The server's answers go straight in instead.
 	 */
 	public void clicked(AbstractContainerMenu menu, int index, ContainerInput input) {
-		if (busy(menu) || mc.player == null || mc.player.isCreative()) {
+		if (busy(menu) || mc.player == null || mc.player.isCreative() || MyriadImpl.get().inventoryLedger().enforcing()) {
 			forget();
 			return;
 		}

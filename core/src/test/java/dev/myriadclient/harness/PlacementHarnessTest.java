@@ -154,7 +154,7 @@ class PlacementHarnessTest {
 	}
 
 	private static boolean asked(Harness h) {
-		return h.sent(ServerboundContainerClickPacket.class).stream().anyMatch(p -> p.slotNum() == -999);
+		return h.sent(ServerboundContainerClickPacket.class).stream().anyMatch(p -> p.slotNum() == -1);
 	}
 
 	private static boolean swapsTheOffHand(Harness h) {

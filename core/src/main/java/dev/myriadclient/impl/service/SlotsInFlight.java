@@ -12,6 +12,9 @@ import dev.myriadclient.impl.MyriadImpl;
  * overwriting newer changes). So for about a round trip after a click changed a slot's contents, nothing is placed
  * from it or looked for in it; and after a hotbar slot was clicked or placed from, nothing is moved into it. Without
  * lag that's a tick, as before.
+ * <p>
+ * Not while the inventory ledger runs the menu ({@link InventoryLedger#enforcing()}): slots then always show what the
+ * server will hold once it has every click, so nothing waits.
  */
 final class SlotsInFlight {
 	/** Ticks of a round trip at most: past that the server has answered whatever it will. */
@@ -37,6 +40,7 @@ final class SlotsInFlight {
 
 	/** Whether what slot {@code index} shows is what the server has, for placing from it or finding something in it. */
 	boolean settled(int index) {
+		if (MyriadImpl.get().inventoryLedger().enforcing()) return true;
 		return index < 0 || index >= changed.length || Ticks.current() - changed[index] >= roundTrip();
 	}
 
@@ -47,11 +51,13 @@ final class SlotsInFlight {
 	 * the click first, places that.
 	 */
 	boolean placeable(int index) {
+		if (MyriadImpl.get().inventoryLedger().enforcing()) return true;
 		return settled(index) || index >= 0 && index < changed.length && changed[index] == Ticks.current();
 	}
 
 	/** Whether a click may change slot {@code index} now: nothing done with it is still on its way to the server. */
 	boolean swappable(int index) {
+		if (MyriadImpl.get().inventoryLedger().enforcing()) return true;
 		return settled(index) && (index < 0 || index >= used.length || Ticks.current() - used[index] >= roundTrip());
 	}
 

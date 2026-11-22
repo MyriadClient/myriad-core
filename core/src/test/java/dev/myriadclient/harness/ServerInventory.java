@@ -82,7 +82,9 @@ public final class ServerInventory {
 	}
 
 	private void click(ServerboundContainerClickPacket p) {
-		// Outside the window with nothing on the cursor: changes nothing (an ask for the whole menu).
+		// A shift-click on no slot, or a click outside the window with nothing on the cursor: changes nothing (an ask
+		// for the whole menu).
+		if (p.containerInput() == ContainerInput.QUICK_MOVE && p.slotNum() == -1) return;
 		if (p.containerInput() == ContainerInput.PICKUP && p.slotNum() == -999) return;
 		if (p.containerInput() != ContainerInput.SWAP) throw new UnsupportedOperationException("ServerInventory doesn't model " + p.containerInput() + " clicks");
 		int a = p.slotNum(), b = p.buttonNum() == 40 ? OFF_HAND : HOTBAR + p.buttonNum();

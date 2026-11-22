@@ -24,7 +24,8 @@ import java.util.concurrent.TimeoutException;
  * said, and a click an anti-cheat drops gets no answer at all: the client then shows items where the server has none,
  * until something else updates those slots.
  * <p>
- * The ask is one click that changes nothing (outside the window with an empty cursor), carrying a state id the server
+ * The ask is one click that changes nothing (a shift-click on no slot, which the server ignores whatever the cursor
+ * holds; a plain click outside the window would throw out what the server has on it), carrying a state id the server
  * doesn't have; it answers any such click with the whole menu. Its packets arrive in the order it sent them, so once
  * that answer is in, and a tick has passed with nothing newer (two while whole menus stream in, see {@link #STREAM_QUIET}),
  * the client holds what the server has after every click made before it. Like any click it waits for a tick the server takes one on.
@@ -34,8 +35,8 @@ public final class MenuSync {
 	private static final int FIRST_STATE_ID_PROTOCOL = 755;
 	/** Ticks to wait for a still moment before releasing your keys for one, as borrowed items do. */
 	private static final int WAIT_FOR_STILL = 20;
-	/** Ticks the cursor may hold something before giving up: the ask would throw it out. */
-	private static final int WAIT_FOR_CURSOR = 100;
+	/** Ticks a drag may keep the ask waiting before giving up: a click mid-drag would end the drag. */
+	private static final int WAIT_FOR_DRAG = 100;
 	private static final int ATTEMPTS = 2;
 	/**
 	 * Extra quiet ticks before trusting the answer when whole menus are streaming in (a server answering every click,
@@ -115,8 +116,10 @@ public final class MenuSync {
 	}
 
 	private void trySend(Request r) {
-		if (!r.menu.getCarried().isEmpty()) {
-			if (++r.waited > WAIT_FOR_CURSOR) finish(r, new IllegalStateException("Something stayed on the cursor"));
+		// Not mid-drag; something merely on the cursor is fine (the ask never throws it out), and may be the very thing
+		// the client shows wrongly.
+		if (InventoryLedger.dragging(r.menu)) {
+			if (++r.waited > WAIT_FOR_DRAG) finish(r, new IllegalStateException("A drag went on too long"));
 			return;
 		}
 		if (!Myriad.limits().canSend(PacketLimits.Kind.INVENTORY, 1)) return;
@@ -126,7 +129,7 @@ public final class MenuSync {
 		if (!inventory.prepareClick()) return;
 		// Half the id range away: never one the server has, even with its own updates on the way.
 		((AbstractContainerMenuAccessor) r.menu).myriad$setStateId((r.menu.getStateId() + 16384) & 32767);
-		mc.gameMode.handleContainerInput(r.menu.containerId, -999, 0, ContainerInput.PICKUP, mc.player);
+		mc.gameMode.handleContainerInput(r.menu.containerId, -1, 0, ContainerInput.QUICK_MOVE, mc.player);
 		r.sent = true;
 		r.attempts++;
 		r.sentAt = Ticks.current();

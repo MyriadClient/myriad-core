@@ -6,6 +6,7 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.service.PacketLimits;
+import dev.myriadclient.impl.MyriadImpl;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
@@ -30,7 +31,8 @@ final class Borrows {
 		/** What was borrowed, and what it made room for (now at home; null if the hotbar slot was empty). */
 		final Item item, displaced;
 		int lastWanted, waited, outOfPlace;
-		boolean giveBack;
+		/** Asked back early ({@link #giveBack}), or you selected its slot ({@code yours}): it goes back as soon as a click can go. */
+		boolean giveBack, yours;
 
 		Borrow(Object owner, int home, int slot, int selectedBefore, Item item, Item displaced, int now) {
 			this.owner = owner;
@@ -57,13 +59,17 @@ final class Borrows {
 	private final InventoryManager inventory;
 	private final InventoryClicks clicks;
 	private final ClickGate gate;
+	private final Presentation presentation;
 	private final List<Borrow> borrows = new ArrayList<>();
 	private int ticks;
+	/** The selected slot at the last tick, to see you scroll onto a borrowed slot. */
+	private int lastSelected = -1;
 
-	Borrows(InventoryManager inventory, InventoryClicks clicks, ClickGate gate) {
+	Borrows(InventoryManager inventory, InventoryClicks clicks, ClickGate gate, Presentation presentation) {
 		this.inventory = inventory;
 		this.clicks = clicks;
 		this.gate = gate;
+		this.presentation = presentation;
 	}
 
 	int borrow(Object owner, int inventoryIndex, Predicate<ItemStack> replaceable) {
@@ -76,8 +82,10 @@ final class Borrows {
 			}
 			return inventoryIndex;
 		}
-		// Where it is now as the server has it: a click that just moved things there may not be answered yet.
-		if (!inventory.settled(inventoryIndex) || !gate.prepareClick()) return -1;
+		// Where it is now as the server has it: a click that just moved things there may not be answered yet. Somewhere to
+		// put it before anything else: asking for a still moment for a click that can't go would let go of your keys
+		// for nothing (moveToHotbar asks, once the click can go).
+		if (!inventory.settled(inventoryIndex)) return -1;
 		int to = roomFor(replaceable == null ? s -> false : replaceable);
 		if (to < 0) return -1;
 		var inv = mc.player.getInventory();
@@ -85,7 +93,9 @@ final class Borrows {
 		ItemStack displaced = inv.getItem(to);
 		Item displacedItem = displaced.isEmpty() ? null : displaced.getItem();
 		if (!clicks.moveToHotbar(inventoryIndex, to)) return -1;
-		borrows.add(new Borrow(owner, inventoryIndex, to, inv.getSelectedSlot(), item, displacedItem, ticks));
+		Borrow b = new Borrow(owner, inventoryIndex, to, inv.getSelectedSlot(), item, displacedItem, ticks);
+		borrows.add(b);
+		presentation.swapped(b, inventoryIndex, to);
 		return to;
 	}
 
@@ -143,28 +153,44 @@ final class Borrows {
 		var inv = mc.player.getInventory();
 		int selected = inv.getSelectedSlot();
 		int serverSlot = inventory.serverSlot();
+		// You scrolled (or pressed a number) onto a slot something is borrowed into: it's yours, so it goes back now.
+		boolean scrolled = selected != lastSelected && lastSelected >= 0 && !inventory.selectedByModule();
+		lastSelected = selected;
 		for (Borrow b : new ArrayList<>(borrows)) {
 			if (!intact(b)) {
-				if (++b.outOfPlace > OUT_OF_PLACE_TICKS) borrows.remove(b);
+				// Picked up by you (one of its items on the cursor): mid-move, not moved, so it waits for where it's put.
+				ItemStack carried = mc.player.containerMenu.getCarried();
+				if (!carried.isEmpty() && (carried.is(b.item) || b.displaced != null && carried.is(b.displaced))) continue;
+				// With the inventory ledger running the menu, what shows is what will be: moved means moved.
+				int patience = MyriadImpl.get().inventoryLedger().enforcing() ? 0 : OUT_OF_PLACE_TICKS;
+				if (++b.outOfPlace > patience) {
+					borrows.remove(b);
+					presentation.forget(b);
+				}
 				continue;
 			}
 			b.outOfPlace = 0;
-			boolean held = serverSlot == b.slot && (inventory.isHolding() || serverSlot != selected);
-			if (held || selected == b.slot && mc.player.isUsingItem()) b.lastWanted = ticks;
-			if (held || !b.giveBack && ticks - b.lastWanted < KEEP_TICKS) continue;
+			if (scrolled && selected == b.slot) b.yours = true;
+			if (b.yours && selected != b.slot) b.yours = false;
+			boolean held = !b.yours && serverSlot == b.slot && (inventory.isHolding() || serverSlot != selected);
+			if (held || !b.yours && selected == b.slot && mc.player.isUsingItem()) b.lastWanted = ticks;
+			if (held || !b.yours && !b.giveBack && ticks - b.lastWanted < KEEP_TICKS) continue;
 			// Both slots as the server has them: nothing done with them still unanswered.
 			if (!inventory.swappable(b.slot) || !inventory.settled(b.home)) continue;
-			// A moment you aren't moving if one comes soon; otherwise your keys are released for a tick.
-			if (!gate.safeToClick() && !(++b.waited > WAIT_FOR_STILL && gate.prepareClick())) continue;
 			// With a container you opened yourself, through its menu (it shows your inventory too), rather than waiting for
-			// it to close; one a module opened is left alone (its own clicks are under way there), so that waits.
+			// it to close; one a module opened is left alone (its own clicks are under way there), so that waits. Checked
+			// before asking for a still moment, which lets go of your keys: never for a click that can't go.
 			var menu = mc.player.containerMenu;
 			boolean inContainer = menu != mc.player.inventoryMenu;
 			if (inContainer && !Myriad.containers().current().map(v -> v.byHand()).orElse(false)) continue;
+			// A moment you aren't moving if one comes soon; otherwise your keys are released for a tick.
+			if (!gate.safeToClick() && !(++b.waited > WAIT_FOR_STILL && gate.prepareClick())) continue;
 			if (inContainer ? !Myriad.limits().canSend(PacketLimits.Kind.INVENTORY, 1) || !gate.prepareClick() : !clicks.canClick(1)) continue;
-			if (selected == b.slot && b.selectedBefore != b.slot) inventory.select(b.selectedBefore);
+			// A module that selected the slot gets your old one back; one you scrolled onto stays yours.
+			if (!b.yours && selected == b.slot && b.selectedBefore != b.slot) inventory.select(b.selectedBefore);
 			if (inContainer && !clicks.swapIn(menu, b.home, b.slot)) continue;
 			if (!inContainer) clicks.clickSwap(b.home, b.slot);
+			presentation.swapped(b, b.home, b.slot);
 			// The rest in this tick too: a borrow sharing a slot with this one waits (its slot isn't settled now).
 			borrows.remove(b);
 		}
@@ -172,6 +198,7 @@ final class Borrows {
 
 	@Subscribe
 	private void onLeave(WorldEvent.Leave e) {
+		for (Borrow b : borrows) presentation.forget(b);
 		borrows.clear();
 	}
 }

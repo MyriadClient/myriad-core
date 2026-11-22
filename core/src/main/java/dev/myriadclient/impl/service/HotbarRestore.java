@@ -17,9 +17,12 @@ import java.util.BitSet;
  * its item back, one click each, all in one tick at a moment the server takes clicks, and what it brought in goes back to the slot it
  * came from where that's free. Worked out from where things are at the end rather than by undoing each move, since a
  * block moved aside is often brought back into another slot later, which an undo list can't follow. Meanwhile every slot
- * it touched, hotbar and inventory, shows what it held before ({@link #shown}). Once the last build has ended and the
- * hotbar is back ({@link #resyncWhenDone}), the server is asked for the inventory as it has it, so anything the client got
+ * it touched, hotbar and inventory, shows what it held before (each move is a swap, see {@link Presentation}). Once the
+ * last build has ended and the hotbar is back ({@link #resyncWhenDone}), the server is asked for the inventory as it has it, so anything the client got
  * wrong along the way is put right.
+ * <p>
+ * While a build runs, the slot you hold is yours: select one it moved something into and your item comes back at once
+ * ({@link #giveBackHeld}), so what you hold is what the hotbar shows.
  */
 final class HotbarRestore {
 	/** Ticks a restore waits for a moment you aren't moving before releasing your keys for one. */
@@ -32,20 +35,20 @@ final class HotbarRestore {
 	private final InventoryClicks clicks;
 	private final ClickGate gate;
 	private final SlotsInFlight inFlight;
+	private final Presentation presentation;
 	/** What each inventory slot (0-35) held before the build moved anything; null slots were empty. */
 	private @Nullable Item[] before;
 	/** Hotbar slots a build moved things into. */
 	private final BitSet used = new BitSet(9);
-	/** Every slot (0-35) a build's moves touched, for what they show meanwhile. */
-	private final BitSet touched = new BitSet(36);
 	private boolean building, restoring, resync;
 	private int waited, ticks;
 
-	HotbarRestore(InventoryManager inventory, InventoryClicks clicks, ClickGate gate, SlotsInFlight inFlight) {
+	HotbarRestore(InventoryManager inventory, InventoryClicks clicks, ClickGate gate, SlotsInFlight inFlight, Presentation presentation) {
 		this.inventory = inventory;
 		this.clicks = clicks;
 		this.gate = gate;
 		this.inFlight = inFlight;
+		this.presentation = presentation;
 	}
 
 	/**
@@ -60,8 +63,6 @@ final class HotbarRestore {
 			for (int i = 0; i < 36; i++) before[i] = inv.getItem(i).isEmpty() ? null : inv.getItem(i).getItem();
 		}
 		used.set(hotbarSlot);
-		touched.set(hotbarSlot);
-		if (from >= 0 && from < 36) touched.set(from);
 		building = true;
 		resync = false;
 		restoring = false;
@@ -92,6 +93,7 @@ final class HotbarRestore {
 
 	@Subscribe(priority = 940)
 	private void tick(TickEvent.Pre e) {
+		if (building && mc.player != null && before != null) giveBackHeld();
 		if (!restoring || mc.player == null || before == null) return;
 		if (++ticks > GIVE_UP_TICKS) {
 			done();
@@ -122,9 +124,29 @@ final class HotbarRestore {
 			if (!clicked && !gate.safeToClick() && !(++waited > WAIT_FOR_STILL && gate.prepareClick())) return;
 			if (!clicks.canClick(1)) return;
 			clicks.clickSwap(m, s);
+			presentation.swapped(this, m, s);
 			clicked = true;
 		}
 		if (!left) done();
+	}
+
+	/**
+	 * You selected a hotbar slot the build moved something into: your item goes back there now, one click, and what the
+	 * build had there goes to where your item was (it can bring that into another slot). Not while a placement from the
+	 * slot is still waiting to go out, or while something a module lent is in it.
+	 */
+	private void giveBackHeld() {
+		var inv = mc.player.getInventory();
+		int s = inv.getSelectedSlot();
+		if (!used.get(s) || same(inv.getItem(s), before[s]) || inventory.lent(s)) return;
+		if (mc.player.containerMenu != mc.player.inventoryMenu || inventory.undoPending() || inventory.restorePending()) return;
+		if (MyriadImpl.get().building() instanceof BuildManager b && b.placement().queuedFrom(s)) return;
+		int m = source(s);
+		if (m < 0) return;
+		if (!gate.safeToClick() && !gate.prepareClick()) return;
+		if (!clicks.canClick(1)) return;
+		clicks.clickSwap(m, s);
+		presentation.swapped(this, m, s);
 	}
 
 	/**
@@ -157,32 +179,14 @@ final class HotbarRestore {
 		return along >= 0 ? along : home >= 0 ? home : any;
 	}
 
+	/** Whether a build is running (not yet putting the hotbar back). */
+	boolean building() {
+		return building;
+	}
+
 	/** Whether a build moved something into hotbar slot {@code s} that hasn't gone back yet. */
 	boolean uses(int s) {
 		return before != null && used.get(s);
-	}
-
-	/**
-	 * What hotbar slot {@code s} shows while a build has something of its own there: what it held before, wherever that
-	 * is now, so a build's moves don't show in the hotbar. Null when it shows what it holds (nothing moved in, the item
-	 * that was there is back or gone).
-	 */
-	@Nullable ItemStack shown(int s) {
-		if (before == null || s < 0 || s >= 36 || !touched.get(s) || mc.player == null) return null;
-		var inv = mc.player.getInventory();
-		Item was = before[s];
-		if (same(inv.getItem(s), was)) return null;
-		if (was == null) return ItemStack.EMPTY;
-		ItemStack any = null;
-		for (int m = 0; m < 36; m++) {
-			ItemStack there = inv.getItem(m);
-			if (m == s || !there.is(was)) continue;
-			// Best the one moved out of here (it wasn't there before), else any of the kind.
-			if (before[m] != was) return there;
-			if (any == null) any = there;
-		}
-		// Used up: shown as gone.
-		return any != null ? any : ItemStack.EMPTY;
 	}
 
 	private static boolean same(ItemStack stack, @Nullable Item item) {
@@ -190,10 +194,11 @@ final class HotbarRestore {
 	}
 
 	private void done() {
+		// Put back, or given up on: what's left out shows as it is.
+		presentation.forget(this);
 		restoring = false;
 		before = null;
 		used.clear();
-		touched.clear();
 		if (resync && !building) askForInventory();
 	}
 

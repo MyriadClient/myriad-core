@@ -53,12 +53,27 @@ final class BuildMaterials {
 	private int findSlot(Item item) {
 		int slot = Myriad.inventory().findInHotbar(s -> s.is(item));
 		if (slot >= 0) return slot;
-		int from = Myriad.inventory().findInInventory(s -> s.is(item));
+		int from = smallestStack(item);
 		if (from < 0) {
 			// In the off hand for a tick after an air placement, until it's swapped back first thing next tick.
 			return Myriad.placement().offHandSlot() >= 0 && mc.player.getOffhandItem().is(item) ? -1 : -2;
 		}
 		return borrow(from);
+	}
+
+	/**
+	 * The inventory slot (9-35) with the smallest stack of {@code item}, or -1: a stack the build moved back out of the
+	 * hotbar is used up before another is started, so one stack goes at a time (and a stack left part-used is the only
+	 * one), rather than every stack a little.
+	 */
+	private int smallestStack(Item item) {
+		var inv = mc.player.getInventory();
+		int best = -1;
+		for (int i = 9; i < 36; i++) {
+			ItemStack s = inv.getItem(i);
+			if (s.is(item) && (best < 0 || s.getCount() < inv.getItem(best).getCount())) best = i;
+		}
+		return best;
 	}
 
 	/**
@@ -75,7 +90,9 @@ final class BuildMaterials {
 		if (!(MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory)) return -3;
 		if (!manager.moveMaterial(() -> {
 			inventory.buildMoves(into, from);
-			return inventory.moveToHotbar(from, into);
+			if (!inventory.moveToHotbar(from, into)) return false;
+			inventory.buildMoved(into, from);
+			return true;
 		})) return -1;
 		materials.add(mc.player.getInventory().getItem(into).getItem());
 		filledSlots.remove((Integer) into);

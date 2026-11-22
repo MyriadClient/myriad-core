@@ -13,6 +13,7 @@ import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
 import net.minecraft.network.protocol.game.ClientboundOpenScreenPacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
 import net.minecraft.network.protocol.game.ClientboundSetCursorItemPacket;
+import net.minecraft.network.protocol.game.ClientboundSetPlayerInventoryPacket;
 import net.minecraft.network.protocol.game.ClientboundSetHealthPacket;
 import net.minecraft.world.entity.PositionMoveRotation;
 import net.minecraft.world.entity.player.Player;
@@ -47,19 +48,39 @@ public abstract class ClientPacketListenerMixin {
 		if (Myriad.isReady() && MyriadImpl.get() != null) MyriadImpl.get().containerTracker().onOpened(packet.getContainerId());
 	}
 
+	/** Changes made since the menu was last seen are InventoryLedger's before a packet about it lands. */
+	@Inject(method = {"handleContainerContent", "handleContainerSetSlot", "handleSetCursorItem", "handleSetPlayerInventory"}, at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/PacketUtils;ensureRunningOnSameThread(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketListener;Lnet/minecraft/network/PacketProcessor;)V", shift = At.Shift.AFTER))
+	private void myriad$beforeMenuPacket(CallbackInfo ci) {
+		if (Myriad.isReady() && MyriadImpl.get() != null) MyriadImpl.get().inventoryLedger().beforeServer();
+	}
+
 	@Inject(method = "handleContainerContent", at = @At("TAIL"))
 	private void myriad$containerContents(ClientboundContainerSetContentPacket packet, CallbackInfo ci) {
-		if (Myriad.isReady() && MyriadImpl.get() != null) MyriadImpl.get().containerTracker().onContents(packet.containerId());
+		if (Myriad.isReady() && MyriadImpl.get() != null) {
+			MyriadImpl.get().inventoryLedger().onContents(packet.containerId(), packet.items(), packet.carriedItem());
+			MyriadImpl.get().containerTracker().onContents(packet.containerId());
+		}
+	}
+
+	@Inject(method = "handleSetPlayerInventory", at = @At("TAIL"))
+	private void myriad$inventorySlot(ClientboundSetPlayerInventoryPacket packet, CallbackInfo ci) {
+		if (Myriad.isReady() && MyriadImpl.get() != null) MyriadImpl.get().inventoryLedger().onInventorySlot(packet.slot(), packet.contents());
 	}
 
 	@Inject(method = "handleSetCursorItem", at = @At("TAIL"))
 	private void myriad$cursor(ClientboundSetCursorItemPacket packet, CallbackInfo ci) {
-		if (Myriad.isReady() && MyriadImpl.get() != null) MyriadImpl.get().handClicks().cursor();
+		if (Myriad.isReady() && MyriadImpl.get() != null) {
+			MyriadImpl.get().inventoryLedger().onCursor(packet.contents());
+			MyriadImpl.get().handClicks().cursor();
+		}
 	}
 
 	@Inject(method = "handleContainerSetSlot", at = @At("TAIL"))
 	private void myriad$containerSlot(ClientboundContainerSetSlotPacket packet, CallbackInfo ci) {
-		if (Myriad.isReady() && MyriadImpl.get() != null) MyriadImpl.get().containerTracker().onSlot(packet.getContainerId(), packet.getSlot());
+		if (Myriad.isReady() && MyriadImpl.get() != null) {
+			MyriadImpl.get().inventoryLedger().onSlot(packet.getContainerId(), packet.getSlot(), packet.getItem());
+			MyriadImpl.get().containerTracker().onSlot(packet.getContainerId(), packet.getSlot());
+		}
 	}
 
 	/** TeleportEvent, on the render thread (the packet first arrives on the network thread and is handed over). */

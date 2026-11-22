@@ -346,6 +346,18 @@ public final class DevConsole implements DevSteps {
 					if (!waits) mc.gameMode.handleContainerInput(menu, slot, button, type, mc.player);
 					say("uclick {}", waits ? "waits" : "sent");
 				}
+				case "fakeslot" -> {
+					// Your inventory's slot changed on this side only, nothing sent: a desync made on purpose.
+					var item = net.minecraft.core.registries.BuiltInRegistries.ITEM.getValue(net.minecraft.resources.Identifier.parse(a[2]));
+					mc.player.inventoryMenu.getSlot(Integer.parseInt(a[1])).set(new net.minecraft.world.item.ItemStack(item, a.length > 3 ? Integer.parseInt(a[3]) : 1));
+					say("fakeslot set");
+				}
+				case "rawclick" -> {
+					// A click in your inventory made at once, still or not (to see what an anti-cheat does with one).
+					mc.gameMode.handleContainerInput(mc.player.inventoryMenu.containerId, Integer.parseInt(a[1]), Integer.parseInt(a[2]),
+						ContainerInput.valueOf(a[3].toUpperCase(Locale.ROOT)), mc.player);
+					say("rawclick sent");
+				}
 				case "attack" -> attack();
 				// As your own right click (a module's slot hold steps aside for it).
 				case "use" -> asClick(this::use);
@@ -417,6 +429,7 @@ public final class DevConsole implements DevSteps {
 				// open, and puts it back after 40 ticks.
 				case "openitem" -> openItem(a[1], a.length > 2 && a[2].equals("air"), a.length > 3 ? Integer.parseInt(a[3]) : 20);
 				case "status" -> status();
+				case "ledger" -> say("{}", a.length > 1 && a[1].equals("check") ? MyriadImpl.get().inventoryLedger().check() : MyriadImpl.get().inventoryLedger().summary());
 				// The swap bar's tabs, and a switch to one by its place on the bar (see ContainerTabs).
 				case "themed" -> MyriadImpl.get().windowManager().theme().themedScreens.set(a[1].equals("on"));
 				// "pref chat.width 200": a theme setting (Theme or Preferences) by group.id or id, to a value as typed; with no

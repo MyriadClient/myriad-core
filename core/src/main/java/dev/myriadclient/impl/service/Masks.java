@@ -12,11 +12,11 @@ import net.minecraft.world.item.ItemStack;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.function.IntUnaryOperator;
 
 /**
  * What the inventory shows while modules move things (see {@code Inventory.mask}): masked slots show what they held when
- * masked, and a hotbar slot with something borrowed or a build's material in it shows what was there before
- * ({@link Borrows}, {@link HotbarRestore}).
+ * masked, and a slot a borrow or a build moved things through shows what was there before ({@link Presentation}).
  */
 final class Masks {
 	private static final class Mask {
@@ -38,14 +38,13 @@ final class Masks {
 	}
 
 	private final Minecraft mc = Minecraft.getInstance();
-	private final Borrows borrows;
-	private final HotbarRestore restore;
+	/** The slot whose stack an inventory slot shows (see InventoryManager.shownFrom). */
+	private final IntUnaryOperator shownFrom;
 	/** Display masks, by owner: what each masked slot held when masked, and until when. */
 	private final Map<Object, Mask> masks = new IdentityHashMap<>();
 
-	Masks(Borrows borrows, HotbarRestore restore) {
-		this.borrows = borrows;
-		this.restore = restore;
+	Masks(IntUnaryOperator shownFrom) {
+		this.shownFrom = shownFrom;
 	}
 
 	void mask(Object owner, long holdMs, int... inventoryIndexes) {
@@ -82,12 +81,11 @@ final class Masks {
 		if (mc.player == null || !InventoryClicks.valid(index)) return ItemStack.EMPTY;
 		var inv = mc.player.getInventory();
 		ItemStack real = inv.getItem(index);
-		// A slot a build moved things through shows what was there, through the build's own swaps too (never the slot you
-		// hold, which builds leave alone).
-		if (!Slots.isHotbar(index) || index != inv.getSelectedSlot()) {
-			ItemStack was = restore.shown(index);
-			if (was != null) return was;
-		}
+		// A slot a borrow or a build moved things through shows what was there, exactly (see Presentation); not the slot
+		// you hold, which shows what you'd use, unless it's about to be given back to you (selected by your scroll, its
+		// own item comes back next tick: shown now, not a frame of the borrowed one).
+		int from = shownFrom.applyAsInt(index);
+		if (from != index) return inv.getItem(from);
 		Mask m = maskAt(index);
 		if (m != null) {
 			// Something from outside the group turned up here (a pickup): it shows as it is.
@@ -105,10 +103,7 @@ final class Masks {
 			if (last == null || !ItemStack.matches(last, live)) m.last.put(index, last = live.copy());
 			return last;
 		}
-		if (!Slots.isHotbar(index)) return real;
-		Borrows.Borrow b = borrows.at(index);
-		if (b == null || inv.getSelectedSlot() == index || !borrows.intact(b)) return real;
-		return inv.getItem(b.home);
+		return real;
 	}
 
 	int shownArmor() {

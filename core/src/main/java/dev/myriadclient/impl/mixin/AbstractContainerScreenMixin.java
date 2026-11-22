@@ -15,8 +15,10 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
@@ -151,10 +153,29 @@ public abstract class AbstractContainerScreenMixin {
 			ci.cancel();
 			return;
 		}
-		// While you move (Inventory Move), the click waits for a tick the server takes it on (see InventoryManager).
+		// While you move (Inventory Move), the click waits for a tick the server takes it on (see InventoryManager), aimed
+		// at what the screen shows now (see below).
 		int id = slot != null ? slot.index : slotId;
-		if (MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory
-			&& inventory.holdScreenClick(((AbstractContainerScreen<?>) (Object) this).getMenu().containerId, id, button, input)) ci.cancel();
+		var menu = ((AbstractContainerScreen<?>) (Object) this).getMenu();
+		if (MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory) {
+			int[] click = inventory.yourClick(menu, id, button, input);
+			if (inventory.holdScreenClick(menu.containerId, click[0], click[1], input)) ci.cancel();
+		}
+	}
+
+	/**
+	 * Your click acts on what the screen shows: a slot showing what was there while a borrow or a build has things out
+	 * (see InventoryManager.shownFrom) is clicked where that is now.
+	 */
+	@WrapOperation(method = "slotClicked(Lnet/minecraft/world/inventory/Slot;IILnet/minecraft/world/inventory/ContainerInput;)V",
+		at = @At(value = "INVOKE", target = "Lnet/minecraft/client/multiplayer/MultiPlayerGameMode;handleContainerInput(IIILnet/minecraft/world/inventory/ContainerInput;Lnet/minecraft/world/entity/player/Player;)V"))
+	private void myriad$yourClick(MultiPlayerGameMode gameMode, int containerId, int slotId, int button, ContainerInput input, Player player, Operation<Void> original) {
+		if (Myriad.isReady() && MyriadImpl.get() != null && MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory) {
+			int[] click = inventory.yourClick(((AbstractContainerScreen<?>) (Object) this).getMenu(), slotId, button, input);
+			slotId = click[0];
+			button = click[1];
+		}
+		original.call(gameMode, containerId, slotId, button, input, player);
 	}
 
 	/** Your click went to the server: what it made stays on screen while answers to older ones arrive (HandClicks). */

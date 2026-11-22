@@ -220,6 +220,11 @@ final class ServiceRouters {
 		}
 
 		@Override
+		public boolean useFromInventory(Object owner, int inventoryIndex, Runnable action) {
+			return of(owner).useFromInventory(owner, inventoryIndex, action);
+		}
+
+		@Override
 		public void giveBack(Object owner) {
 			of(owner).giveBack(owner);
 		}

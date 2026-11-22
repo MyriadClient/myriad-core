@@ -5,6 +5,7 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.TickEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
+import dev.myriadclient.api.item.Slots;
 import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Inventory;
@@ -31,7 +32,9 @@ import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemPacket;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -101,10 +104,12 @@ public final class InventoryManager implements Inventory {
 	private final ScreenClicks screenClicks = new ScreenClicks(gate);
 	private final AttackCharge charge = new AttackCharge(this);
 	private final InventoryClicks clicks = new InventoryClicks(this, gate);
-	private final Borrows borrows = new Borrows(this, clicks, gate);
+	/** What the inventory shows while borrows and builds have things out (see {@link Presentation}). */
+	private final Presentation presentation = new Presentation();
+	private final Borrows borrows = new Borrows(this, clicks, gate, presentation);
 	private final SlotsInFlight inFlight = new SlotsInFlight();
-	private final HotbarRestore restore = new HotbarRestore(this, clicks, gate, inFlight);
-	private final Masks masks = new Masks(borrows, restore);
+	private final HotbarRestore restore = new HotbarRestore(this, clicks, gate, inFlight, presentation);
+	private final Masks masks = new Masks(this::shownFrom);
 	private final OffHandWatch offHand = new OffHandWatch(this, clicks, masks);
 
 	/** What has handlers of its own besides this: subscribed with it. */
@@ -438,6 +443,7 @@ public final class InventoryManager implements Inventory {
 	public void select(int hotbarSlot) {
 		Threads.assertRender();
 		if (mc.player == null || hotbarSlot < 0 || hotbarSlot > 8) return;
+		selectedAt = Ticks.current();
 		mc.player.getInventory().setSelectedSlot(hotbarSlot);
 		mc.gameMode.ensureHasSentCarriedItem();
 	}
@@ -586,6 +592,52 @@ public final class InventoryManager implements Inventory {
 		return borrows.borrow(owner, inventoryIndex, replaceable);
 	}
 
+	/** An item {@link #useFromInventory} swapped into {@code hotbarSlot} from {@code index}, to go back from tick {@code at}. */
+	private record SwapBack(Object owner, int index, int hotbarSlot, long at) {}
+	private final List<SwapBack> swapBacks = new ArrayList<>();
+
+	@Override
+	public boolean useFromInventory(Object owner, int inventoryIndex, Runnable action) {
+		Threads.assertRender();
+		if (mc.player == null || mc.getConnection() == null || inventoryIndex < 0 || inventoryIndex >= 36) return false;
+		if (inventoryIndex < 9) {
+			silentSwap(inventoryIndex, action);
+			return true;
+		}
+		// Your own menu's clicks only count while no container is open over it.
+		if (mc.player.containerMenu != mc.player.inventoryMenu) return false;
+		// Only while actions go out as made: once this tick's movement has gone out, the use and the slot changes are held
+		// for the next tick (ActionTiming) but clicks aren't, so the swap back would overtake the use. Asked again at the
+		// start of the next tick, it all goes in order.
+		if (ActionTiming.get().isLate()) return false;
+		// A hotbar slot that isn't yours or anyone's: the item visits it for the action.
+		int into = borrows.roomFor(s -> true);
+		if (into < 0 || !clicks.canClick(2) || !gate.prepareClick()) return false;
+		clicks.clickSwap(inventoryIndex, into);
+		presentation.swapped(owner, inventoryIndex, into);
+		silentSwap(into, action);
+		// Where the server checks the order of packets in a tick, a click right after the action is refused: next tick.
+		if (!AntiCheat.inEffect().checksPacketOrder()) swapBack(owner, inventoryIndex, into);
+		else swapBacks.add(new SwapBack(owner, inventoryIndex, into, Ticks.current() + 1));
+		return true;
+	}
+
+	private void swapBack(Object owner, int index, int hotbarSlot) {
+		clicks.clickSwap(index, hotbarSlot);
+		presentation.swapped(owner, index, hotbarSlot);
+	}
+
+	/** Instant uses' swaps back that waited for the next tick, after the server's slot went back (see restoreSwap). */
+	@Subscribe(priority = 948)
+	private void swapBacks(TickEvent.Pre e) {
+		if (swapBacks.isEmpty() || mc.player == null) return;
+		for (SwapBack b : List.copyOf(swapBacks)) {
+			if (Ticks.current() < b.at() || !clicks.canClick(1) || !gate.prepareClick()) continue;
+			swapBack(b.owner(), b.index(), b.hotbarSlot());
+			swapBacks.remove(b);
+		}
+	}
+
 	@Override
 	public void giveBack(Object owner) {
 		borrows.giveBack(owner);
@@ -630,6 +682,11 @@ public final class InventoryManager implements Inventory {
 		restore.begin(hotbarSlot, from);
 	}
 
+	/** A build moved inventory slot {@code from} into hotbar slot {@code hotbarSlot} (one swap): shown as it was till put back. */
+	void buildMoved(int hotbarSlot, int from) {
+		presentation.swapped(restore, from, hotbarSlot);
+	}
+
 	/** The last build ended: the inventory is resynced once the restore is done (see {@link HotbarRestore#resyncWhenDone}). */
 	void resyncAfterRestore() {
 		restore.resyncWhenDone();
@@ -638,11 +695,77 @@ public final class InventoryManager implements Inventory {
 	/** An air placement is about to swap hotbar slot {@code hotbarSlot}'s block into the off hand: see {@link OffHandWatch}. */
 	void airSwapping(int hotbarSlot) {
 		offHand.swapping(hotbarSlot);
+		presentation.swapped(offHand, hotbarSlot, Slots.OFF_HAND);
+	}
+
+	/** An air placement's block goes back from the off hand to hotbar slot {@code hotbarSlot} (the swap undone). */
+	void airSwapBack(int hotbarSlot) {
+		clicks.swapHands();
+		presentation.swapped(offHand, hotbarSlot, Slots.OFF_HAND);
+	}
+
+	/** The tick a module last selected a slot ({@link #select}), to tell your own scrolling from it. */
+	private long selectedAt = Long.MIN_VALUE / 2;
+
+	/**
+	 * Whether hotbar slot {@code slot}, which you selected, is about to be given back to you: something a module borrowed
+	 * is there and you (not a module) selected it, or a build has its material there (see Borrows, HotbarRestore).
+	 */
+	private boolean givingBack(int slot) {
+		return borrows.at(slot) != null && !selectedByModule() || restore.building() && restore.uses(slot);
+	}
+
+	/**
+	 * The inventory slot whose stack slot {@code index} shows: where what was there went, while borrows and builds have
+	 * things out ({@link Presentation}); itself otherwise, and for the slot you hold (it shows what you'd use) unless
+	 * that's about to come back to you.
+	 */
+	int shownFrom(int index) {
+		if (presentation.isEmpty() || mc.player == null) return index;
+		if (Slots.isHotbar(index) && index == mc.player.getInventory().getSelectedSlot() && !givingBack(index)) return index;
+		return presentation.source(index);
+	}
+
+	/**
+	 * Your click in a screen, on menu slot {@code slotId} with {@code button}: where it lands so it acts on what the
+	 * screen shows there (a borrowed item shows where it came from; your click takes what you see). The number key of a
+	 * swap is turned the same way when that lands in the hotbar. Returns {slot, button}.
+	 */
+	public int[] yourClick(AbstractContainerMenu menu, int slotId, int button, ContainerInput input) {
+		int[] click = {slotId, button};
+		if (presentation.isEmpty() || mc.player == null) return click;
+		var inv = mc.player.getInventory();
+		if (slotId >= 0 && slotId < menu.slots.size()) {
+			Slot slot = menu.slots.get(slotId);
+			if (slot.container == inv) {
+				int from = shownFrom(slot.getContainerSlot());
+				if (from != slot.getContainerSlot()) {
+					for (Slot s : menu.slots) {
+						if (s.container == inv && s.getContainerSlot() == from) {
+							click[0] = s.index;
+							break;
+						}
+					}
+				}
+			}
+		}
+		if (input == ContainerInput.SWAP && button >= 0 && button < 9) {
+			int from = shownFrom(button);
+			if (from >= 0 && from < 9) click[1] = from;
+		}
+		return click;
+	}
+
+	/** Whether the selected slot changed by a module's doing this tick or the last (not your scrolling). */
+	boolean selectedByModule() {
+		return Ticks.current() - selectedAt <= 1;
 	}
 
 	/** Whether a module borrowed something into hotbar slot {@code slot} that hasn't gone back yet. */
 	boolean lent(int slot) {
-		return borrows.at(slot) != null;
+		if (borrows.at(slot) != null) return true;
+		for (SwapBack b : swapBacks) if (b.hotbarSlot() == slot) return true;
+		return false;
 	}
 
 	/** Whether a build moved something into hotbar slot {@code slot} that hasn't gone back yet. */
@@ -694,6 +817,8 @@ public final class InventoryManager implements Inventory {
 	private void onLeave(WorldEvent.Leave e) {
 		restorePending = false;
 		undos.clear();
+		for (SwapBack b : swapBacks) presentation.forget(b.owner());
+		swapBacks.clear();
 	}
 
 	@Override

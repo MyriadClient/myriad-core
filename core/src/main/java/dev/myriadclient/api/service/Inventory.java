@@ -266,6 +266,21 @@ public interface Inventory {
 	int borrow(Object owner, int inventoryIndex, Predicate<ItemStack> replaceable);
 
 	/**
+	 * Uses the item at {@code inventoryIndex} (0-35) for one action without it showing anywhere: one from the hotbar
+	 * goes through {@link #silentSwap}; one from the inventory is swapped into a hotbar slot, held there by a silent
+	 * swap while {@code action} runs, and swapped back. Where the server doesn't check the order of packets in a tick
+	 * (2b2t) that's all this tick, before anything is drawn; elsewhere the swap back goes out first thing next tick, the
+	 * inventory showing as it was meanwhile. For an action that's done at once (a rocket, a pearl), not one that takes
+	 * ticks (eating, a bow): {@link #borrow} those.
+	 * <p>
+	 * Both swaps or neither: it needs a moment the server takes clicks, room in the click budget for two, and the part of
+	 * the tick before the movement packet (what input handlers run after it waits for the next tick's start), and
+	 * returns false otherwise without running {@code action} (ask again next tick). True once {@code action} ran.
+	 */
+	@ApiStatus.AvailableSince("2.3")
+	boolean useFromInventory(Object owner, int inventoryIndex, Runnable action);
+
+	/**
 	 * Puts back what {@code owner} borrowed as soon as a click can go, instead of waiting; with a container you opened
 	 * yourself, through its menu (which shows your inventory too), so it needn't close first. In a container a module
 	 * opened ({@link Containers.View#byHand()} false) it waits for that to close, so it never clicks in the middle of
@@ -529,6 +544,11 @@ public interface Inventory {
 		@Override
 		public int borrow(Object owner, int inventoryIndex, Predicate<ItemStack> replaceable) {
 			return core.borrow(owner, inventoryIndex, replaceable);
+		}
+
+		@Override
+		public boolean useFromInventory(Object owner, int inventoryIndex, Runnable action) {
+			return core.useFromInventory(owner, inventoryIndex, action);
 		}
 
 		@Override
