@@ -31,7 +31,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * Event bus in the spirit of Orbit (which Meteor uses), with the rough edges filed off:
+ * Event bus in the spirit of Orbit, with the rough edges filed off:
  * <ul>
  *     <li>handlers for a supertype receive subtypes,</li>
  *     <li>a cancelled event keeps dispatching (handlers opt in with {@code receiveCancelled}),</li>
