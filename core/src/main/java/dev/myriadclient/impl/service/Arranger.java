@@ -142,6 +142,27 @@ final class Arranger implements Containers.Planner {
 		return vacated >= 0 && stack(vacated).isEmpty() ? vacated : -1;
 	}
 
+	/**
+	 * A slot of your inventory this put something down in that held nothing before (and isn't a source), whose stack a
+	 * shift click puts all back into the container: what a stop moves back. -1 if none.
+	 */
+	int parkedSlot() {
+		if (!storage()) return -1;
+		for (int s = 0; s < parked.length; s++) {
+			ItemStack here = stack(s);
+			if (!parked[s] || inArea[s] || isSource[s] || !inPlayer(s) || here.isEmpty() || !baseline[s].isEmpty()) continue;
+			int room = 0;
+			for (int c = 0; c < menu.slots.size(); c++) {
+				if (inPlayer(c)) continue;
+				ItemStack d = stack(c);
+				if (d.isEmpty() && menu.getSlot(c).mayPlace(here)) room += capacity(c, here);
+				else if (ItemStack.isSameItemSameComponents(d, here)) room += Math.max(0, capacity(c, here) - d.getCount());
+			}
+			if (room >= here.getCount()) return s;
+		}
+		return -1;
+	}
+
 	/** How many more of {@code like} may come from outside sources under {@link Containers.Arrangement#limit}. */
 	private int allowed(ItemStack like) {
 		if (allowance == null) return Integer.MAX_VALUE;

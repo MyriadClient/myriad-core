@@ -44,6 +44,14 @@ final class PlannerJob implements MenuJob {
 	private int putDowns;
 	/** Put-downs a stop makes before giving up (each one confirmed with the server). */
 	private static final int PUT_DOWNS = 5;
+	/** Stacks a stop moves back into the container from your inventory (see Arranger#parkedSlot), at most. */
+	private static final int RETURNS = 36;
+	private int returns;
+	/** Ticks a stop before a close may take: past that it closes anyway. */
+	private static final int CLOSE_TICKS = 100;
+	/** You closed the screen (see {@link #stopThenClose}): run once the stop's done, the menu then closed; and when. */
+	private @Nullable Runnable closeAfter;
+	private long stoppedAt;
 	/**
 	 * What the menu shows while this runs, by slot: the end result where it's known ({@link Arranger#finishedView}, a
 	 * sort), so the clicks behind it don't show. With a server that answers every click, a burst of them comes back as
@@ -72,15 +80,33 @@ final class PlannerJob implements MenuJob {
 		return menu == this.menu && !result.isDone();
 	}
 
-	/** Stops it: no more of its own clicks; what it holds on the cursor is put down first, then it fails with {@code why}. */
+	/**
+	 * Stops it: no more of its own clicks; what it holds on the cursor is put down first, and what it parked in your
+	 * inventory goes back into the container, then it fails with {@code why}.
+	 */
 	void stop(String why) {
-		if (stopping == null) stopping = why;
+		if (stopping == null) {
+			stopping = why;
+			stoppedAt = Ticks.current();
+		}
+	}
+
+	/**
+	 * You closed the menu's screen: the menu stays open on the server till the stop is done, then {@code close} closes
+	 * it. Closed with something on the cursor, the server would put that into your inventory.
+	 */
+	void stopThenClose(String why, Runnable close) {
+		stop(why);
+		closeAfter = close;
 	}
 
 	@Override
 	public boolean tick(MenuSync sync) {
 		if (mc.player == null || mc.gameMode == null || mc.player.containerMenu != menu) return fail("The container closed");
-		if (stopping != null) return putDown(sync);
+		if (stopping != null) {
+			if (closeAfter != null && Ticks.current() - stoppedAt > CLOSE_TICKS) return fail(stopping);
+			return putDown(sync);
+		}
 		if (check != null) {
 			if (!check.isDone()) return false;
 			check = null;
@@ -123,8 +149,17 @@ final class PlannerJob implements MenuJob {
 		}
 		ItemStack carried = menu.getCarried();
 		if (carried.isEmpty()) {
-			if (confirmed) return fail(stopping);
-			check = sync.refresh(menu);
+			if (!confirmed) {
+				check = sync.refresh(menu);
+				return false;
+			}
+			// What it parked in your inventory goes back with a shift click each, the cursor confirmed empty first.
+			int back = returns < RETURNS && planner instanceof Arranger a ? a.parkedSlot() : -1;
+			if (back < 0) return fail(stopping);
+			if (!Myriad.limits().canSend(PacketLimits.Kind.INVENTORY, 1) || !Myriad.inventory().prepareClick()) return false;
+			click(back, 0, ContainerInput.QUICK_MOVE);
+			returns++;
+			confirmed = false;
 			return false;
 		}
 		confirmed = false;
@@ -154,6 +189,10 @@ final class PlannerJob implements MenuJob {
 	}
 
 	private boolean fail(String why) {
+		// Closed before it ends: whoever waits on it sees the container closed.
+		Runnable close = closeAfter;
+		closeAfter = null;
+		if (close != null && mc.player != null && mc.player.containerMenu == menu) close.run();
 		abort(why);
 		return true;
 	}

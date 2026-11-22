@@ -400,8 +400,9 @@ public final class ContainerTracker implements Containers {
 	}
 
 	/**
-	 * The held container's screen is closing (from AbstractContainerScreenMixin, its onClose): true to keep it open on the
-	 * server, sending no close. Not with something on the cursor, which closing puts back where the server would.
+	 * A container's screen is closing (from AbstractContainerScreenMixin, its onClose): true to keep it open on the
+	 * server, sending no close. A held one, unless something's on the cursor (closing puts that back where the server
+	 * would); one a sort runs in, till the sort has put down what it carries (then it closes).
 	 */
 	public boolean keepOpen(AbstractContainerMenu menu) {
 		// Your inventory's screen over the held one (showInventory): closing it leaves that open too.
@@ -411,8 +412,20 @@ public final class ContainerTracker implements Containers {
 			heldScreen = null;
 			return false;
 		}
+		// A sort running in it: the close waits for what it carries to be put down (else the server puts that into your
+		// inventory), the menu open on the server till then with no screen. A held one stays open anyway, the sort going on.
+		if (mc.player != null && mc.player.containerMenu == menu && transfers.peek() instanceof PlannerJob job && job.runsIn(menu)
+			&& (held == null || held.handler != menu)) {
+			job.stopThenClose("The container closed", () -> {
+				if (mc.player != null && mc.player.containerMenu == menu) {
+					mc.player.connection.send(new ServerboundContainerClosePacket(menu.containerId));
+					mc.player.containerMenu = mc.player.inventoryMenu;
+				}
+			});
+			return true;
+		}
 		if (held == null || held.handler != menu || mc.player == null || mc.player.containerMenu != menu) return false;
-		if (!menu.getCarried().isEmpty()) {
+		if (!menu.getCarried().isEmpty() && !arranging(menu)) {
 			held = null;
 			heldScreen = null;
 			return false;
