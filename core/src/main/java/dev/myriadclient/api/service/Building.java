@@ -43,21 +43,21 @@ public interface Building {
 		 * Lenient servers: {@link Placement.Options#DEFAULT} and {@link Breaking.Options#DEFAULT}, up to 4 placements a
 		 * tick, wrong blocks broken, fluids kept back, settings clicked, bottom up, finishing once done.
 		 */
-		public static final Options DEFAULT = new Options(Placement.Options.DEFAULT, Breaking.Options.DEFAULT, true, true, 4, 0, false, true, Order.BOTTOM_UP);
+		public static final Options DEFAULT = new Options(Placement.Options.DEFAULT, Breaking.Options.DEFAULT, true, true, 4, 0, false, true, false, Order.BOTTOM_UP);
 		/**
 		 * Servers that check the look of each click: {@link Placement.Options#STRICT} and {@link Breaking.Options#STRICT}
 		 * (turned for breaks too), one placement a tick; otherwise as {@link #DEFAULT}.
 		 */
-		public static final Options STRICT = new Options(Placement.Options.STRICT, Breaking.Options.STRICT, true, true, 1, 0, false, true, Order.BOTTOM_UP);
+		public static final Options STRICT = new Options(Placement.Options.STRICT, Breaking.Options.STRICT, true, true, 1, 0, false, true, false, Order.BOTTOM_UP);
 
 		private final Placement.Options placing;
 		private final Breaking.Options breaking;
-		private final boolean breakWrong, avoidFluids, keepUp, clickSettings;
+		private final boolean breakWrong, avoidFluids, keepUp, clickSettings, useTools;
 		private final int placesPerTick, priority;
 		private final Order order;
 
 		private Options(Placement.Options placing, Breaking.Options breaking, boolean breakWrong, boolean avoidFluids, int placesPerTick,
-		                int priority, boolean keepUp, boolean clickSettings, Order order) {
+		                int priority, boolean keepUp, boolean clickSettings, boolean useTools, Order order) {
 			this.placing = Objects.requireNonNull(placing);
 			this.breaking = Objects.requireNonNull(breaking);
 			this.breakWrong = breakWrong;
@@ -66,6 +66,7 @@ public interface Building {
 			this.priority = priority;
 			this.keepUp = keepUp;
 			this.clickSettings = clickSettings;
+			this.useTools = useTools;
 			this.order = Objects.requireNonNull(order);
 		}
 
@@ -131,37 +132,37 @@ public interface Building {
 
 		/** These options with {@link #placing()} set. */
 		public Options withPlacing(Placement.Options placing) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, useTools, order);
 		}
 
 		/** These options with {@link #breaking()} set. */
 		public Options withBreaking(Breaking.Options breaking) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, useTools, order);
 		}
 
 		/** These options with {@link #breakWrong()} set. */
 		public Options withBreakWrong(boolean breakWrong) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, useTools, order);
 		}
 
 		/** These options with {@link #avoidFluids()} set. */
 		public Options withAvoidFluids(boolean avoidFluids) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, useTools, order);
 		}
 
 		/** These options with {@link #placesPerTick()} (at least 1) set. */
 		public Options withPlacesPerTick(int placesPerTick) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, useTools, order);
 		}
 
 		/** These options with {@link #priority()} set. */
 		public Options withPriority(int priority) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, useTools, order);
 		}
 
 		/** These options with {@link #keepUp()} set. */
 		public Options withKeepUp(boolean keepUp) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, useTools, order);
 		}
 
 		/**
@@ -170,7 +171,7 @@ public interface Building {
 		 * default; off, a block placed the right way counts as done whatever its setting.
 		 */
 		public Options withClickSettings(boolean clickSettings) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, useTools, order);
 		}
 
 		/** Whether settings are clicked; see {@link #withClickSettings}. */
@@ -178,9 +179,27 @@ public interface Building {
 			return clickSettings;
 		}
 
+		/**
+		 * Finish blocks with a tool or an item after placing them, where the target needs it and the plain block is what
+		 * you have ({@link dev.myriadclient.api.build.BlockRules#placedAs}, {@link dev.myriadclient.api.build.BlockRules#finishTool}):
+		 * a log stripped with an axe, dirt tilled into farmland with a hoe or made a path with a shovel, a plant put in a
+		 * flower pot, a candle lit, a campfire put out, an eye put in an end portal frame. Off by default; off, those
+		 * targets want their own item, and a lit candle or an unlit campfire counts as done either way.
+		 */
+		@ApiStatus.AvailableSince("2.5")
+		public Options withUseTools(boolean useTools) {
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, useTools, order);
+		}
+
+		/** Whether blocks are finished with tools; see {@link #withUseTools}. */
+		@ApiStatus.AvailableSince("2.5")
+		public boolean useTools() {
+			return useTools;
+		}
+
 		/** Which placements in reach go first ({@link Order#BOTTOM_UP} by default). */
 		public Options withOrder(Order order) {
-			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
+			return new Options(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, useTools, order);
 		}
 
 		/** Which placements go first; see {@link #withOrder}. */
@@ -192,18 +211,18 @@ public interface Building {
 		public boolean equals(@Nullable Object o) {
 			return o instanceof Options x && x.placing.equals(placing) && x.breaking.equals(breaking) && x.breakWrong == breakWrong
 				&& x.avoidFluids == avoidFluids && x.placesPerTick == placesPerTick && x.priority == priority && x.keepUp == keepUp
-				&& x.clickSettings == clickSettings && x.order == order;
+				&& x.clickSettings == clickSettings && x.useTools == useTools && x.order == order;
 		}
 
 		@Override
 		public int hashCode() {
-			return Objects.hash(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, order);
+			return Objects.hash(placing, breaking, breakWrong, avoidFluids, placesPerTick, priority, keepUp, clickSettings, useTools, order);
 		}
 
 		@Override
 		public String toString() {
 			return "Building.Options[placing=" + placing + ", breaking=" + breaking + ", breakWrong=" + breakWrong + ", avoidFluids="
-				+ avoidFluids + ", placesPerTick=" + placesPerTick + ", priority=" + priority + ", keepUp=" + keepUp + ", clickSettings=" + clickSettings + ", order=" + order + "]";
+				+ avoidFluids + ", placesPerTick=" + placesPerTick + ", priority=" + priority + ", keepUp=" + keepUp + ", clickSettings=" + clickSettings + ", useTools=" + useTools + ", order=" + order + "]";
 		}
 	}
 

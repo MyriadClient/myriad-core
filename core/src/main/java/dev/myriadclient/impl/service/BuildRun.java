@@ -22,7 +22,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.ObserverBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -72,7 +76,7 @@ final class BuildRun implements Build {
 	private static final Status[] STATUSES = Status.values();
 
 	/** What's to be done at a position, beside the status shown for it. */
-	private static final byte NOTHING = 0, BREAK = 1, PLACE = 2, GROW = 3, CLICK = 4;
+	private static final byte NOTHING = 0, BREAK = 1, PLACE = 2, GROW = 3, CLICK = 4, TOOL = 5;
 	/** What planning the position at hand found to do (a field, not a result, so planning allocates nothing). */
 	private byte kind;
 
@@ -255,11 +259,40 @@ final class BuildRun implements Build {
 					long hand = (leaving ? 0 : 1L << 38) | (long) handTier(target) << 36 | (long) rank(target) << 28;
 					places.add(key((shaped != null && BlockRules.oriented(shaped) ? 1L << 39 : 0) | hand | layer | Math.min(distance, 0xFFFF), i));
 				}
-				case CLICK -> clicks.add(key(distance, i));
+				case CLICK, TOOL -> clicks.add(key(distance, i));
 				default -> {
 				}
 			}
 		});
+		if (!places.isEmpty()) observersLast();
+	}
+
+	/** Positions with something to do this tick, for {@link #observersLast}. */
+	private final LongOpenHashSet todo = new LongOpenHashSet();
+	/** Observers waiting for the block they watch, with the tick they began; past {@link #OBSERVER_WAIT} they go anyway. */
+	private final Long2IntOpenHashMap observerWaits = new Long2IntOpenHashMap();
+	private static final int OBSERVER_WAIT = 40;
+
+	/**
+	 * An observer waits for the block it watches to be done: placed first, it would see that block go in and pulse,
+	 * setting off whatever the schematic has it wired to before the rest is built.
+	 */
+	private void observersLast() {
+		todo.clear();
+		// Only what's about to be placed: not a block held up (no angle from here, nothing to place against).
+		for (int i = 0; i < work.size(); i++) if (workKind.getByte(i) != NOTHING && heldUntil.get(work.getLong(i)) <= tick) todo.add(work.getLong(i));
+		if (observerWaits.size() > 256) observerWaits.clear();
+		for (int k = places.size() - 1; k >= 0; k--) {
+			int i = index(places.getLong(k));
+			BlockState shaped = workTargets.get(i).orientedState();
+			if (shaped == null || !(shaped.getBlock() instanceof ObserverBlock)) continue;
+			if (!todo.contains(BlockPos.offset(work.getLong(i), shaped.getValue(ObserverBlock.FACING)))) continue;
+			if (!observerWaits.containsKey(work.getLong(i))) observerWaits.put(work.getLong(i), tick);
+			if (tick - observerWaits.get(work.getLong(i)) > OBSERVER_WAIT) continue;
+			places.removeLong(k);
+			workStatus.set(i, (byte) Status.WAITING.ordinal());
+			workKind.set(i, NOTHING);
+		}
 	}
 
 	/** Each item's {@link #handTier} this tick. */
@@ -339,7 +372,8 @@ final class BuildRun implements Build {
 		for (int k = 0; k < clicks.size() && actions < o.placesPerTick(); k++) {
 			int i = index(clicks.getLong(k));
 			sent = false;
-			set(i, click(at(i).immutable(), ((Target.Exact) workTargets.get(i)).state(), o));
+			BlockState want = ((Target.Exact) workTargets.get(i)).state();
+			set(i, workKind.getByte(i) == TOOL ? tool(at(i).immutable(), want, o) : click(at(i).immutable(), want, o));
 			if (sent) actions++;
 		}
 	}
@@ -369,6 +403,7 @@ final class BuildRun implements Build {
 		if (target instanceof Target.Exact exact) {
 			BlockState want = exact.state();
 			if (BlockRules.placedWithNeighbour(want)) return true;
+			if (o.useTools() && BlockRules.finishTool(current, want) != null) return false;
 			return BlockRules.matches(current, want, o.clickSettings());
 		}
 		return target.matches(mc.level, pos, current);
@@ -382,6 +417,11 @@ final class BuildRun implements Build {
 			// Comes with the block below or beside it; only something else in the way matters.
 			if (current.is(want.getBlock()) || current.canBeReplaced()) return Status.DONE;
 			return wrong(pos, current, false, o);
+		}
+		// Placed as its plain block (or lit, unlit, without its eye): finished with a tool or an item.
+		if (o.useTools() && BlockRules.finishTool(current, want) != null) {
+			if (!refusedUntil.isEmpty() && refusedUntil.containsKey(pos.asLong())) return Status.REFUSED;
+			return reachable(pos, o, TOOL);
 		}
 		if (BlockRules.matches(current, want, o.clickSettings())) return Status.DONE;
 		if (!refusedUntil.isEmpty() && refusedUntil.containsKey(pos.asLong())) return Status.REFUSED;
@@ -399,7 +439,8 @@ final class BuildRun implements Build {
 			return Status.PLACE;
 		}
 		if (!current.canBeReplaced()) return wrong(pos, current, false, o);
-		if (!BlockRules.placeable(want)) return Status.UNSUPPORTED;
+		if (!BlockRules.placeable(want) && !(o.useTools() && BlockRules.placedAs(want) instanceof BlockState base && BlockRules.placeable(base)))
+			return Status.UNSUPPORTED;
 		if (BlockRules.falls(mc.level, pos, want)) return Status.NO_SUPPORT;
 		return reachable(pos, o, PLACE);
 	}
@@ -483,14 +524,22 @@ final class BuildRun implements Build {
 		// A shaped block's click is worked out first, with its stack wherever it is: one that can't go from here yet
 		// (nothing to click, the wrong angle) neither brings its block into the hotbar nor holds up the one there.
 		Placement.Solution early = null;
+		Item item = null;
 		if (want != null && target instanceof Target.Exact exact) {
-			Item item = BlockRules.item(exact.state());
-			ItemStack stack = materials.stackOf(item);
+			item = BlockRules.item(exact.state());
+			// No item of its own (a potted plant): an empty slot would "match" air.
+			ItemStack stack = item == Items.AIR ? null : materials.stackOf(item);
+			// Its own item missing (or none: farmland, a potted plant): the plain block, finished with a tool afterwards.
+			if (stack == null && o.useTools() && BlockRules.placedAs(exact.state()) instanceof BlockState base) {
+				want = base;
+				item = BlockRules.item(base);
+				stack = materials.stackOf(item);
+			}
 			if (stack == null) return Status.NO_ITEM;
 			early = manager.placement().solveWith(at, want, stack, o.placing());
 			if (!early.found()) return hold(at.immutable(), status(early.check()));
 		}
-		int slot = target instanceof Target.Exact exact ? materials.slotFor(BlockRules.item(exact.state())) : materials.slotFor(target);
+		int slot = item != null ? materials.slotFor(item) : materials.slotFor(target);
 		if (slot == -2) return Status.NO_ITEM;
 		if (slot == -3) return Status.NO_SLOT;
 		if (slot < 0 || !Myriad.placement().canPlaceWith(slot)) return Status.WAITING;
@@ -544,6 +593,42 @@ final class BuildRun implements Build {
 		if (!a.sent()) return status(a.check());
 		sent = true;
 		return Status.WAITING;
+	}
+
+	/**
+	 * Uses the tool or item that finishes the block at {@code pos} ({@link BlockRules#finishTool}): an axe on a log, a
+	 * hoe or shovel on dirt (from a side or the top, with air above it), the plant on a pot, flint and steel on a candle.
+	 */
+	private Status tool(BlockPos pos, BlockState want, Building.Options o) {
+		Status held = held(pos);
+		if (held != null) return held;
+		if (Myriad.placement().offHandSlot() >= 0) return Status.WAITING;
+		BlockState current = mc.level.getBlockState(pos);
+		Predicate<ItemStack> fits = BlockRules.finishTool(current, want);
+		if (fits == null) return Status.WAITING;
+		Block made = want.getBlock();
+		if ((made == Blocks.FARMLAND || made == Blocks.DIRT_PATH) && !mc.level.getBlockState(pos.above()).isAir()) return Status.BLOCKED;
+		Item tool = toolItem(fits);
+		if (tool == null) return Status.NO_ITEM;
+		int slot = materials.slotFor(tool);
+		if (slot == -2) return Status.NO_ITEM;
+		if (slot == -3) return Status.NO_SLOT;
+		if (slot < 0) return Status.WAITING;
+		// Any face but the bottom: a hoe and a shovel do nothing from below.
+		BlockHitResult hit = handHit(pos, o.placing().visibleFaces(), o.placing().range(), p -> p.y > pos.getY() + 1.0E-3);
+		if (hit == null) return Reach.canReach(pos, o.placing().range()) ? Status.NOT_VISIBLE : Status.OUT_OF_RANGE;
+		Placement.Attempt a = Myriad.placement().use(this, hit, slot, o.placing().withSneak(false));
+		if (!a.sent()) return status(a.check());
+		sent = true;
+		return Status.WAITING;
+	}
+
+	/** The item of a stack that {@code fits}, from the hotbar first, then the inventory; null if none. */
+	private @Nullable Item toolItem(Predicate<ItemStack> fits) {
+		var inv = mc.player.getInventory();
+		for (int i = 0; i < 9; i++) if (!inv.getItem(i).isEmpty() && fits.test(inv.getItem(i))) return inv.getItem(i).getItem();
+		for (int i = 9; i < 36; i++) if (!inv.getItem(i).isEmpty() && fits.test(inv.getItem(i))) return inv.getItem(i).getItem();
+		return null;
 	}
 
 	/**

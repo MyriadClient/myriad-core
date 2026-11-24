@@ -2,16 +2,23 @@ package dev.myriadclient.api.build;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.AbstractCandleBlock;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.DaylightDetectorBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.FlowerPotBlock;
 import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
@@ -22,12 +29,14 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.block.state.properties.SlabType;
+import org.jetbrains.annotations.ApiStatus;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 
 /**
  * What a block state is made of, for building it: which properties the placement itself decides (checked by
@@ -205,6 +214,77 @@ public final class BlockRules {
 	/** The item that places {@code target}: a torch for a wall torch, redstone for redstone wire, string for tripwire. */
 	public static Item item(BlockState target) {
 		return target.getBlock().asItem();
+	}
+
+	/** Stripped logs and wood by their plain block, read from the block ids ({@code stripped_oak_log} by {@code oak_log}). */
+	private static volatile @Nullable Map<Block, Block> unstripped;
+
+	private static @Nullable Block unstripped(Block stripped) {
+		Map<Block, Block> map = unstripped;
+		if (map == null) {
+			Map<Block, Block> built = new ConcurrentHashMap<>();
+			for (Block b : BuiltInRegistries.BLOCK) {
+				Identifier id = BuiltInRegistries.BLOCK.getKey(b);
+				if (!id.getPath().startsWith("stripped_")) continue;
+				BuiltInRegistries.BLOCK.getOptional(Identifier.fromNamespaceAndPath(id.getNamespace(), id.getPath().substring("stripped_".length())))
+					.ifPresent(plain -> built.put(b, plain));
+			}
+			unstripped = map = built;
+		}
+		return map.get(stripped);
+	}
+
+	/**
+	 * What to place for {@code target} when it's made from another block afterwards ({@link #finishTool}): the plain log
+	 * or wood (the same axis) for a stripped one, dirt for farmland or a path, an empty flower pot for a potted plant. Null
+	 * when the target is placed as itself. Farmland, paths and potted plants have no item of their own to place; a
+	 * stripped log does, and a build uses it when it's there.
+	 */
+	@ApiStatus.AvailableSince("2.5")
+	public static @Nullable BlockState placedAs(BlockState target) {
+		Block b = target.getBlock();
+		if (b == Blocks.FARMLAND || b == Blocks.DIRT_PATH) return Blocks.DIRT.defaultBlockState();
+		if (b instanceof FlowerPotBlock pot && pot.getPotted() != Blocks.AIR) return Blocks.FLOWER_POT.defaultBlockState();
+		Block plain = unstripped(b);
+		if (plain == null) return null;
+		BlockState state = plain.defaultBlockState();
+		return target.hasProperty(BlockStateProperties.AXIS) && state.hasProperty(BlockStateProperties.AXIS)
+			? state.setValue(BlockStateProperties.AXIS, target.getValue(BlockStateProperties.AXIS)) : state;
+	}
+
+	/**
+	 * The item that, used on {@code current}, makes it {@code target}, or null if none does: an axe strips a log, a hoe
+	 * tills dirt or grass into farmland, a shovel makes a path or puts a campfire out, the plant goes into an empty pot,
+	 * flint and steel (or a fire charge) lights candles, an eye of ender goes into an end portal frame. A hoe and a
+	 * shovel need air above the block, and are used on a side or the top.
+	 */
+	@ApiStatus.AvailableSince("2.5")
+	public static @Nullable Predicate<ItemStack> finishTool(BlockState current, BlockState target) {
+		Block want = target.getBlock(), have = current.getBlock();
+		if (want == Blocks.FARMLAND) return have == Blocks.DIRT || have == Blocks.GRASS_BLOCK || have == Blocks.DIRT_PATH ? s -> s.is(ItemTags.HOES) : null;
+		if (want == Blocks.DIRT_PATH) {
+			boolean paths = have == Blocks.DIRT || have == Blocks.GRASS_BLOCK || have == Blocks.PODZOL || have == Blocks.MYCELIUM
+				|| have == Blocks.COARSE_DIRT || have == Blocks.ROOTED_DIRT;
+			return paths ? s -> s.is(ItemTags.SHOVELS) : null;
+		}
+		if (want instanceof FlowerPotBlock pot && have == Blocks.FLOWER_POT && pot.getPotted() != Blocks.AIR) {
+			Item plant = pot.getPotted().asItem();
+			return s -> s.is(plant);
+		}
+		if (unstripped(want) == have) {
+			boolean sameAxis = !target.hasProperty(BlockStateProperties.AXIS) || !current.hasProperty(BlockStateProperties.AXIS)
+				|| target.getValue(BlockStateProperties.AXIS) == current.getValue(BlockStateProperties.AXIS);
+			return sameAxis ? s -> s.is(ItemTags.AXES) : null;
+		}
+		if (want != have) return null;
+		if (target.hasProperty(BlockStateProperties.LIT) && (want instanceof AbstractCandleBlock || want instanceof CampfireBlock)
+			&& target.getValue(BlockStateProperties.LIT) != current.getValue(BlockStateProperties.LIT) && count(current) == count(target)) {
+			if (want instanceof CampfireBlock) return target.getValue(BlockStateProperties.LIT) ? null : s -> s.is(ItemTags.SHOVELS);
+			return target.getValue(BlockStateProperties.LIT) ? s -> s.is(Items.FLINT_AND_STEEL) || s.is(Items.FIRE_CHARGE) : null;
+		}
+		if (want == Blocks.END_PORTAL_FRAME && target.getValue(BlockStateProperties.EYE) && !current.getValue(BlockStateProperties.EYE)
+			&& placedMatches(current, target)) return s -> s.is(Items.ENDER_EYE);
+		return null;
 	}
 
 	/** Whether {@code state} needs something solid under it to stay (sand, gravel, concrete powder, anvils) and has nothing. */
