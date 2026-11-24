@@ -9,8 +9,12 @@ import dev.myriadclient.api.player.Reach;
 import dev.myriadclient.api.service.Rotations;
 import dev.myriadclient.api.util.MathUtil;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.Direction;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -54,7 +58,10 @@ final class BreakAim {
 		Myriad.rotations().request(breaking, r[0], r[1], PlacementManager.REFINED_PRIORITY, PlacementManager.MOVE_FIX, null);
 	}
 
-	/** The point and face to break {@code j} at: the nearest visible point, else its centre. */
+	/**
+	 * The point and face to break {@code j} at: the nearest visible point, else the nearest on a face towards the eyes,
+	 * else its centre with the face the eyes are furthest past (a face pointing away is refused).
+	 */
 	void aim(BreakJob j) {
 		BlockHitResult hit = Reach.hitFor(j.pos, false, j.options.range());
 		if (hit != null) {
@@ -62,7 +69,32 @@ final class BreakAim {
 			j.aim = hit.getLocation();
 		} else {
 			j.aim = Vec3.atCenterOf(j.pos);
+			j.face = towardsEyes(j);
 		}
+	}
+
+	/** The face of {@code j}'s outline the eyes are furthest past; its current one with the eyes inside. */
+	private Direction towardsEyes(BreakJob j) {
+		VoxelShape shape = mc.level.getBlockState(j.pos).getShape(mc.level, j.pos);
+		AABB b = (shape.isEmpty() ? Shapes.block() : shape).bounds().move(j.pos);
+		Vec3 e = Reach.eyes();
+		Direction face = j.face;
+		double best = 0;
+		for (Direction d : Direction.values()) {
+			double past = switch (d) {
+				case UP -> e.y - b.maxY;
+				case DOWN -> b.minY - e.y;
+				case EAST -> e.x - b.maxX;
+				case WEST -> b.minX - e.x;
+				case SOUTH -> e.z - b.maxZ;
+				case NORTH -> b.minZ - e.z;
+			};
+			if (past > best) {
+				best = past;
+				face = d;
+			}
+		}
+		return face;
 	}
 
 	/** With rotate, only once the rotation just sent looks at the block; the face it lands on is the one used. */

@@ -86,6 +86,15 @@ public final class Reach {
 		return mc().player != null && new AABB(pos).distanceToSqr(eyes()) <= range * range;
 	}
 
+	/** The block's outline at {@code pos} in world space, a full block if it has none. */
+	private static List<AABB> outline(BlockPos pos) {
+		VoxelShape shape = mc().level.getBlockState(pos).getShape(mc().level, pos);
+		if (shape.isEmpty()) shape = Shapes.block();
+		List<AABB> out = new ArrayList<>();
+		for (AABB part : shape.toAabbs()) out.add(part.move(pos));
+		return out;
+	}
+
 	/** The point on {@code entity}'s box closest to the eyes, where a hit or rotation should aim. */
 	public static Vec3 aimPoint(Entity entity) {
 		return MathUtil.closestPoint(entity.getBoundingBox(), eyes());
@@ -100,15 +109,16 @@ public final class Reach {
 	 * A click on the block at {@code pos} for opening, breaking or using it: the nearest point within {@code range}
 	 * on the nearest face of its real outline (a slab's top is half way up), preferring faces you can see. Each face is
 	 * tried at its point nearest the eyes (so the whole reach counts), then at its centre in case something hides the
-	 * edge. With {@code mustSee}, only visible faces count (strict anti-cheats check this). Null if no face qualifies,
-	 * or outside a world.
+	 * edge. With {@code mustSee}, only visible faces count (strict anti-cheats check this); without it, a hidden face
+	 * still has to point towards the eyes, as servers that check clicks refuse one pointing away (any face does with the
+	 * eyes inside the outline, where none can). Null if no face qualifies, or outside a world.
 	 */
 	public static @Nullable BlockHitResult hitFor(BlockPos pos, boolean mustSee, double range) {
 		if (mc().level == null || mc().player == null) return null;
 		Vec3 eyes = eyes();
 		double r2 = range * range;
-		BlockHitResult best = null, bestHidden = null;
-		double bestDist = Double.MAX_VALUE, bestHiddenDist = Double.MAX_VALUE;
+		BlockHitResult best = null, bestHidden = null, bestAway = null;
+		double bestDist = Double.MAX_VALUE, bestHiddenDist = Double.MAX_VALUE, bestAwayDist = Double.MAX_VALUE;
 		for (Direction face : Direction.values()) {
 			for (Vec3 point : clickPoints(pos, face, false)) {
 				double d = eyes.distanceToSqr(point);
@@ -119,13 +129,25 @@ public final class Reach {
 						best = hit;
 						bestDist = d;
 					}
-				} else if (d < bestHiddenDist) {
-					bestHidden = hit;
-					bestHiddenDist = d;
+				} else if (exposed(hit, eyes)) {
+					if (d < bestHiddenDist) {
+						bestHidden = hit;
+						bestHiddenDist = d;
+					}
+				} else if (d < bestAwayDist) {
+					bestAway = hit;
+					bestAwayDist = d;
 				}
 			}
 		}
-		return best != null || mustSee ? best : bestHidden;
+		if (best != null || mustSee) return best;
+		if (bestHidden != null) return bestHidden;
+		return insideOutline(pos, eyes) ? bestAway : null;
+	}
+
+	private static boolean insideOutline(BlockPos pos, Vec3 point) {
+		for (AABB b : outline(pos)) if (b.contains(point)) return true;
+		return false;
 	}
 
 	/** How far a point is moved off the surface to check it's on the outside of the outline there. */
@@ -175,7 +197,15 @@ public final class Reach {
 	public static boolean canSee(BlockHitResult hit) {
 		if (mc().level == null || mc().player == null) return false;
 		Vec3 e = eyes(), p = hit.getLocation();
-		boolean exposed = switch (hit.getDirection()) {
+		if (!exposed(hit, e)) return false;
+		BlockHitResult ray = mc().level.clip(new ClipContext(e, p, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, mc().player));
+		return ray.getType() == HitResult.Type.MISS || ray.getBlockPos().equals(hit.getBlockPos()) && ray.getDirection() == hit.getDirection();
+	}
+
+	/** Whether the eyes at {@code e} are past the plane of {@code hit}'s face, so it points towards them. */
+	private static boolean exposed(BlockHitResult hit, Vec3 e) {
+		Vec3 p = hit.getLocation();
+		return switch (hit.getDirection()) {
 			case UP -> e.y > p.y;
 			case DOWN -> e.y < p.y;
 			case EAST -> e.x > p.x;
@@ -183,9 +213,6 @@ public final class Reach {
 			case SOUTH -> e.z > p.z;
 			case NORTH -> e.z < p.z;
 		};
-		if (!exposed) return false;
-		BlockHitResult ray = mc().level.clip(new ClipContext(e, p, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, mc().player));
-		return ray.getType() == HitResult.Type.MISS || ray.getBlockPos().equals(hit.getBlockPos()) && ray.getDirection() == hit.getDirection();
 	}
 
 	/** Adds {@code p} if it's on the outside of {@code shape}, facing {@code face}. */

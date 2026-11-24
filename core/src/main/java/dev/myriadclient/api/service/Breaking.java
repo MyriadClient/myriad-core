@@ -134,7 +134,8 @@ public interface Breaking {
 
 		/**
 		 * Maximum distance from the eyes to the nearest point of the block, as the server and Grim measure (see
-		 * {@link Reach#canReach(BlockPos, double)}).
+		 * {@link Reach#canReach(BlockPos, double)}). A block smaller than its space (a bud, a button) is only broken once
+		 * its own outline is that close, as a face of it pointing at the eyes has to be.
 		 */
 		public double range() {
 			return range;
