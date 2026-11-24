@@ -17,6 +17,15 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.5.2
+
+A patch: the API is unchanged. Both found on 2b2t and measured there.
+
+- **Recipe book placements aren't clicks.** 2b2t's click limit (the 80th within about 4 seconds drops you) doesn't
+  count them, so they no longer use up core's click budget. Paper still limits them apart, about 20 in a burst.
+- **On 2b2t**, a placement that needs a facing (stairs, logs) no longer sends the same look again after it: no click
+  there was applied late in two prints, and each change of facing took a tick less.
+
 ## 2.5.1
 
 A patch: the API is unchanged. Fewer workarounds on 2b2t, where its Grim doesn't need them, and no more slowing down
