@@ -102,7 +102,15 @@ final class ClickGate {
 	private boolean coreSafeToClick() {
 		// Only anti-cheats that refuse clicks while you move (Grim) need a still moment.
 		if (!Myriad.antiCheat().profile().clicksOnlyWhileStill()) return true;
-		return !rules().refusesKeys(sentInput) && (!sentSprinting || canBracket());
+		return !rules().refusesKeys(sentInput) && (!sentSprinting || !sprintRefuses() || canBracket());
+	}
+
+	/**
+	 * Whether sprinting gets a click refused on this server: everywhere Grim runs but 2b2t, whose Grim takes it (see
+	 * {@link ClickRules#ignoresSprint}). There the sprint bracket's two packets are left out of every click.
+	 */
+	private boolean sprintRefuses() {
+		return !ClickRules.ignoresSprint(Myriad.server().address());
 	}
 
 	/** What a click has to wait for, for the version this connection joined as and the server. */
@@ -146,7 +154,7 @@ final class ClickGate {
 		if (mc.player == null) return false;
 		if (!Myriad.antiCheat().profile().clicksOnlyWhileStill()) return true;
 		if (!rules().refusesKeys(sentInput)) {
-			if (!sentSprinting) return true;
+			if (!sentSprinting || !sprintRefuses()) return true;
 			if (canBracket()) return stopSprintForClicks();
 			return false;
 		}

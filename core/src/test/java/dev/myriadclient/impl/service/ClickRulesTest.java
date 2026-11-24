@@ -76,4 +76,13 @@ class ClickRulesTest {
 		assertTrue(ClickRules.ALL.refusesKeys(WALKING));
 		assertFalse(ClickRules.SPRINT.refusesKeys(WALKING));
 	}
+
+	@Test
+	void onlyTwoBTwoTTakesASprintingClick() {
+		assertTrue(ClickRules.ignoresSprint("2b2t.org"));
+		assertTrue(ClickRules.ignoresSprint("connect.2b2t.org:25565"));
+		assertFalse(ClickRules.ignoresSprint("localhost"));
+		assertFalse(ClickRules.ignoresSprint("play.example.net"));
+		assertFalse(ClickRules.ignoresSprint(null));
+	}
 }

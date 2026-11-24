@@ -39,6 +39,13 @@ public enum ClickRules {
 	 */
 	private static final Set<String> EXTRA_HOSTS = Set.copyOf(Arrays.asList(System.getProperty("myriad.noInputRuleHosts", "").toLowerCase(Locale.ROOT).split("\\s*,\\s*")));
 
+	/**
+	 * Hosts (with their subdomains) whose Grim takes a click while you sprint too: on 2b2t (live, 2026-11-24) 38 clicks
+	 * sent mid-sprint while printing all went through. There no sprint stop is sent for a click. Not the hosts from
+	 * {@code -Dmyriad.noInputRuleHosts}: the Grim test server, current Grim, still flags a sprinting click.
+	 */
+	static final Set<String> NO_SPRINT_RULE = Set.of(KnownServers.TWO_B2T);
+
 	/** Protocol numbers of the versions the rules change at. */
 	static final int V1_15 = 573, V1_21_2 = 768, V1_21_9 = 773;
 
@@ -60,6 +67,14 @@ public enum ClickRules {
 		ClickRules rules = forProtocol(protocol);
 		if (!rules.input || !ignoresInput(address)) return rules;
 		return rules.sneak ? SNEAK : SPRINT;
+	}
+
+	/** Whether the server ({@code address} as joined) takes a click while you sprint ({@link #NO_SPRINT_RULE}). */
+	public static boolean ignoresSprint(@Nullable String address) {
+		String host = ServerStats.hostOf(address);
+		if (host == null || host.isEmpty()) return false;
+		for (String h : NO_SPRINT_RULE) if (ServerStats.isHost(host, h)) return true;
+		return false;
 	}
 
 	static boolean ignoresInput(@Nullable String address) {

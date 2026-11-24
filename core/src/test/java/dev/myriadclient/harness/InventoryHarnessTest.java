@@ -1,6 +1,7 @@
 package dev.myriadclient.harness;
 
 import dev.myriadclient.api.Myriad;
+import dev.myriadclient.impl.network.JoinedVersion;
 import dev.myriadclient.api.service.AntiCheat;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -137,45 +138,70 @@ class InventoryHarnessTest {
 	}
 
 	/**
-	 * Sprinting and placing every tick (the Printer), a click from the inventory (its swap, or Replenish's top-up): the
-	 * sprint is stopped for the click and started again in the same tick, and you never slow to a walk. Held back as a
-	 * fresh start after a placement, it cost a tick or two at walking speed for every click.
+	 * Sprinting and placing every tick (the Printer), a click from the inventory (its swap, or Replenish's top-up), on a
+	 * Grim that refuses a sprinting click but not held keys (as a 1.21.1 client): the sprint is stopped for the click and
+	 * started again in the same tick, and you never slow to a walk. Held back as a fresh start after a placement, it cost
+	 * a tick or two at walking speed for every click.
 	 */
 	@Test
 	void aClickWhilePlacingKeepsTheSprint() {
 		try (Harness h = withItems()) {
-			for (int x = -1; x <= 1; x++) for (int z = -1; z <= 60; z++) h.level.set(new BlockPos(x, 0, z), Blocks.STONE.defaultBlockState());
-			Myriad.antiCheat().choose(AntiCheat.Profile.GRIM);
-			// On 2b2t, whose Grim doesn't count held keys against a click: only sprint is in the way, and the bracket gets past it.
-			Fields.set(h.player.connection, "serverData", new net.minecraft.client.multiplayer.ServerData("2b2t", "2b2t.org", net.minecraft.client.multiplayer.ServerData.Type.OTHER));
-			h.give(9, new ItemStack(Items.DIAMOND, 3)).keys("forward", "sprint").ticks(5);
-			assertTrue(h.player.isSprinting(), "not sprinting before the click");
-			BlockPos above = new BlockPos(1, 1, 0);
-			boolean[] moved = {false};
-			int[] clickTick = {-1}, walkedTicks = {0};
-			h.everyTick(() -> {
-				h.player.connection.send(new ServerboundUseItemOnPacket(InteractionHand.MAIN_HAND,
-					new BlockHitResult(Vec3.atCenterOf(above), Direction.UP, above, false), 1));
-				if (!moved[0] && h.currentTick() > 8 && Myriad.inventory().prepareClick()) {
-					moved[0] = Myriad.inventory().move(9, 8);
-					clickTick[0] = h.currentTick();
-				}
-			});
-			for (int t = 0; t < 12; t++) {
-				h.tick();
-				if (moved[0] && !h.player.isSprinting()) walkedTicks[0]++;
-			}
-			assertTrue(moved[0], "the click never went");
-			List<Integer> stops = new java.util.ArrayList<>(), starts = new java.util.ArrayList<>();
-			for (Harness.Sent sent : h.sent()) {
-				if (!(sent.packet() instanceof ServerboundPlayerCommandPacket p)) continue;
-				if (p.getAction() == ServerboundPlayerCommandPacket.Action.STOP_SPRINTING) stops.add(sent.tick());
-				if (p.getAction() == ServerboundPlayerCommandPacket.Action.START_SPRINTING) starts.add(sent.tick());
-			}
-			assertTrue(stops.contains(clickTick[0]), "no sprint stop with the click at tick " + clickTick[0] + ": stops " + stops);
-			assertTrue(starts.contains(clickTick[0]), "sprint not started again in the click's tick " + clickTick[0] + ": starts " + starts);
-			assertEquals(0, walkedTicks[0], "walked " + walkedTicks[0] + " ticks after the click");
+			Fields.set(JoinedVersion.get(), "resolvedFor", h.player.connection.getConnection());
+			Fields.set(JoinedVersion.get(), "protocol", 767);
+			h.onClose(() -> Fields.set(JoinedVersion.get(), "resolvedFor", null));
+			int[] click = sprintClickWhilePlacing(h);
+			assertTrue(click[1] == 1, "no sprint stop with the click: " + click[1]);
+			assertTrue(click[2] == 1, "sprint not started again in the click's tick: " + click[2]);
+			assertEquals(0, click[3], "walked " + click[3] + " ticks after the click");
 		}
+	}
+
+	/** The same on 2b2t, whose Grim takes a click while you sprint: no sprint stop at all, two packets fewer a click. */
+	@Test
+	void onTwoBTwoTAClickWhileSprintingSendsNoSprintPackets() {
+		try (Harness h = withItems()) {
+			Fields.set(h.player.connection, "serverData", new net.minecraft.client.multiplayer.ServerData("2b2t", "2b2t.org", net.minecraft.client.multiplayer.ServerData.Type.OTHER));
+			int[] click = sprintClickWhilePlacing(h);
+			assertEquals(0, click[1], "sprint stopped for the click on 2b2t");
+			assertEquals(0, click[2], "sprint started for the click on 2b2t");
+			assertEquals(0, click[3], "walked " + click[3] + " ticks after the click");
+		}
+	}
+
+	/**
+	 * Sprints along a floor placing every tick, then clicks once from the inventory. Returns the click's tick, the sprint
+	 * stops and starts sent in that tick, and the ticks after it spent not sprinting.
+	 */
+	private static int[] sprintClickWhilePlacing(Harness h) {
+		for (int x = -1; x <= 1; x++) for (int z = -1; z <= 60; z++) h.level.set(new BlockPos(x, 0, z), Blocks.STONE.defaultBlockState());
+		Myriad.antiCheat().choose(AntiCheat.Profile.GRIM);
+		h.give(9, new ItemStack(Items.DIAMOND, 3)).keys("forward", "sprint").ticks(5);
+		assertTrue(h.player.isSprinting(), "not sprinting before the click");
+		BlockPos above = new BlockPos(1, 1, 0);
+		boolean[] moved = {false};
+		h.everyTick(() -> {
+			h.player.connection.send(new ServerboundUseItemOnPacket(InteractionHand.MAIN_HAND,
+				new BlockHitResult(Vec3.atCenterOf(above), Direction.UP, above, false), 1));
+			if (!moved[0] && h.currentTick() > 8 && Myriad.inventory().prepareClick()) moved[0] = Myriad.inventory().move(9, 8);
+		});
+		int walked = 0;
+		for (int t = 0; t < 12; t++) {
+			h.tick();
+			if (moved[0] && !h.player.isSprinting()) walked++;
+		}
+		assertTrue(moved[0], "the click never went");
+		int clickTick = -1;
+		for (Harness.Sent sent : h.sent()) if (sent.packet() instanceof ServerboundContainerClickPacket) {
+			clickTick = sent.tick();
+			break;
+		}
+		int stops = 0, starts = 0;
+		for (Harness.Sent sent : h.sent()) {
+			if (sent.tick() != clickTick || !(sent.packet() instanceof ServerboundPlayerCommandPacket p)) continue;
+			if (p.getAction() == ServerboundPlayerCommandPacket.Action.STOP_SPRINTING) stops++;
+			if (p.getAction() == ServerboundPlayerCommandPacket.Action.START_SPRINTING) starts++;
+		}
+		return new int[] {clickTick, stops, starts, walked};
 	}
 
 	@Test
