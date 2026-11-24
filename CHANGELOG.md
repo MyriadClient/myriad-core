@@ -17,6 +17,18 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.5.1
+
+A patch: the API is unchanged. Fewer workarounds on 2b2t, where its Grim doesn't need them, and no more slowing down
+for clicks while sprinting.
+
+- **Sprinting through clicks.** A click while you sprint and place (the Printer pulling a block from the inventory,
+  Replenish topping up a stack) dropped you to a walk for a tick or two: the sprint stopped for the click was held back
+  as if newly started. It now carries on in the same tick.
+- **On 2b2t**, measured there: inventory clicks go while you sprint or sneak (no sprint stop and start around each,
+  two packets fewer a click), placements go without turning to the block or a face you can see (default builds there
+  aren't held to one placement a tick), and break packets go without a swing. Everywhere else, these stay as before.
+
 ## 2.5.0
 
 ### Building
