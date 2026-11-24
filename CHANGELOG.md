@@ -17,6 +17,29 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.4.1
+
+A patch: the API is unchanged. Breaking on 2b2t, tried in geodes and digging straight down there.
+
+### Breaking
+
+- **Small blocks are hit on a face that points at you.** A bud, a cluster or a button sits well inside its block
+  space, so it could count as in reach while no point on it was, and its break went out on the top face, which Grim
+  refuses from below; the module then tried it again every few ticks. A block is now in range by its own outline, a
+  hidden face is used only if it points at your eyes, and with none in reach the face towards you goes.
+- **Digging straight down keeps its pace.** Grim credits a break with the ground under you a movement packet later
+  than the server does, so a block started as you landed on it was finished too early for Grim, refused, and then
+  waited out about 2 seconds as if the server were finishing it. Breaks are now timed as Grim sees them, and a finish
+  the server sends the block back on is tried again as soon as Grim's timing allows.
+- **No small setbacks while digging down.** Grim takes a block away the moment a finish for it arrives, as a vanilla
+  client does, so standing on it till the server answered set you back a little. A block you stand on or against now
+  goes on your side as the packet does (a refused one comes back).
+- **Instant breaks in bulk aren't cancelled.** Grim counts every start soon after a finish against one allowance, so
+  a geode's worth of instant breaks straight after a timed one had most sent back. They go as far as the allowance
+  lasts, and the rest a moment later.
+- A start Grim refused, or a finish the server ignored, no longer leaves the module sending finishes alone for a start
+  the server never had: the next try starts again. An ignored finish is resent a few times at most.
+
 ## 2.4.0
 
 ### Anti-cheat
