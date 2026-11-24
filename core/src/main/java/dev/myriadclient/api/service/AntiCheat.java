@@ -106,12 +106,13 @@ public interface AntiCheat {
 		/**
 		 * 2b2t's Grim: Grim's answers, but it lets placements and item uses go without a swing, and a slot swapped in for
 		 * one go back in the same tick, so your hand never shows the item (checked against live captures: no setback,
-		 * nothing refused); and its break timing is fooled by a decoy start ({@link BreakTiming#DECOYABLE}). Picked for
-		 * 2b2t.org.
+		 * nothing refused); it takes a placement without the look on the block, on a face you can't see (since 2.5.1:
+		 * about a thousand placements without turning went in, 2026-11-24); and its break timing is fooled by a decoy
+		 * start ({@link BreakTiming#DECOYABLE}). Picked for 2b2t.org.
 		 */
 		@ApiStatus.AvailableSince("1.2")
 		public static final Profile GRIM_2B2T = GRIM.named("myriad:2b2t", "2b2t").withChecksSwings(false).withChecksPacketOrder(false)
-			.withBreakTiming(BreakTiming.DECOYABLE);
+			.withChecksLookOnActions(false).withVisibleFacesOnly(false).withBreakTiming(BreakTiming.DECOYABLE);
 		/**
 		 * NoCheatPlus (6b6t runs a fork of it). It checks the glide only against loose limits rather than simulating it,
 		 * which is what lets Elytra Fly's Control work there; everything else is treated as on a vanilla server. Picked
