@@ -81,16 +81,24 @@ final class GlideHolder {
 		return true;
 	}
 
-	/** Lets go: any held answers are sent, and nothing more is held for {@code owner}. */
+	/**
+	 * Lets go: any held answers are sent, and nothing more is held for {@code owner}. It keeps listening (it does nothing
+	 * unarmed but note what the server last said of your glide, see {@link #serverStopped}).
+	 */
 	public static void disarm(Object owner) {
 		GlideHolder h = INSTANCE;
 		if (h.owner != owner) return;
 		h.flush();
 		h.owner = null;
-		if (h.subscribed) {
-			Myriad.events().unsubscribe(h);
-			h.subscribed = false;
-		}
+	}
+
+	/**
+	 * Whether the server's last word on the local player's glide was that it stopped it, since a hold was first armed
+	 * (false before, or if it glides you). A stop held through, then let go, comes only once: a glide still going on the
+	 * client after it is one the server ended.
+	 */
+	static boolean serverStopped() {
+		return INSTANCE.ownGlide == 0;
 	}
 
 	/**

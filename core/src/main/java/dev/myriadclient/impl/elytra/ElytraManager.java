@@ -169,7 +169,13 @@ public final class ElytraManager implements Elytra {
 	 */
 	public static void landingTick(boolean onGround, boolean gliding) {
 		if (!gliding) landedInGlide = false;
-		else if (onGround && !holdsGlide() && !NoDurabilityEngine.swappingNow()) landedInGlide = true;
+		else if (onGround && !holdsGlide() && !NoDurabilityEngine.swappingNow()) {
+			landedInGlide = true;
+			// The server's stop came already (held through a swap, then let go) and won't come again: end it here, as
+			// its stop would, rather than glide along the ground.
+			var p = net.minecraft.client.Minecraft.getInstance().player;
+			if (p != null && GlideHolder.serverStopped()) p.stopFallFlying();
+		}
 	}
 
 	/** Whether the local player's glide has touched the ground, ended on the server: a rocket boosts nothing then. */

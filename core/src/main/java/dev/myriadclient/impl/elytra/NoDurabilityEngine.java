@@ -82,6 +82,12 @@ final class NoDurabilityEngine implements NoDurability {
 	private static final int CLEAR_TIMEOUT = 40;
 	/** Ticks of gliding with room below before the first swap. */
 	private static final int ARM_TICKS = 10;
+	/**
+	 * This many setbacks while swapping, each within {@link #SETBACK_WINDOW} ticks of the last, and the swapping stands
+	 * down for {@link #STAND_DOWN_TICKS} (or till you land): each setback lets the hold go, the start is made again at
+	 * once, and where something keeps Grim from taking the glide (pinned to a wall, say) that's set back again, without end.
+	 */
+	private static final int SETBACKS_TO_STAND_DOWN = 3, SETBACK_WINDOW = 40, STAND_DOWN_TICKS = 200;
 	/** Coming down more than this since you last rose, the server's count of your fall would hurt on landing. */
 	static final double SAFE_DESCENT = 3;
 	/**
@@ -130,6 +136,8 @@ final class NoDurabilityEngine implements NoDurability {
 	private volatile boolean setBack;
 	private boolean recovering, confirming;
 	private int lostStarts;
+	/** Setbacks in a row while swapping (each soon after the last), ticks since the last, and ticks left standing down. */
+	private int setbacksInARow, sinceSetback = Integer.MAX_VALUE, standDown, standDowns;
 
 	@Override
 	public void enable() {
@@ -217,6 +225,20 @@ final class NoDurabilityEngine implements NoDurability {
 		boolean wasSetBack = setBack;
 		setBack = false;
 		trackDescent(p);
+		if (sinceSetback < Integer.MAX_VALUE) sinceSetback++;
+		if (standDown > 0 && (--standDown == 0 || p.onGround() || p.isInWater())) standDown = 0;
+		if (wasSetBack && swapping) {
+			setbacksInARow = sinceSetback <= SETBACK_WINDOW ? setbacksInARow + 1 : 1;
+			sinceSetback = 0;
+			if (setbacksInARow >= SETBACKS_TO_STAND_DOWN) {
+				setbacksInARow = 0;
+				standDown = STAND_DOWN_TICKS;
+				standDowns++;
+				fly.info("Set back again and again: gliding on the elytra till you land");
+				finish(true);
+				return;
+			}
+		}
 		if (!fly.noDurability()) {
 			finish();
 			breaks.end();
@@ -272,8 +294,9 @@ final class NoDurabilityEngine implements NoDurability {
 	/** Not swapping yet: the first swap, once you've glided with room below for a while and everything it needs is there. */
 	private void arm(LocalPlayer p) {
 		// Not while you eat (or use anything held): a swap would stop it (see onUse).
+		// Nor while you push into a wall (no speed along it to glide with), nor for a while after it stood down.
 		boolean ready = p.isFallFlying() && ChestSwapper.elytraWorn() && !p.onGround() && !p.isInWater() && !p.isPassenger() && !p.isUsingItem()
-			&& !ElytraManager.pilotHoldsGlide() && room(true);
+			&& !p.horizontalCollision && standDown == 0 && !ElytraManager.pilotHoldsGlide() && room(true);
 		armTicks = ready ? armTicks + 1 : 0;
 		if (armTicks < ARM_TICKS) return;
 		if (!chestplateAtHand(true)) return;
