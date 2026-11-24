@@ -47,6 +47,11 @@ final class ClickGate {
 	private boolean sprintBlocked;
 	/** The player tick the last block placement went out in (see beforeTravel). */
 	private int placedAt = Integer.MIN_VALUE / 2;
+	/**
+	 * Sprint was stopped for a click this tick, to start again before the movement (see beforeTravel). A flag, not a
+	 * tick stamp: clicks go at the start of the game tick, before the player's own tick counts up.
+	 */
+	private boolean bracketed;
 
 	/** Lowest priority: what actually goes out, after other handlers have changed it. */
 	@Subscribe(priority = Priority.LOWEST, packets = {ServerboundPlayerInputPacket.class, ServerboundPlayerCommandPacket.class, ServerboundUseItemOnPacket.class})
@@ -127,6 +132,7 @@ final class ClickGate {
 	private boolean stopSprintForClicks() {
 		mc.getConnection().send(new ServerboundPlayerCommandPacket(mc.player, ServerboundPlayerCommandPacket.Action.STOP_SPRINTING));
 		((LocalPlayerAccessor) mc.player).myriad$setWasSprinting(false);
+		bracketed = true;
 		return !sentSprinting;
 	}
 
@@ -204,10 +210,14 @@ final class ClickGate {
 	 * A sprint start the server doesn't have yet waits a tick after a block placement, too: Grim predicts the movement
 	 * of a start sent just after a placement at walking speed, and on a diagonal (the movement fix turning forward into
 	 * forward and a strafe while the look is turned) sprinting goes 0.03 further, a Simulation flag that then decays.
-	 * Every such start flagged in the printer's sprinting and jumping passes, and none did once it waited the tick.
+	 * Every such start flagged in the printer's sprinting and jumping passes, and none did once it waited the tick. Not
+	 * a click's sprint bracket: the server had you sprinting till the stop a moment ago, and the start ends it in the same
+	 * tick; held back, you slowed to a walk for a tick or two each time a module clicked while you sprinted and placed.
 	 */
 	void beforeTravel() {
-		if (!sprintBlocked && !sentSprinting && mc.player.isSprinting() && recent(placedAt, 1)) sprintBlocked = true;
+		boolean bracket = bracketed;
+		bracketed = false;
+		if (!sprintBlocked && !sentSprinting && mc.player.isSprinting() && recent(placedAt, 1) && !bracket) sprintBlocked = true;
 		if (!sprintBlocked) return;
 		sprintBlocked = false;
 		if (mc.player.isSprinting()) {
