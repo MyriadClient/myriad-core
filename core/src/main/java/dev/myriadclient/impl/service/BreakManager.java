@@ -10,6 +10,7 @@ import dev.myriadclient.api.network.Packets;
 import dev.myriadclient.api.player.Interactions;
 import dev.myriadclient.api.player.Mining;
 import dev.myriadclient.api.player.Reach;
+import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Breaking;
 import dev.myriadclient.api.service.PacketLimits;
 import dev.myriadclient.api.util.Threads;
@@ -668,11 +669,12 @@ public final class BreakManager implements Breaking {
 
 	/**
 	 * Swings with a break packet, as vanilla does (Grim's NoSwingBreak, experimental, flags one without): shown if the
-	 * options want the hand to swing, otherwise only sent, unless a swing already went out this tick.
+	 * options want the hand to swing, otherwise only sent, unless a swing already went out this tick, or the server
+	 * doesn't check swings (2b2t, live 2026-11-24: breaks without one all went in).
 	 */
 	private void swing(BreakJob j) {
 		if (j.options.swing()) Interactions.swing(InteractionHand.MAIN_HAND);
-		else if (swungTick != tick && mc.getConnection() != null) mc.getConnection().send(ServerboundPunchPacket.INSTANCE);
+		else if (swungTick != tick && mc.getConnection() != null && AntiCheat.inEffect().checksSwings()) mc.getConnection().send(ServerboundPunchPacket.INSTANCE);
 	}
 
 	/** Vanilla's pause after a finish is over, in ticks and in real time. */

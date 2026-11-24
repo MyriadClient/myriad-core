@@ -104,7 +104,8 @@ public interface AntiCheat {
 		public static final Profile GRIM = new Profile(MyriadId.of("myriad", "grim"), "Grim", true, true, true, true, true, BreakTiming.CHECKED, 9,
 			true, true);
 		/**
-		 * 2b2t's Grim: Grim's answers, but it lets placements and item uses go without a swing, and a slot swapped in for
+		 * 2b2t's Grim: Grim's answers, but it lets placements, item uses and break packets go without a swing (breaks
+		 * since 2.5.1), and a slot swapped in for
 		 * one go back in the same tick, so your hand never shows the item (checked against live captures: no setback,
 		 * nothing refused); it takes a placement without the look on the block, on a face you can't see (since 2.5.1:
 		 * about a thousand placements without turning went in, 2026-11-24); and its break timing is fooled by a decoy
