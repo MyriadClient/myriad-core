@@ -72,6 +72,24 @@ final class GrimBreakTiming {
 		return gap >= GAP_MS || delayBalance + (FULL_GAP_MS - gap) <= DELAY_BUDGET;
 	}
 
+	/**
+	 * How many starts sent now, one after another, keep the start-too-soon balance under the margin: each is judged
+	 * against the last finish, so a burst of instant breaks just after a finish costs {@code 300 - gap} apiece (about
+	 * four of them), while one 275 ms or more after it costs nothing. At most {@code max}.
+	 */
+	int startsAllowed(long now, int max) {
+		long gap = now - lastFinishMs;
+		if (gap >= GAP_MS) return max;
+		double balance = delayBalance;
+		int n = 0;
+		while (n < max) {
+			balance = clamp(balance) + FULL_GAP_MS - gap;
+			if (balance > DELAY_BUDGET) break;
+			n++;
+		}
+		return n;
+	}
+
 	/** Whether a start sent straight after a finish (double break's next block) keeps that balance under the margin. */
 	boolean startOkRightAfterFinish() {
 		return delayBalance + FULL_GAP_MS <= DELAY_BUDGET;

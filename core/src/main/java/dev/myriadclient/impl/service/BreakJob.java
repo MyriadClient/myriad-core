@@ -32,9 +32,11 @@ final class BreakJob {
 	Phase phase = Phase.QUEUED;
 	Direction face = Direction.UP;
 	Vec3 aim;
-	int started, due, deadline, lastSent;
+	int started, due, deadline, lastSent, resends;
 	/** When the start went out, in wall-clock ms: Grim times breaks in real time. */
 	long startedMs;
+	/** When its last packet went out, in wall-clock ms. */
+	long sentMs;
 	float progress;
 	boolean acked, finishLater;
 

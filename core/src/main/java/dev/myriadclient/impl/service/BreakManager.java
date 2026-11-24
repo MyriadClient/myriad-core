@@ -21,6 +21,7 @@ import dev.myriadclient.impl.util.Clock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.protocol.game.ClientboundBlockUpdatePacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
@@ -29,11 +30,18 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Breaks blocks with its own action packets, mirroring how the server times a break:
@@ -73,6 +81,8 @@ public final class BreakManager implements Breaking {
 	private static final int FINISH_GAP = 6;
 	/** How long to wait for the server's word on a finished break, beyond when it's due. */
 	private static final int GRACE_TICKS = 40;
+	/** How often a finish the server ignored is sent again before waiting out the grace. */
+	private static final int MAX_RESENDS = 3;
 	/** Breaker ids for the crack overlay, apart from real entities (and the player's own mining). */
 	private static final int CRACK_PRIMARY = Integer.MIN_VALUE + 17, CRACK_DELAYED = Integer.MIN_VALUE + 18;
 
@@ -118,6 +128,21 @@ public final class BreakManager implements Breaking {
 	 * tick counts alone aren't enough: a client that falls behind runs several ticks back to back.
 	 */
 	private long lastStopMs;
+	/**
+	 * The on-ground flag of the last movement packet sent: what Grim credits a break with until it has handled the next
+	 * one (it samples before applying the packet it samples on, so landing counts a packet late there).
+	 */
+	private boolean grimOnGround = true;
+	/**
+	 * Blocks the server sent back as they were, with when (network thread): a finish it refused (Grim cancels and
+	 * resends the block), not one it's finishing by itself, which comes with no update.
+	 */
+	private final Map<BlockPos, PutBack> putBack = new ConcurrentHashMap<>();
+	/** Where a packet of ours awaits the server's answer: the only updates worth keeping in {@link #putBack}. */
+	private final Set<BlockPos> awaiting = ConcurrentHashMap.newKeySet();
+
+	private record PutBack(BlockState state, long ms) {
+	}
 
 	// ---- API ----------------------------------------------------------------------------------------------------
 
@@ -222,6 +247,9 @@ public final class BreakManager implements Breaking {
 		rebreakReady = false;
 		rebreakPos = serverDelayedPos = null;
 		grim.reset();
+		grimOnGround = true;
+		putBack.clear();
+		awaiting.clear();
 		tools.clear();
 	}
 
@@ -236,7 +264,10 @@ public final class BreakManager implements Breaking {
 		switch (e.packet()) {
 			case ServerboundPlayerActionPacket p when p.getAction() == Action.START_DESTROY_BLOCK -> grim.started(p.getPos(), grimDamage(p.getPos()), now);
 			case ServerboundPlayerActionPacket p when p.getAction() == Action.STOP_DESTROY_BLOCK -> grim.finished(now);
-			case ServerboundMovePlayerPacket m -> sampleGrim();
+			case ServerboundMovePlayerPacket m -> {
+				sampleGrim();
+				grimOnGround = m.isOnGround();
+			}
 			case ServerboundPunchPacket s -> {
 				swungTick = tick;
 				sampleGrim();
@@ -251,11 +282,29 @@ public final class BreakManager implements Breaking {
 		if (target != null) grim.sampled(grimDamage(target));
 	}
 
-	/** The progress per tick Grim credits for {@code pos} now: with what the server holds, at the Efficiency it has had. */
+	/**
+	 * The progress per tick Grim credits for {@code pos} now: with what the server holds, at the Efficiency it has had,
+	 * on the ground or not as the last movement packet said (mining off the ground is 5 times slower).
+	 */
 	private double grimDamage(BlockPos pos) {
 		BlockState state = mc.level.getBlockState(pos);
 		if (state.isAir()) return Double.POSITIVE_INFINITY;
-		return tools.rate(state, pos, Myriad.inventory().serverSlot());
+		double rate = tools.rate(state, pos, Myriad.inventory().serverSlot());
+		if (mc.player.onGround() != grimOnGround) rate = grimOnGround ? rate * 5 : rate / 5;
+		return rate;
+	}
+
+	@Subscribe(packets = ClientboundBlockUpdatePacket.class)
+	private void onBlockUpdate(PacketEvent.Receive e) {
+		ClientboundBlockUpdatePacket p = (ClientboundBlockUpdatePacket) e.packet();
+		if (p.getBlockState().isAir() || !awaiting.contains(p.getPos())) return;
+		putBack.put(p.getPos(), new PutBack(p.getBlockState(), Clock.millis()));
+	}
+
+	/** Whether the server sent {@code j}'s block back since its last packet went out: refused. */
+	private boolean refused(BreakJob j) {
+		PutBack b = putBack.remove(j.pos);
+		return b != null && b.ms >= j.sentMs && b.state.is(j.block);
 	}
 
 	private void step() {
@@ -300,10 +349,13 @@ public final class BreakManager implements Breaking {
 					if (!j.acked) continue;
 					if (gone) finish(j, true);
 					else if (tick > j.deadline) finish(j, false);
-					else if (j.fast() && j.pos.equals(rebreakPos) && rebreakReady && !j.pos.equals(serverDelayedPos) && tick - j.lastSent >= 2 && budget(1) && grimLets(j)) {
+					else if (j.fast() && j.resends < MAX_RESENDS && j.pos.equals(rebreakPos) && rebreakReady && !j.pos.equals(serverDelayedPos) && tick - j.lastSent >= 2 && budget(1) && grimLets(j)) {
 						// The finish arrived early while the server was already finishing another block by itself, so
-						// it was ignored; the server still remembers this start, so finishing again soon works.
+						// it was ignored; the server still remembers this start, so finishing again soon works. Only
+						// a few times: past them it was refused, not ignored, and the job waits out its grace.
 						j.lastSent = tick;
+						j.resends++;
+						aim.aim(j);
 						tools.withTool(tools.slotFor(j.options, state, j.pos), () -> Packets.sendSequenced(j.pos,
 							seq -> new ServerboundPlayerActionPacket(Action.STOP_DESTROY_BLOCK, j.pos, j.face, seq)));
 						swing(j);
@@ -331,6 +383,9 @@ public final class BreakManager implements Breaking {
 		List<BreakJob> instant = new ArrayList<>();
 		List<Integer> slots = new ArrayList<>();
 		boolean vanillaUsed = false;
+		// Grim judges each start against the last finish, so a burst right after one adds up: only as many as its
+		// allowance covers go now, the rest a moment later.
+		int grimStarts = grim.startsAllowed(Clock.millis(), jobs.size());
 		for (BreakJob j : jobs) {
 			if (j.phase != BreakJob.Phase.QUEUED) continue;
 			BlockState state = mc.level.getBlockState(j.pos);
@@ -340,10 +395,12 @@ public final class BreakManager implements Breaking {
 			if (!j.packet() && vanillaUsed) continue;
 			// Starting anything straight after a finish is too fast for vanilla, and for Grim.
 			if (!startAllowed(j)) continue;
+			if (j.grimTimed() && grimStarts <= 0) continue;
 			// Any start restarts the server's clock for the block being mined, so only more urgent blocks cut in.
 			if (primary != null && primary.phase == BreakJob.Phase.MINING && j.priority <= primary.priority) continue;
 			if (!aim.canAct(j) || !budget(instant.size() + 1)) continue;
 			if (!j.packet()) vanillaUsed = true;
+			if (j.grimTimed()) grimStarts--;
 			instant.add(j);
 			slots.add(slot);
 		}
@@ -405,7 +462,11 @@ public final class BreakManager implements Breaking {
 					primary = null;
 					mc.level.destroyBlockProgress(CRACK_PRIMARY, p.pos, -1);
 					becomeDelayed(p, rate);
-					Packets.sendSequenced(p.pos, seq -> new ServerboundPlayerActionPacket(Action.STOP_DESTROY_BLOCK, p.pos, p.face, seq));
+					boolean show = grimTakesAway(p);
+					Packets.sendSequenced(p.pos, seq -> {
+						if (show) mc.gameMode.destroyBlock(p.pos);
+						return new ServerboundPlayerActionPacket(Action.STOP_DESTROY_BLOCK, p.pos, p.face, seq);
+					});
 					swing(p);
 				}
 			}
@@ -462,8 +523,18 @@ public final class BreakManager implements Breaking {
 		BlockState state = mc.level.getBlockState(j.pos);
 		int slot = tools.slotFor(j.options, state, j.pos);
 		// Start with the tool in hand: Grim times the break from what you hold as it starts (and the best it sees after).
+		j.sentMs = Clock.millis();
+		putBack.remove(j.pos);
+		awaiting.add(j.pos);
 		tools.withTool(slot, () -> {
-			Packets.sendSequenced(j.pos, seq -> new ServerboundPlayerActionPacket(Action.START_DESTROY_BLOCK, j.pos, j.face, seq));
+			Packets.sendSequenced(j.pos, seq -> new ServerboundPlayerActionPacket(Action.START_DESTROY_BLOCK, j.pos, j.face, seq))
+				.thenAccept(answered -> {
+					// Refused (Grim cancels it and sends the block back): the server has no start here, so a finish alone
+					// would be ignored however long it waited. Forget it; asked again, it starts afresh.
+					if (j.phase != BreakJob.Phase.MINING || j.result.isDone() || !refused(j)) return;
+					forgetStart(j.pos);
+					finish(j, false);
+				});
 			swing(j);
 		});
 		j.phase = BreakJob.Phase.MINING;
@@ -513,12 +584,16 @@ public final class BreakManager implements Breaking {
 		j.finishLater = finishLater;
 		j.deadline = Integer.MAX_VALUE;
 		j.lastSent = tick;
+		j.sentMs = Clock.millis();
+		putBack.remove(j.pos);
+		awaiting.add(j.pos);
 		if (action == Action.STOP_DESTROY_BLOCK) {
 			lastStopMs = Clock.millis();
 			if (j.keepsGap()) finishCooldown = FINISH_GAP;
 		}
-		// Waiting for the server: the block stays on screen until its update says it's gone.
-		boolean show = predict && !(j.packet() && j.options.waitForServer());
+		// Waiting for the server: the block stays on screen until its update says it's gone. Not one you stand on or
+		// against where Grim times breaks: it takes the block away the moment the packet arrives, as a vanilla client does.
+		boolean show = predict && (!(j.packet() && j.options.waitForServer()) || grimTakesAway(j));
 		CompletableFuture<BlockState> ack = Packets.sendSequenced(j.pos, seq -> {
 			if (show) mc.gameMode.destroyBlock(j.pos);
 			return new ServerboundPlayerActionPacket(action, j.pos, j.face, seq);
@@ -530,6 +605,9 @@ public final class BreakManager implements Breaking {
 				finish(j, false);
 			} else if (!state.is(j.block)) {
 				finish(j, true);
+			} else if (refused(j)) {
+				// Refused (Grim's timing): the server still has the start, so asked again it's finished once that allows.
+				finish(j, false);
 			} else if (finishLater && serverDelayedPos == null && delayed == null) {
 				// Finished a little early (the server lagged): it keeps mining this one by itself.
 				BlockState now = mc.level.getBlockState(j.pos);
@@ -539,9 +617,19 @@ public final class BreakManager implements Breaking {
 				j.acked = true;
 				j.deadline = tick + GRACE_TICKS;
 			} else {
+				// Not broken and nothing sent back: a finish alone the server ignored, so it has no start here (its
+				// start was refused, or it was told to start another since). The next try starts afresh.
+				if (action == Action.STOP_DESTROY_BLOCK) forgetStart(j.pos);
 				finish(j, false);
 			}
 		});
+	}
+
+	/** The server isn't remembering a start at {@code pos} after all: no rebreak there. */
+	private void forgetStart(BlockPos pos) {
+		if (!pos.equals(rebreakPos)) return;
+		rebreakPos = null;
+		rebreakReady = false;
 	}
 
 	private void finish(BreakJob j, boolean broken) {
@@ -558,6 +646,10 @@ public final class BreakManager implements Breaking {
 			delayed = null;
 		}
 		jobs.remove(j);
+		if (find(j.pos) == null) {
+			awaiting.remove(j.pos);
+			putBack.remove(j.pos);
+		}
 		j.result.complete(broken);
 	}
 
@@ -599,9 +691,27 @@ public final class BreakManager implements Breaking {
 		return Myriad.limits().canSend(PacketLimits.Kind.BLOCK_ACTION, packets);
 	}
 
-	/** Measured to the nearest point of the block, as the server and Grim do. */
+	/**
+	 * Measured to the block's real outline: a bud's or a button's can be out of reach while its block space isn't, and
+	 * then the only faces left point away, which Grim refuses.
+	 */
 	private boolean inRange(BlockPos pos, Options o) {
-		return Reach.canReach(pos, o.range());
+		VoxelShape shape = mc.level.getBlockState(pos).getShape(mc.level, pos);
+		if (shape.isEmpty()) shape = Shapes.block();
+		Vec3 eyes = Reach.eyes();
+		double r2 = o.range() * o.range();
+		for (AABB part : shape.toAabbs()) if (part.move(pos).distanceToSqr(eyes) <= r2) return true;
+		return false;
+	}
+
+	/**
+	 * Whether {@code j}'s block is one you stand on or against, where Grim times breaks. Grim takes a block away as soon
+	 * as a finish for it arrives (or a start that breaks it at once), as a vanilla client predicts, and puts the server's
+	 * back with the acknowledgement. Kept on screen till then, you'd stand on a block it thinks is gone, and it sets you
+	 * back as it falls you. So these go at once here too; a refused one comes back with the acknowledgement.
+	 */
+	private boolean grimTakesAway(BreakJob j) {
+		return j.grimTimed() && mc.player.getBoundingBox().inflate(0.3, 0, 0.3).expandTowards(0, -0.6, 0).intersects(new AABB(j.pos));
 	}
 
 	private static boolean nothingThere(BlockState state) {
