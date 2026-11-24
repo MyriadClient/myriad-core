@@ -59,8 +59,9 @@ class ClickRulesTest {
 
 	@Test
 	void twoBeeTwoTeeDoesNotJudgeTheKeys() {
-		assertEquals(ClickRules.SNEAK, ClickRules.forServer(776, "2b2t.org"));
-		assertEquals(ClickRules.SNEAK, ClickRules.forServer(776, "connect.2B2T.org:25565"));
+		// Nor sneaking (live, 2026-11-24): there only sprint is left, and that's taken too (ignoresSprint).
+		assertEquals(ClickRules.SPRINT, ClickRules.forServer(776, "2b2t.org"));
+		assertEquals(ClickRules.SPRINT, ClickRules.forServer(776, "connect.2B2T.org:25565"));
 		assertEquals(ClickRules.SPRINT, ClickRules.forServer(769, "2b2t.org"), "1.21.4 there: sprint alone");
 		assertEquals(ClickRules.SPRINT, ClickRules.forServer(765, "2b2t.org"));
 		assertEquals(ClickRules.ALL, ClickRules.forServer(776, "not2b2t.org"));

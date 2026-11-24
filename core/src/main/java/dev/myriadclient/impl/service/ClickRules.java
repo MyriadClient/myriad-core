@@ -64,6 +64,8 @@ public enum ClickRules {
 
 	/** {@link #forProtocol}, without the keys on a server known not to judge them ({@code address} as joined, port and all). */
 	public static ClickRules forServer(int protocol, @Nullable String address) {
+		// 2b2t: sneaking, like the keys and sprint, doesn't get a click refused there (live, 2026-11-24).
+		if (ignoresSprint(address)) return SPRINT;
 		ClickRules rules = forProtocol(protocol);
 		if (!rules.input || !ignoresInput(address)) return rules;
 		return rules.sneak ? SNEAK : SPRINT;
