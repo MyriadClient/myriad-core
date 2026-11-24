@@ -17,6 +17,34 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.5.0
+
+### Building
+
+- **Blocks finished with a tool.** With `Building.Options.withUseTools`, a block with no item of its own (farmland, a
+  path, a potted plant), or one you don't carry, is placed as its plain block and finished: a stripped log from a log
+  and an axe, farmland and a dirt path from dirt and a hoe or shovel, a potted plant from a pot and the plant. Candles
+  are lit with flint and steel, campfires put out with a shovel, and end portal frames get their eyes. Off by default.
+- **Observers go in last.** An observer waits for the block it watches (up to two seconds, and only for one that's
+  being placed), so it doesn't pulse while the rest goes in.
+
+### Elytra
+
+- **No more runs of setbacks with No Durability.** Pinned against a wall, each setback let the glide hold go, the
+  glide was started again at once, and that was set back too, every few ticks (186 in a row on 2b2t). Three setbacks
+  close together now stand the swapping down till you land or for ten seconds, gliding on the elytra meanwhile, and no
+  swapping starts while you push into a wall.
+- A glide that lands after the server's stop was already held through ends there, rather than gliding on along the
+  ground and into water.
+
+### API
+
+- `Reach.canReachOutline`: whether a block can be hit by its real outline (a bud or button is much smaller than its
+  block space).
+- `BlockRules.placedAs` and `BlockRules.finishTool`: what a block is placed as when it's made from another, and the
+  item that finishes it.
+- `Building.Options.withUseTools` / `useTools`.
+
 ## 2.4.1
 
 A patch: the API is unchanged. Breaking on 2b2t, tried in geodes and digging straight down there.
