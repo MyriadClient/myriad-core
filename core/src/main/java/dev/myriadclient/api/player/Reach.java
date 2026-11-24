@@ -12,6 +12,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import org.jetbrains.annotations.ApiStatus;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -84,6 +85,21 @@ public final class Reach {
 	/** {@link #canReach(BlockPos)} with a reach of {@code range}. */
 	public static boolean canReach(BlockPos pos, double range) {
 		return mc().player != null && new AABB(pos).distanceToSqr(eyes()) <= range * range;
+	}
+
+	/**
+	 * Whether the block at {@code pos} can be hit within {@code range}, measured to its real outline: a bud, a button or
+	 * a torch is much smaller than its block space, so it can be out of reach while {@link #canReach(BlockPos, double)}
+	 * says yes, and then only faces pointing away are left, which servers that check clicks refuse. No rays: cheap
+	 * enough to ask every tick.
+	 */
+	@ApiStatus.AvailableSince("2.5")
+	public static boolean canReachOutline(BlockPos pos, double range) {
+		if (mc().level == null || mc().player == null) return false;
+		Vec3 e = eyes();
+		double r2 = range * range;
+		for (AABB b : outline(pos)) if (b.distanceToSqr(e) <= r2) return true;
+		return false;
 	}
 
 	/** The block's outline at {@code pos} in world space, a full block if it has none. */

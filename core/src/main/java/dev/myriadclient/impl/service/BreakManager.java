@@ -31,9 +31,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.Shapes;
-import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -696,12 +693,7 @@ public final class BreakManager implements Breaking {
 	 * then the only faces left point away, which Grim refuses.
 	 */
 	private boolean inRange(BlockPos pos, Options o) {
-		VoxelShape shape = mc.level.getBlockState(pos).getShape(mc.level, pos);
-		if (shape.isEmpty()) shape = Shapes.block();
-		Vec3 eyes = Reach.eyes();
-		double r2 = o.range() * o.range();
-		for (AABB part : shape.toAabbs()) if (part.move(pos).distanceToSqr(eyes) <= r2) return true;
-		return false;
+		return Reach.canReachOutline(pos, o.range());
 	}
 
 	/**
