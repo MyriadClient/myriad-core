@@ -6,7 +6,9 @@ import dev.myriadclient.api.event.Subscribe;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.service.Placement.Click;
 import dev.myriadclient.api.service.Rotations;
+import dev.myriadclient.api.service.ServerStats;
 import dev.myriadclient.impl.network.ActionTiming;
+import dev.myriadclient.impl.network.KnownServers;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.common.ServerboundPongPacket;
 import net.minecraft.network.protocol.game.ServerboundMovePlayerPacket;
@@ -77,6 +79,12 @@ final class FollowLook {
 
 	/** After solved click {@code c} went out with the look it was solved with: the look for the next movement packet. */
 	void after(Click c, float sendYaw, float sendPitch, CompletableFuture<Boolean> result) {
+		// Not on 2b2t: no click there was applied a packet late in two prints (83 stairs, every facing right), and the
+		// repeated look cost each change of facing a second tick.
+		if (!c.aimed() && onTwoBTwoT()) {
+			rotationPlaceBuffer = Math.max(0, rotationPlaceBuffer - 0.1);
+			return;
+		}
 		ThreadLocalRandom r = ThreadLocalRandom.current();
 		followAimed = c.aimed();
 		followYaw = c.aimed() ? c.aimYaw() + (float) r.nextDouble(-LOOK_JITTER, LOOK_JITTER) : sendYaw;
@@ -104,6 +112,11 @@ final class FollowLook {
 		Packet<?> p = e.packet();
 		if (p instanceof ServerboundMovePlayerPacket) aimedInFlight = false;
 		else if (p instanceof ServerboundPongPacket || p instanceof ServerboundSetCarriedItemPacket && !ActionTiming.get().isLate()) rotationPlaceBuffer = 1;
+	}
+
+	private static boolean onTwoBTwoT() {
+		String host = ServerStats.hostOf(Myriad.server().address());
+		return host != null && ServerStats.isHost(host, KnownServers.TWO_B2T);
 	}
 
 	void clear() {
