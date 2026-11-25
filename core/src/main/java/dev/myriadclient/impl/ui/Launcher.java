@@ -18,6 +18,7 @@ import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.api.util.FuzzyMatch;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.macro.MacroManager;
+import dev.myriadclient.impl.render.UiRenderer;
 import dev.myriadclient.impl.service.JobText;
 import dev.myriadclient.impl.ui.panels.AddonNames;
 import dev.myriadclient.impl.ui.panels.CorePanels;
@@ -123,7 +124,7 @@ final class Launcher {
 			for (Tag tag : m.tags()) t.addAll(tags(tag.name(), tag.id().path()));
 			if (m.hasTag(MacroManager.TAG)) t.add("macro");
 			list.add(new Entry(m.isEnabled() ? "" : "", m.name(), m.group().name() + " · " + (m.isEnabled() ? "on" : "off"),
-				m::toggle, () -> CorePanels.openModuleSettings(m, false), Kind.MODULE, true, m.id().namespace(), t));
+				m::toggle, () -> CorePanels.openModuleSettings(m, true), Kind.MODULE, true, m.id().namespace(), t));
 		}
 		for (ControlPanel c : Myriad.controls().all()) {
 			list.add(new Entry(c.icon(), "Control: " + c.name(), c.modules().size() + " modules · " + (c.isActive() ? "on" : "off"),
@@ -272,7 +273,7 @@ final class Launcher {
 		float r = theme.rounding.get();
 		if (theme.shadow.get()) c.shadow(x, y, WIDTH, h, r, theme.shadowRange.get(), theme.shadowColor.argb());
 		c.backdrop(x, y, WIDTH, h, r, 1);
-		c.roundRect(x, y, WIDTH, h, r, theme.windowBackground.argb());
+		UiRenderer.surface(c, x, y, WIDTH, h, r, theme.windowBackground.argb());
 		c.gradientOutline(x, y, WIDTH, h, r, Math.max(1, theme.borderSize.get()), theme.activeBorderFrom.argb(), theme.activeBorderTo.argb(), theme.borderAngle.get().floatValue());
 
 		float size = c.defaultFontSize() * 1.1f;
