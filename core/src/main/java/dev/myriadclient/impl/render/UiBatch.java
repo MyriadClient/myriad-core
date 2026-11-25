@@ -11,6 +11,8 @@ import net.minecraft.client.renderer.state.gui.GuiElementRenderState;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.system.MemoryUtil;
 
+import java.util.List;
+
 /**
  * A run of UI quads recorded by {@link UiRenderer}, handed to vanilla's GUI renderer as one element so it is drawn in
  * order with vanilla's own items and text (the GUI layers elements by where they overlap).
@@ -28,8 +30,17 @@ final class UiBatch implements GuiElementRenderState {
 	private final int vertices;
 	private final TextureSetup textures;
 	private final ScreenRectangle bounds;
+	private final RenderPipeline pipeline;
+	/** Its frosted backgrounds (GUI coordinates), which blur what's drawn under them; null when it has none. */
+	final @Nullable List<ScreenRectangle> backdrops;
+	/** Its bounds without its shadows (GUI coordinates), null if it's only shadows. */
+	final @Nullable ScreenRectangle solid;
 
-	UiBatch(float[] data, int vertices, TextureSetup textures, ScreenRectangle bounds) {
+	UiBatch(float[] data, int vertices, TextureSetup textures, ScreenRectangle bounds, RenderPipeline pipeline, @Nullable List<ScreenRectangle> backdrops,
+		@Nullable ScreenRectangle solid) {
+		this.pipeline = pipeline;
+		this.backdrops = backdrops;
+		this.solid = solid;
 		this.data = data;
 		this.vertices = vertices;
 		this.textures = textures;
@@ -49,7 +60,7 @@ final class UiBatch implements GuiElementRenderState {
 
 	@Override
 	public RenderPipeline pipeline() {
-		return MyriadPipelines.UI;
+		return pipeline;
 	}
 
 	@Override

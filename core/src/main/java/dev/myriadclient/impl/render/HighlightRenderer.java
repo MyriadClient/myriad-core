@@ -129,6 +129,8 @@ public final class HighlightRenderer {
 	/** Resources reloaded: shaders may have changed. */
 	public void resourcesReloaded() {
 		HighlightPasses.fillsReloaded();
+		UiRenderer r = UiRenderer.peek();
+		if (r != null) r.effectsReloaded();
 	}
 
 	/** Advances every time the level is extracted; styles built from settings are cached per frame. */

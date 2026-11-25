@@ -182,6 +182,8 @@ public final class ThemedMenus {
 			case "inworld_menu_background.png" -> !whole ? c -> c.rect(x, y, w, h, ColorUtil.withAlpha(theme().windowBackground.argb(), 0xC8))
 				: screen instanceof PauseScreen ? c -> {
 					c.backdrop(x, y, w, h, 0, 1);
+					// The menus keep their motes, not the windows' background effect.
+					c.plainOverBackdrop();
 					c.rect(x, y, w, h, theme().windowBackground.argb());
 					// Motes and you here too, for fun; not what its buttons blur, the world is.
 					newFrame();
@@ -272,6 +274,8 @@ public final class ThemedMenus {
 		if (MenuScene.frosted()) {
 			c.setBlur(t.blur.get(), t.blurPasses.get(), t.blurSize.get().floatValue());
 			c.backdrop(x, y, w, h, r, 1);
+			// A button, not a window: no background effect in it.
+			c.plainOverBackdrop();
 		}
 		c.roundRect(x, y, w, h, r, off ? ColorUtil.withAlpha(t.surface.argb(), 0x50) : hover ? t.surfaceHover.argb() : t.surface.argb());
 		c.outline(x, y, w, h, r, 1, hover ? t.accent.argb() : ColorUtil.withAlpha(t.inactiveBorder.argb(), 0x90));

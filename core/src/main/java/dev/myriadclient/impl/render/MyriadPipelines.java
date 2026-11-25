@@ -215,6 +215,44 @@ public final class MyriadPipelines {
 	}
 
 	/**
+	 * A background effect's pipeline (BackdropEffect): the UI's own (its quads and blending), with the effect's fragment
+	 * shader, which includes myriad:effect.glsl.
+	 */
+	public static RenderPipeline uiEffect(int number, Identifier shader) {
+		return RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
+			.withLocation(id("pipeline/ui_effect_" + number))
+			.withVertexShader(id("core/ui"))
+			.withFragmentShader(shader)
+			.withBindGroupLayout(BindGroupLayouts.SAMPLER0_SAMPLER1)
+			.withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT_PREMULTIPLIED_ALPHA))
+			.withVertexBinding(0, UI_FORMAT)
+			.withPrimitiveTopology(PrimitiveTopology.QUADS)
+			.withCull(false)
+			.build();
+	}
+
+	private static final BindGroupLayout EFFECT_FULL_LAYOUT = BindGroupLayout.builder()
+		.withUniform("Sampler0", UniformType.COMBINED_IMAGE_SAMPLER)
+		.withUniform("Sampler1", UniformType.COMBINED_IMAGE_SAMPLER)
+		.withUniform("FxInfo", UniformType.UNIFORM_BUFFER)
+		.build();
+
+	/**
+	 * A background effect over the whole screen as one background (a full-screen triangle, no blending), drawn once a
+	 * frame to be blurred for frosted widgets (see UiRenderer); not registered, like {@link #uiEffect}.
+	 */
+	public static RenderPipeline uiEffectFull(int number, Identifier shader) {
+		return RenderPipeline.builder(RenderPipelines.GLOBALS_SNIPPET)
+			.withLocation(id("pipeline/ui_effect_full_" + number))
+			.withVertexShader(id("core/effect_full"))
+			.withFragmentShader(shader)
+			.withBindGroupLayout(EFFECT_FULL_LAYOUT)
+			.withColorTargetState(new ColorTargetState(Optional.empty(), GpuFormat.RGBA8_UNORM, ColorTargetState.WRITE_ALL))
+			.withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
+			.build();
+	}
+
+	/**
 	 * An addon's fill: the composite pass with its fragment shader, for highlights whose fill is {@code shaderId}. Not
 	 * registered with the game's own pipelines, which must all compile for a resource reload to finish: a fill compiles
 	 * the first time it's drawn instead (see HighlightPasses), so a broken one turns itself off rather than the game.

@@ -1,5 +1,6 @@
 package dev.myriadclient.impl.ui;
 
+import dev.myriadclient.api.ui.BackdropEffect;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.ui.BarWidget;
 import dev.myriadclient.api.ui.Rect;
@@ -44,6 +45,9 @@ final class UiPainter {
 		r.setDefaults(theme.fontFamily(), theme.fontSize.get().floatValue());
 		// No world, nothing worth blurring: the UI's own background is drawn as part of the GUI.
 		r.setBlur(theme.blur.get() && mc.level != null, theme.blurPasses.get(), theme.blurSize.get().floatValue());
+		BackdropEffect effect = theme.backgroundEffect();
+		r.setEffect(effect, effect == null ? List.of() : theme.effectOptions(effect),
+			theme.accent.argb(), theme.secondary.argb(), theme.text.argb(), theme.windowBackground.argb(), theme.animations.get());
 	}
 
 	void renderUi(GuiGraphicsExtractor ctx, int guiMouseX, int guiMouseY) {
@@ -194,7 +198,7 @@ final class UiPainter {
 			if (theme.hudBackground.get()) {
 				float rad = theme.rounding.get();
 				c.backdrop(r.x() - 3, r.y() - 3, r.w() + 6, r.h() + 6, rad, 1);
-				c.roundRect(r.x() - 3, r.y() - 3, r.w() + 6, r.h() + 6, rad, theme.windowBackground.argb());
+				UiRenderer.surface(c, r.x() - 3, r.y() - 3, r.w() + 6, r.h() + 6, rad, theme.windowBackground.argb());
 			}
 			c.translate(r.x(), r.y());
 			w.panel.render(c, r.w(), r.h(), editing ? -1000 : wm.mouseX - r.x(), editing ? -1000 : wm.mouseY - r.y());
@@ -268,11 +272,14 @@ final class UiPainter {
 				c.scale(s);
 				c.translate(-r.centerX(), -r.centerY());
 			}
+			// A batch of its own from here: its shadow added to the last window's batch drew that one over this window's
+			// neighbours in the GUI's layering, and frosted backgrounds had to blur again more often (GuiRendererMixin).
+			c.flush();
 			if (theme.shadow.get() && !w.fullscreen) {
 				c.shadow(r.x(), r.y(), r.w(), r.h(), rad, theme.shadowRange.get(), theme.shadowColor.argb());
 			}
 			c.backdrop(r.x(), r.y(), r.w(), r.h(), rad, 1);
-			c.roundRect(r.x(), r.y(), r.w(), r.h(), rad, theme.windowBackground.argb());
+			UiRenderer.surface(c, r.x(), r.y(), r.w(), r.h(), rad, theme.windowBackground.argb());
 
 			Rect content = wm.contentRect(w, r);
 			if (theme.titleBars.get() && !w.titleless()) drawTitleBar(c, w, r, rad, focused, interactive);
@@ -501,7 +508,7 @@ final class UiPainter {
 		// The theme's window look, as the launcher has it: its backdrop, background, rounding (smaller, as it's small) and border.
 		float r = Math.min(theme.rounding.get(), 6);
 		c.backdrop(x, y, tw + 8, th, r, 1);
-		c.roundRect(x, y, tw + 8, th, r, ColorUtil.withAlpha(theme.windowBackground.argb(), Math.max(0xE0, ColorUtil.alpha(theme.windowBackground.argb()))));
+		UiRenderer.surface(c, x, y, tw + 8, th, r, ColorUtil.withAlpha(theme.windowBackground.argb(), Math.max(0xE0, ColorUtil.alpha(theme.windowBackground.argb()))));
 		c.gradientOutline(x, y, tw + 8, th, r, Math.max(1, theme.borderSize.get()), theme.activeBorderFrom.argb(), theme.activeBorderTo.argb(), theme.borderAngle.get().floatValue());
 		float ly = y + 3;
 		for (Object row : rows) {
@@ -601,7 +608,8 @@ final class UiPainter {
 		// Editing the HUD, what's placed behind the bar has to show.
 		boolean editing = wm.active == Ui.HUD_WORKSPACE;
 		if (!editing) c.backdrop(0, y, wm.screenW, h, 0, 1);
-		c.rect(0, y, wm.screenW, h, editing ? ColorUtil.withAlpha(theme.barBackground.argb(), EDITING_BAR_ALPHA) : theme.barBackground.argb());
+		// Plain, whatever the theme's background effect: its text has to read.
+		c.plainSurface(0, y, wm.screenW, h, editing ? ColorUtil.withAlpha(theme.barBackground.argb(), EDITING_BAR_ALPHA) : theme.barBackground.argb());
 		for (BarSlot s : barLayout(c)) {
 			int depth = c.depth();
 			try {

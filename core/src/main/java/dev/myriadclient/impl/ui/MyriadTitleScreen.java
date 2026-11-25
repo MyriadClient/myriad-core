@@ -224,6 +224,7 @@ public final class MyriadTitleScreen extends Screen {
 				// Frosted over the scene behind them.
 				if (withScene()) {
 					c.backdrop(bx, yy, BUTTON_W, BUTTON_H, r, 1);
+					c.plainOverBackdrop();
 					fill = ColorUtil.withAlpha(fill, theme.blur.get() ? 0x90 : 0xE0);
 				}
 				c.roundRect(bx, yy, BUTTON_W, BUTTON_H, r, fill);

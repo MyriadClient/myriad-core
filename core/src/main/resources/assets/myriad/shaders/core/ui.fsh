@@ -23,6 +23,7 @@ const int SHADOW = 2;
 const int GLYPH = 3;
 const int IMAGE = 4;
 const int BACKDROP = 5;
+const int FROST = 6;
 
 // Signed distance to a box with half-size b and per-corner radii r (tl, tr, br, bl); y grows downwards.
 float sdRoundBox(vec2 p, vec2 b, vec4 r) {
@@ -75,6 +76,18 @@ void main() {
         // The blur is premultiplied; where it's of a picture's see-through part, what's under the window shows.
         vec4 b = texture(Sampler1, vScreenUv);
         color = vec4(b.rgb / max(b.a, 0.0001), b.a * vColor1.a);
+    } else if (type == FROST) {
+        // The effect background under a widget, again, with its effect blurred: what's under the window (Sampler1, the
+        // blur its backdrop shows), then the background's colour (Color1, faded by Params.y) and the blurred effect
+        // (Sampler0) as the background puts them together. All premultiplied.
+        float d = sdRoundBox(p, halfSize, vRadii);
+        coverage = clamp(0.5 - d, 0.0, 1.0);
+        vec4 under = texture(Sampler1, vScreenUv);
+        vec4 fx = texture(Sampler0, vScreenUv);
+        vec4 base = vColor1;
+        vec4 bg = vec4(fx.rgb + base.rgb * base.a * (1.0 - fx.a), fx.a + base.a * (1.0 - fx.a)) * vParams.y;
+        vec4 o = bg + under * (1.0 - bg.a);
+        color = vec4(o.rgb / max(o.a, 0.0001), o.a);
     } else {
         float d = sdRoundBox(p, halfSize, vRadii);
         coverage = clamp(0.5 - d, 0.0, 1.0);

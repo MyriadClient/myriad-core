@@ -9,6 +9,7 @@ import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.util.ColorUtil;
+import dev.myriadclient.impl.render.UiRenderer;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -108,9 +109,11 @@ public final class NotificationManager implements Notifications {
 			c.alpha(t);
 			if (theme.shadow.get()) c.shadow(x, y, WIDTH, h, theme.rounding.get(), 10, ColorUtil.fade(theme.shadowColor.argb(), 0.7f));
 			c.backdrop(x, y, WIDTH, h, theme.rounding.get(), 1);
-			c.roundRect(x, y, WIDTH, h, theme.rounding.get(), theme.windowBackground.argb());
+			UiRenderer.surface(c, x, y, WIDTH, h, theme.rounding.get(), theme.windowBackground.argb());
+			// A window's look: the active border round it, the level shown by the icon's colour.
+			c.gradientOutline(x, y, WIDTH, h, theme.rounding.get(), Math.max(1, theme.borderSize.get()), theme.activeBorderFrom.argb(),
+				theme.activeBorderTo.argb(), theme.borderAngle.get().floatValue());
 			int accent = levelColor(e.level, theme);
-			c.roundRect(x, y, 2.5f, h, theme.rounding.get(), 0, 0, theme.rounding.get(), accent);
 			c.text(FontFamily.MONO, size, levelIcon(e.level), x + 7, y + 6, accent);
 			c.text(FontFamily.SANS_BOLD, size, e.title, x + 18, y + 6, theme.text.argb());
 			if (e.count > 1) {

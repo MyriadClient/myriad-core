@@ -31,6 +31,7 @@ public class SettingGroup {
 	private final String id;
 	private final List<Setting<?>> settings = new ArrayList<>();
 	private boolean expanded = true;
+	private java.util.function.Supplier<Boolean> visible = () -> true;
 
 	SettingGroup(Settings owner, String name) {
 		this.owner = owner;
@@ -50,6 +51,22 @@ public class SettingGroup {
 	/** {@link #name()} in snake_case: the key the group's settings are saved under. */
 	public String id() {
 		return id;
+	}
+
+	/**
+	 * Shows the whole group in the settings window only while {@code visible} says so (asked as it draws), on top of
+	 * each setting's own. Returns this group.
+	 */
+	@org.jetbrains.annotations.ApiStatus.AvailableSince("2.6")
+	public SettingGroup visibleWhen(java.util.function.Supplier<Boolean> visible) {
+		this.visible = visible;
+		return this;
+	}
+
+	/** Whether the settings window shows the group right now ({@link #visibleWhen}); a group with no settings shows nothing either way. */
+	@org.jetbrains.annotations.ApiStatus.AvailableSince("2.6")
+	public boolean isVisible() {
+		return visible.get();
 	}
 
 	/** The group's settings in the order they were added; unmodifiable, and follows later additions. */

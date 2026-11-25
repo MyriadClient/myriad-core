@@ -317,7 +317,7 @@ public final class ThemedScreens {
 			ThemeSettings t = theme();
 			float bx = x - 4 + dx, by = y - 4 + dy, bw = w + 8, bh = h + 8, r = Math.min(t.rounding.get(), 6);
 			c.backdrop(bx, by, bw, bh, r, 1);
-			c.roundRect(bx, by, bw, bh, r, ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xE0, ColorUtil.alpha(t.windowBackground.argb()))));
+			UiRenderer.surface(c, bx, by, bw, bh, r, ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xE0, ColorUtil.alpha(t.windowBackground.argb()))));
 			c.gradientOutline(bx, by, bw, bh, r, Math.max(1, t.borderSize.get()), t.activeBorderFrom.argb(), t.activeBorderTo.argb(), t.borderAngle.get().floatValue());
 		});
 		return true;
@@ -475,7 +475,7 @@ public final class ThemedScreens {
 			case "container/inventory/effect_background", "container/inventory/effect_background_ambient" -> posed(ctx, c -> {
 				ThemeSettings t = theme();
 				float r = Math.min(t.rounding.get(), 6);
-				c.roundRect(x, y, w, h, r, ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xE0, ColorUtil.alpha(t.windowBackground.argb()))));
+				UiRenderer.surface(c, x, y, w, h, r, ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xE0, ColorUtil.alpha(t.windowBackground.argb()))));
 				if (path.endsWith("ambient")) c.outline(x, y, w, h, r, 1, t.inactiveBorder.argb());
 				else c.gradientOutline(x, y, w, h, r, Math.max(1, t.borderSize.get()), t.activeBorderFrom.argb(), t.activeBorderTo.argb(), t.borderAngle.get().floatValue());
 			});
@@ -577,7 +577,7 @@ public final class ThemedScreens {
 		float r = Math.min(t.rounding.get(), h / 2), b = t.borderSize.get();
 		if (shadow && t.shadow.get()) c.shadow(x, y, w, h, r, t.shadowRange.get(), t.shadowColor.argb());
 		c.backdrop(x, y, w, h, r, 1);
-		c.roundRect(x, y, w, h, r, t.windowBackground.argb());
+		UiRenderer.surface(c, x, y, w, h, r, t.windowBackground.argb());
 		if (b > 0) c.gradientOutline(x, y, w, h, r, b, t.activeBorderFrom.argb(), t.activeBorderTo.argb(), t.borderAngle.get().floatValue());
 	}
 
@@ -608,7 +608,7 @@ public final class ThemedScreens {
 		float r = Math.min(theme.rounding.get(), h / 2), b = theme.borderSize.get();
 		if (theme.shadow.get()) c.shadow(x, y, w, h, r, theme.shadowRange.get(), theme.shadowColor.argb());
 		c.backdrop(x, y, w, h, r, 1);
-		c.roundRect(x, y, w, h, r, theme.windowBackground.argb());
+		UiRenderer.surface(c, x, y, w, h, r, theme.windowBackground.argb());
 
 		boolean inventory = screen instanceof InventoryScreen;
 		float size = c.defaultFontSize();

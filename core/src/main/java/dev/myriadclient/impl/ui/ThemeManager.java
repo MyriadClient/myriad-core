@@ -94,7 +94,8 @@ public final class ThemeManager {
 
 	public ThemeManager(ThemeSettings theme) {
 		this.theme = theme;
-		for (Setting<?> s : theme.settings.all()) s.onChanged(v -> edited());
+		// Every setting, background effects' options made later too.
+		theme.settings.onAnyChanged(s -> edited());
 	}
 
 	private static Path dir() {
@@ -255,6 +256,11 @@ public final class ThemeManager {
 		return o;
 	}
 
+	private boolean hasGroup(String id) {
+		for (SettingGroup g : theme.settings.groups()) if (g.id().equals(id)) return true;
+		return false;
+	}
+
 	/** The values in {@code now} that differ from {@code base}. */
 	private static JsonObject diff(JsonObject now, JsonObject base) {
 		JsonObject out = new JsonObject();
@@ -285,9 +291,17 @@ public final class ThemeManager {
 	/** Saves edits to the active theme a moment after the last change. Called every tick. */
 	public void tick() {
 		followLive();
+		// A background effect made since: its options in the active theme are only there now.
+		int effects = dev.myriadclient.api.ui.BackdropEffect.all().size();
+		if (effects != knownEffects) {
+			knownEffects = effects;
+			commit();
+			reapply();
+		}
 		if (dirty && System.currentTimeMillis() - dirtyAt > 400) commit();
 	}
 
+	private int knownEffects = dev.myriadclient.api.ui.BackdropEffect.all().size();
 	private int livePoll;
 	private String liveSignature = "";
 	private MyriadId liveTheme;
@@ -328,6 +342,8 @@ public final class ThemeManager {
 		Entry e = entries.get(active);
 		if (e == null) return;
 		JsonObject now = snapshot(theme);
+		// The options of background effects that aren't here (their addon is gone) stay as they were saved.
+		for (String group : e.values.keySet()) if (!now.has(group) && !hasGroup(group)) now.add(group, e.values.get(group));
 		e.values = e.isUser() ? now : diff(now, pristine(e));
 		e.swatch = null;
 		save(e);

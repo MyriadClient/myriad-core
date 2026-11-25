@@ -30,6 +30,7 @@ import dev.myriadclient.api.input.Keybind;
 import dev.myriadclient.api.module.ModuleGroup;
 import dev.myriadclient.api.module.Tag;
 import dev.myriadclient.api.render.HighlightStyle;
+import dev.myriadclient.api.ui.BackdropEffect;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.ui.Icons;
@@ -86,6 +87,12 @@ public final class ExampleAddon implements MyriadAddon {
 		SettingGroup logoGrid = ctx.settings("Fills").group("Logo Grid");
 		logoGrid.decimal("Drift").description("How fast the logos drift up.").defaultValue(0.05).range(0, 0.5).decimals(2).build();
 		LOGO_FILL.options(logoGrid);
+		// A background effect: Theme > Background > Style. Its shader includes myriad:effect.glsl and reads the options,
+		// which each theme keeps for it, in order with effectOption(0), effectOption(1)...
+		BackdropEffect.register(Identifier.fromNamespaceAndPath("myriad-example", "effects/glitch"), "Glitch", o -> {
+			o.decimal("Intensity").description("How often and how hard it glitches.").defaultValue(0.4).range(0, 1).decimals(2).build();
+			o.bool("Scanlines").defaultValue(true).build();
+		});
 
 		// 2. Modules, in menu order, in two groups: each is a window of its own in the menu. Each module gets what it
 		// needs through its constructor.

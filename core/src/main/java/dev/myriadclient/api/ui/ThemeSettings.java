@@ -2,10 +2,12 @@ package dev.myriadclient.api.ui;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.myriadclient.api.setting.BoolSetting;
+import dev.myriadclient.api.setting.ChoiceSetting;
 import dev.myriadclient.api.setting.ColorSetting;
 import dev.myriadclient.api.setting.DoubleSetting;
 import dev.myriadclient.api.setting.EnumSetting;
 import dev.myriadclient.api.setting.IntSetting;
+import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.setting.SettingColor;
 import dev.myriadclient.api.setting.SettingGroup;
 import dev.myriadclient.api.setting.Settings;
@@ -13,6 +15,15 @@ import dev.myriadclient.api.ui.draw.Bezier;
 import dev.myriadclient.api.ui.draw.FontFamily;
 import net.minecraft.client.Minecraft;
 import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.WeakHashMap;
 
 /**
  * The live look of the menu, modelled on Hyprland's {@code general}, {@code decoration} and {@code animations}
@@ -44,6 +55,7 @@ public final class ThemeSettings {
 		/** The new workspace shows at once. */
 		NONE
 	}
+
 
 	/**
 	 * The modifier that, held, turns keys and clicks into menu shortcuts ({@link #modKey}): workspaces, launcher,
@@ -278,21 +290,19 @@ public final class ThemeSettings {
 	public final BoolSetting themeFont = spCosmetics.bool("Theme Font")
 		.description("Item counts in the theme's font, and with Themed Screens the menus' text too (not chat, books or signs). Off: Minecraft's own.")
 		.defaultValue(true).build();
-	/** The hotbar and the off hand's slot in the theme (the status bars and experience bar have their own options). */
+	/** The hotbar and the off hand's slot in the theme. */
 	@ApiStatus.AvailableSince("1.2")
 	public final BoolSetting themedHotbar = spCosmetics.bool("Themed Hotbar")
 		.description("Draw the hotbar and the off hand's slot in the theme. Off: Minecraft's own look.")
 		.defaultValue(true).build();
-	/** Hearts, food and armour over the hotbar in the theme. */
+	/** No longer used: hearts, food and armour are Minecraft's own. Kept (hidden, off) so addons reading it still load. */
 	@ApiStatus.AvailableSince("1.3")
-	public final BoolSetting themedStatusBars = spCosmetics.bool("Themed Status Bars")
-		.description("Draw hearts, food and armour in the theme. Off: Minecraft's own look.")
-		.defaultValue(true).build();
-	/** The experience bar and your level in the theme. */
+	@Deprecated(forRemoval = true)
+	public final BoolSetting themedStatusBars = spCosmetics.bool("Themed Status Bars").defaultValue(false).visible(() -> false).build();
+	/** No longer used: the experience bar is Minecraft's own. Kept (hidden, off) so addons reading it still load. */
 	@ApiStatus.AvailableSince("1.3")
-	public final BoolSetting themedExperienceBar = spCosmetics.bool("Themed Experience Bar")
-		.description("Draw the experience bar and your level in the theme. Off: Minecraft's own look.")
-		.defaultValue(true).build();
+	@Deprecated(forRemoval = true)
+	public final BoolSetting themedExperienceBar = spCosmetics.bool("Themed Experience Bar").defaultValue(false).visible(() -> false).build();
 
 	private final SettingGroup sgInput = preferences.group("Input");
 	/** The modifier for menu shortcuts; see {@link ModKey}. */
@@ -309,6 +319,77 @@ public final class ThemeSettings {
 	public final BoolSetting hudBackground = sgHud.bool("HUD Backgrounds").description("Draw a translucent card behind HUD elements.").defaultValue(false).build();
 	/** How far HUD elements stay from the screen edges, in UI units: their anchor points are inset by it. */
 	public final IntSetting hudPadding = sgHud.integer("HUD Edge Padding").defaultValue(4).range(0, 40).build();
+
+	/** {@link #background}'s value for no effect. */
+	@ApiStatus.AvailableSince("2.6")
+	public static final String PLAIN = "Plain";
+
+	// Last of the groups: each background effect's options follow it as a group of their own (shown while it's picked).
+	private final SettingGroup sgBackground = settings.group("Background");
+	/**
+	 * What window and bar backgrounds have on them, and the menus' backdrop: {@link #PLAIN}, or a background effect by the
+	 * name it's listed as ({@link BackdropEffect}). An effect that isn't there (its addon is gone) draws as Plain, and
+	 * the choice is kept for when it's back.
+	 */
+	@ApiStatus.AvailableSince("2.6")
+	public final ChoiceSetting background = sgBackground.choice("Style", ThemeSettings::styles).defaultValue(PLAIN)
+		.description("What window and bar backgrounds have on them, and the menus' backdrop. Addons add the effects.").build();
+
+	/** Each background effect's options in this theme. */
+	private final Map<BackdropEffect, SettingGroup> effectOptions = new HashMap<>();
+	/** Every theme's settings there are, to give each effect made later its options too. */
+	private static final Set<ThemeSettings> LIVE = Collections.newSetFromMap(new WeakHashMap<>());
+
+	{
+		synchronized (LIVE) {
+			LIVE.add(this);
+		}
+		for (BackdropEffect e : BackdropEffect.all()) addEffect(e);
+	}
+
+	private static List<String> styles() {
+		List<String> names = new ArrayList<>();
+		names.add(PLAIN);
+		for (BackdropEffect e : BackdropEffect.all()) names.add(e.name());
+		return names;
+	}
+
+	/** A background effect was made: every theme's settings get its options. */
+	static void effectAdded(BackdropEffect e) {
+		List<ThemeSettings> all;
+		synchronized (LIVE) {
+			all = new ArrayList<>(LIVE);
+		}
+		for (ThemeSettings t : all) t.addEffect(e);
+	}
+
+	private synchronized void addEffect(BackdropEffect e) {
+		if (effectOptions.containsKey(e)) return;
+		String name = e.name();
+		for (SettingGroup g : settings.groups()) {
+			if (g.name().equals(name)) {
+				name = name + " Effect";
+				break;
+			}
+		}
+		SettingGroup group = settings.group(name);
+		group.visibleWhen(() -> background.get().equals(e.name()));
+		e.buildOptions(group);
+		effectOptions.put(e, group);
+	}
+
+	/** The picked background effect ({@link #background}), or null for Plain or one that isn't there. */
+	@ApiStatus.AvailableSince("2.6")
+	public @Nullable BackdropEffect backgroundEffect() {
+		return BackdropEffect.byName(background.get());
+	}
+
+	/** Background effect {@code e}'s options in this theme, in order (what its shader reads); empty for none. */
+	@ApiStatus.AvailableSince("2.6")
+	public synchronized List<Setting<?>> effectOptions(BackdropEffect e) {
+		SettingGroup g = effectOptions.get(e);
+		return g == null ? List.of() : g.settings();
+	}
 
 	/**
 	 * The ARGB colour {@code role} stands for in this theme (never a role itself, so roles can't recurse). Modes that

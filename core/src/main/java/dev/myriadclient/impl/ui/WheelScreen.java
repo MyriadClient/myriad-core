@@ -120,7 +120,7 @@ public final class WheelScreen extends Screen {
 		// The plate: blurred game, the window colour, the active border's gradient round the edge.
 		if (theme.shadow.get()) c.shadow(-outer, -outer, outer * 2, outer * 2, outer, theme.shadowRange.get(), theme.shadowColor.argb());
 		c.backdrop(-outer, -outer, outer * 2, outer * 2, outer, 1);
-		c.circle(0, 0, outer, theme.windowBackground.argb());
+		UiRenderer.surface(c, -outer, -outer, outer * 2, outer * 2, outer, theme.windowBackground.argb());
 		c.gradientOutline(-outer, -outer, outer * 2, outer * 2, outer, Math.max(1, theme.borderSize.get()), theme.activeBorderFrom.argb(),
 			theme.activeBorderTo.argb(), theme.borderAngle.get().floatValue());
 		c.circle(0, 0, inner, theme.surface.argb());
