@@ -5,10 +5,12 @@ import dev.myriadclient.api.addon.AddonContext;
 import dev.myriadclient.api.ui.BarWidget;
 import dev.myriadclient.api.ui.ThemeSettings;
 import dev.myriadclient.api.ui.Ui;
+import dev.myriadclient.api.ui.layout.Layout;
 import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.ui.draw.MyriadLogo;
 import dev.myriadclient.api.util.ColorUtil;
+import dev.myriadclient.impl.render.UiRenderer;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.ui.panels.CorePanels;
@@ -53,6 +55,8 @@ public final class CoreBarWidgets {
 
 		ctx.registerBarWidget(new BarWidget(ctx.id("workspaces"), "Workspaces", BarWidget.Side.LEFT, 10) {
 			private static final float CELL = 12;
+			/** The square's corners (Dwindle's, the HUD's). */
+			private static final float SQUARE_ROUNDING = 1.5f;
 			/** Always shown; the rest appear while they have windows (or you're on them), like Omarchy's bar. */
 			private static final int ALWAYS = 4;
 
@@ -84,13 +88,26 @@ public final class CoreBarWidgets {
 					boolean isActive = ws == active;
 					boolean occupied = wm.windowCount(ws) > 0;
 					boolean hover = mx >= cx && mx < cx + CELL && my >= y && my < y + h;
-					if (isActive) c.roundRect(cx + 1, y + 3, CELL - 2, h - 6, 3, ColorUtil.withAlpha(theme().accent.argb(), 200));
-					else if (hover) c.roundRect(cx + 1, y + 3, CELL - 2, h - 6, 3, theme().surfaceHover.argb());
+					// A true square, centred in its cell, on whole pixels (the same crisp square for every one); the active
+					// one's shape says its layout (a circle for Columns, a square for Dwindle, rounder for any other), and it
+					// drops its number. The HUD's, with no layout, is the plain square.
+					float ps = c.pixelScale();
+					float size = Math.round(Math.min(CELL - 2, h - 4) * ps) / ps;
+					float sx = Math.round((cx + (CELL - size) / 2) * ps) / ps, sy = Math.round((y + (h - size) / 2) * ps) / ps;
+					if (isActive && ws != Ui.HUD_WORKSPACE) {
+						c.roundRect(sx, sy, size, size, layoutRounding(wm.layout(ws), size), ColorUtil.withAlpha(theme().accent.argb(), 220));
+						continue;
+					}
+					if (isActive) c.roundRect(sx, sy, size, size, SQUARE_ROUNDING, ColorUtil.withAlpha(theme().accent.argb(), 220));
+					else if (hover) c.roundRect(sx, sy, size, size, 2.5f, theme().surfaceHover.argb());
 					String label = ws == Ui.HUD_WORKSPACE ? "\uf108" : String.valueOf(ws);
 					FontFamily f = ws == Ui.HUD_WORKSPACE ? FontFamily.MONO : FontFamily.SANS_BOLD;
 					int color = isActive ? 0xFF11111B : occupied ? theme().text.argb() : ColorUtil.withAlpha(theme().textDim.argb(), 140);
-					float tw = c.textWidth(f, c.defaultFontSize() * 0.9f, label);
-					c.text(f, c.defaultFontSize() * 0.9f, label, cx + (CELL - tw) / 2, y + (h - c.textHeight(f, c.defaultFontSize() * 0.9f)) / 2, color);
+					float fs = c.defaultFontSize() * 0.9f;
+					// Centred on its ink, not its advance and line: the HUD's icon glyph sits off both.
+					float inkX = c instanceof UiRenderer u ? u.inkOffset(f, fs, label) : 0, inkY = c instanceof UiRenderer u ? u.inkOffsetY(f, fs, label) : 0;
+					float tw = c.textWidth(f, fs, label);
+					c.text(f, fs, label, sx + (size - tw) / 2 - inkX, sy + (size - c.textHeight(f, fs)) / 2 - inkY, color);
 				}
 			}
 
@@ -98,8 +115,19 @@ public final class CoreBarWidgets {
 			public boolean mouseClicked(float mx, float my, int button) {
 				int[] shown = shown();
 				int i = (int) (mx / CELL);
-				if (i >= 0 && i < shown.length) wm.switchWorkspace(shown[i]);
+				if (i < 0 || i >= shown.length) return true;
+				// The workspace you're on, clicked again: its next layout (and its square's shape with it).
+				if (shown[i] == wm.activeWorkspace() && shown[i] != Ui.HUD_WORKSPACE) wm.runBind("layout");
+				else wm.switchWorkspace(shown[i]);
 				return true;
+			}
+
+			/** How round the active square is for {@code layout}: a circle for Columns, square for Dwindle, between for others. */
+			private static float layoutRounding(Layout layout, float size) {
+				String path = layout.id().path();
+				if (path.equals("columns")) return size / 2;
+				if (path.equals("dwindle")) return SQUARE_ROUNDING;
+				return size / 4;
 			}
 		});
 

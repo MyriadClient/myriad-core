@@ -809,6 +809,11 @@ public final class WindowManager implements Ui {
 		return Optional.empty();
 	}
 
+	/** The layout of {@code workspace}. */
+	public Layout layout(int workspace) {
+		return workspaces[Math.clamp(workspace, 0, WORKSPACES)].layout;
+	}
+
 	public String layoutName(int workspace) {
 		return workspaces[Math.clamp(workspace, 0, WORKSPACES)].layout.name();
 	}
