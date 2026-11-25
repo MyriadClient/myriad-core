@@ -54,6 +54,41 @@ class ContainersHarnessTest {
 		}
 	}
 
+	/** 2b2t drops you for a flood of container opens: there, past 8 in 5 s, an open waits till the oldest is 5 s old. */
+	@Test
+	void onTwoBTwoTOpensPastEightInFiveSecondsWait() {
+		try (Harness h = besideAChest()) {
+			Myriad.antiCheat().choose(AntiCheat.Profile.GRIM_2B2T);
+			@SuppressWarnings("unchecked") CompletableFuture<Containers.View>[] open = new CompletableFuture[1];
+			int[] syncId = {7};
+			// Opened, its contents answered, closed, and opened again, as fast as it goes.
+			h.everyTick(() -> {
+				if (open[0] == null || open[0].isDone()) {
+					if (open[0] != null && !open[0].isCompletedExceptionally()) open[0].getNow(null).close();
+					open[0] = Myriad.containers().open(this, CHEST, 20, Placement.Options.forServer());
+				}
+			});
+			for (int t = 0; t < 40; t++) {
+				h.tick();
+				List<ServerboundUseItemOnPacket> uses = h.sent(ServerboundUseItemOnPacket.class);
+				if (uses.size() > syncId[0] - 7) {
+					h.ack(uses.getLast().sequence());
+					h.serverOpensChest(syncId[0]++, List.of());
+				}
+			}
+			assertEquals(8, h.sent(ServerboundUseItemOnPacket.class).size(), "opens in the first 2 s");
+			for (int t = 0; t < 70; t++) {
+				h.tick();
+				List<ServerboundUseItemOnPacket> uses = h.sent(ServerboundUseItemOnPacket.class);
+				if (uses.size() > syncId[0] - 7) {
+					h.ack(uses.getLast().sequence());
+					h.serverOpensChest(syncId[0]++, List.of());
+				}
+			}
+			assertTrue(h.sent(ServerboundUseItemOnPacket.class).size() > 8, "no open once 5 s had gone");
+		}
+	}
+
 	@Test
 	void standingStillItClicksAndClosesInTheSameTickInThatOrder() {
 		try (Harness h = besideAChest()) {

@@ -135,6 +135,7 @@ final class ItemBoxes {
 
 	private static CompletableFuture<Containers.ItemSession> start(Object owner, Session s) {
 		s.noWayBack = MyriadImpl.get().containerTracker().noWayBackOf(owner);
+		s.quiet = owner instanceof Job<?>;
 		Job<Containers.View> job = Myriad.jobs().start(owner, s.getOut());
 		// Asked for by a job: the box work ends with it (the put-back still runs, being Myriad's).
 		if (owner instanceof Job<?> parent) parent.result().whenComplete((r, t) -> {
@@ -164,6 +165,8 @@ final class ItemBoxes {
 		private @Nullable Spot spot;
 		private @Nullable Containers.View view;
 		private boolean placed;
+		/** Asked for by a job (Steps.inItem): opened with no screen shown. */
+		private boolean quiet;
 		/** Handed to the swap bar (finishWhenClosed), which closes everything once it's back. */
 		private boolean handedOver;
 		private @Nullable CompletableFuture<Void> back;
@@ -270,7 +273,8 @@ final class ItemBoxes {
 					}
 					return ctx.ticks() > PLACE_TICKS ? Progress.failed(Why.of(Why.TIMEOUT, "couldn't bring it into the hotbar")) : Progress.running();
 				}
-				int to = Myriad.inventory().pullToHotbar(index, s -> true);
+				int to = MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory ? inventory.pullToHotbarOverBuild(index)
+					: Myriad.inventory().pullToHotbar(index, s -> true);
 				if (to >= 0) {
 					from = to;
 					return Progress.done();
@@ -419,7 +423,11 @@ final class ItemBoxes {
 				}
 				// Only put down: done once the server has it.
 				if (!opens) return placing.isDone() ? Progress.done(null) : Progress.running();
-				if (opening == null) opening = Myriad.containers().open(ctx.job(), pos, ticks, options);
+				if (opening == null) {
+					// A box you open yourself shows; one a job opens (a restock) doesn't, as the job's opens don't.
+					if (!quiet) MyriadImpl.get().containerTracker().shown(pos);
+					opening = Myriad.containers().open(ctx.job(), pos, ticks, options);
+				}
 				if (!opening.isDone()) return Progress.running();
 				try {
 					return Progress.done(opening.join());
@@ -1043,36 +1051,44 @@ final class ItemBoxes {
 	}
 
 	/**
-	 * Whether what a box at {@code pos} drops lands where you pick it up: down from it, onto something no lower than your
-	 * feet (not off a ledge, down a hole). Broken, its items pop out sideways, up to a block at your feet and a block and
-	 * a half as they fall from a ring above you, so the columns around it count too, one out or two: each walled off at
-	 * the box's height, or with a floor that high (a box at the edge of a mushroom cap would lose its drop over it).
+	 * Where what a box at {@code pos} drops lands: 0 where you stand picks it up (onto something no lower than your feet),
+	 * 1 up to a block lower (picked up by stepping down to it, then back: standing on a box on a platform of them, say),
+	 * -1 lost (off a ledge, down a hole). Broken, its items pop out sideways, up to a block at your feet and a block and a
+	 * half as they fall from a ring above you, so the columns around it count too, one out or two: each walled off at the
+	 * box's height, or with a floor that high (a box at the edge of a mushroom cap would lose its drop over it).
 	 */
-	private static boolean landsNear(BlockPos pos) {
-		int out = pos.getY() > Client.player().getY() ? 2 : 1;
+	static int landing(BlockPos pos) {
+		int out = pos.getY() > Client.player().getY() ? 2 : 1, worst = 0;
 		for (int dx = -out; dx <= out; dx++) {
 			for (int dz = -out; dz <= out; dz++) {
-				if (!landsOn(pos.offset(dx, 0, dz), dx == 0 && dz == 0)) return false;
+				int on = landsOn(pos.offset(dx, 0, dz), dx == 0 && dz == 0);
+				if (on < 0) return -1;
+				worst = Math.max(worst, on);
 			}
 		}
-		return true;
+		return worst;
 	}
 
-	/** Whether a drop drifting into the column at {@code at} (the box's own: from under it) stops no lower than your feet. */
-	private static boolean landsOn(BlockPos at, boolean own) {
+	/** How low a drop drifting into the column at {@code at} (the box's own: from under it) stops, as {@link #landing} counts. */
+	private static int landsOn(BlockPos at, boolean own) {
 		Level level = Client.level();
 		double feet = Client.player().getY();
-		for (at = own ? at.below() : at; at.getY() >= feet - 2; at = at.below()) {
+		for (at = own ? at.below() : at; at.getY() >= feet - 3; at = at.below()) {
 			var shape = level.getBlockState(at).getCollisionShape(level, at);
-			if (!shape.isEmpty()) return at.getY() + shape.max(Direction.Axis.Y) >= feet - 0.5;
+			if (shape.isEmpty()) continue;
+			double top = at.getY() + shape.max(Direction.Axis.Y);
+			return top >= feet - 0.5 ? 0 : top >= feet - 1.5 ? 1 : -1;
 		}
-		return false;
+		return -1;
 	}
+
+	/** How much further down the choice one whose drop lands a block lower comes: after every spot that lands where you stand. */
+	private static final double LOWER_LANDING = 40;
 
 	/**
 	 * Around you, a free block clear of you, in reach and placeable, nearest the way you face first. Without air
 	 * placement, beside your feet on a floor (placed on its top, so a shulker box faces up and its lid opens into the block
-	 * above). With it, see {@link #rings}. Only where what it drops lands within reach (landsNear).
+	 * above). With it, see {@link #rings}. Only where what it drops can be picked up ({@link #landing}), where you stand first.
 	 */
 	private static @Nullable Spot beside(Placement.Options options, boolean ender) {
 		if (options.airPlace()) return rings(options, ender);
@@ -1089,7 +1105,9 @@ final class ItemBoxes {
 				if (!free(pos, options, ender)) continue;
 				if (!level.getBlockState(floor).isFaceSturdy(level, floor, Direction.UP)) continue;
 				if (!ender && !level.getBlockState(above).getCollisionShape(level, above).isEmpty()) continue;
-				double score = 2 * (dx * dx + dz * dz) - 0.5 * (dx * facing.getStepX() + dz * facing.getStepZ());
+				int land = landing(pos);
+				if (land < 0) continue;
+				double score = 2 * (dx * dx + dz * dz) - 0.5 * (dx * facing.getStepX() + dz * facing.getStepZ()) + LOWER_LANDING * land;
 				if (score >= bestScore) continue;
 				bestScore = score;
 				// Sneaking only where the floor would open or be used instead (a chest under it).
@@ -1123,7 +1141,9 @@ final class ItemBoxes {
 					Direction face = dx > 0 ? Direction.EAST : dx < 0 ? Direction.WEST : dz > 0 ? Direction.SOUTH : Direction.NORTH;
 					BlockPos lid = pos.relative(face);
 					if (!ender && !level.getBlockState(lid).getCollisionShape(level, lid).isEmpty()) continue;
-					double score = 2 * (dx * dx + dz * dz) - 0.5 * (dx * facing.getStepX() + dz * facing.getStepZ()) + RING_ORDER[dy];
+					int land = landing(pos);
+					if (land < 0) continue;
+					double score = 2 * (dx * dx + dz * dz) - 0.5 * (dx * facing.getStepX() + dz * facing.getStepZ()) + RING_ORDER[dy] + LOWER_LANDING * land;
 					if (score >= bestScore) continue;
 					bestScore = score;
 					best = new Spot(pos, new BlockHitResult(Vec3.atCenterOf(pos).relative(face, 0.5), face, pos, false), false, true);
@@ -1136,12 +1156,12 @@ final class ItemBoxes {
 	/** How far back each ring (by height above your feet) comes: two up first, your feet last. */
 	private static final double[] RING_ORDER = {12, 8, 0, 4};
 
-	/** Whether {@code pos} can take a box: replaceable, clear of you, in reach, placeable, and its drops land within reach. */
+	/** Whether {@code pos} can take a box: replaceable, clear of you, in reach and placeable (where its drops land is {@link #landing}'s). */
 	private static boolean free(BlockPos pos, Placement.Options options, boolean ender) {
 		Level level = Client.level();
 		if (!level.getBlockState(pos).canBeReplaced() || Client.player().getBoundingBox().intersects(new AABB(pos)) || !Reach.canReach(pos)) return false;
 		BlockPos above = pos.above();
 		if (ender && level.getBlockState(above).isRedstoneConductor(level, above)) return false;
-		return Myriad.placement().check(pos, options).ok() && landsNear(pos);
+		return Myriad.placement().check(pos, options).ok();
 	}
 }

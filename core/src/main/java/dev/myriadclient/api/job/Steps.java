@@ -301,8 +301,8 @@ public final class Steps {
 
 	/**
 	 * Opens the container at {@code pos} (turned onto it first where the server checks) and produces its view once the
-	 * contents arrived. Stuck: {@code OUT_OF_REACH} (tried again each tick). Failed: {@code TIMEOUT},
-	 * {@code NO_CONTAINER}.
+	 * contents arrived: no screen shows for it, nor takes the place of one you have up. Stuck: {@code OUT_OF_REACH} (tried
+	 * again each tick). Failed: {@code TIMEOUT}, {@code NO_CONTAINER}.
 	 */
 	public static Step<Containers.View> openContainer(BlockPos pos, int ticks, Placement.Options options) {
 		return Step.of("Open the container", () -> new Step.Run<>() {
@@ -395,14 +395,15 @@ public final class Steps {
 	}
 
 	/**
-	 * Works in the shulker box (or ender chest) at inventory index {@code index}: put down beside you, opened, handed to
-	 * {@code work}, then closed, broken, picked up and put back in its slot, however {@code work} ends (cancelled
-	 * too: putting it back is Myriad's own job, so it finishes anyway). Produces the work's result once the box is back.
+	 * Works in the shulker box (or ender chest) at inventory index {@code index}: put down beside you, opened (showing no
+	 * screen, nor taking the place of one you have up), handed to {@code work}, then closed, broken, picked up and put
+	 * back in its slot, however {@code work} ends (cancelled too: putting it back is Myriad's own job, so it finishes
+	 * anyway). For a box to show, open it with {@link Containers#openItem} yourself. Produces the work's result once the box is back.
 	 * Failed: {@code NO_ITEM} (no box there, or no Silk Touch pickaxe for an ender chest), {@code NO_ROOM} (nowhere to
 	 * put it down), {@code SERVER_REFUSED}, {@code TIMEOUT}; and whatever {@code work} fails with.
 	 *
 	 * <pre>{@code
-	 * Steps.inItem(index, view -> Steps.untilClosed(view, 20 * 60 * 5))   // let the player browse it
+	 * Steps.inItem(index, view -> Steps.take(view, s -> s.is(Items.OBSIDIAN), Containers.Transfer.upTo(64)))
 	 * }</pre>
 	 */
 	public static <T> Step<T> inItem(int index, Function<Containers.View, ? extends Step<T>> work) {

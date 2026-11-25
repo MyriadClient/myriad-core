@@ -2,6 +2,7 @@ package dev.myriadclient.impl.service;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.event.Subscribe;
+import dev.myriadclient.api.job.Job;
 import dev.myriadclient.api.event.events.ContainerEvent;
 import dev.myriadclient.api.event.events.PacketEvent;
 import dev.myriadclient.api.event.events.ScreenOpenEvent;
@@ -10,6 +11,7 @@ import dev.myriadclient.api.event.events.WorldEvent;
 import dev.myriadclient.api.item.Slots;
 import dev.myriadclient.api.player.Interactions;
 import dev.myriadclient.api.player.Reach;
+import dev.myriadclient.api.service.AntiCheat;
 import dev.myriadclient.api.service.Containers;
 import dev.myriadclient.api.service.Placement;
 import dev.myriadclient.api.util.Threads;
@@ -19,6 +21,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.protocol.game.ClientboundContainerClosePacket;
 import net.minecraft.network.protocol.game.ServerboundContainerClosePacket;
 import net.minecraft.network.protocol.game.ServerboundUseItemOnPacket;
 import net.minecraft.util.Prediction;
@@ -76,6 +79,16 @@ public final class ContainerTracker implements Containers {
 	private @Nullable Object pendingOwner;
 	/** A close asked for while the server wouldn't take one yet: it goes at the first moment it will. */
 	private boolean closeWanted;
+	/**
+	 * 2b2t drops you for a flood of container opens (about 12 in 2.5 s, and 10 in 1 s, with few or no clicks), and 8 in
+	 * any 5 s are known to pass: there, opens past that wait (see {@link #open}). Every opening click counts, yours too.
+	 */
+	private static final int OPEN_BURST = 8, OPEN_WINDOW_MS = 5000;
+	private final SendWindow opens = new SendWindow(OPEN_WINDOW_MS);
+	/** An open waiting for the open budget, made the first tick it has room. */
+	private record Deferred(@Nullable Object owner, BlockPos pos, int timeoutTicks, Placement.@Nullable Options options, CompletableFuture<View> future) {
+	}
+	private @Nullable Deferred deferred;
 	/** The container held open on the server after its screen closes (Containers.hold), and that screen, kept to show again. */
 	private @Nullable ViewImpl held;
 	private @Nullable AbstractContainerScreen<?> heldScreen;
@@ -87,6 +100,12 @@ public final class ContainerTracker implements Containers {
 	private final Map<Object, NoWayBack> noWayBack = Collections.synchronizedMap(new WeakHashMap<>());
 	/** The next container opened in code here shows no screen if none is up as it opens (see unseen). */
 	private @Nullable BlockPos unseen;
+	/**
+	 * Whether the open under way is a job's (a restock, a box opened in code), which shows no screen, unless a container's
+	 * screen is up already; and the next open at a position that shows its screen anyway (a box you open yourself).
+	 */
+	private boolean pendingQuiet;
+	private @Nullable BlockPos shown;
 	/** The open container's screen that wasn't shown (unseen, or the held ender chest opened over itself with none up). */
 	private @Nullable AbstractContainerScreen<?> hiddenScreen;
 	/** Your inventory's screen is being shown over the held container (showInventory), not that one's instead. */
@@ -145,6 +164,9 @@ public final class ContainerTracker implements Containers {
 		if (e.packet() instanceof ServerboundUseItemOnPacket p) {
 			lastClicked = p.hitResult().getBlockPos().immutable();
 			lastClickedAt = Clock.millis();
+			// Anything that opens a screen: a container, a crafting table; or the click of an open under way.
+			if (!e.isCancelled() && mc.level != null && (pending != null && lastClicked.equals(pendingPos)
+				|| mc.level.getBlockState(lastClicked).getMenuProvider(mc.level, lastClicked) != null)) opens.record();
 		}
 	}
 
@@ -225,10 +247,30 @@ public final class ContainerTracker implements Containers {
 		}
 	}
 
+	/** Whether opens wait for the open budget here: on 2b2t. */
+	private static boolean opensLimited() {
+		return AntiCheat.inEffect() == AntiCheat.Profile.GRIM_2B2T;
+	}
+
+	/** A deferred open, made as soon as the budget has room for it. */
+	@Subscribe
+	private void openDeferred(TickEvent.Pre e) {
+		Deferred d = deferred;
+		if (d == null || opensLimited() && opens.count() >= OPEN_BURST) return;
+		deferred = null;
+		open(d.owner(), d.pos(), d.timeoutTicks(), d.options()).whenComplete((v, t) -> {
+			if (t != null) d.future().completeExceptionally(t);
+			else d.future().complete(v);
+		});
+	}
+
 	@Subscribe
 	private void onLeave(WorldEvent.Leave e) {
 		closeTracked();
 		if (pending != null) fail(new IllegalStateException("Left the world"));
+		Deferred d = deferred;
+		deferred = null;
+		if (d != null) d.future().completeExceptionally(new IllegalStateException("Left the world"));
 	}
 
 	private void closeTracked() {
@@ -305,17 +347,31 @@ public final class ContainerTracker implements Containers {
 			f.completeExceptionally(new IllegalStateException("Can't reach the container"));
 			return f;
 		}
-		if (pending != null) fail(new IllegalStateException("Replaced by another open()"));
 		if (current != null && pos.equals(current.pos) && current.loaded && unlinking == null) {
+			if (pending != null) fail(new IllegalStateException("Replaced by another open()"));
 			f.complete(current);
 			return f;
 		}
+		Deferred waiting = deferred;
+		if (waiting != null) {
+			deferred = null;
+			waiting.future().completeExceptionally(new IllegalStateException("Replaced by another open()"));
+		}
+		// Past the open budget (2b2t): made once there's room, the tick it has (openDeferred).
+		if (opensLimited() && opens.count() >= OPEN_BURST) {
+			if (pending != null) fail(new IllegalStateException("Replaced by another open()"));
+			deferred = new Deferred(owner, pos.immutable(), timeoutTicks, options, f);
+			return f;
+		}
+		if (pending != null) fail(new IllegalStateException("Replaced by another open()"));
 		// Another container open stays so, its screen up until this one's replaces it: the server closes it itself as it
 		// opens this one (ServerPlayer.openMenu), so no close goes first, none while you move (Grim's MultiActionsD) and
 		// no frame of the world shows between the two.
 		pending = f;
 		pendingOwner = owner;
 		pendingPos = pos.immutable();
+		pendingQuiet = owner instanceof Job<?> && !pos.equals(shown);
+		shown = null;
 		if (options == null) {
 			pendingTicks = Math.max(1, timeoutTicks);
 			// Sneaking with an item in hand would place it instead of opening the container.
@@ -512,10 +568,12 @@ public final class ContainerTracker implements Containers {
 	@Subscribe
 	private void onScreenOpen(ScreenOpenEvent e) {
 		if (e.screen() instanceof InventoryScreen && !showingInventory && heldScreen != null && heldMenu() != null && !mc.player.isCreative()) e.setScreen(heldScreen);
-		// Opened with no screen up, for code that only needs it open on the server: it shows none. The menu is the
+		// Opened in code over no screen, for code that only needs it open on the server (a job's open, unseen): it shows
+		// none. Nor over a screen of yours that isn't a container's (Myriad's UI, chat): that stays up. The menu is the
 		// client's already (MenuScreens sets it before showing the screen), so its clicks and contents go on as shown.
-		else if (e.screen() instanceof AbstractContainerScreen<?> s && mc.gui.screen() == null && pending != null && pendingPos != null
-			&& (pendingPos.equals(unseen) || pendingPos.equals(unlinking)) && mc.player != null && s.getMenu() == mc.player.containerMenu) {
+		else if (e.screen() instanceof AbstractContainerScreen<?> s && pending != null && pendingPos != null && mc.player != null
+			&& s.getMenu() == mc.player.containerMenu && !(mc.gui.screen() instanceof AbstractContainerScreen<?>)
+			&& (mc.gui.screen() != null || pendingQuiet || pendingPos.equals(unseen) || pendingPos.equals(unlinking))) {
 			hiddenScreen = s;
 			e.cancel();
 		}
@@ -527,6 +585,11 @@ public final class ContainerTracker implements Containers {
 	 */
 	public void unseen(BlockPos pos) {
 		unseen = pos.immutable();
+	}
+
+	/** The next open in code of the container at {@code pos} shows its screen, a job's too (a box you open yourself). */
+	public void shown(BlockPos pos) {
+		shown = pos.immutable();
 	}
 
 	/** {@code menu}'s screen, showing or opened unseen; null if it has none. */
@@ -550,7 +613,26 @@ public final class ContainerTracker implements Containers {
 			heldScreen = null;
 		}
 		// Only while it's still the menu open: one closed this tick (it's forgotten next tick) would send your inventory's close.
-		if (mc.player != null && current != null && mc.player.containerMenu == current.handler) mc.player.closeContainer();
+		if (mc.player == null || current == null || mc.player.containerMenu != current.handler) return;
+		// Not shown, under a screen of yours: closed for the server only, your screen staying up.
+		if (hiddenScreen != null && hiddenScreen.getMenu() == current.handler && mc.gui.screen() != null) {
+			mc.player.connection.send(new ServerboundContainerClosePacket(current.handler.containerId));
+			mc.player.containerMenu = mc.player.inventoryMenu;
+		} else mc.player.closeContainer();
+	}
+
+	/** The server closing a container that wasn't shown leaves the screen you have up (vanilla closes whatever's up). */
+	@Subscribe(packets = ClientboundContainerClosePacket.class)
+	private void onServerClose(PacketEvent.Receive e) {
+		if (!(e.packet() instanceof ClientboundContainerClosePacket p)) return;
+		AbstractContainerScreen<?> hidden = hiddenScreen;
+		if (hidden == null || mc.player == null || mc.gui.screen() == null || mc.gui.screen() == hidden) return;
+		AbstractContainerMenu menu = hidden.getMenu();
+		if (menu.containerId != p.getContainerId() || mc.player.containerMenu != menu) return;
+		e.cancel();
+		mc.execute(() -> {
+			if (mc.player != null && mc.player.containerMenu == menu) mc.player.containerMenu = mc.player.inventoryMenu;
+		});
 	}
 
 	private final class ViewImpl implements View {
