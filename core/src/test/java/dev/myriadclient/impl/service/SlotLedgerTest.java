@@ -196,6 +196,28 @@ class SlotLedgerTest {
 	}
 
 	@Test
+	void dragEndCrossedByCursorAnswers() {
+		// A shulker put down by a one-slot drag (start, slot, end: only the end changes anything). 2b2t answers the start
+		// and the slot click with the cursor still holding it; those arrive after the end: the box stays put down, not
+		// back on the cursor as well.
+		ledger.reset(List.of(E, E, E, E), "shulker");
+		tick = 10;
+		click(1, E, "shulker", SlotLedger.CURSOR, "shulker", E);
+		assertEquals(Verdict.STALE, ledger.onCursor("shulker", 12, 3));
+		assertEquals(Verdict.STALE, ledger.onCursor("shulker", 12, 3));
+		assertEquals(E, ledger.logical(SlotLedger.CURSOR));
+		// The end's own answer: the slot holds it, so the click was taken, cursor and all.
+		assertEquals(Verdict.ECHO, ledger.onSlot(1, "shulker", 12, 3));
+		assertEquals(E, ledger.logical(SlotLedger.CURSOR));
+		assertEquals(E, ledger.confirmed(SlotLedger.CURSOR));
+		assertEquals("shulker", ledger.logical(1));
+		// Long after the click, the cursor is the server's word.
+		click(1, "shulker", E, SlotLedger.CURSOR, E, "shulker");
+		assertEquals(Verdict.CONTRADICTS, ledger.onCursor(E, 30, 3));
+		assertEquals(E, ledger.logical(SlotLedger.CURSOR));
+	}
+
+	@Test
 	void identicalStacks() {
 		// Two slots holding the same thing are told apart by slot, so a reply for one can't settle the other.
 		ledger.reset(List.of("stone", "stone", E, E), E);

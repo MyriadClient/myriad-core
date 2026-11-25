@@ -185,9 +185,16 @@ public final class SlotLedger<T> {
 
 	/** The server set the cursor. */
 	public Verdict onCursor(T value) {
-		Verdict v = weigh(CURSOR, value, false);
-		retire();
-		return v;
+		return onSlot(CURSOR, value);
+	}
+
+	/**
+	 * The server set the cursor, at tick {@code now}: weighed as one slot ({@link #onSlot(int, Object, long, long)}). A
+	 * server answering every click (2b2t) answers each of a drag's clicks with the cursor as that click left it, so the
+	 * stack still on it arrives after the drag's end put it down.
+	 */
+	public Verdict onCursor(T value, long now, long crossing) {
+		return onSlot(CURSOR, value, now, crossing);
 	}
 
 	/**

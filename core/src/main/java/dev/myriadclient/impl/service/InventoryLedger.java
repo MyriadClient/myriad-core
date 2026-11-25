@@ -12,6 +12,7 @@ import dev.myriadclient.impl.service.SlotLedger.Verdict;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.network.HashedStack;
 import net.minecraft.network.protocol.game.ServerboundContainerClickPacket;
@@ -140,6 +141,7 @@ public final class InventoryLedger {
 		MyriadImpl.get().packetLimiter().recordClick();
 		mc.getConnection().send(new ServerboundContainerClickPacket(menu.containerId, menu.getStateId(), (short) -1, (byte) 0,
 			ContainerInput.QUICK_MOVE, claims, HashedStack.create(wrong, hashes)));
+		MyriadImpl.get().packetLimiter().clickDone();
 		answered.clear();
 		check = new Check(menu, upTo, claimed, Ticks.current());
 		checks++;
@@ -341,7 +343,7 @@ public final class InventoryLedger {
 			return;
 		}
 		ItemStack before = ledger.logical(SlotLedger.CURSOR);
-		count(ledger.onCursor(item.copy()), SlotLedger.CURSOR, before, item);
+		count(ledger.onCursor(item.copy(), Ticks.current(), crossing()), SlotLedger.CURSOR, before, item);
 		if (enforce) show(SlotLedger.CURSOR);
 		seenCursor = menu.getCarried().copy();
 	}
@@ -434,10 +436,12 @@ public final class InventoryLedger {
 		long wait = (SlotsInFlight.roundTrip() + 1L) << Math.min(dropStreak, 5);
 		if (Ticks.current() - clickedAt <= wait || Ticks.current() - heardAt < 2 + Math.min(dropStreak, 5) * 4L) return;
 		if (dragging(menu)) return;
-		// A check can wait: never while a build runs (it asks for the inventory once it's done) or when clicks are short
-		// (a module's would wait behind it; a server like 2b2t counts every one), and only at a moment already safe to
-		// click (sprint stopped for the tick at most, keys never let go).
-		if (!Myriad.building().running().isEmpty()) return;
+		// A check can wait: not while a build runs (it asks for the inventory once it's done), unless your inventory or a
+		// container is on screen (a build kept up, as Printer's, runs all the while it's on, and what you're clicking at
+		// would stay wrong until it ended); never when clicks are short (a module's would wait behind it; a server like
+		// 2b2t counts every one), and only at a moment already safe to click (sprint stopped for the tick at most, keys
+		// never let go).
+		if (!Myriad.building().running().isEmpty() && !(mc.gui.screen() instanceof AbstractContainerScreen<?>)) return;
 		if (!Myriad.limits().canSend(PacketLimits.Kind.INVENTORY, CHECK_HEADROOM)) return;
 		if (!Myriad.inventory().safeToClick() || !Myriad.inventory().prepareClick()) return;
 		sendCheck(false);
