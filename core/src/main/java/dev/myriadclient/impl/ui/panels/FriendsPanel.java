@@ -8,6 +8,7 @@ import dev.myriadclient.api.ui.widget.EmptyState;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.TextField;
+import dev.myriadclient.api.ui.widget.Widget;
 import dev.myriadclient.api.ui.widget.VBox;
 
 /** The Friends window: your friends listed, with a field to add one and a button beside each to remove them. */
@@ -34,10 +35,10 @@ public final class FriendsPanel extends WidgetPanel {
 		for (String f : Myriad.friends().all()) {
 			HBox row = new HBox(4);
 			row.addWeighted(new Label(f), 1);
-			row.addFixed(new Button("Remove", () -> {
+			row.addFixed(new Button(Icons.TIMES, () -> {
 				Myriad.friends().remove(f);
 				rebuild();
-			}), 50);
+			}).quiet().danger().tooltip("Remove " + f), Widget.ROW);
 			content.add(row);
 		}
 	}

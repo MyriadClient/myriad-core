@@ -34,7 +34,8 @@ public final class MacroModule extends Module {
 		.description("Run when it's turned off, the same way.").visible(() -> mode.get() == Mode.TOGGLE).protect().build();
 	public final IconSetting icon = sgGeneral.icon("Icon").description("Its icon on wheels.").build();
 	{
-		sgGeneral.action("Delete Macro", () -> MacroManager.delete(this)).description("Remove this macro for good.").build();
+		sgGeneral.action("Delete Macro", () -> Myriad.ui().confirm("Delete " + name(), "Delete this macro for good?", "Delete",
+			() -> MacroManager.delete(this), null)).description("Remove this macro for good.").build();
 	}
 
 	/** Owns the Off Commands' run, which outlives the module being on (turning off cancels the module's own jobs). */

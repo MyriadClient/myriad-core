@@ -3,6 +3,7 @@ package dev.myriadclient.impl.ui.panels;
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.setting.Setting;
+import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
@@ -35,6 +36,15 @@ public final class ModuleSettingsPanel extends WidgetPanel {
 	}
 
 	@Override
+	public void tick() {
+		// Gone (a macro deleted): nothing left to show, as wheels and control panels close.
+		if (!dev.myriadclient.impl.MyriadImpl.get().modules().contains(module.id())) {
+			var w = window();
+			if (w != null) w.close();
+		}
+	}
+
+	@Override
 	protected void build(VBox content) {
 		HBox header = new HBox(4);
 		header.addWeighted(new Label(() -> module.isEnabled() ? "Enabled" : "Disabled").bold(), 1);
@@ -57,9 +67,9 @@ public final class ModuleSettingsPanel extends WidgetPanel {
 	 * can't be undone). The keybind and hold mode stay: they're how the player reaches the module, not how it behaves.
 	 */
 	static Widget resetButton(Module module) {
-		return new Button("Reset to Default", () -> Myriad.ui().confirm("Reset " + module.name(),
+		return new Button(Icons.UNDO + "  Reset to default", () -> Myriad.ui().confirm("Reset " + module.name(),
 			"Put every setting of " + module.name() + " back to its default? Its keybind stays.", "Reset", () -> {
 				for (Setting<?> s : module.settings.all()) if (s != module.keybind && s != module.holdMode) s.reset();
-			}, null));
+			}, null)).quiet();
 	}
 }

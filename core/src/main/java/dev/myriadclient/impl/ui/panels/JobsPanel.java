@@ -114,7 +114,7 @@ final class JobsPanel extends WidgetPanel {
 			row.addFixed(new Button(Icons.TIMES, () -> {
 				dismissed.add(j.id());
 				rebuild();
-			}).tooltip("Dismiss"), ROW_BUTTON);
+			}).quiet().tooltip("Dismiss"), ROW_BUTTON);
 			content.add(row);
 		}
 	}

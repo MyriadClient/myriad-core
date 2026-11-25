@@ -10,7 +10,7 @@ import java.util.List;
 
 /**
  * Shows a child clipped to a viewport with smooth scrolling (24 units a wheel notch, once the child doesn't use the
- * wheel itself). Given a height by {@link #setViewportHeight}, the viewport is that tall; otherwise it sizes to its
+ * wheel itself; at the top or bottom, a notch further that way goes on to whatever the view is in). Given a height by {@link #setViewportHeight}, the viewport is that tall; otherwise it sizes to its
  * content up to {@code maxHeight}. The child's width leaves room for the bar whether it's showing or not, so nothing
  * moves when the content outgrows the view. The mouse only reaches the child inside the viewport.
  */
@@ -99,7 +99,10 @@ public class ScrollView extends Widget {
 		if (child.mouseScrolled(mx, my, amount)) return true;
 		float max = contentHeight - height;
 		if (max <= 0) return false;
-		target = Math.clamp(target - amount * 24, 0, max);
+		// At its end that way, the wheel goes on to whatever it's in (as a page scrolls on once a box in it is done).
+		float next = Math.clamp(target - amount * 24, 0, max);
+		if (next == target) return false;
+		target = next;
 		return true;
 	}
 

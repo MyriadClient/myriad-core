@@ -228,10 +228,10 @@ final class WheelView extends WidgetPanel {
 			up.tooltip("Move anticlockwise");
 			down.tooltip("Move clockwise");
 			actions.addWeighted(Spacer.gap(0), 1);
-			actions.addFixed(new Button("Remove", () -> {
+			actions.addFixed(new Button(Icons.TRASH + "  Remove", () -> {
 				wheel.remove(slot());
 				slots.sync();
-			}).danger(), 48);
+			}).quiet().danger(), 64);
 			body.add(actions);
 		}
 

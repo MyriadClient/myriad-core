@@ -26,7 +26,6 @@ public final class CorePanels {
 	public static final MyriadId PANEL_SETTINGS = MyriadId.of("myriad", "panel_settings");
 	public static final MyriadId CONSOLE = MyriadId.of("myriad", "console");
 	public static final MyriadId DIALOG = MyriadId.of("myriad", "dialog");
-	public static final MyriadId PROFILES = MyriadId.of("myriad", "profiles");
 	public static final MyriadId ADDONS = MyriadId.of("myriad", "addons");
 	public static final MyriadId FRIENDS = MyriadId.of("myriad", "friends");
 	public static final MyriadId THEME = MyriadId.of("myriad", "theme");
@@ -62,7 +61,6 @@ public final class CorePanels {
 			args.has("window") ? new PanelSettingsPanel(wm, args.get("window").getAsInt()) : null).build());
 		ctx.registerPanel(PanelType.builder(DIALOG, "Dialog").icon("\uf059").factory(DialogPanel::create).build());
 		ctx.registerPanel(PanelType.builder(CONSOLE, "Console").icon("").factory(ConsolePanel::new).build());
-		ctx.registerPanel(PanelType.builder(PROFILES, "Profiles").icon("").factory(ProfilesPanel::new).build());
 		ctx.registerPanel(PanelType.builder(ADDONS, "Addons").icon("").factory(AddonsPanel::new).build());
 		ctx.registerPanel(PanelType.builder(FRIENDS, "Friends").icon("").factory(FriendsPanel::new).build());
 		ctx.registerPanel(PanelType.builder(THEME, "Theme").icon("").factory(ThemePanel::new).build());

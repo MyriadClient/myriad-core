@@ -14,7 +14,7 @@ import java.util.function.Supplier;
 public class Button extends Widget {
 	private final Supplier<String> label;
 	private final Runnable action;
-	private boolean accent, danger;
+	private boolean accent, danger, quiet;
 
 	/** A button labelled {@code label} that runs {@code action}. */
 	public Button(String label, Runnable action) {
@@ -43,6 +43,16 @@ public class Button extends Widget {
 		return this;
 	}
 
+	/**
+	 * A secondary action that shouldn't weigh as much as the settings round it (Reset to default, a row's ×): no fill
+	 * till it's hovered, its text dim till then. With {@link #danger}, red on hover. Returns this button.
+	 */
+	@ApiStatus.AvailableSince("2.6")
+	public Button quiet() {
+		this.quiet = true;
+		return this;
+	}
+
 	@Override
 	protected float measure(Canvas canvas, float width) {
 		return ROW;
@@ -61,12 +71,13 @@ public class Button extends Widget {
 		boolean hover = isHovered(mx, my);
 		int red = theme().red.argb();
 		int bg = accent ? ColorUtil.withAlpha(theme().accent.argb(), hover ? 200 : 150)
-			: danger && hover ? ColorUtil.withAlpha(red, 70) : hover ? theme().surfaceHover.argb() : theme().surface.argb();
-		c.roundRect(x, y, width, height, 4, bg);
+			: danger && hover ? ColorUtil.withAlpha(red, quiet ? 45 : 70) : hover ? theme().surfaceHover.argb() : quiet ? 0 : theme().surface.argb();
+		if (ColorUtil.alpha(bg) > 0) c.roundRect(x, y, width, height, 4, bg);
 		String text = label.get();
 		// One glyph (an icon) is drawn whole: "…" in its place says nothing.
 		if (text.codePointCount(0, text.length()) > 1) text = c.ellipsize(c.defaultFont(), c.defaultFontSize(), text, width - 8);
-		c.text(text, x + (width - c.textWidth(text)) / 2, y + (height - c.textHeight()) / 2, danger ? red : theme().text.argb());
+		int fg = quiet ? danger && hover ? red : hover ? theme().text.argb() : theme().textDim.argb() : danger ? red : theme().text.argb();
+		c.text(text, x + (width - c.textWidth(text)) / 2, y + (height - c.textHeight()) / 2, fg);
 		offerTooltip(mx, my);
 	}
 

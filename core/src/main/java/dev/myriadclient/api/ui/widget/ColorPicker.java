@@ -47,7 +47,8 @@ public class ColorPicker extends Widget {
 	}
 
 	private void sync() {
-		int c = getter.get().color();
+		// What it looks like (a theme colour resolved), so the square and bars start from the colour shown.
+		int c = getter.get().argb();
 		hsb = resync(hsb, alpha, c);
 		alpha = ColorUtil.alpha(c);
 	}
@@ -181,9 +182,15 @@ public class ColorPicker extends Widget {
 	}
 
 	private void apply() {
+		SettingColor cur = getter.get();
+		// Only the opacity changed: a theme colour stays the theme's, more or less see-through.
+		if (dragging == 2 && cur.mode().isThemeRole()) {
+			setter.accept(new SettingColor(ColorUtil.withAlpha(0xFFFFFF, alpha), cur.mode()));
+			return;
+		}
 		int rgb = ColorUtil.hsb(hsb[0], hsb[1], hsb[2], alpha);
-		// Editing the colour by hand detaches it from the theme.
-		setter.accept(new SettingColor(rgb, getter.get().mode().isThemeRole() ? SettingColor.Mode.STATIC : getter.get().mode()));
+		// Editing the colour itself by hand detaches it from the theme (from the colour it showed).
+		setter.accept(new SettingColor(rgb, cur.mode().isThemeRole() ? SettingColor.Mode.STATIC : cur.mode()));
 	}
 
 	private void drag(float mx, float my) {

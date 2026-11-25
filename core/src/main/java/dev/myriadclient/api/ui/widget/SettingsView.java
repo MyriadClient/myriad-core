@@ -1,5 +1,9 @@
 package dev.myriadclient.api.ui.widget;
 
+import java.util.List;
+
+import java.util.ArrayList;
+
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.setting.SettingGroup;
@@ -45,8 +49,26 @@ public final class SettingsView {
 	 * hides while none of its settings is visible.
 	 */
 	public static VBox build(Settings settings) {
+		return buildGroups(settings);
+	}
+
+	/**
+	 * The groups of {@code settings} in the order they're shown: as made, but a module's own "Module" group (its keybind,
+	 * hold, list and chat settings) always last, so it's in the same place for every module whatever groups it adds.
+	 */
+	@ApiStatus.AvailableSince("2.6")
+	public static List<SettingGroup> displayOrder(Settings settings) {
+		List<SettingGroup> ordered = new ArrayList<>(settings.groups());
+		for (SettingGroup g : settings.groups()) if (g.name().equals("Module")) {
+			ordered.remove(g);
+			ordered.add(g);
+		}
+		return ordered;
+	}
+
+	private static VBox buildGroups(Settings settings) {
 		VBox box = new VBox(4, 0);
-		for (SettingGroup group : settings.groups()) {
+		for (SettingGroup group : SettingsView.displayOrder(settings)) {
 			if (group.settings().isEmpty()) continue;
 			VBox body = new VBox(3, 0);
 			for (Setting<?> s : group.settings()) {
@@ -55,7 +77,7 @@ public final class SettingsView {
 			}
 			Collapsible section = new Collapsible(group::name, body, group::isExpanded, group::setExpanded).indent(10)
 				.hint(() -> group.isExpanded() ? "" : String.valueOf(group.settings().stream().filter(Setting::isVisible).count()));
-			section.visible(() -> group.settings().stream().anyMatch(Setting::isVisible));
+			section.visible(() -> group.isVisible() && group.settings().stream().anyMatch(Setting::isVisible));
 			box.add(section);
 		}
 		return box;

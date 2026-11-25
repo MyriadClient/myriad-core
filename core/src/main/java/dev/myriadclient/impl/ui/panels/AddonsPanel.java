@@ -10,11 +10,12 @@ import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
-import dev.myriadclient.api.ui.widget.Heading;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.Note;
 import dev.myriadclient.api.ui.widget.SettingsView;
 import dev.myriadclient.api.ui.widget.VBox;
+import dev.myriadclient.api.ui.widget.Widget;
+import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.addon.AddonLoader;
 import dev.myriadclient.impl.update.UpdateManager;
@@ -27,6 +28,8 @@ import java.util.Set;
 /** Every addon Myriad found, as cards: what it adds, who made it, where to find it, and why it failed if it did. */
 public final class AddonsPanel extends WidgetPanel {
 	private final Set<String> unfolded = new HashSet<>();
+	/** Addons' settings blocks (and core's own sections) folded away; all open at first. */
+	private final Set<String> folded = new HashSet<>();
 	private final UpdateManager updates = MyriadImpl.get().updates();
 	/** In the title bar: checking at start, checking now, and installing every update. */
 	private final List<TitleControl> titleControls = List.of(
@@ -151,16 +154,39 @@ public final class AddonsPanel extends WidgetPanel {
 			body.add(new Label(() -> counts(id)));
 			AddonLoader.Startup started = MyriadImpl.get().addonLoader().startup(id);
 			if (started != null) body.add(new Label(started.describe(failed())).dim());
-			// Links from the addon's fabric.mod.json "contact" block.
-			HBox links = new HBox(4);
-			addon.homepage().ifPresent(url -> links.add(new Button(" Website", () -> Blaze3D.openUri(URI.create(url)))).tooltip(url));
-			addon.sources().ifPresent(url -> links.add(new Button(" Source", () -> Blaze3D.openUri(URI.create(url)))).tooltip(url));
-			addon.issues().ifPresent(url -> links.add(new Button(" Issues", () -> Blaze3D.openUri(URI.create(url)))).tooltip(url));
-			if (!links.children().isEmpty()) body.add(links);
-			buildUpdate(body, updates.state(id));
+			// Links from the addon's fabric.mod.json "contact" block, and its update, in one row.
+			Toolbar links = new Toolbar();
+			addon.homepage().ifPresent(url -> links.add("\uf0ac", "Website", url, () -> Blaze3D.openUri(URI.create(url))));
+			addon.sources().ifPresent(url -> links.add("\uf121", "Source", url, () -> Blaze3D.openUri(URI.create(url))));
+			addon.issues().ifPresent(url -> links.add("\uf188", "Issues", url, () -> Blaze3D.openUri(URI.create(url))));
+			UpdateManager.State u = updates.state(id);
+			if (u != null && (u.kind() == UpdateManager.Kind.AVAILABLE || u.kind() == UpdateManager.Kind.FAILED)) {
+				links.gap();
+				if (u.releaseUrl() != null) links.add("\uf15c", "Notes", u.releaseUrl(), () -> Blaze3D.openUri(URI.create(u.releaseUrl())));
+				links.add("\uf019", "Update to " + u.version(), "Downloads it now; it installs when you quit.", () -> updates.update(id), false, true, () -> true);
+			}
+			if (!links.isEmpty()) body.add(links);
+			buildUpdate(body, u);
+			// Core's own settings: profiles and the anti-cheat.
+			if (id.equals("myriad")) ProfilesSection.build(body, AddonsPanel.this::rebuild, folded);
+			// Each block of settings folds like a module's group: its rows straight in when it has one group, its groups
+			// inside when it has more.
 			for (AddonSettings s : Myriad.addonSettings().ownedBy(id)) {
-				body.add(new Heading(s.name()));
-				body.add(SettingsView.build(s.settings()));
+				var groups = SettingsView.displayOrder(s.settings()).stream().filter(g -> !g.settings().isEmpty()).toList();
+				Widget inner;
+				if (groups.size() == 1) {
+					VBox rows = new VBox(3, 0);
+					for (var setting : groups.getFirst().settings()) {
+						Widget row = Myriad.ui().settingWidgets().create(setting);
+						if (row != null) rows.add(row);
+					}
+					inner = rows;
+				} else inner = SettingsView.build(s.settings());
+				String key = id + "/" + s.name();
+				body.add(new Collapsible(s::name, inner, () -> !folded.contains(key), open -> {
+					if (open) folded.remove(key);
+					else folded.add(key);
+				}).indent(10).hint(() -> folded.contains(key) ? String.valueOf(s.settings().all().stream().filter(dev.myriadclient.api.setting.Setting::isVisible).count()) : ""));
 			}
 		}
 
@@ -168,13 +194,10 @@ public final class AddonsPanel extends WidgetPanel {
 			if (u == null) return;
 			String id = addon.id();
 			switch (u.kind()) {
-				case AVAILABLE, FAILED -> {
-					if (u.kind() == UpdateManager.Kind.FAILED) body.add(new Note("Updating to " + u.version() + " failed: " + u.message()).error());
-					HBox row = new HBox(4);
-					row.add(new Button(" Update to " + u.version(), () -> updates.update(id)).accent()).tooltip("Downloads it now; it installs when you quit");
-					if (u.releaseUrl() != null) row.add(new Button(" Release notes", () -> Blaze3D.openUri(URI.create(u.releaseUrl())))).tooltip(u.releaseUrl());
-					body.add(row);
+				// The update button is in the links' row (buildBody).
+				case AVAILABLE -> {
 				}
+				case FAILED -> body.add(new Note("Updating to " + u.version() + " failed: " + u.message()).error());
 				case CHECKING -> body.add(new Label("Checking for updates…").dim());
 				case DOWNLOADING -> body.add(new Label("Downloading " + u.version() + "…").dim());
 				case STAGED -> body.add(new Note(u.version() + " is downloaded and installs when you quit."

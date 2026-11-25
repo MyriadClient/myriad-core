@@ -2,6 +2,7 @@ package dev.myriadclient.impl.ui.panels;
 
 import dev.myriadclient.api.module.Module;
 import dev.myriadclient.api.setting.SettingGroup;
+import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
@@ -47,6 +48,6 @@ final class ControlMemberEntry extends ModuleEntry {
 			.visible(() -> control.rememberedCount(module) > 0);
 		body.add(saved);
 		super.buildBody(body);
-		body.add(new Button("Remove from " + control.name(), () -> control.members.toggle(module)).danger());
+		body.add(new Button(Icons.TIMES + "  Remove from " + control.name(), () -> control.members.toggle(module)).quiet().danger());
 	}
 }

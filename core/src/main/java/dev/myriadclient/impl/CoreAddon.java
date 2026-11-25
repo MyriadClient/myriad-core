@@ -26,6 +26,7 @@ import dev.myriadclient.api.setting.RegistryListSetting;
 import dev.myriadclient.api.setting.RegistrySetting;
 import dev.myriadclient.api.setting.StringListSetting;
 import dev.myriadclient.api.setting.StringSetting;
+import dev.myriadclient.api.ui.Icons;
 import dev.myriadclient.api.ui.SettingWidgets;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.ColorPicker;
@@ -119,7 +120,8 @@ public final class CoreAddon implements MyriadAddon {
 		w.register(EnumSetSetting.class, s -> new RegistryPicker<>(enumSetSource((EnumSetSetting) s)), true);
 		w.register(ColorSetting.class, s -> new ColorPicker(s::get, s::edit), false);
 		w.register(KeybindSetting.class, s -> new KeybindButton(s::get, s::edit), false);
-		w.register(ActionSetting.class, s -> new Button("Run", s::run), false);
+		// The whole row runs it (SettingRow); the arrow only says so.
+		w.register(ActionSetting.class, s -> new Button(Icons.PLAY, s::run).quiet().tooltip(s.description()), false);
 		w.register(RegistryListSetting.class, s -> new RegistryPicker<>(s), true);
 		w.register(RegistrySetting.class, s -> RegistryPicker.single(s), true);
 		w.register(ModuleListSetting.class, CoreAddon::modulePicker, true);

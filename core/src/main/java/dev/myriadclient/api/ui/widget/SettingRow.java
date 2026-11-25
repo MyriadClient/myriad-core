@@ -1,6 +1,7 @@
 package dev.myriadclient.api.ui.widget;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import dev.myriadclient.api.setting.ActionSetting;
 import dev.myriadclient.api.setting.Setting;
 import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.draw.FontFamily;
@@ -9,7 +10,7 @@ import dev.myriadclient.api.util.ColorUtil;
 /**
  * A setting's name (left) and editor (right). Wide editors (pickers, lists) go below the name instead, and so does any
  * editor once the name and it don't both fit on a line. Right-click the name to reset to default; clicking a switch's
- * name flips the switch.
+ * name flips the switch, and clicking an action's row runs it.
  */
 public class SettingRow extends Widget {
 	/** The least width of an editor beside its name; narrower than this it goes below. */
@@ -46,7 +47,7 @@ public class SettingRow extends Widget {
 	@Override
 	protected float measure(Canvas c, float width) {
 		float wanted = c.textWidth(setting.name()) + 8 + (setting.overriddenBy() == null ? 0 : 24);
-		if (editor instanceof Toggle) {
+		if (editor instanceof Toggle || action()) {
 			below = false;
 			nameW = width - 24;
 			return Math.max(ROW, editor.layout(c, x + nameW, y, width - nameW));
@@ -99,11 +100,16 @@ public class SettingRow extends Widget {
 			setting.reset();
 			return true;
 		}
-		if (button == InputConstants.MOUSE_BUTTON_LEFT && editor instanceof Toggle) {
+		if (button == InputConstants.MOUSE_BUTTON_LEFT && (editor instanceof Toggle || action())) {
 			editor.activate();
 			return true;
 		}
 		return false;
+	}
+
+	/** An action's row: the whole row runs it, as a switch's flips it. */
+	private boolean action() {
+		return setting instanceof ActionSetting;
 	}
 
 	@Override

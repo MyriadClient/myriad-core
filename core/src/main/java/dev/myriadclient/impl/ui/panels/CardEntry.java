@@ -138,7 +138,6 @@ abstract class CardEntry extends Widget {
 		if (t > 0.01f) {
 			// Square the bottom corners as the card opens, like the header itself.
 			c.roundRect(x, y, width * t, rowH, 4, 4, corner, corner, ColorUtil.withAlpha(accent, (int) (55 * t)));
-			c.roundRect(x, y + 3, 2, rowH - 6, 1, ColorUtil.withAlpha(accent, (int) (255 * t)));
 		}
 		float ty = y + (rowH - c.textHeight()) / 2;
 		float rx = x + width - 10;

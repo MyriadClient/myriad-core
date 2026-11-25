@@ -11,6 +11,7 @@ import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.api.ui.widget.Heading;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.VBox;
+import dev.myriadclient.api.ui.widget.Widget;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.hook.HookManager;
 
@@ -26,6 +27,8 @@ import java.util.Set;
  */
 final class HooksPanel extends WidgetPanel {
 	private final Set<MyriadId> unfolded = new HashSet<>();
+	/** Services and hooks folded away (all open at first). */
+	private final Set<MyriadId> folded = new HashSet<>();
 	private String built = "";
 	private boolean showUnused;
 
@@ -64,6 +67,8 @@ final class HooksPanel extends WidgetPanel {
 		built = signature();
 		HookManager hooks = MyriadImpl.get().hookManager();
 
+		content.add(new Label("What addons change in how Myriad works. Click a card to switch it off or on; unfold it to see where it applies.").dim());
+
 		content.add(new Heading("Services"));
 		boolean anyReplaced = false;
 		for (Service<?> s : Service.all()) {
@@ -71,9 +76,11 @@ final class HooksPanel extends WidgetPanel {
 			if (list.isEmpty()) continue;
 			anyReplaced = true;
 			String forEveryone = hooks.active(s).map(Contribution::label).orElse("core's own");
-			content.add(new Label(s.name() + " · " + forEveryone + " for everyone").dim());
 			List<Contribution> live = hooks.live(s);
-			for (Contribution c : list) content.add(new Card(c, hooks, live.contains(c)));
+			VBox cards = new VBox(2, 0);
+			for (Contribution c : list) cards.add(new Card(c, hooks, live.contains(c)));
+			content.add(section(s.id(), s.name(), cards, () -> forEveryone,
+				s.name() + " for everyone: " + forEveryone + ". A replacement may cover only some addons' modules (its badge says whose)."));
 		}
 		if (!anyReplaced) content.add(new Label("Rotations, inventory, placement and breaking are all core's own.").dim());
 
@@ -87,16 +94,28 @@ final class HooksPanel extends WidgetPanel {
 				unused.add(h.name());
 				continue;
 			}
-			content.add(new Label(h.name() + (h.description().isEmpty() ? "" : " · " + h.description())).dim());
-			for (Contribution c : list) content.add(new Card(c, hooks, false));
+			VBox cards = new VBox(2, 0);
+			for (Contribution c : list) cards.add(new Card(c, hooks, false));
+			content.add(section(h.id(), h.name(), cards, () -> list.stream().filter(c -> c.enabled() && !c.failed()).count() + " on",
+				h.description().isEmpty() ? null : h.description()));
 		}
 		if (unused.size() == seen.size()) content.add(new Label("No addon handles any hook.").dim());
 		if (!unused.isEmpty()) {
 			// For addon developers looking for where they can step in: out of the player's way until opened.
 			VBox names = new VBox(2, 0);
 			names.add(new Label(String.join(", ", unused)).dim());
-			content.add(new Collapsible(() -> "Not handled", names, () -> showUnused, v -> showUnused = v).hint(() -> String.valueOf(unused.size())));
+			content.add(new Collapsible(() -> "Not handled", names, () -> showUnused, v -> showUnused = v).indent(10).hint(() -> String.valueOf(unused.size())));
 		}
+	}
+
+	/** One service or hook: its cards under its name, open unless folded, what's in use as the hint, more in the tooltip. */
+	private Widget section(MyriadId id, String name, VBox cards, java.util.function.Supplier<String> hint, String tip) {
+		Collapsible c = new Collapsible(() -> name, cards, () -> !folded.contains(id), open -> {
+			if (open) folded.remove(id);
+			else folded.add(id);
+		}).indent(10).hint(hint);
+		if (tip != null) c.tooltip(tip);
+		return c;
 	}
 
 	/** A contribution: click switches it on or off; unfolding says who made it and when it applies. */

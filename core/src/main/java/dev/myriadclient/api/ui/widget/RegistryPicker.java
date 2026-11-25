@@ -3,6 +3,8 @@ package dev.myriadclient.api.ui.widget;
 import dev.myriadclient.api.setting.RegistryListSetting;
 import dev.myriadclient.api.setting.RegistrySetting;
 import dev.myriadclient.api.ui.draw.Canvas;
+import org.jetbrains.annotations.ApiStatus;
+import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
 import net.minecraft.core.Registry;
 import net.minecraft.resources.Identifier;
@@ -19,14 +21,14 @@ import java.util.Locale;
 
 /**
  * Inline searchable multi-select over a vanilla registry, instead of a separate picker screen. Selected
- * entries sort first; items and blocks show their icon. Shut, it's a row saying what's picked; click it (or Enter) to
+ * entries sort first. Shut, it's a row naming what's picked (with a count); click it (or Enter) to
  * open a search box and a scrolling list, where clicking an entry picks or unpicks it. The search matches names and
  * ids. The order is taken when it opens or the search changes, so entries don't jump while you pick.
  *
  * @param <T> the registry's entry type
  */
 public class RegistryPicker<T> extends Widget {
-	private static final float LIST_HEIGHT = 120, ENTRY = 12;
+	private static final float LIST_HEIGHT = 120, ENTRY = 13, PAD = 6;
 
 	/** What the picker lists and how picking works: a multi-select list, a single choice, or anything else. */
 	public interface Source<T> {
@@ -54,7 +56,19 @@ public class RegistryPicker<T> extends Widget {
 		/** What {@code t} is called on screen. */
 		String name(T t);
 
-		/** The icon drawn beside {@code t}: blocks and items show their item, anything else {@link ItemStack#EMPTY} (none). */
+		/**
+		 * Whether several can be picked (a list) rather than one (a single choice): shut, a list's row names what's picked
+		 * with a count, a single choice's shows {@link #label}. True unless overridden.
+		 */
+		@ApiStatus.AvailableSince("2.6")
+		default boolean multiple() {
+			return true;
+		}
+
+		/**
+		 * An icon for {@code t}: blocks and items their item, anything else {@link ItemStack#EMPTY} (none). The picker no
+		 * longer draws it (its rows are checkboxes or radio dots); kept for sources that use it elsewhere.
+		 */
 		default ItemStack icon(T t) {
 			if (t instanceof Block b && b.asItem() != Items.AIR) return new ItemStack(b.asItem());
 			if (t instanceof Item i) return new ItemStack(i);
@@ -69,6 +83,11 @@ public class RegistryPicker<T> extends Widget {
 	private List<T> filtered = new ArrayList<>();
 	private float scroll;
 	private int lastSize = -1;
+	/** What's picked, named, for the shut row; worked out again when the count changes, or now and then. */
+	private String summary = "";
+	private int summarySize = -1, summaryAge;
+	/** Where the shut row's "Clear" was drawn (x, width), or width 0 for none. */
+	private float clearX, clearW;
 
 	/** A multi-select over {@code setting}'s registry, picking into the setting; the row says how many are picked. */
 	public RegistryPicker(RegistryListSetting<T> setting) {
@@ -144,6 +163,11 @@ public class RegistryPicker<T> extends Widget {
 			}
 
 			@Override
+			public boolean multiple() {
+				return false;
+			}
+
+			@Override
 			public String label() {
 				return registryName(setting.registry(), setting.get());
 			}
@@ -207,24 +231,65 @@ public class RegistryPicker<T> extends Widget {
 	@Override
 	protected float measure(Canvas canvas, float width) {
 		if (!expanded) return ROW;
-		search.layout(canvas, x, y + ROW + 3, width);
+		// Inset, inside the field's outline.
+		search.layout(canvas, x + 3, y + ROW + 3, width - 6);
 		return ROW + 3 + ROW + 3 + LIST_HEIGHT;
+	}
+
+	/** The names of what's picked, in the registry's order, for the shut row; "None" for nothing. */
+	private String summary() {
+		int size = setting.size();
+		if (size != summarySize || ++summaryAge > 40) {
+			StringBuilder b = new StringBuilder();
+			int n = 0;
+			if (size > 0) for (T t : setting.all()) {
+				if (!setting.contains(t)) continue;
+				if (n++ > 0) b.append(", ");
+				b.append(setting.name(t));
+				if (n >= 12) break;
+			}
+			// Picked but not listed (a module of an addon that isn't loaded): said, not hidden.
+			int missing = size - Math.min(n, size);
+			if (n > 0 && missing > 0 && n < 12) b.append(" +").append(missing).append(" not loaded");
+			summary = n == 0 ? size > 0 ? size + " not loaded" : "None" : b.toString();
+			summarySize = size;
+			summaryAge = 0;
+		}
+		return summary;
 	}
 
 	@Override
 	public void render(Canvas c, float mx, float my) {
 		boolean hover = mx >= x && my >= y && mx < x + width && my < y + ROW;
-		int header = hover ? theme().surfaceHover.argb() : theme().surface.argb();
-		// Open, the search and the list sit on one panel in the header's own colour, as a dropdown's list does.
-		if (expanded) {
-			c.roundRect(x, y, width, ROW, 4, 4, 0, 0, header);
-			c.roundRect(x, y + ROW, width, height - ROW, 0, 0, 4, 4, theme().surface.argb());
+		Dropdown.field(c, x, y, width, height, ROW, hover, expanded, expanded ? 1 : 0);
+		float ty = y + (ROW - c.textHeight()) / 2;
+		float right = x + width - 16;
+		clearW = 0;
+		if (setting.multiple()) {
+			int size = setting.size();
+			if (size > 0) {
+				// The count as a pill, and while open a way to unpick them all.
+				String count = String.valueOf(size);
+				float pw = c.textWidth(count) + 7;
+				right -= pw;
+				c.roundRect(right, y + 3, pw, ROW - 6, (ROW - 6) / 2, ColorUtil.withAlpha(theme().accent.argb(), 60));
+				c.text(count, right + 3.5f, ty, theme().accent.argb());
+				right -= 4;
+				if (expanded) {
+					String clear = "Clear";
+					clearW = c.textWidth(clear) + 6;
+					clearX = right - clearW;
+					boolean ch = mx >= clearX && mx < clearX + clearW && my >= y && my < y + ROW;
+					c.text(clear, clearX + 3, ty, ch ? theme().red.argb() : theme().textDim.argb());
+					right = clearX - 2;
+				}
+			}
+			String text = summary();
+			c.text(c.ellipsize(c.defaultFont(), c.defaultFontSize(), text, right - x - PAD), x + PAD, ty, size > 0 ? theme().text.argb() : theme().textDim.argb());
 		} else {
-			c.roundRect(x, y, width, ROW, 4, header);
+			c.text(c.ellipsize(c.defaultFont(), c.defaultFontSize(), setting.label(), right - x - PAD), x + PAD, ty, theme().text.argb());
 		}
-		String label = c.ellipsize(c.defaultFont(), c.defaultFontSize(), setting.label(), width - 16);
-		c.text(label, x + 4, y + (ROW - c.textHeight()) / 2, theme().textDim.argb());
-		c.text(expanded ? "" : "", x + width - 10, y + (ROW - c.textHeight()) / 2, theme().textDim.argb());
+		Dropdown.chevron(c, x, y, width, ROW, expanded);
 		if (!expanded) return;
 		if (lastSize < 0) refilter();
 		search.render(c, mx, my);
@@ -233,28 +298,52 @@ public class RegistryPicker<T> extends Widget {
 		c.clip(x, ly, width, LIST_HEIGHT);
 		int first = (int) (scroll / ENTRY);
 		int count = (int) (LIST_HEIGHT / ENTRY) + 2;
+		float box = 8;
 		for (int i = first; i < Math.min(filtered.size(), first + count); i++) {
 			T t = filtered.get(i);
 			float ey = ly + i * ENTRY - scroll;
 			boolean sel = setting.contains(t);
 			boolean h = mx >= x && mx < x + width && my >= ey && my < ey + ENTRY && my >= ly && my < ly + LIST_HEIGHT;
-			if (h) c.rect(x, ey, width, ENTRY, theme().surfaceHover.argb());
-			c.roundRect(x + 3, ey + 3, 6, 6, 2, sel ? theme().accent.argb() : ColorUtil.withAlpha(theme().textDim.argb(), 80));
-			ItemStack stack = setting.icon(t);
-			float tx = x + 13;
-			if (!stack.isEmpty()) {
-				c.item(stack, tx, ey + 1, 10);
-				tx += 12;
+			if (h) c.roundRect(x + 2, ey, width - 4, ENTRY, 3, theme().surfaceHover.argb());
+			// A tick box (a dot for a single choice), then the name.
+			float bx = x + PAD, by = ey + (ENTRY - box) / 2;
+			if (setting.multiple()) {
+				if (sel) {
+					c.roundRect(bx, by, box, box, 2, theme().accent.argb());
+				} else {
+					c.outline(bx, by, box, box, 2, 1, ColorUtil.withAlpha(theme().textDim.argb(), h ? 200 : 120));
+				}
+			} else {
+				c.outline(bx, by, box, box, box / 2, 1, ColorUtil.withAlpha(sel ? theme().accent.argb() : theme().textDim.argb(), sel ? 255 : 120));
+				if (sel) c.circle(bx + box / 2, by + box / 2, 2, theme().accent.argb());
 			}
-			c.text(c.ellipsize(c.defaultFont(), c.defaultFontSize() * 0.9f, setting.name(t), width - (tx - x) - 4) , tx, ey + (ENTRY - c.textHeight()) / 2, sel ? theme().text.argb() : theme().textDim.argb());
+			// (No item icons: items don't draw inside UI windows yet, and a column for them stood empty.)
+			float tx = bx + box + 5;
+			c.text(c.ellipsize(c.defaultFont(), c.defaultFontSize(), setting.name(t), x + width - tx - PAD), tx, ey + (ENTRY - c.textHeight()) / 2,
+				sel ? theme().text.argb() : h ? theme().text.argb() : theme().textDim.argb());
 		}
 		c.pop();
+		// A thin bar says where in a long list you are.
+		float total = filtered.size() * ENTRY;
+		if (total > LIST_HEIGHT) {
+			float bh = Math.max(12, LIST_HEIGHT * LIST_HEIGHT / total);
+			float by = ly + (LIST_HEIGHT - bh) * (scroll / (total - LIST_HEIGHT));
+			c.roundRect(x + width - 4, by, 2, bh, 1, ColorUtil.withAlpha(theme().textDim.argb(), 110));
+		}
+		if (filtered.isEmpty()) c.text("Nothing matches", x + PAD, ly + 4, theme().textDim.argb());
 	}
 
 	@Override
 	public boolean mouseClicked(float mx, float my, int button) {
 		if (!isHovered(mx, my)) return false;
 		if (my < y + ROW) {
+			if (clearW > 0 && mx >= clearX && mx < clearX + clearW) {
+				// Unpick them all (the list keeps its order till it's searched again).
+				List<T> picked = new ArrayList<>();
+				for (T t : setting.all()) if (setting.contains(t)) picked.add(t);
+				for (T t : picked) setting.toggle(t);
+				return true;
+			}
 			expanded = !expanded;
 			if (expanded) refilter();
 			return true;
@@ -286,7 +375,9 @@ public class RegistryPicker<T> extends Widget {
 	public boolean mouseScrolled(float mx, float my, float amount) {
 		if (!expanded) return false;
 		float max = Math.max(0, filtered.size() * ENTRY - LIST_HEIGHT);
-		scroll = Math.clamp(scroll - amount * ENTRY * 3, 0, max);
+		float next = Math.clamp(scroll - amount * ENTRY * 3, 0, max);
+		if (next == scroll) return false;
+		scroll = next;
 		return true;
 	}
 }
