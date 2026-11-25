@@ -389,10 +389,11 @@ public final class DevConsole implements DevSteps {
 					}
 				}
 				// Drags the held left button to x y in window pixels, on the open screen: real drags only arrive in a focused
-				// window, which a test client's usually isn't. "mouse 0 press", "drag 400 220", "mouse 0 release".
+				// window, which a test client's usually isn't. "mouse 0 press", "drag 400 220" (or "drag slot 10"), "mouse 0 release".
 				case "drag" -> {
 					double scale = mc.getWindow().getGuiScale();
-					if (mc.gui.screen() != null) mc.gui.screen().mouseDragged(new net.minecraft.client.input.MouseButtonEvent(Double.parseDouble(a[1]) / scale, Double.parseDouble(a[2]) / scale,
+					double[] at = a[1].equals("slot") ? slotPixels(Integer.parseInt(a[2])) : new double[]{Double.parseDouble(a[1]), Double.parseDouble(a[2])};
+					if (mc.gui.screen() != null) mc.gui.screen().mouseDragged(new net.minecraft.client.input.MouseButtonEvent(at[0] / scale, at[1] / scale,
 						new MouseButtonInfo(InputConstants.MOUSE_BUTTON_LEFT, 0)), 0, 0);
 				}
 				// Moves the cursor to x y in window pixels, as screenshots show them: "cursor 400 220"; or over slot n of the
@@ -503,6 +504,9 @@ public final class DevConsole implements DevSteps {
 					for (int i = 2; i < a.length; i++) WheelSlot.candidates(a[i]).stream().findFirst().ifPresent(wheel::add);
 					CorePanels.openWheel(wheel);
 				}
+				// Shows the named wheel over the game, as its bind does (closed with Escape; F24 stands in for the bind).
+				case "wheel" -> MyriadImpl.get().wheelManager().all().stream().filter(w -> w.name().equals(a[1])).findFirst()
+					.ifPresent(w -> mc.gui.setScreen(new dev.myriadclient.impl.ui.WheelScreen((dev.myriadclient.impl.wheel.WheelImpl) w, Keybind.key(301))));
 				// Opens the named control panel's window.
 				case "controlwin" -> Myriad.controls().all().stream().filter(c -> c.name().equals(a[1])).findFirst().ifPresent(CorePanels::openControl);
 				// Floats the focused window at this size, to see how a panel takes a small one.
