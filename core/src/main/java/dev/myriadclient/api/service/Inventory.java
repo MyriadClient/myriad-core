@@ -48,8 +48,8 @@ import java.util.function.ToDoubleFunction;
  * <li>A container is open ({@link #containerOpen()} says so for one with its screen up): the server takes clicks only
  * in the menu it has open. One held open ({@link Containers#hold}) is the exception: it takes the click on its own
  * slot for the same item.</li>
- * <li>The click budget is spent: {@link PacketLimits.Kind#INVENTORY}, sized for the strictest servers measured (72 in
- * any 5 seconds; 2b2t disconnects on the 80th click in about 4). A sort or refill of up to that many clicks goes in
+ * <li>The click budget is spent: {@link PacketLimits.Kind#INVENTORY}, sized for the strictest servers measured (76 in
+ * any 4.5 seconds, 3 more kept for urgent ones; 2b2t disconnects on the 80th click in about 4). A sort or refill of up to that many clicks goes in
  * one tick. Wrap a move that must happen whatever the cost (a totem) in {@link PacketLimits#urgent}.</li>
  * <li>The server hasn't answered the last click on one of the slots yet: with lag, a click made on what the client
  * still shows would undo what the server already did.</li>

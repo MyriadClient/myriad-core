@@ -99,7 +99,9 @@ public abstract class MultiPlayerGameModeMixin {
 	/** After the click went out: its changes, for InventoryLedger. */
 	@Inject(method = "handleContainerInput", at = @At("RETURN"))
 	private void myriad$clicked(int containerId, int slotNum, int buttonNum, ContainerInput input, Player player, CallbackInfo ci) {
-		if (MyriadImpl.get() != null) MyriadImpl.get().inventoryLedger().afterClick(containerId, slotNum, buttonNum, input);
+		if (MyriadImpl.get() == null) return;
+		MyriadImpl.get().packetLimiter().clickDone();
+		MyriadImpl.get().inventoryLedger().afterClick(containerId, slotNum, buttonNum, input);
 	}
 
 	@Unique

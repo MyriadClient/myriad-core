@@ -92,7 +92,13 @@ final class Borrows {
 		Item item = inv.getItem(inventoryIndex).getItem();
 		ItemStack displaced = inv.getItem(to);
 		Item displacedItem = displaced.isEmpty() ? null : displaced.getItem();
-		if (!clicks.moveToHotbar(inventoryIndex, to)) return -1;
+		// By pick-from-block if a block of it is in reach: the same swap, but no click (see PickSwap).
+		boolean pick = inventory.pickSwap().arm(inventoryIndex, to);
+		if (!clicks.moveToHotbar(inventoryIndex, to)) {
+			if (pick) inventory.pickSwap().disarm();
+			return -1;
+		}
+		if (pick) inventory.pickSwap().sent();
 		Borrow b = new Borrow(owner, inventoryIndex, to, inv.getSelectedSlot(), item, displacedItem, ticks);
 		borrows.add(b);
 		presentation.swapped(b, inventoryIndex, to);
@@ -109,16 +115,29 @@ final class Borrows {
 	 * a click or a use the server hasn't answered yet went to. -1 if none.
 	 */
 	int roomFor(Predicate<ItemStack> replaceable) {
+		return roomFor(replaceable, false);
+	}
+
+	/**
+	 * {@link #roomFor(Predicate)}, or with {@code overBuild} and no other, a slot a build moved a material into: what's
+	 * there goes back when the build ends either way (HotbarRestore works from where things are then), so a shulker box
+	 * a restock opens can come into the hotbar the build has filled.
+	 */
+	int roomFor(Predicate<ItemStack> replaceable, boolean overBuild) {
 		var inv = mc.player.getInventory();
-		int selected = inv.getSelectedSlot(), to = -1, blocks = -1;
+		int selected = inv.getSelectedSlot(), to = -1, blocks = -1, built = -1;
 		for (int i = 0; i < 9; i++) {
-			if (i == selected || i == inventory.serverSlot() || at(i) != null || inventory.buildUses(i) || !inventory.swappable(i)) continue;
+			if (i == selected || i == inventory.serverSlot() || at(i) != null || !inventory.swappable(i)) continue;
+			if (inventory.buildUses(i)) {
+				if (built < 0) built = i;
+				continue;
+			}
 			ItemStack s = inv.getItem(i);
 			if (s.isEmpty()) return i;
 			if (to < 0 && replaceable.test(s)) to = i;
 			if (blocks < 0 && Target.solid().preference(s) >= 0) blocks = i;
 		}
-		return to >= 0 ? to : blocks;
+		return to >= 0 ? to : blocks >= 0 ? blocks : overBuild ? built : -1;
 	}
 
 	/** The borrow in hotbar slot {@code hotbarSlot}, or null. */

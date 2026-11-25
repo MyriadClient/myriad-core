@@ -17,14 +17,16 @@ import org.jetbrains.annotations.ApiStatus;
  * Wrap actions that must happen whatever the cost, like putting a totem in your off hand, in {@link #urgent}. With
  * {@link AntiCheat.Profile#VANILLA} picked by hand (not detected by Auto) there's no budget: everything fits.
  * <p>
- * Counting and checking are lock-free and safe from any thread; packets are counted on whichever thread sends them.
+ * Counting and checking are safe from any thread; packets are counted on whichever thread sends them, each by its exact
+ * send time, so it drops out of the window exactly a window later.
  */
 @ApiStatus.NonExtendable
 public interface PacketLimits {
 	/**
-	 * The kinds of packet the budget counts, each with its own limit and window: inventory clicks 72 in any 5 seconds,
-	 * interactions the anti-cheat profile's {@link AntiCheat.Profile#interactionBudget()} in 300 ms (9, after Paper's
-	 * spam limiter), block actions 80 in half a second.
+	 * The kinds of packet the budget counts, each with its own limit and window: inventory clicks 76 in any 4.5 seconds
+	 * (79 for {@link #urgent} ones), interactions the anti-cheat profile's {@link AntiCheat.Profile#interactionBudget()}
+	 * in 380 ms (9, after Paper's spam limiter's 300 ms, with a margin for packets bunching up on their way), block
+	 * actions 80 in half a second.
 	 */
 	enum Kind {
 		/** Block digging actions: starting, stopping and aborting a break, swapping hands, dropping the held item. */
@@ -42,8 +44,9 @@ public interface PacketLimits {
 	boolean canSend(Kind kind, int packets);
 
 	/**
-	 * Counts {@code packets} of {@code kind} you sent past where core counts them: inventory clicks are counted in the
-	 * game's click handler, so clicks you send as packets yourself need this, or the budget doesn't know about them.
+	 * Counts {@code packets} of {@code kind} you sent past where core counts them. Inventory clicks are counted in the
+	 * game's click handler, and click packets sent through the connection are counted as they go; only clicks that
+	 * reach the server some other way need this, or the budget doesn't know about them.
 	 */
 	@ApiStatus.AvailableSince("1.8")
 	void count(Kind kind, int packets);

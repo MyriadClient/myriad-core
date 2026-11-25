@@ -90,7 +90,13 @@ final class BuildMaterials {
 		if (!(MyriadImpl.get().inventoryManager() instanceof InventoryManager inventory)) return -3;
 		if (!manager.moveMaterial(() -> {
 			inventory.buildMoves(into, from);
-			if (!inventory.moveToHotbar(from, into)) return false;
+			// By pick-from-block if a block of it is in reach (the build's own, often): no click (see PickSwap).
+			boolean pick = inventory.pickSwap().arm(from, into);
+			if (!inventory.moveToHotbar(from, into)) {
+				if (pick) inventory.pickSwap().disarm();
+				return false;
+			}
+			if (pick) inventory.pickSwap().sent();
 			inventory.buildMoved(into, from);
 			return true;
 		})) return -1;

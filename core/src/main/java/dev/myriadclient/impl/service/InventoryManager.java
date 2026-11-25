@@ -111,10 +111,12 @@ public final class InventoryManager implements Inventory {
 	private final HotbarRestore restore = new HotbarRestore(this, clicks, gate, inFlight, presentation);
 	private final Masks masks = new Masks(this::shownFrom);
 	private final OffHandWatch offHand = new OffHandWatch(this, clicks, masks);
+	/** Borrows by pick-from-block where a block of the item is in reach (see {@link PickSwap}). */
+	private final PickSwap pickSwap = new PickSwap(this);
 
 	/** What has handlers of its own besides this: subscribed with it. */
 	public List<Object> parts() {
-		return List.of(gate, screenClicks, charge, borrows, masks, restore, offHand);
+		return List.of(gate, screenClicks, charge, borrows, masks, restore, offHand, pickSwap);
 	}
 
 	/** Lowest priority: what actually goes out, after other handlers have changed it. */
@@ -422,6 +424,10 @@ public final class InventoryManager implements Inventory {
 		return true;
 	}
 
+	PickSwap pickSwap() {
+		return pickSwap;
+	}
+
 	@Override
 	public boolean isHolding() {
 		return holder != null;
@@ -582,9 +588,19 @@ public final class InventoryManager implements Inventory {
 		return to >= 0 && moveToHotbar(inventoryIndex, to) ? to : -1;
 	}
 
-	/** A hotbar slot to bring something into, an empty one or else one holding what {@code replaceable} accepts (see {@link Borrows#roomFor}), or -1. */
+	/**
+	 * A hotbar slot to bring something into, an empty one or else one holding what {@code replaceable} accepts, else one
+	 * a build moved a material into (see {@link Borrows#roomFor(Predicate, boolean)}), or -1.
+	 */
 	int hotbarRoom(Predicate<ItemStack> replaceable) {
-		return borrows.roomFor(replaceable);
+		return borrows.roomFor(replaceable, true);
+	}
+
+	/** {@link #pullToHotbar}, into a slot a build moved a material into when there's no other (a box a restock opens). */
+	int pullToHotbarOverBuild(int inventoryIndex) {
+		if (mc.player == null || inventoryIndex < 9 || inventoryIndex >= 36 || !prepareClick()) return -1;
+		int to = borrows.roomFor(s -> true, true);
+		return to >= 0 && moveToHotbar(inventoryIndex, to) ? to : -1;
 	}
 
 	@Override
