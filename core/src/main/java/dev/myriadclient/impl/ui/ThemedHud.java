@@ -2,7 +2,6 @@ package dev.myriadclient.impl.ui;
 
 import dev.myriadclient.api.Myriad;
 import dev.myriadclient.api.ui.ThemeSettings;
-import dev.myriadclient.api.ui.draw.FontFamily;
 import dev.myriadclient.api.util.ColorUtil;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.render.UiRenderer;
@@ -12,22 +11,16 @@ import net.minecraft.resources.Identifier;
 import java.util.function.Consumer;
 
 /**
- * The hotbar and the off hand's slot (Theme → Preferences → Themed Hotbar), hearts, food and armour (Themed Status
- * Bars) and the experience bar and level (Themed Experience Bar) drawn in the theme, each on its own: each sprite
- * Minecraft draws for them is swapped for the theme's own shapes in the same place, so its items, counts and the bars'
- * sizes stay Minecraft's. With the hotbar themed, it and what sits on it are moved up {@link #MARGIN} off the screen's
+ * The hotbar and the off hand's slot drawn in the theme (Theme → Preferences → Themed Hotbar): each sprite Minecraft
+ * draws for them is swapped for the theme's own shapes in the same place, so its items and counts stay Minecraft's.
+ * Hearts, food, armour and the experience bar are Minecraft's own. With the hotbar themed, it and what sits on it are moved up {@link #MARGIN} off the screen's
  * edge (HudMixin).
  */
 public final class ThemedHud {
 	/** A hotbar cell around its 16-pixel item; hotbar items are 20 apart, so two pixels between. */
 	private static final float CELL = 18;
-	/** The theme icon font's heart and shield (Material Design) and drumstick (Font Awesome), at a size that fills a 9-pixel icon. */
-	private static final String HEART = "\uDB80\uDED1", DRUMSTICK = "\uEEF9", SHIELD = "\uDB81\uDC98";
-	private static final float ICON_SIZE = 10;
 	/** GUI pixels between the hotbar and the bottom of the screen. */
 	public static final int MARGIN = 3;
-	/** The experience bar drawn thinner than Minecraft's, as the UI's progress bars are: this far in from its top and bottom. */
-	private static final float BAR_INSET = 1;
 
 	private ThemedHud() {
 	}
@@ -35,14 +28,6 @@ public final class ThemedHud {
 	/** Whether the hotbar is in the theme (and lifted off the edge). */
 	public static boolean on() {
 		return Myriad.isReady() && theme().themedHotbar.get();
-	}
-
-	private static boolean statusBars() {
-		return Myriad.isReady() && theme().themedStatusBars.get();
-	}
-
-	private static boolean experienceBar() {
-		return Myriad.isReady() && theme().themedExperienceBar.get();
 	}
 
 	private static ThemeSettings theme() {
@@ -77,93 +62,10 @@ public final class ThemedHud {
 		};
 	}
 
-	/** The experience bar's track, where Minecraft puts it; false to let Minecraft draw it. */
-	public static boolean experienceTrack(GuiGraphicsExtractor ctx, int x, int y, int w, int h) {
-		if (!experienceBar()) return false;
-		return paint(ctx, c -> c.roundRect(x, y + BAR_INSET, w, h - 2 * BAR_INSET, (h - 2 * BAR_INSET) / 2f, ColorUtil.withAlpha(theme().textDim.argb(), 50)));
-	}
-
-	/** Its fill, {@code w} of the track's width; false to let Minecraft draw it. */
-	public static boolean experienceFill(GuiGraphicsExtractor ctx, int x, int y, int w, int h) {
-		if (!experienceBar()) return false;
-		if (w <= 0) return true;
-		return paint(ctx, c -> {
-			ThemeSettings t = theme();
-			float bh = h - 2 * BAR_INSET;
-			c.gradientRect(x, y + BAR_INSET, Math.max(w, bh), bh, bh / 2, t.activeBorderFrom.argb(), t.activeBorderTo.argb(), 0);
-		});
-	}
-
-	/**
-	 * A heart, food or armour icon, from the name of the sprite Minecraft would draw at {@code x, y} (9 by 9): the theme
-	 * font's own heart, drumstick and shield in the theme's colours (hearts its red, or by kind its green when poisoned,
-	 * dim when withered, yellow for absorption, cyan when frozen; food the accent, the secondary under Hunger; armour the
-	 * text),
-	 * half of one by drawing the full icon over the empty one only on its left, lighter while it flashes. False to let
-	 * Minecraft draw it (a vehicle's hearts, say).
-	 */
-	public static boolean statusIcon(GuiGraphicsExtractor ctx, Identifier sprite, int x, int y) {
-		if (!statusBars()) return false;
-		String path = sprite.getPath();
-		ThemeSettings th = theme();
-		String icon;
-		int color;
-		if (path.startsWith("hud/heart/")) {
-			String kind = path.substring("hud/heart/".length());
-			if (kind.startsWith("vehicle")) return false;
-			icon = HEART;
-			color = kind.startsWith("container") ? 0 : kind.startsWith("poisoned") ? th.green.argb() : kind.startsWith("withered") ? th.textDim.argb()
-				: kind.startsWith("absorbing") ? th.yellow.argb() : kind.startsWith("frozen") ? th.cyan.argb() : th.red.argb();
-		} else if (path.startsWith("hud/food_")) {
-			icon = DRUMSTICK;
-			color = path.contains("empty") ? 0 : path.contains("hunger") ? th.secondary.argb() : th.accent.argb();
-		} else if (path.startsWith("hud/armor_")) {
-			icon = SHIELD;
-			color = path.contains("empty") ? 0 : th.text.argb();
-		} else return false;
-		boolean half = path.contains("half"), blinking = path.contains("blinking");
-		return paint(ctx, c -> {
-			ThemeSettings t = theme();
-			int full = color;
-			// The empty icon: under a half one, and what a container or an empty slot is.
-			if (color == 0 || half) glyph(c, icon, x, y, ColorUtil.withAlpha(t.textDim.argb(), 0x60));
-			if (color == 0) return;
-			if (blinking) full = ColorUtil.lerp(full, 0xFFFFFFFF, 0.45f);
-			if (half) {
-				c.push();
-				c.clip(x, y - 2, 4.5f, 13);
-				glyph(c, icon, x, y, full);
-				c.pop();
-			} else glyph(c, icon, x, y, full);
-		});
-	}
-
-	/** {@code icon} centred in the 9-pixel square at {@code x, y}, with a faint shadow so it reads over the world. */
-	private static void glyph(UiRenderer c, String icon, float x, float y, int color) {
-		float w = c.textWidth(FontFamily.MONO, ICON_SIZE, icon), h = c.textHeight(FontFamily.MONO, ICON_SIZE);
-		float gx = x + (9 - w) / 2, gy = y + (9 - h) / 2;
-		if (ColorUtil.alpha(color) > 0x80) c.text(FontFamily.MONO, ICON_SIZE, icon, gx + 0.6f, gy + 0.6f, ColorUtil.withAlpha(0xFF000000, 0x90));
-		c.text(FontFamily.MONO, ICON_SIZE, icon, gx, gy, color);
-	}
-
-	/** The experience level over the bar, in the theme's font and accent; false to let Minecraft draw it. */
-	public static boolean level(GuiGraphicsExtractor ctx, int level) {
-		if (!experienceBar()) return false;
-		return paint(ctx, c -> {
-			ThemeSettings t = theme();
-			String text = Integer.toString(level);
-			float size = c.defaultFontSize(), w = c.textWidth(FontFamily.SANS_BOLD, size, text);
-			// Where Minecraft centres it: over the bar, 35 pixels up from the bottom.
-			float x = ctx.guiWidth() / 2f - w / 2, y = ctx.guiHeight() - 35;
-			c.text(FontFamily.SANS_BOLD, size, text, x + 0.75f, y + 0.75f, 0xC0000000);
-			c.text(FontFamily.SANS_BOLD, size, text, x, y, t.accent.argb());
-		});
-	}
-
 	/** A small window's surface and border, as the UI draws its windows. */
 	private static void window(UiRenderer c, ThemeSettings t, float x, float y, float w, float h) {
 		float r = Math.min(t.rounding.get(), h / 2), b = t.borderSize.get();
-		c.roundRect(x, y, w, h, r, ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xC0, ColorUtil.alpha(t.windowBackground.argb()))));
+		UiRenderer.surface(c, x, y, w, h, r, ColorUtil.withAlpha(t.windowBackground.argb(), Math.max(0xC0, ColorUtil.alpha(t.windowBackground.argb()))));
 		if (b > 0) c.gradientOutline(x, y, w, h, r, b, t.activeBorderFrom.argb(), t.activeBorderTo.argb(), t.borderAngle.get().floatValue());
 	}
 

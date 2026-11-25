@@ -257,12 +257,6 @@ final class UiStore {
 		if (o.has("preferences") && o.get("preferences").isJsonObject()) {
 			JsonObject prefs = o.getAsJsonObject("preferences");
 			theme.preferences.fromJson(prefs);
-			// Saved before Themed Hotbar was split (1.3): the status bars and experience bar go as the hotbar did.
-			JsonObject cosmetics = prefs.has("cosmetics") && prefs.get("cosmetics").isJsonObject() ? prefs.getAsJsonObject("cosmetics") : null;
-			if (cosmetics != null && cosmetics.has(theme.themedHotbar.id())) {
-				if (!cosmetics.has(theme.themedStatusBars.id())) theme.themedStatusBars.set(theme.themedHotbar.get());
-				if (!cosmetics.has(theme.themedExperienceBar.id())) theme.themedExperienceBar.set(theme.themedHotbar.get());
-			}
 		}
 		MyriadId id = t != null && t.isJsonPrimitive() ? MyriadId.parse(t.getAsString()) : ThemeManager.DEFAULT;
 		if (!themes.apply(id)) themes.apply(ThemeManager.DEFAULT);

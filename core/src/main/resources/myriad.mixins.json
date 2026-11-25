@@ -43,7 +43,6 @@
 		"EntityRenderDispatcherMixin",
 		"EntityRendererMixin",
 		"EntityRenderStateMixin",
-		"ExperienceBarMixin",
 		"FeatureRenderDispatcherMixin",
 		"FirstPersonHandsAndItemsMixin",
 		"FirstPersonHandsAndItemsRendererMixin",
