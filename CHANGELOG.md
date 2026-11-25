@@ -17,6 +17,67 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.6.0
+
+Adds API, for Minecraft 26.3: background effects, and a few for settings and buttons (below).
+
+### UI
+
+- **Background effects.** Theme > Background > Style picks Plain or an effect an addon registers
+  (`BackdropEffect.register`: a fragment shader on `myriad:effect.glsl`, with up to 12 options). Windows, tooltips,
+  toasts, the launcher, wheels and themed screens draw it; the bar and menu buttons stay plain. An effect's options
+  show as a group of their own while it's picked, and are saved and shared with the theme. A missing effect draws as
+  Plain and keeps the choice; one whose shader doesn't compile draws as Plain until resources reload. The example
+  addon registers one.
+- **Frosted backgrounds blur what's under them**, as a backdrop filter does: a window over another or over the HUD,
+  a tooltip or the launcher over a window. See-through rows, buttons and wheel slots on an effect background show it
+  blurred through them, with no gap round them. About 0.7 ms a frame with the UI open (measured at 1466x1030).
+- **Scrolling carries on.** At the top or bottom of a list inside another (a scroll view, a dropdown, a picker), the
+  wheel scrolls the one it's in, as a page does in a browser.
+- **Pickers and buttons.** A dropdown is an outlined field that opens on the current value and scrolls. A registry
+  picker names what's picked, with a count and a Clear link, checkboxes or radio dots, a scrollbar and "Nothing
+  matches". An action setting runs when its row is clicked. Reset, Remove, Dismiss and x are quiet buttons.
+  Deleting a macro, a theme or a profile asks first.
+- **Profiles and anti-cheat** are foldable sections of Addons > Myriad now; the Profiles window is gone. An addon's
+  links and Update/Notes share a toolbar and its settings fold, as each service's hooks do. Themes switch on a left
+  click; a right click unfolds the active theme's actions and settings.
+- A module's Module group (keybind, hold, list, chat) always comes last, in the same place for every module.
+- **Workspace bar.** The cells are squares; the active one's shape says its layout (a circle for Columns, a square
+  for Dwindle), and clicking it again cycles the layout. The HUD's icon is centred, its selected square like the rest.
+- The launcher's Shift+Enter (or a Shift or right click) on a module opens its settings in a window of their own, as
+  Shift+right-click in a group does, rather than in place of the last one.
+- The themed hearts, food, armour and experience bars are gone: Minecraft draws its own again.
+- Toasts get the window border in place of their left stripe.
+
+### Inventory and containers
+
+- **Clicks counted by when they went.** The budget is 76 clicks in any 4.5 seconds (3 more for urgent ones, like a
+  totem), each leaving it exactly 4.5 seconds after it was sent, where the old count let them go early. A sort sends
+  up to 76 at once and a long run settles at about 17 a second; clicks sent straight to the connection count too.
+  Interactions: 9 in any 380 ms.
+- **Pick-item swaps.** An item moved from the inventory to the hotbar for a build or a restock goes as a
+  pick-from-block when a block of it is in reach (servers on 1.21.4 or later, joined directly): it uses no click
+  budget and works while moving. `-Dmyriad.noPickSwap=true` turns it off.
+- **On 2b2t, opens past 8 in 5 seconds wait** (yours count too), where the 9th got you dropped.
+- **Jobs open containers quietly.** A job's container (a restock, `Steps.openContainer`, `Steps.inItem`) shows no
+  screen and never takes the place of yours: the UI, a wheel or chat stay up, and the server closing it doesn't close
+  them. Restocks from chests and boxes wait while your inventory or a container is open, take only what fits, and
+  never fill the slot the box came from; a box may take a hotbar slot a build filled when no other is free.
+- **Boxes go down on platforms.** A box put down for you (Mod+right-click, restocks, the swap bar) may go where its
+  drop lands a block below your feet, standing on a platform of boxes say; it's stepped down to and back up from.
+  Spots whose drop lands at your feet still come first. Before, it could find nowhere to go.
+- **No ghost box on the cursor on 2b2t.** A shulker put down with the mouse moving is a one-slot drag, which 2b2t
+  answers with the box still on the cursor after it landed: it showed on the cursor as well (or as "air"). The
+  inventory check also runs while Printer is on, when your inventory or a container is open.
+
+### API
+
+- Added: `BackdropEffect`; `ThemeSettings.PLAIN`, `background`, `backgroundEffect()` and `effectOptions()`;
+  `SettingGroup.visibleWhen()` and `isVisible()`; `Button.quiet()`; `RegistryPicker.Source.multiple()`;
+  `SettingsView.displayOrder()`.
+- Deprecated for removal: `ThemeSettings.themedStatusBars` and `themedExperienceBar` (they do nothing).
+- `MyriadLogo.draw` ignores `gap` (the gaps are cut out now). `RegistryPicker` no longer draws `Source.icon`.
+
 ## 2.5.2
 
 A patch: the API is unchanged. Both found on 2b2t and measured there.
