@@ -61,6 +61,13 @@ project(':core') {
 		}
 	}
 
+	// Reproducible: the same source builds the same jar, byte for byte, so a release built by CI can be rebuilt and
+	// compared before it's signed (tools/sign-release).
+	tasks.withType(AbstractArchiveTask).configureEach {
+		preserveFileTimestamps = false
+		reproducibleFileOrder = true
+	}
+
 	// dev.myriadclient:myriad (with sources and javadoc) for addons. Releases publish it to Myriad's maven,
 	// https://maven.myriadclient.dev/releases, with `./gradlew publishAllPublicationsToMyriadRepository` and the
 	// myriadUsername and myriadPassword Gradle properties (the release workflow sets them from secrets).

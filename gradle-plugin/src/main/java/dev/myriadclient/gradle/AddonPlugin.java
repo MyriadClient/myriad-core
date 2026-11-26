@@ -327,10 +327,34 @@ public final class AddonPlugin implements Plugin<Project> {
 			maven.credentials(PasswordCredentials.class);
 		});
 		project.getTasks().withType(PublishToMavenRepository.class).configureEach(t -> t.mustRunAfter("build"));
+		signing(project);
 		project.getTasks().register("publishAddon", t -> {
 			t.setGroup("publishing");
 			t.setDescription("Builds and tests the addon, then publishes it to Myriad's maven (myriadUsername and myriadPassword).");
 			t.dependsOn("build", "publishAllPublicationsToMyriadRepository");
+		});
+	}
+
+	/** Signing releases for Myriad's updater, and jars that build byte for byte the same from the same source. */
+	private static void signing(Project project) {
+		// Reproducible archives: the same source gives the same jar, so a build can be checked against another.
+		project.getTasks().withType(org.gradle.api.tasks.bundling.AbstractArchiveTask.class).configureEach(t -> {
+			t.setPreserveFileTimestamps(false);
+			t.setReproducibleFileOrder(true);
+		});
+		project.getTasks().register("generateSigningKey", GenerateSigningKey.class, t -> {
+			t.setGroup("publishing");
+			t.setDescription("Makes a key to sign the addon's releases with (prints the public half, writes the private half to a file).");
+			t.getOutputDir().set(project.getLayout().getBuildDirectory().dir("signing"));
+		});
+		project.getTasks().register("signAddon", SignAddon.class, t -> {
+			t.setGroup("publishing");
+			t.setDescription("Signs the built jar for Myriad's updater (writes <jar>.sig; key from MYRIAD_SIGNING_KEY).");
+			Jar jar = (Jar) project.getTasks().getByName("jar");
+			t.dependsOn(jar);
+			t.getJar().set(jar.getArchiveFile());
+			t.getAllowUndeclaredKey().set(project.provider(() -> project.hasProperty("allowUndeclaredKey")));
+			t.getKeyFile().set(project.provider(() -> (String) project.findProperty("myriadSigningKeyFile")));
 		});
 	}
 }
