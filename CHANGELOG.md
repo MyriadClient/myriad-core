@@ -17,6 +17,42 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.8.1
+
+A patch: the API is unchanged. Hardening for the Myriad Library, from a security review before it opens, and one UI
+fix.
+
+### UI
+
+- With the UI open over the main menu, rows and cards on a window with a background effect are frosted over it again,
+  as in game, instead of letting the effect show straight through.
+
+### The Myriad Library
+
+- Only addons installed from Browse are pinned to the Library. An addon you already had keeps updating from its own
+  source even when the Library lists it, and Myriad itself is never pinned.
+- A release the Library withdraws after Myriad found it as an update is no longer downloaded, and Install checks the
+  Library again before writing anything. An update from the Library must provide exactly what its listing says.
+- The Library's information counts as out of date the moment it expires, not only when it was last read.
+- Withdrawals count only when signed with the Library's offline key or the addon's own developer key. Myriad's
+  reserved ids can only be listed by Myriad. A listing revision signed by a key that's later revoked no longer holds
+  back the real listing.
+- The Library is read away from the game's render thread, and each signature is checked only against the key it
+  names, so a hostile copy of it can't freeze the game.
+- Names and Minecraft versions shown from the Library lose private-use characters, which Myriad's font draws as icons.
+
+### Gradle plugin
+
+- `fabric.mod.json` is filled in by plain replacement of `${version}`, `${myriad_version}` and
+  `${minecraft_version}`, no longer by Gradle's template engine, which ran any code the file held.
+- The Library's builder refuses source that could change a build without changing its build-logic hash (template code
+  in `fabric.mod.json`, an unpinned Gradle download from elsewhere, git attributes that rewrite files), hashes only
+  top-level licences and Markdown as the addon's own, and reads `gradle.properties`' `mod_version` line strictly.
+- The inspection finds classes and jars wherever they are in a jar (under `META-INF`, among resources, named in
+  `jars`), multi-release jars, reflection and more ways to reach the network, native code or the desktop.
+- Accepted findings count only when the maintainer's listing key signed them, and a closed-source addon's releases
+  repository is checked to be public and its owner's.
+
 ## 2.8.0
 
 The API is unchanged, for Minecraft 26.3. This release brings the Myriad Library.
