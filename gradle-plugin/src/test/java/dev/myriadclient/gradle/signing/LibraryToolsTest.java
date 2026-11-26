@@ -300,23 +300,51 @@ class LibraryToolsTest {
 		String a = "a".repeat(64);
 		Map<String, Object> l = listing(5);
 		List<String> jarKeys = List.of(dev.publicText());
-		assertTrue(Builder.decide(l, Set.of("network"), summary(dev, jarKeys, List.of("network")), a, BUILD).sign());
+		assertTrue(Builder.decide(l, Set.of("network"), summary(dev, jarKeys, List.of("network")), a, BUILD, Map.of()).sign());
 
-		assertFalse(Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of()), a, "c".repeat(64)).sign(), "build logic changed");
-		assertFalse(Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of()), "d".repeat(64), BUILD).sign(), "the release isn't what was built");
-		assertFalse(Builder.decide(l, Set.of(), summary(stranger, jarKeys, List.of()), a, BUILD).sign(), "not the developer");
-		assertFalse(Builder.decide(l, Set.of(), summary(dev, List.of(stranger.publicText()), List.of()), a, BUILD).sign(), "the jar stopped listing the key");
-		assertFalse(Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of("process")), a, BUILD).sign(), "a new finding");
-		assertFalse(Builder.decide(l, Set.of("obfuscated"), summary(dev, jarKeys, List.of("obfuscated")), a, BUILD).sign(), "obfuscation is never accepted");
+		assertFalse(Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of()), a, "c".repeat(64), Map.of()).sign(), "build logic changed");
+		assertFalse(Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of()), "d".repeat(64), BUILD, Map.of()).sign(), "the release isn't what was built");
+		assertFalse(Builder.decide(l, Set.of(), summary(stranger, jarKeys, List.of()), a, BUILD, Map.of()).sign(), "not the developer");
+		assertFalse(Builder.decide(l, Set.of(), summary(dev, List.of(stranger.publicText()), List.of()), a, BUILD, Map.of()).sign(), "the jar stopped listing the key");
+		assertFalse(Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of("process")), a, BUILD, Map.of()).sign(), "a new finding");
+		assertFalse(Builder.decide(l, Set.of("obfuscated"), summary(dev, jarKeys, List.of("obfuscated")), a, BUILD, Map.of()).sign(), "obfuscation is never accepted");
 		Map<String, Object> other = summary(dev, jarKeys, List.of());
 		other.put("id", "other-addon");
-		assertFalse(Builder.decide(l, Set.of(), other, a, BUILD).sign(), "another addon");
+		assertFalse(Builder.decide(l, Set.of(), other, a, BUILD, Map.of()).sign(), "another addon");
 		Map<String, Object> provides = summary(dev, jarKeys, List.of());
 		provides.put("provides", List.of("my-lib", "minecraft"));
-		assertFalse(Builder.decide(l, Set.of(), provides, a, BUILD).sign(), "provides changed");
+		assertFalse(Builder.decide(l, Set.of(), provides, a, BUILD, Map.of()).sign(), "provides changed");
 		Map<String, Object> closed = listing(5);
 		closed.put("source", "closed");
-		assertFalse(Builder.decide(closed, Set.of(), summary(dev, jarKeys, List.of()), a, BUILD).sign(), "closed source always waits");
+		assertFalse(Builder.decide(closed, Set.of(), summary(dev, jarKeys, List.of()), a, BUILD, Map.of()).sign(), "closed source always waits");
+		assertTrue(Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of()), a, BUILD, Map.of("1.2.0", Set.of(a))).sign(), "the same jar again");
+		assertFalse(Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of()), a, BUILD, Map.of("1.2.0", Set.of("e".repeat(64)))).sign(),
+			"a version the Library holds is never signed with another jar");
+
+		// Nothing a person could approve is refused outright; the rest waits for review.
+		assertFalse(Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of()), "d".repeat(64), BUILD, Map.of()).refused().isEmpty(), "not what was built");
+		assertFalse(Builder.decide(l, Set.of(), summary(stranger, jarKeys, List.of()), a, BUILD, Map.of()).refused().isEmpty(), "not the developer");
+		Builder.Decision changed = Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of("process")), a, "c".repeat(64), Map.of());
+		assertTrue(changed.refused().isEmpty());
+		assertEquals(2, changed.review().size(), "changed build logic and a new finding wait for a person");
+
+		Map<String, Object> report = summary(dev, jarKeys, List.of());
+		assertNull(Builder.refusal(report, a));
+		assertNotNull(Builder.refusal(report, "d".repeat(64)), "the released jar isn't what was built");
+		assertNotNull(Builder.refusal(report, null), "nothing was built");
+		assertNotNull(Builder.refusal(summary(stranger, jarKeys, List.of()), a), "signed by a key the jar doesn't list");
+		assertNotNull(Builder.refusal(summary(dev, List.of(), List.of()), a), "a jar that lists no keys");
+	}
+
+	@Test
+	void heldVersionsComeFromListedVersionsAndYanks() {
+		Map<String, Object> body = Map.of("addons", List.of(
+			Map.of("listing", Map.of("id", "my-addon"),
+				"versions", List.of(Map.of("version", "1.0.0", "sha256", "a".repeat(64))),
+				"yanks", List.of(Map.of("version", "0.9.0", "sha256", "b".repeat(64)))),
+			Map.of("listing", Map.of("id", "other"), "versions", List.of(Map.of("version", "2.0.0", "sha256", "c".repeat(64))))));
+		assertEquals(Map.of("1.0.0", Set.of("a".repeat(64)), "0.9.0", Set.of("b".repeat(64))), LibraryTrust.held(body, "my-addon"));
+		assertEquals(Map.of(), LibraryTrust.held(body, "nobody"));
 	}
 
 	@Test

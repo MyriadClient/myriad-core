@@ -50,10 +50,13 @@ public final class Builder {
 
 	// ---- the signing decision ---------------------------------------------------------------------------------------
 
-	/** What the sign step decided: the reasons it won't sign (none means sign). */
-	public record Decision(List<String> reasons) {
+	/**
+	 * What the sign step decided: why the release is refused outright (nothing a person could approve: the jar isn't
+	 * what the source builds, or the developer didn't sign it), and why it waits for review. Neither means sign.
+	 */
+	public record Decision(List<String> refused, List<String> review) {
 		public boolean sign() {
-			return reasons.isEmpty();
+			return refused.isEmpty() && review.isEmpty();
 		}
 	}
 
@@ -61,32 +64,36 @@ public final class Builder {
 	 * Whether a release may be signed without a person: an open-source listing whose build logic is unchanged since it
 	 * was listed, whose released jar is byte for byte what the builder built from the tagged source, which is the
 	 * listing's addon, signed by one of the listing's developer keys that the jar itself lists, and with no finding the
-	 * maintainer hasn't accepted. Anything else waits for review.
+	 * maintainer hasn't accepted. A jar that isn't what its source builds, isn't the developer's or isn't the listing's
+	 * addon is refused; changed build logic, provides or a new finding wait for review.
 	 *
 	 * @param listing  the signed listing (already checked back to the root keys)
 	 * @param accepted findings the maintainer has accepted for this listing
 	 * @param summary  the inspect step's summary of the released jar
 	 * @param buildSha the SHA-256 of the jar the build step built
 	 * @param buildHash the build-logic hash of the tagged source
+	 * @param held     the jars the signed index already holds for this addon, version → SHA-256s
 	 */
-	public static Decision decide(Map<String, Object> listing, Set<String> accepted, Map<String, Object> summary, String buildSha, String buildHash) {
-		List<String> why = new ArrayList<>();
+	public static Decision decide(Map<String, Object> listing, Set<String> accepted, Map<String, Object> summary, String buildSha, String buildHash,
+			Map<String, Set<String>> held) {
+		List<String> why = new ArrayList<>(), review = new ArrayList<>();
 		if (!"open".equals(listing.get("source"))) why.add("it's a closed-source listing");
-		if (!buildHash.equals(listing.get("build"))) why.add("its build logic changed since it was listed");
+		if (!buildHash.equals(listing.get("build"))) review.add("its build logic changed since it was listed");
 		Object sha = summary.get("sha256");
 		if (!(sha instanceof String s) || !SHA256.matcher(s).matches()) why.add("the released jar couldn't be read");
 		else if (!s.equals(buildSha)) why.add("the released jar isn't what its tagged source builds");
 		if (!java.util.Objects.equals(summary.get("id"), listing.get("id"))) why.add("the jar is a different addon than the listing");
-		if (!new TreeSet<>(strings(summary.get("provides"))).equals(new TreeSet<>(strings(listing.get("provides"))))) why.add("what the jar provides changed");
+		if (!new TreeSet<>(strings(summary.get("provides"))).equals(new TreeSet<>(strings(listing.get("provides"))))) review.add("what the jar provides changed");
 		if (!(summary.get("version") instanceof String v) || !VERSION.matcher(v).matches()) why.add("the jar's version isn't one Myriad signs");
+		else if (held.containsKey(v) && !held.get(v).contains(sha)) why.add("version " + v + " is already in the Library with a different jar");
 		Set<String> devKeys = new HashSet<>(strings(listing.get("keys")));
 		devKeys.retainAll(strings(summary.get("keys")));
 		if (!developerSigned(summary, devKeys)) why.add("the release isn't signed by a developer key both the listing and the jar name");
 		for (String f : strings(summary.get("findings"))) {
 			if (f.equals("obfuscated")) why.add("the jar looks obfuscated");
-			else if (!accepted.contains(f)) why.add("new finding: " + f);
+			else if (!accepted.contains(f)) review.add("new finding: " + f);
 		}
-		return new Decision(List.copyOf(why));
+		return new Decision(List.copyOf(why), List.copyOf(review));
 	}
 
 	private static boolean developerSigned(Map<String, Object> summary, Set<String> keys) {
@@ -301,10 +308,15 @@ public final class Builder {
 		String buildSha = env("BUILD_SHA"), buildHash = check(SHA256, env("BUILD_HASH"), "build hash"), commit = check(SHA1, env("COMMIT"), "commit");
 		String url = env("ASSET_URL");
 		if (!ASSET.matcher(url).matches()) throw new IllegalArgumentException("not a release jar");
-		Decision d = decide(listing, accepted, summary, buildSha, buildHash);
-		if (!d.sign()) {
+		Decision d = decide(listing, accepted, summary, buildSha, buildHash, LibraryTrust.held(body, Json.string(listing.get("id"), "id")));
+		if (!d.refused().isEmpty()) {
+			output("decision", "refused");
+			output("reasons", oneLine(String.join("; ", d.refused())));
+			return;
+		}
+		if (!d.review().isEmpty()) {
 			output("decision", "review");
-			output("reasons", oneLine(String.join("; ", d.reasons())));
+			output("reasons", oneLine(String.join("; ", d.review())));
 			return;
 		}
 		Signing.Key key = Signing.parsePrivate(env("LIBRARY_VERSION_KEY"));
@@ -329,6 +341,16 @@ public final class Builder {
 		output("version", Json.write(version));
 	}
 
+	/**
+	 * Why a checked release is refused before anyone looks at it, whatever its listing: its jar isn't what its tagged
+	 * source builds, or isn't signed by a key the jar itself lists. Null if neither.
+	 */
+	static String refusal(Map<String, Object> report, String built) {
+		if (built == null || !SHA256.matcher(built).matches() || !built.equals(report.get("sha256"))) return "The released jar isn't what its tagged source builds.";
+		if (!developerSigned(report, new HashSet<>(strings(report.get("keys"))))) return "The release isn't signed by a key its jar lists.";
+		return null;
+	}
+
 	private static void report() throws Exception {
 		String api = api(), token = env("BUILDER_TOKEN");
 		long id = submission();
@@ -349,6 +371,9 @@ public final class Builder {
 		} else if (!"success".equals(System.getenv("INSPECT_RESULT")) || report == null) {
 			result.put("outcome", "failed");
 			result.put("reason", "Its released jar couldn't be checked (a jar and its .sig attached to the release are needed).");
+		} else if (refusal(report, System.getenv("BUILD_SHA")) instanceof String why) {
+			result.put("outcome", "failed");
+			result.put("reason", why);
 		} else if ("closed".equals(System.getenv("KIND"))) {
 			result.put("outcome", "review");
 			result.put("reason", "true".equals(System.getenv("LISTED"))
@@ -360,6 +385,9 @@ public final class Builder {
 		} else if ("signed".equals(System.getenv("DECISION"))) {
 			result.put("outcome", "signed");
 			result.put("version", Json.parse(env("VERSION")));
+		} else if ("refused".equals(System.getenv("DECISION"))) {
+			result.put("outcome", "failed");
+			result.put("reason", "Refused: " + orElse(System.getenv("REASONS"), "the sign step refused it."));
 		} else {
 			result.put("outcome", "review");
 			result.put("reason", orElse(System.getenv("REASONS"), "The sign step didn't finish."));

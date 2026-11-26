@@ -17,6 +17,16 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## Unreleased
+
+### Gradle plugin
+
+- The Library's builder refuses a release outright, instead of sending it for review, when its jar isn't what its
+  tagged source builds or isn't signed by a key the jar lists: nothing a person could approve. Changed build logic and
+  new findings still wait for review.
+- It never signs a version the Library already holds, or has withdrawn, with a different jar, whatever the tag is
+  called.
+
 ## 2.8.1
 
 A patch: the API is unchanged. Hardening for the Myriad Library, from a security review before it opens, and one UI

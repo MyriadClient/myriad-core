@@ -174,6 +174,25 @@ public final class LibraryTrust {
 		}
 	}
 
+	/**
+	 * The jars a verified index {@code body} already holds for addon {@code id}, version → SHA-256s, from its listed
+	 * versions and its yanks. A version the Library holds is never signed again with another jar.
+	 */
+	public static Map<String, Set<String>> held(Map<String, Object> body, String id) {
+		Map<String, Set<String>> out = new HashMap<>();
+		for (Object a : body.get("addons") instanceof List<?> l ? l : List.of()) {
+			if (!(a instanceof Map<?, ?> addon) || !(addon.get("listing") instanceof Map<?, ?> listing) || !id.equals(listing.get("id"))) continue;
+			for (String field : List.of("versions", "yanks")) {
+				for (Object v : addon.get(field) instanceof List<?> vs ? vs : List.of()) {
+					if (v instanceof Map<?, ?> m && m.get("version") instanceof String version && m.get("sha256") instanceof String sha) {
+						out.computeIfAbsent(version, k -> new java.util.TreeSet<>()).add(sha);
+					}
+				}
+			}
+		}
+		return out;
+	}
+
 	/** Whether {@code listing} is signed by one of the listing keys in force in {@code body}. */
 	public static boolean listingSigned(Map<String, Object> listing, Map<String, Object> body, List<String> roots, long now) {
 		return signer(listingStatement(listing), listing.get("signatures"), certifiedKeys(body, roots, now).get("listing")) != null;
