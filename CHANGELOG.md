@@ -17,7 +17,10 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
-## Unreleased
+## 2.8.2
+
+A patch: the API and the game are unchanged. Two fixes to the Myriad Library's builder, from rehearsing it with
+hostile releases before it opens.
 
 ### Gradle plugin
 
