@@ -52,7 +52,6 @@ the Addons window.
 | Addon | What it adds | Where |
 |---|---|---|
 | **Myriad Essentials** | The stock modules: Offhand, Kill Aura, Elytra Fly, Packet Mine, Scaffold, ESP, Nametags and the rest, with the HUD elements. Built like any other addon, on the public API, versioned on its own; remove it and Myriad boots with an empty module list. | [MyriadClient/myriad-essentials](https://github.com/MyriadClient/myriad-essentials) |
-| **Myriad Boze** | Every module of the [Boze](https://boze.dev) client in Myriad's menu, with Boze installed alongside: Boze's modules appear in windows named after Boze's own categories, with their settings, keybinds and on/off state in sync both ways, and the two friend lists kept the same. Boze stays the owner of its config and keys; Myriad is a second front end. | [MyriadClient/myriad-boze](https://github.com/MyriadClient/myriad-boze) |
 | **Myriad Omarchy** | A theme that follows your [Omarchy](https://omarchy.org) system theme: switch themes on the UI and the menu follows. | [MyriadClient/myriad-omarchy](https://github.com/MyriadClient/myriad-omarchy) |
 
 For writing your own: [myriad-addon-template](https://github.com/MyriadClient/myriad-addon-template) to start from and
