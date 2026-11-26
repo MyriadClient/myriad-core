@@ -99,6 +99,8 @@ public final class UiRenderer implements Canvas {
 	private GuiGraphicsExtractor context;
 	private int fbW, fbH, guiScale;
 	private boolean blurEnabled;
+	/** Whether see-through widgets on an effect background frost over it ({@link #frostsOverEffect}); see {@link #setFrost}. */
+	private boolean frostEnabled;
 	private int blurPasses = 3;
 	private float blurOffset = 2.5f;
 	/** The pipeline of the batch being recorded, and the one the next quad wants (an effect's, for its backgrounds). */
@@ -231,8 +233,17 @@ public final class UiRenderer implements Canvas {
 
 	public void setBlur(boolean enabled, int passes, float offset) {
 		this.blurEnabled = enabled;
+		this.frostEnabled = enabled;
 		this.blurPasses = passes;
 		this.blurOffset = offset;
+	}
+
+	/**
+	 * Whether see-through widgets on an effect background show it blurred, set after {@link #setBlur}: on even when there's
+	 * nothing behind the windows worth blurring (no world), or the effect would show sharp through every card.
+	 */
+	public void setFrost(boolean enabled) {
+		this.frostEnabled = enabled;
 	}
 
 	/** Whether {@link #surface} fills have an effect now. */
@@ -523,7 +534,7 @@ public final class UiRenderer implements Canvas {
 	 */
 	private boolean frostsOverEffect(float x, float y, float w, float h, float radius, int color) {
 		int alpha = color >>> 24;
-		if (!blurEnabled || fxW < 0 || alpha == 0 || alpha == 255 || w < 6 || h < 6) return false;
+		if (!frostEnabled || fxW < 0 || alpha == 0 || alpha == 255 || w < 6 || h < 6) return false;
 		// What shows of it (a row scrolled half out of a list frosts all the way).
 		float x1 = Math.min(x + w, state.clipX1), y1 = Math.min(y + h, state.clipY1);
 		x = Math.max(x, state.clipX0);

@@ -45,6 +45,8 @@ final class UiPainter {
 		r.setDefaults(theme.fontFamily(), theme.fontSize.get().floatValue());
 		// No world, nothing worth blurring: the UI's own background is drawn as part of the GUI.
 		r.setBlur(theme.blur.get() && mc.level != null, theme.blurPasses.get(), theme.blurSize.get().floatValue());
+		// Cards and rows on an effect background still frost over it, as in game.
+		r.setFrost(theme.blur.get());
 		BackdropEffect effect = theme.backgroundEffect();
 		r.setEffect(effect, effect == null ? List.of() : theme.effectOptions(effect),
 			theme.accent.argb(), theme.secondary.argb(), theme.text.argb(), theme.windowBackground.argb(), theme.animations.get());
