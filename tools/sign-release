@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Signs a release offline, after checking that CI's jar is exactly what this machine builds from the same tag.
+#
+#   tools/sign-release core <version> <key file>
+#   tools/sign-release essentials <version> <key file>
+#
+# 1. Downloads the release's jar from GitHub.
+# 2. Builds the tag in a fresh worktree here, and refuses unless the two jars are byte for byte the same (so neither a
+#    tampered CI nor a tampered release asset gets signed).
+# 3. Asks for the key file's passphrase (on this terminal; the key never leaves this machine) and signs the jar.
+# 4. Uploads <jar>.sig to the release. Players' Myriad only installs the update once the .sig is there.
+#
+# Core is signed with a Myriad root key, Essentials with its own key (the one its fabric.mod.json lists).
+set -euo pipefail
+
+if [[ $# -ne 3 ]]; then
+	sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+	exit 2
+fi
+what=$1 version=$2 key=$3
+here=$(cd "$(dirname "$0")/.." && pwd)
+export JAVA_HOME=${JAVA_HOME:-/usr/lib/jvm/jbr_jcef-25.0.1-linux-x64-b285.56}
+
+case $what in
+	core) repo=MyriadClient/myriad-core dir=$here jar=myriad-$version.jar task=:core:jar out=core/build/libs ;;
+	essentials) repo=MyriadClient/myriad-essentials dir=$here/../myriad-essentials jar=myriad-essentials-$version.jar task=jar out=build/libs ;;
+	*) echo "core or essentials, not $what" >&2; exit 2 ;;
+esac
+[[ $version =~ ^[0-9A-Za-z.+-]+$ ]] || { echo "odd version: $version" >&2; exit 2; }
+[[ -f $key ]] || { echo "no key file at $key" >&2; exit 2; }
+
+work=$(mktemp -d)
+trap 'git -C "$dir" worktree remove --force "$work/src" >/dev/null 2>&1 || true; rm -rf "$work"' EXIT
+
+if gh release view "v$version" --repo "$repo" --json assets --jq '.assets[].name' | grep -qx "$jar.sig"; then
+	echo "v$version already has $jar.sig" >&2
+	exit 1
+fi
+echo "Downloading $jar from $repo v$version"
+gh release download "v$version" --repo "$repo" --pattern "$jar" --dir "$work/ci"
+
+echo "Building v$version here"
+git -C "$dir" fetch --quiet --tags origin
+git -C "$dir" worktree add --quiet --detach "$work/src" "v$version"
+(cd "$work/src" && ./gradlew --quiet --no-daemon --no-build-cache --no-configuration-cache "$task" >/dev/null)
+
+ci=$(sha256sum "$work/ci/$jar" | cut -d' ' -f1)
+mine=$(sha256sum "$work/src/$out/$jar" | cut -d' ' -f1)
+if [[ $ci != "$mine" ]]; then
+	echo "CI's jar ($ci) isn't what this machine builds ($mine). Not signing." >&2
+	echo "Entries that differ:" >&2
+	diff <(unzip -Z -v "$work/ci/$jar" | grep -E '^(Central directory entry|  32-bit CRC)') \
+		<(unzip -Z -v "$work/src/$out/$jar" | grep -E '^(Central directory entry|  32-bit CRC)') | head -40 >&2 || true
+	exit 1
+fi
+echo "CI's jar matches this build: $ci"
+
+(cd "$here" && ./gradlew --quiet :gradle-plugin:classes >/dev/null)
+"$JAVA_HOME/bin/java" -cp "$here/gradle-plugin/build/classes/java/main" dev.myriadclient.gradle.signing.Signing sign "$work/ci/$jar" "$key"
+
+echo "Uploading $jar.sig"
+gh release upload "v$version" --repo "$repo" "$work/ci/$jar.sig"
+echo "Done: v$version is signed."
