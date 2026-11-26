@@ -2,6 +2,7 @@ package dev.myriadclient.impl.update;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.myriadclient.impl.update.LibraryStatements.Listing;
 import dev.myriadclient.impl.update.LibraryStatements.Role;
 import dev.myriadclient.impl.update.LibraryStatements.Source;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,7 @@ class LibraryIndexTest {
 		assertNotNull(e);
 		assertTrue(e.verified());
 		assertEquals(List.of("1.1.0", "1.0.0"), e.versions().stream().map(o -> o.version().version()).toList());
-		assertFalse(v.index().stale());
+		assertFalse(v.index().staleAt(NOW));
 		assertEquals(NOW - 60, v.state().issued);
 		assertEquals(1L, v.state().revisions.get("good"));
 	}
@@ -88,7 +89,9 @@ class LibraryIndexTest {
 		LibraryFixture f = one();
 		f.issued = NOW - 7200;
 		f.expires = NOW - 3600;
-		assertTrue(f.verify(new LibraryState()).index().stale());
+		LibraryIndex.Index i = f.verify(new LibraryState()).index();
+		assertTrue(i.staleAt(NOW));
+		assertFalse(i.staleAt(NOW - 3601), "judged at the time it's asked, not when it was read");
 	}
 
 	@Test
@@ -155,6 +158,49 @@ class LibraryIndexTest {
 		LibraryFixture forged = one();
 		yank(forged.addons.get(0).getAsJsonObject(), "good", "1.0.0", sha("1.0.0"), OTHER); // not a key that may yank
 		assertEquals(2, forged.verify(new LibraryState()).index().entry("good").versions().size());
+
+		// The online keys can't yank: a yank is forever, and they're the ones most likely to be stolen.
+		for (TestKeys online : List.of(INDEX, VERSION)) {
+			LibraryFixture byOnline = one();
+			yank(byOnline.addons.get(0).getAsJsonObject(), "good", "1.0.0", sha("1.0.0"), online);
+			assertEquals(2, byOnline.verify(new LibraryState()).index().entry("good").versions().size());
+		}
+		LibraryFixture byListing = one();
+		yank(byListing.addons.get(0).getAsJsonObject(), "good", "1.0.0", sha("1.0.0"), LISTING);
+		assertEquals(List.of("1.1.0"), byListing.verify(new LibraryState()).index().entry("good").versions().stream().map(o -> o.version().version()).toList());
+	}
+
+	@Test
+	void reservedIdsOnlyFromMyriad() throws IOException {
+		LibraryFixture f = new LibraryFixture();
+		f.addon(listing("myriad", 1, Source.OPEN, DEV.pub()), LISTING, version("myriad", "9.0.0", VERSION, DEV));
+		f.addon(listing("fabric-api", 1, Source.OPEN, DEV.pub()), LISTING, version("fabric-api", "9.0.0", VERSION, DEV));
+		f.addon(new Listing("sly", 1, 100, 200, Source.OPEN, 0, BUILD, List.of("myriad-essentials"), List.of(DEV.pub())), LISTING, version("sly", "1.0.0", VERSION, DEV));
+		f.addon(new Listing("myriad-essentials", 1, 101, LibraryIndex.MYRIAD_OWNER, Source.OPEN, 0, BUILD, List.of(), List.of(DEV.pub())), LISTING,
+			version("myriad-essentials", "3.0.0", VERSION, DEV));
+		LibraryIndex.Index i = f.verify(new LibraryState()).index();
+		assertEquals(List.of("myriad-essentials"), i.entries().stream().map(e -> e.listing().id()).toList());
+	}
+
+	@Test
+	void aRevisionFloorGoesWithItsRevokedSigner() throws IOException {
+		LibraryState seen = new LibraryState();
+		seen.revisions.put("good", Long.MAX_VALUE - 1); // signed by a key that was then stolen and revoked
+		seen.revisionSigners.put("good", OTHER.pub().text());
+		assertNull(one().verify(seen).index().entry("good"), "still the floor while its signer stands");
+		seen.revoked.add(OTHER.pub().text());
+		LibraryIndex.Verified v = one().verify(seen);
+		assertNotNull(v.index().entry("good"));
+		assertEquals(LISTING.pub().text(), v.state().revisionSigners.get("good"));
+	}
+
+	@Test
+	void aSignatureIsCheckedOnlyAgainstTheKeyItNames() {
+		byte[] m = "hello".getBytes();
+		SignatureCheck.Sig good = DEV.sign(m);
+		assertEquals(DEV.pub(), SignatureCheck.signerByLabel(m, List.of(good), List.of(DEV2.pub(), DEV.pub())));
+		SignatureCheck.Sig mislabelled = new SignatureCheck.Sig(DEV2.pub().id(), good.sig());
+		assertNull(SignatureCheck.signerByLabel(m, List.of(mislabelled), List.of(DEV2.pub(), DEV.pub())));
 	}
 
 	@Test
@@ -185,7 +231,7 @@ class LibraryIndexTest {
 	void displayTextIsCleaned() throws IOException {
 		LibraryFixture f = one();
 		JsonObject info = f.addons.get(0).getAsJsonObject().getAsJsonObject("info");
-		info.addProperty("name", "Ev§cil\u0000‮\nName");
+		info.addProperty("name", "Ev§cil\u0000‮\nName\uf00c");
 		info.addProperty("repo", "../../evil");
 		LibraryIndex.Entry e = f.verify(new LibraryState()).index().entry("good");
 		assertEquals("EvcilName", e.name());
@@ -228,7 +274,7 @@ class LibraryIndexTest {
 
 	/**
 	 * An index made by the API's own code (myriad-api's rules.ts, with the same throwaway keys as here) is read and
-	 * trusted as the API meant it: the listing, its versions newest first, the index-key yank honoured.
+	 * trusted as the API meant it: the listing, its versions newest first, the listing-key yank honoured.
 	 */
 	@Test
 	void readsAnIndexTheApiMade() throws Exception {
@@ -244,7 +290,7 @@ class LibraryIndexTest {
 		assertEquals(List.of("good-lib"), e.listing().provides());
 		assertEquals(List.of("1.1.0", "1.0.0"), e.versions().stream().map(o -> o.version().version()).toList());
 		assertTrue(v.state().yanks.contains(LibraryState.yankKey("good-addon", "1.2.0", LibraryIndex.sha256("1.2.0".getBytes()))));
-		assertFalse(v.index().stale());
+		assertFalse(v.index().staleAt(NOW + 60));
 	}
 
 	/** Signatures the Gradle plugin made (pinned in its LibraryStatementsTest) verify against core's own spelling. */

@@ -68,13 +68,28 @@ final class LibraryIndex {
 		}
 	}
 
-	/** A checked index. {@code stale} once past its expiry: it may still be browsed, but nothing is installed from it. */
-	record Index(long issued, long expires, boolean stale, List<Entry> entries) {
+	/**
+	 * A checked index. Stale once past its expiry, judged whenever it's asked (not once when it was read): it may still be
+	 * browsed, but nothing is installed or updated from it.
+	 */
+	record Index(long issued, long expires, List<Entry> entries) {
 		@Nullable Entry entry(String id) {
 			for (Entry e : entries) if (e.listing().id().equals(id)) return e;
 			return null;
 		}
+
+		boolean staleAt(long now) {
+			return now >= expires;
+		}
+
+		boolean stale() {
+			return staleAt(System.currentTimeMillis() / 1000);
+		}
 	}
+
+	/** The MyriadClient organisation's GitHub id: only its repositories may list Myriad's reserved ids. */
+	static final long MYRIAD_OWNER = 343667496L;
+	private static final java.util.regex.Pattern RESERVED = java.util.regex.Pattern.compile("myriad.*|minecraft|java|fabric.*|fabricloader|quilt.*|forge|neoforge");
 
 	/** The index, and the state to remember now that it's been accepted. */
 	record Verified(Index index, LibraryState state) {
@@ -108,7 +123,7 @@ final class LibraryIndex {
 		} catch (IllegalArgumentException e) {
 			throw new IOException("the Library index has odd times");
 		}
-		if (SignatureCheck.signer(snapshot.bytes(), snapshotSigs, keys.get(Role.INDEX)) == null) {
+		if (SignatureCheck.signerByLabel(snapshot.bytes(), snapshotSigs, keys.get(Role.INDEX)) == null) {
 			throw new IOException("the Library index isn't signed by a current Myriad index key");
 		}
 		if (issued > now + FUTURE_SLACK) throw new IOException("the Library index is dated in the future; check this computer's clock");
@@ -130,7 +145,7 @@ final class LibraryIndex {
 		}
 		// An id listed twice is listed by neither: there's no telling which one is meant.
 		entries.removeIf(en -> twice.contains(en.listing().id()));
-		return new Verified(new Index(issued, expires, now >= expires, List.copyOf(entries)), state);
+		return new Verified(new Index(issued, expires, List.copyOf(entries)), state);
 	}
 
 	private static void revocations(JsonObject b, LibraryState state, List<DevKey> roots) throws IOException {
@@ -145,7 +160,7 @@ final class LibraryIndex {
 		} catch (IllegalArgumentException e) {
 			throw new IOException("the Library's revocations are malformed");
 		}
-		if (SignatureCheck.signer(rev.bytes(), sigs(o, "signatures", "the Library's revocations"), roots) == null) {
+		if (SignatureCheck.signerByLabel(rev.bytes(), sigs(o, "signatures", "the Library's revocations"), roots) == null) {
 			throw new IOException("the Library's revocations aren't signed by Myriad");
 		}
 		if (rev.seq() > state.revocationSeq) {
@@ -166,7 +181,7 @@ final class LibraryIndex {
 				KeyCert cert = new KeyCert(key(o.get("key"), "a Library key"), role, notAfter);
 				if (state.revoked.contains(cert.key().text())) continue;
 				if (role == Role.INDEX && now >= notAfter) continue;
-				if (SignatureCheck.signer(cert.bytes(), sigs(o, "signatures", "a Library key"), roots) == null) continue;
+				if (SignatureCheck.signerByLabel(cert.bytes(), sigs(o, "signatures", "a Library key"), roots) == null) continue;
 				if (!keys.get(role).contains(cert.key())) keys.get(role).add(cert.key());
 			} catch (IOException | IllegalArgumentException ex) {
 				LOG.debug("Skipping a Library key: {}", ex.getMessage());
@@ -181,16 +196,21 @@ final class LibraryIndex {
 			JsonObject a = object(e, "a listing");
 			JsonObject l = object(a.get("listing"), "a listing");
 			Listing listing = listing(l);
-			if (SignatureCheck.signer(listing.bytes(), sigs(l, "signatures", "a listing"), keys.get(Role.LISTING)) == null) {
-				throw new IOException("its listing isn't signed by a Myriad listing key");
-			}
-			long seen = state.revisions.getOrDefault(listing.id(), 0L);
+			DevKey by = SignatureCheck.signerByLabel(listing.bytes(), sigs(l, "signatures", "a listing"), keys.get(Role.LISTING));
+			if (by == null) throw new IOException("its listing isn't signed by a Myriad listing key");
+			// Myriad's own ids (and anything provided under them) only from Myriad's own repositories.
+			boolean reserved = RESERVED.matcher(listing.id()).matches() || listing.provides().stream().anyMatch(p -> RESERVED.matcher(p).matches());
+			if (reserved && listing.ownerId() != MYRIAD_OWNER) throw new IOException("it uses an id only Myriad may list");
+			// The newest revision seen is a floor, unless the key that signed it has since been revoked (so a stolen key
+			// can't sign an absurd revision that locks the real listing out for good).
+			String floorBy = state.revisionSigners.get(listing.id());
+			long seen = floorBy != null && state.revoked.contains(floorBy) ? 0L : state.revisions.getOrDefault(listing.id(), 0L);
 			if (listing.revision() < seen) throw new IOException("its listing is older than one already seen");
+			if (listing.revision() > seen || floorBy == null) state.revisionSigners.put(listing.id(), by.text());
 			state.revisions.put(listing.id(), listing.revision());
 
-			List<DevKey> anyLibrary = new ArrayList<>();
-			for (List<DevKey> k : keys.values()) anyLibrary.addAll(k);
-			List<DevKey> yankers = new ArrayList<>(anyLibrary);
+			// Yanks are kept forever, so only the offline listing key and the addon's own developer keys may make one.
+			List<DevKey> yankers = new ArrayList<>(keys.get(Role.LISTING));
 			yankers.addAll(listing.keys());
 			JsonElement y = a.get("yanks");
 			if (y != null && !y.isJsonNull()) {
@@ -202,7 +222,7 @@ final class LibraryIndex {
 					} catch (IllegalArgumentException ex) {
 						continue;
 					}
-					if (SignatureCheck.signer(yank.bytes(), sigs(yo, "signatures", "a yank"), yankers) != null) {
+					if (SignatureCheck.signerByLabel(yank.bytes(), sigs(yo, "signatures", "a yank"), yankers) != null) {
 						state.yanks.add(LibraryState.yankKey(yank.id(), yank.version(), yank.sha256()));
 					}
 				}
@@ -254,13 +274,13 @@ final class LibraryIndex {
 			JsonObject v = object(ve, "a release");
 			Version version = new Version(listing.id(), string(v, "version", "a release", 64), number(v, "size", "a release"),
 				string(v, "sha256", "a release", 64), string(v, "commit", "a release", 40));
-			if (SignatureCheck.signer(version.bytes(), sigs(v, "signatures", "a release"), signers) == null) return null;
+			if (SignatureCheck.signerByLabel(version.bytes(), sigs(v, "signatures", "a release"), signers) == null) return null;
 			List<Sig> developer = sigs(v, "developer", "a release");
 			ReleaseStatement release = new ReleaseStatement(version.id(), version.version(), version.size(), version.sha256());
-			if (SignatureCheck.signer(release.bytes(), developer, listing.keys()) == null) return null;
+			if (SignatureCheck.signerByLabel(release.bytes(), developer, listing.keys()) == null) return null;
 			String url = string(v, "url", "a release", 500);
 			if (!downloadable(url)) return null;
-			String minecraft = v.has("minecraft") ? string(v, "minecraft", "a release", 200) : null;
+			String minecraft = v.has("minecraft") ? clean(string(v, "minecraft", "a release", 200), 200) : null;
 			return new Offered(version, url, minecraft, developer);
 		} catch (IOException | IllegalArgumentException ex) {
 			return null;
@@ -290,14 +310,22 @@ final class LibraryIndex {
 			&& ("localhost".equals(u.getHost()) || "127.0.0.1".equals(u.getHost())) && Fetch.refused(u) == null;
 	}
 
-	/** Display text: control characters, formatting codes and line breaks removed, capped at {@code max}. */
+	/** Display text from {@code o}: see {@link #clean}. */
 	private static String shown(JsonObject o, String key, int max) {
 		JsonElement e = o.get(key);
 		if (e == null || !e.isJsonPrimitive() || !e.getAsJsonPrimitive().isString()) return "";
-		String s = e.getAsString();
+		return clean(e.getAsString(), max);
+	}
+
+	/**
+	 * Text safe to show: control characters, formatting codes, line breaks and private-use characters (which Myriad's
+	 * font draws as icons, so a name could fake a badge) removed, capped at {@code max}.
+	 */
+	static String clean(String s, int max) {
 		StringBuilder out = new StringBuilder();
-		s.codePoints().limit(4 * max).forEach(c -> {
-			if (Character.isISOControl(c) || c == '§' || Character.getType(c) == Character.FORMAT || c == 0x2028 || c == 0x2029) return;
+		s.codePoints().limit(4L * max).forEach(c -> {
+			if (Character.isISOControl(c) || c == '§' || Character.getType(c) == Character.FORMAT || Character.getType(c) == Character.PRIVATE_USE
+				|| c == 0x2028 || c == 0x2029) return;
 			out.appendCodePoint(c);
 		});
 		String t = out.toString().strip();

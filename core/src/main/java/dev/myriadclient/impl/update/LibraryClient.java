@@ -73,28 +73,38 @@ final class LibraryClient {
 		String why = Fetch.refused(uri);
 		if (why != null) return CompletableFuture.failedFuture(new IOException(why));
 		String etag = index != null ? state.etag : null;
+		boolean have = index != null;
 		loading = Fetch.conditional(uri, LibraryIndex.MAX_INDEX, etag, "application/json").thenApply(got -> {
+			LibraryState seen;
 			synchronized (this) {
-				try {
-					if (got.status() == 304 && index != null) {
-						// Unchanged, but time has passed: it may have expired since.
-						index = LibraryIndex.verify(Files.readString(cacheFile, StandardCharsets.UTF_8), state, now(), roots()).index();
-					} else {
-						String text = new String(got.body(), StandardCharsets.UTF_8);
-						LibraryIndex.Verified v = LibraryIndex.verify(text, state, now(), roots());
+				seen = state.copy();
+			}
+			try {
+				// Checked outside the lock: the game asks for the index from the render thread, and checking a large one
+				// takes a while.
+				boolean unchanged = got.status() == 304 && have;
+				String text = unchanged ? Files.readString(cacheFile, StandardCharsets.UTF_8) : new String(got.body(), StandardCharsets.UTF_8);
+				LibraryIndex.Verified v = LibraryIndex.verify(text, seen, now(), roots());
+				synchronized (this) {
+					if (!unchanged) {
 						v.state().etag = got.etag();
+						// Pins may have changed while it was being checked: those are the player's, keep them.
+						v.state().pins.clear();
+						v.state().pins.addAll(state.pins);
 						state = v.state();
-						index = v.index();
 						save(text);
 					}
+					index = v.index();
 					problem = index.stale() ? "The Library's information is out of date; nothing is installed from it until it's fresh" : null;
 					return index;
-				} catch (IOException e) {
+				}
+			} catch (IOException e) {
+				synchronized (this) {
 					problem = e.getMessage();
 					LOG.warn("The Library index was refused: {}", e.getMessage());
 					if (index != null) return index;
-					throw new java.util.concurrent.CompletionException(e);
 				}
+				throw new java.util.concurrent.CompletionException(e);
 			}
 		}).exceptionally(err -> {
 			synchronized (this) {
@@ -126,9 +136,9 @@ final class LibraryClient {
 		return state.pins.contains(id);
 	}
 
-	/** Pins {@code id}: from now on it updates only through the Library. */
+	/** Pins {@code id}: from now on it updates only through the Library. Never Myriad itself, which has its own keys. */
 	synchronized void pin(String id) {
-		if (Names.isId(id) && state.pins.add(id)) state.write(stateFile);
+		if (Names.isId(id) && !id.equals("myriad") && state.pins.add(id)) state.write(stateFile);
 	}
 
 	/** Unpins {@code id} (the player's choice): it updates from its own source again. */

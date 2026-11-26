@@ -23,6 +23,8 @@ final class LibraryState {
 	long issued;
 	@Nullable String bodySha256;
 	final Map<String, Long> revisions = new HashMap<>();
+	/** The listing key ({@code ed25519:...}) that signed each remembered revision: once it's revoked, that floor goes. */
+	final Map<String, String> revisionSigners = new HashMap<>();
 	/** {@code id/version/sha256} of every yanked release seen. */
 	final Set<String> yanks = new HashSet<>();
 	long revocationSeq;
@@ -41,6 +43,7 @@ final class LibraryState {
 		s.issued = issued;
 		s.bodySha256 = bodySha256;
 		s.revisions.putAll(revisions);
+		s.revisionSigners.putAll(revisionSigners);
 		s.yanks.addAll(yanks);
 		s.revocationSeq = revocationSeq;
 		s.revoked.addAll(revoked);
@@ -63,6 +66,13 @@ final class LibraryState {
 				}
 			}
 		}
+		if (o.get("revisionSigners") instanceof JsonObject r) {
+			for (Map.Entry<String, JsonElement> en : r.entrySet()) {
+				if (Names.isId(en.getKey()) && en.getValue().isJsonPrimitive() && en.getValue().getAsJsonPrimitive().isString()) {
+					s.revisionSigners.put(en.getKey(), en.getValue().getAsString());
+				}
+			}
+		}
 		strings(o, "yanks", s.yanks);
 		s.revocationSeq = number(o, "revocationSeq");
 		strings(o, "revoked", s.revoked);
@@ -78,6 +88,9 @@ final class LibraryState {
 		JsonObject r = new JsonObject();
 		revisions.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(en -> r.addProperty(en.getKey(), en.getValue()));
 		o.add("revisions", r);
+		JsonObject rs = new JsonObject();
+		revisionSigners.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(en -> rs.addProperty(en.getKey(), en.getValue()));
+		o.add("revisionSigners", rs);
 		o.add("yanks", array(yanks));
 		o.addProperty("revocationSeq", revocationSeq);
 		o.add("revoked", array(revoked));

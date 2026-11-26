@@ -194,12 +194,9 @@ public final class UpdateManager {
 	public void check(boolean manual) {
 		if (checking) return;
 		checking = true;
-		// The Library first: addons pinned to it update only through it, and an installed jar it lists gets pinned.
+		// The Library first: addons installed from it update only through it. (Only those installed from it: pinning every
+		// addon the Library happens to list would let one stolen listing key cut any addon off from its own updates.)
 		library.refresh().handle((index, err) -> {
-			for (Addon a : Myriad.addons()) {
-				String sha = jarHash(a);
-				if (sha != null && library.vouching(a.id(), sha) != null) library.pin(a.id());
-			}
 			Async.onRenderThread(() -> {
 				checking = false;
 				checkNow(manual);
@@ -316,6 +313,12 @@ public final class UpdateManager {
 
 	/** Installs what {@link #lookUp} offered into the mods folder; it loads at the next start. */
 	public void install(LinkInstall.Offer offer) throws IOException {
+		if (offer.library() != null) {
+			// Checked again now: the Library may have withdrawn it, or gone stale, since it was looked up.
+			LibraryIndex.Index index = library.index();
+			LibraryIndex.Entry e = index == null ? null : index.entry(offer.id());
+			if (e == null || index.stale() || !offers(e, offer.version(), offer.jar())) throw new IOException("the Myriad Library no longer offers this release");
+		}
 		LinkInstall.install(offer, modsFolder());
 		installer.added(offer.id(), offer.version());
 		if (offer.token() != null) tokens.set(offer.id(), offer.token());
@@ -471,12 +474,14 @@ public final class UpdateManager {
 		Set<String> others = otherAddons(id);
 		Version core = addon.isCore() ? null : coreVersionAfterUpdates();
 		URI origin = UpdateSource.of(addon.metadata()).map(UpdateManager::tokenOrigin).orElse(null);
+		boolean viaLibrary = fromLibrary.contains(id); // as it was when this update was found, whatever happens meanwhile
 		return download(id, r, token, origin).thenAccept(got -> {
 			Verified v = verify(id, r.version(), got, trusted, addon.isCore(), others, minecraftVersion(), core);
 			if (v.problem() != null) throw new CompletionException(new IOException(v.problem()));
-			if (fromLibrary.contains(id)) {
-				// From the Library: still listed and fresh, and signed by a key the installed jar, the listing and the new jar all name.
-				String why = libraryKeyRule(id, v.signer(), got.jar(), r.version(), others, core);
+			if (viaLibrary) {
+				// From the Library: still offered now (not withdrawn since it was found), fresh, and signed by a key the
+				// installed jar, the listing and the new jar all name.
+				String why = libraryKeyRule(id, v.signer(), got.jar(), r, others, core);
 				if (why != null) throw new CompletionException(new IOException(why));
 			}
 			try {
@@ -496,13 +501,27 @@ public final class UpdateManager {
 		});
 	}
 
-	private @Nullable String libraryKeyRule(String id, @Nullable DevKey signer, byte[] jar, String version, Set<String> others, @Nullable Version core) {
+	private @Nullable String libraryKeyRule(String id, @Nullable DevKey signer, byte[] jar, Releases.Release r, Set<String> others, @Nullable Version core) {
 		LibraryIndex.Index index = library.index();
 		LibraryIndex.Entry e = index == null ? null : index.entry(id);
 		if (e == null || index.stale()) return "the Myriad Library no longer lists it, or its information is out of date";
+		if (!offers(e, r.version(), jar)) return "the Myriad Library no longer offers this release";
 		if (signer == null || !e.listing().keys().contains(signer)) return "it isn't signed by a key its Library listing names";
-		if (!JarCheck.check(jar, id, version, minecraftVersion(), core, others).keys().contains(signer)) return "the new jar doesn't list the key it's signed with";
+		if (!JarCheck.check(jar, id, r.version(), minecraftVersion(), core, others).keys().contains(signer)) return "the new jar doesn't list the key it's signed with";
+		Set<String> provides = new java.util.TreeSet<>();
+		JarCheck.provided(LinkInstall.modJson(jar), provides);
+		provides.remove(id);
+		if (!provides.equals(new java.util.TreeSet<>(e.listing().provides()))) return "the new jar provides something its listing doesn't say";
 		return null;
+	}
+
+	/** Whether {@code e} offers exactly this jar as {@code version} now (listed, unwithdrawn, the same size and hash). */
+	private static boolean offers(LibraryIndex.Entry e, String version, byte[] jar) {
+		String sha = LibraryIndex.sha256(jar);
+		for (LibraryIndex.Offered o : e.versions()) {
+			if (o.version().version().equals(version) && o.version().sha256().equals(sha) && o.version().size() == jar.length) return true;
+		}
+		return false;
 	}
 
 	/** A download: the jar, and what it must be (from the release, and its {@code .sig} when it has one). */

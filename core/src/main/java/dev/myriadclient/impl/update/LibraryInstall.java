@@ -48,13 +48,14 @@ final class LibraryInstall {
 			if (checked.problem() != null) throw LinkInstall.fail(checked.problem());
 			List<DevKey> keys = new ArrayList<>(entry.listing().keys());
 			keys.retainAll(checked.keys());
-			DevKey signer = SignatureCheck.signer(ReleaseStatement.of(id, v.version(), jar, JarCheck.sha256(jar)).bytes(), offered.developer(), keys);
+			DevKey signer = SignatureCheck.signerByLabel(ReleaseStatement.of(id, v.version(), jar, JarCheck.sha256(jar)).bytes(), offered.developer(), keys);
 			if (signer == null) throw LinkInstall.fail("it isn't signed by a developer key both its listing and its jar name");
 			String path = url.getPath();
 			String fileName = path.substring(path.lastIndexOf('/') + 1);
 			if (Names.fileIn(mods, fileName) == null) throw LinkInstall.fail("its file name is odd");
 			if (Files.exists(mods.resolve(fileName))) throw LinkInstall.fail("a file named " + fileName + " is already in mods");
-			return new LinkInstall.Offer(id, name.equals("unknown") ? entry.name() : name, v.version(), "the Myriad Library", signer.id(), fileName, jar, null,
+			String shownName = LibraryIndex.clean(name, 64);
+			return new LinkInstall.Offer(id, name.equals("unknown") || shownName.isEmpty() ? entry.name() : shownName, v.version(), "the Myriad Library", signer.id(), fileName, jar, null,
 				entry.verified() ? LinkInstall.Library.VERIFIED : LinkInstall.Library.REVIEWED);
 		});
 	}

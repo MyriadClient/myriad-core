@@ -39,6 +39,22 @@ final class SignatureCheck {
 		return null;
 	}
 
+	/**
+	 * Like {@link #signer}, but each signature is checked only against the key it names. For the Myriad Library's index,
+	 * which carries thousands of signatures: checking each against every trusted key would let a hostile index take
+	 * minutes to read. Everything the Library carries is labelled by the tools that made it.
+	 */
+	static @Nullable DevKey signerByLabel(byte[] message, List<Sig> signatures, List<DevKey> trusted) {
+		int n = 0;
+		for (Sig s : signatures) {
+			if (++n > MAX_SIGNATURES) break;
+			byte[] sig = decode(s.sig());
+			if (sig == null) continue;
+			for (DevKey k : trusted) if (k.id().equals(s.key()) && verify(message, sig, k)) return k;
+		}
+		return null;
+	}
+
 	static boolean verify(byte[] message, byte[] sig, DevKey key) {
 		if (sig.length != 64 || !reduced(sig)) return false;
 		try {
