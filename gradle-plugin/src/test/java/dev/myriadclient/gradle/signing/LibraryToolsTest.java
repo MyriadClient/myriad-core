@@ -1,0 +1,229 @@
+package dev.myriadclient.gradle.signing;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import javax.tools.ToolProvider;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/** The Library's tools: the JSON reader, the inspector, the trust chain and the builder's signing decision. */
+class LibraryToolsTest {
+	static Signing.Key key(int n) throws Exception {
+		byte[] seed = new byte[32];
+		Arrays.fill(seed, (byte) n);
+		return Signing.fromSeed(seed);
+	}
+
+	@Test
+	void jsonIsStrict() {
+		assertEquals(Map.of("a", List.of(new java.math.BigDecimal("1"), "x\n", true)), Json.parse("{\"a\": [1, \"x\\n\", true]}"));
+		assertEquals("{\"a\":[1,\"x\\n\",null],\"b\":\"\\u2028\"}", Json.write(new LinkedHashMap<>(Map.of("a", Arrays.asList(1, "x\n", null)))).replace("}", ",\"b\":\"\\u2028\"}"));
+		assertThrows(IllegalArgumentException.class, () -> Json.parse("{\"a\": 1, \"a\": 2}"));
+		assertThrows(IllegalArgumentException.class, () -> Json.parse("[1, 2,]"));
+		assertThrows(IllegalArgumentException.class, () -> Json.parse("{} {}"));
+		assertThrows(IllegalArgumentException.class, () -> Json.parse("[".repeat(100) + "]".repeat(100)));
+		assertThrows(IllegalArgumentException.class, () -> Json.parse("\"a\u0001\""));
+	}
+
+	/** A jar built here from real compiled classes, with the things the inspector looks for. */
+	static Path addonJar(Path dir, boolean withSourceForAll) throws Exception {
+		Path src = dir.resolve("src/main/java/com/example");
+		Files.createDirectories(src);
+		Files.writeString(src.resolve("Good.java"), "package com.example; public class Good { void run() throws Exception { Runtime.getRuntime().exec(\"ls\"); String u = \"https://Example.COM/api\"; } }");
+		Path extra = dir.resolve("gen/com/example");
+		Files.createDirectories(extra);
+		Files.writeString(extra.resolve("Sneaky.java"), "package com.example; public class Sneaky extends ClassLoader { }");
+		Path out = dir.resolve("classes");
+		Files.createDirectories(out);
+		List<String> args = new ArrayList<>(List.of("-d", out.toString(), src.resolve("Good.java").toString(), extra.resolve("Sneaky.java").toString()));
+		assertEquals(0, ToolProvider.getSystemJavaCompiler().run(null, null, null, args.toArray(String[]::new)));
+		if (withSourceForAll) Files.copy(extra.resolve("Sneaky.java"), src.resolve("Sneaky.java"));
+
+		Path jar = dir.resolve("addon.jar");
+		try (ZipOutputStream z = new ZipOutputStream(Files.newOutputStream(jar))) {
+			z.putNextEntry(new ZipEntry("fabric.mod.json"));
+			z.write(("{\"schemaVersion\":1,\"id\":\"my-addon\",\"version\":\"1.2.0\",\"name\":\"My Addon\",\"provides\":[\"my-lib\"],\"icon\":\"assets/my-addon/icon.png\","
+				+ "\"depends\":{\"minecraft\":\"~26.3\"},\"custom\":{\"myriad\":{\"keys\":[\"" + key(5).publicText() + "\"]}}}").getBytes(StandardCharsets.UTF_8));
+			for (String c : List.of("Good", "Sneaky")) {
+				z.putNextEntry(new ZipEntry("com/example/" + c + ".class"));
+				z.write(Files.readAllBytes(out.resolve("com/example/" + c + ".class")));
+			}
+			z.putNextEntry(new ZipEntry("META-INF/jars/lib.jar"));
+			z.write(new byte[]{1, 2, 3});
+			z.putNextEntry(new ZipEntry("natives/libevil.so"));
+			z.write(new byte[]{0});
+			z.putNextEntry(new ZipEntry("assets/my-addon/icon.png"));
+			java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(512, 512, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+			ByteArrayOutputStream png = new ByteArrayOutputStream();
+			javax.imageio.ImageIO.write(img, "png", png);
+			z.write(png.toByteArray());
+		}
+		return jar;
+	}
+
+	@Test
+	void inspectorFindsWhatDeservesALook(@TempDir Path dir) throws Exception {
+		Path jar = addonJar(dir, false);
+		Map<String, Object> r = Inspect.inspect(jar, dir);
+		assertEquals("my-addon", r.get("id"));
+		assertEquals("1.2.0", r.get("version"));
+		assertEquals(List.of("my-lib"), r.get("provides"));
+		assertEquals("~26.3", r.get("minecraft"));
+		List<String> ids = new ArrayList<>();
+		for (Object f : Json.array(r.get("findings"), "findings")) ids.add((String) ((Map<?, ?>) f).get("id"));
+		assertTrue(ids.contains("process"), ids.toString());
+		assertTrue(ids.contains("host:example.com"), ids.toString());
+		assertTrue(ids.contains("classloader"), ids.toString());
+		assertTrue(ids.contains("native-file:natives/libevil.so"), ids.toString());
+		assertTrue(ids.stream().anyMatch(i -> i.startsWith("nested:META-INF/jars/lib.jar:")), ids.toString());
+		assertTrue(ids.contains("unexplained:com/example/Sneaky"), ids.toString());
+		assertFalse(ids.contains("unexplained:com/example/Good"), ids.toString());
+		// The icon came back re-encoded and shrunk.
+		byte[] icon = java.util.Base64.getDecoder().decode((String) r.get("icon"));
+		assertEquals(256, javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(icon)).getWidth());
+
+		Map<String, Object> withSource = Inspect.inspect(addonJar(dir.resolve("b"), true), dir.resolve("b"));
+		assertFalse(Json.write(withSource.get("findings")).contains("unexplained"));
+	}
+
+	@Test
+	void inspectorRefusesAJarWithoutMetadata(@TempDir Path dir) throws Exception {
+		Path jar = dir.resolve("x.jar");
+		try (ZipOutputStream z = new ZipOutputStream(Files.newOutputStream(jar))) {
+			z.putNextEntry(new ZipEntry("a.txt"));
+		}
+		assertThrows(java.io.IOException.class, () -> Inspect.inspect(jar, null));
+	}
+
+	// ---- trust chain ------------------------------------------------------------------------------------------------
+
+	static Map<String, Object> sig(Signing.Key k, byte[] statement) throws Exception {
+		return Json.object(Json.parse(LibraryStatements.signatureJson(k, statement)), "sig");
+	}
+
+	static byte[] st(String kind, String fields) {
+		return LibraryStatements.statement(kind, LibraryStatements.fields(List.of(fields.split(" "))));
+	}
+
+	@Test
+	void trustChainStartsAtTheRoots() throws Exception {
+		Signing.Key root = key(1), listingKey = key(2), indexKey = key(4), other = key(7);
+		List<Object> certs = new ArrayList<>();
+		for (Object[] c : new Object[][]{{listingKey, "listing", root}, {indexKey, "index", root}, {other, "listing", other}}) {
+			Signing.Key k = (Signing.Key) c[0];
+			String role = (String) c[1];
+			Map<String, Object> cert = new LinkedHashMap<>();
+			cert.put("key", k.publicText());
+			cert.put("role", role);
+			String f = "key=" + k.publicText() + " role=" + role;
+			if (role.equals("index")) {
+				cert.put("notAfter", 1_900_000_000L);
+				f += " not-after=1900000000";
+			}
+			cert.put("signatures", List.of(sig((Signing.Key) c[2], st("key", f))));
+			certs.add(cert);
+		}
+		Map<String, Object> body = new LinkedHashMap<>();
+		body.put("issued", 1_800_000_000L);
+		body.put("expires", 1_800_100_000L);
+		body.put("certs", certs);
+		body.put("addons", List.of());
+		List<String> roots = List.of(root.publicText());
+		Map<String, java.util.Set<String>> keys = LibraryTrust.certifiedKeys(body, roots, 1_800_000_000L);
+		assertEquals(Set.of(listingKey.publicText()), keys.get("listing"), "a self-certified key counts for nothing");
+		assertEquals(Set.of(indexKey.publicText()), keys.get("index"));
+		assertTrue(LibraryTrust.certifiedKeys(body, roots, 1_900_000_000L).get("index").isEmpty(), "an expired index key counts for nothing");
+
+		String bodyText = Json.write(body);
+		Map<String, Object> wrapper = new LinkedHashMap<>();
+		wrapper.put("format", 1);
+		wrapper.put("body", bodyText);
+		wrapper.put("signatures", List.of(sig(indexKey, st("snapshot", "issued=1800000000 expires=1800100000 body-sha256=" + Signing.hex(Signing.sha256(bodyText.getBytes(StandardCharsets.UTF_8)))))));
+		assertNotNull(LibraryTrust.verifiedBody(Json.write(wrapper), roots, 1_800_000_000L));
+		assertThrows(IllegalArgumentException.class, () -> LibraryTrust.verifiedBody(Json.write(wrapper), List.of(other.publicText()), 1_800_000_000L));
+		wrapper.put("body", bodyText.replace("1800100000", "1800100001"));
+		assertThrows(IllegalArgumentException.class, () -> LibraryTrust.verifiedBody(Json.write(wrapper), roots, 1_800_000_000L));
+
+		Map<String, Object> listing = listing(5);
+		listing.put("signatures", List.of(sig(listingKey, LibraryTrust.listingStatement(listing))));
+		assertTrue(LibraryTrust.listingSigned(listing, body, roots, 1_800_000_000L));
+		listing.put("signatures", List.of(sig(other, LibraryTrust.listingStatement(listing))));
+		assertFalse(LibraryTrust.listingSigned(listing, body, roots, 1_800_000_000L));
+	}
+
+	// ---- the signing decision ---------------------------------------------------------------------------------------
+
+	static final String BUILD = "b".repeat(64);
+
+	static Map<String, Object> listing(int devSeed) throws Exception {
+		Map<String, Object> l = new LinkedHashMap<>();
+		l.put("id", "my-addon");
+		l.put("revision", new java.math.BigDecimal(1));
+		l.put("repoId", new java.math.BigDecimal(10));
+		l.put("ownerId", new java.math.BigDecimal(20));
+		l.put("source", "open");
+		l.put("build", BUILD);
+		l.put("provides", List.of("my-lib"));
+		l.put("keys", List.of(key(devSeed).publicText()));
+		return l;
+	}
+
+	static Map<String, Object> summary(Signing.Key dev, List<String> jarKeys, List<String> findings) throws Exception {
+		String sha = "a".repeat(64);
+		Map<String, Object> s = new HashMap<>();
+		s.put("sha256", sha);
+		s.put("size", new java.math.BigDecimal(1000));
+		s.put("id", "my-addon");
+		s.put("version", "1.2.0");
+		s.put("provides", List.of("my-lib"));
+		s.put("keys", jarKeys);
+		s.put("findings", findings);
+		s.put("developer", List.of(sig(dev, Signing.statement("my-addon", "1.2.0", 1000, java.util.HexFormat.of().parseHex(sha)))));
+		return s;
+	}
+
+	@Test
+	void signsOnlyWhenNothingNeedsAPerson() throws Exception {
+		Signing.Key dev = key(5), stranger = key(6);
+		String a = "a".repeat(64);
+		Map<String, Object> l = listing(5);
+		List<String> jarKeys = List.of(dev.publicText());
+		assertTrue(Builder.decide(l, Set.of("network"), summary(dev, jarKeys, List.of("network")), a, BUILD).sign());
+
+		assertFalse(Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of()), a, "c".repeat(64)).sign(), "build logic changed");
+		assertFalse(Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of()), "d".repeat(64), BUILD).sign(), "the release isn't what was built");
+		assertFalse(Builder.decide(l, Set.of(), summary(stranger, jarKeys, List.of()), a, BUILD).sign(), "not the developer");
+		assertFalse(Builder.decide(l, Set.of(), summary(dev, List.of(stranger.publicText()), List.of()), a, BUILD).sign(), "the jar stopped listing the key");
+		assertFalse(Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of("process")), a, BUILD).sign(), "a new finding");
+		assertFalse(Builder.decide(l, Set.of("obfuscated"), summary(dev, jarKeys, List.of("obfuscated")), a, BUILD).sign(), "obfuscation is never accepted");
+		Map<String, Object> other = summary(dev, jarKeys, List.of());
+		other.put("id", "other-addon");
+		assertFalse(Builder.decide(l, Set.of(), other, a, BUILD).sign(), "another addon");
+		Map<String, Object> provides = summary(dev, jarKeys, List.of());
+		provides.put("provides", List.of("my-lib", "minecraft"));
+		assertFalse(Builder.decide(l, Set.of(), provides, a, BUILD).sign(), "provides changed");
+		Map<String, Object> closed = listing(5);
+		closed.put("source", "closed");
+		assertFalse(Builder.decide(closed, Set.of(), summary(dev, jarKeys, List.of()), a, BUILD).sign(), "closed source always waits");
+	}
+
+	@Test
+	void downloadsOnlyFromGitHub() {
+		assertThrows(java.io.IOException.class, () -> Builder.download("https://evil.example/x.jar", 10));
+		assertThrows(java.io.IOException.class, () -> Builder.download("http://github.com/x.jar", 10));
+	}
+}

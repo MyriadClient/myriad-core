@@ -227,6 +227,9 @@ public final class AddonPlugin implements Plugin<Project> {
 			// -Papi=http://localhost:3000 -Psite=...: a local config-sharing service and website instead of Myriad's.
 			if (project.hasProperty("api")) properties.put("myriad.api", project.property("api").toString());
 			if (project.hasProperty("site")) properties.put("myriad.site", project.property("site").toString());
+			// -PlibraryTestRoot=ed25519:...: also trust this root key for the Library's index (dev clients only), to try a
+			// local Library signed with test keys.
+			if (project.hasProperty("libraryTestRoot")) properties.put("myriad.library.testRoot", project.property("libraryTestRoot").toString());
 			// -PupdatesPretend=myriad-essentials=0.0.9: the update check treats those addons as that version.
 			if (project.hasProperty("updatesPretend")) properties.put("myriad.updates.pretend", project.property("updatesPretend").toString());
 			ListProperty<String> args = run.getProgramArguments();

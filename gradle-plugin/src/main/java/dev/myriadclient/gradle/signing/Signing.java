@@ -151,7 +151,7 @@ public final class Signing {
 		if (!FILE.matcher(file).matches() || file.startsWith(".")) throw new IOException("the jar's file name must be a plain jar name: " + file);
 		if (!allowUndeclared && !info.keys().contains(key.publicText())) {
 			throw new IOException(info.id() + "'s fabric.mod.json doesn't list this key (" + key.publicText() + ") under custom.myriad.keys. "
-				+ "Add it, or pass -PallowUndeclaredKey when rotating to a new key.");
+				+ "Add it, or when rotating to a new key pass -PallowUndeclaredKey (signAddon) or --allow-undeclared (the command line).");
 		}
 		byte[] bytes = Files.readAllBytes(jar);
 		byte[] sha = sha256(bytes);
@@ -227,8 +227,20 @@ public final class Signing {
 	// ---- command line -----------------------------------------------------------------------------------------------
 
 	public static void main(String[] args) throws Exception {
+		if (args.length >= 1 && args[0].startsWith("builder-")) {
+			Builder.run(args[0]);
+			return;
+		}
 		if (args.length < 2) {
-			System.err.println("usage: generate <key file> | sign <jar> <key file> [--allow-undeclared] | sign-env <jar> [--allow-undeclared] | public <key file>");
+			System.err.println("""
+				usage: generate <key file> | public <key file>
+				       sign <jar> <key file> [--allow-undeclared] | sign-env <jar> [--allow-undeclared]
+				       library-statement <kind> name=value...          (prints what would be signed)
+				       library-sign <kind> <key file> name=value...    (prints the signature, as JSON)
+				       library-sign-env <kind> <ENV VAR> name=value... (the same, the key from an environment variable)
+				       build-hash <repository dir>
+				       inspect <jar> [<source dir>]                    (what the Library would flag, as JSON)
+				       builder-prepare | builder-inspect | builder-sign | builder-report  (the Library builder's steps)""");
 			System.exit(2);
 		}
 		switch (args[0]) {
@@ -266,6 +278,24 @@ public final class Signing {
 				Files.writeString(sig, sign(jar, key, args.length > 2 && args[2].equals("--allow-undeclared")));
 				System.out.println("Wrote " + sig + " (key " + key.id() + ")");
 			}
+			case "library-statement" -> System.out.print(new String(library(args, 2), StandardCharsets.US_ASCII));
+			case "library-sign" -> {
+				if (args.length < 3) throw new IOException("library-sign <kind> <key file> name=value...");
+				byte[] statement = library(args, 3);
+				char[] pass = passphrase("Passphrase for " + args[2] + ": ");
+				Key key = decrypt(Files.readString(Path.of(args[2])), pass);
+				Arrays.fill(pass, ' ');
+				System.out.println(LibraryStatements.signatureJson(key, statement));
+			}
+			case "library-sign-env" -> {
+				if (args.length < 3) throw new IOException("library-sign-env <kind> <ENV VAR> name=value...");
+				byte[] statement = library(args, 3);
+				String env = System.getenv(args[2]);
+				if (env == null || env.isBlank()) throw new IOException(args[2] + " isn't set");
+				System.out.println(LibraryStatements.signatureJson(parsePrivate(env), statement));
+			}
+			case "build-hash" -> System.out.println(BuildHash.of(Path.of(args[1])));
+			case "inspect" -> System.out.println(Json.write(Inspect.inspect(Path.of(args[1]), args.length > 2 ? Path.of(args[2]) : null)));
 			default -> throw new IOException("unknown command " + args[0]);
 		}
 	}
@@ -286,6 +316,15 @@ public final class Signing {
 		} catch (GeneralSecurityException e) {
 			throw new IllegalStateException(e);
 		}
+	}
+
+	/** The statement named by {@code args[1]} from the fields from {@code args[from]} on. */
+	private static byte[] library(String[] args, int from) {
+		return LibraryStatements.statement(args[1], LibraryStatements.fields(Arrays.asList(args).subList(Math.min(from, args.length), args.length)));
+	}
+
+	static String hex(byte[] b) {
+		return HexFormat.of().formatHex(b);
 	}
 
 	static String b64(byte[] b) {

@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+# The Myriad Library maintainer's tool: review what's waiting, approve it with the offline listing key, and the rest.
+#
+#   tools/library-review pending                     what's waiting (and recent failures)
+#   tools/library-review show <n>                    one submission: its report, findings, and (closed source) its source
+#   tools/library-review accept <n>                  build a new closed-source addon (it waits until accepted)
+#   tools/library-review approve-listing <n> [--accept <finding>]... [--listing-only]
+#                                                    list a new addon (or re-list one: new build logic, accepted findings),
+#                                                    then sign this version too
+#   tools/library-review approve-version <n>         sign a version that waited for review
+#   tools/library-review reject <n> <reason...>      turn a submission down (the developer sees the reason)
+#   tools/library-review yank <id> <version>         take a release back (signed with the API's index key)
+#   tools/library-review pause <id>                  take a listing out of the index until it's listed again
+#   tools/library-review cert <listing|version|index> <ed25519:key> [days] [root key file]
+#                                                    certify a Library key with a root key (index keys expire, default 365 days)
+#   tools/library-review revoke <seq> <ed25519:key>... [--root <file>]  revoke Library keys with a root key
+#   tools/library-review archive                     keep a copy of the current index (for recovery)
+#
+# Keys and the admin token live in ~/.myriad-keys (MYRIAD_KEYS): library-listing.key, root-primary.key,
+# library-admin-token. Reviewed closed-source code and index copies go to ~/.myriad-library (MYRIAD_LIBRARY_DIR).
+# Nothing a developer wrote is ever run here; everything they wrote is shown with control characters stripped.
+set -euo pipefail
+
+here=$(cd "$(dirname "$0")/.." && pwd)
+export JAVA_HOME=${JAVA_HOME:-/usr/lib/jvm/jbr_jcef-25.0.1-linux-x64-b285.56}
+API=${LIBRARY_API:-https://api.myriadclient.dev}
+KEYS=${MYRIAD_KEYS:-$HOME/.myriad-keys}
+STATE=${MYRIAD_LIBRARY_DIR:-$HOME/.myriad-library}
+PRIVATE_BUILDER=MyriadClient/myriad-builder-private
+
+usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+die() { echo "$*" >&2; exit 1; }
+need() { command -v "$1" >/dev/null || die "needs $1"; }
+need curl; need jq
+
+# Developer text, made safe for a terminal: escape sequences and control characters removed.
+clean() { LC_ALL=C sed -e 's/\x1b\[[0-9;?]*[ -\/]*[@-~]//g' -e 's/\x1b[]PX^_][^\x07\x1b]*\(\x07\|\x1b\\\)//g' | LC_ALL=C tr -d '\000-\010\013-\037\177'; }
+
+token() {
+	[[ -f $KEYS/library-admin-token ]] || die "no admin token at $KEYS/library-admin-token"
+	tr -d '[:space:]' <"$KEYS/library-admin-token"
+}
+
+api() { # method path [json]
+	local args=(-fsS --proto '=https' -X "$1" -H "Authorization: Bearer $(token)")
+	[[ $API == http://localhost* ]] && args=(-fsS -X "$1" -H "Authorization: Bearer $(token)")
+	if [[ $# -ge 3 ]]; then args+=(-H 'Content-Type: application/json' --data-binary "$3"); fi
+	curl "${args[@]}" "$API$2" || die "the API refused $1 $2"
+}
+
+signer() {
+	(cd "$here" && ./gradlew --quiet :gradle-plugin:classes >/dev/null)
+	"$JAVA_HOME/bin/java" -cp "$here/gradle-plugin/build/classes/java/main" dev.myriadclient.gradle.signing.Signing "$@"
+}
+
+# library-sign <kind> <key file> ...: a signature with a passphrase-protected key. Its output is captured, so Java has
+# no console to ask on: the passphrase is read from the terminal here and given to that one Java process only (not to
+# Gradle, whose daemon outlives the command).
+signed() {
+	local pass
+	(cd "$here" && ./gradlew --quiet :gradle-plugin:classes >/dev/null)
+	IFS= read -rs -p "Passphrase for $3: " pass </dev/tty
+	echo >/dev/tty
+	MYRIAD_KEY_PASSPHRASE=$pass "$JAVA_HOME/bin/java" -cp "$here/gradle-plugin/build/classes/java/main" \
+		dev.myriadclient.gradle.signing.Signing "$@"
+}
+
+submission() { # n → its pending entry
+	[[ $1 =~ ^[1-9][0-9]{0,17}$ ]] || die "not a submission number: $1"
+	local s
+	s=$(api GET /v1/library/pending | jq --argjson n "$1" '.[] | select(.id == $n)')
+	[[ -n $s ]] || die "nothing pending with number $1"
+	printf '%s' "$s"
+}
+
+confirm() { read -r -p "$1 [y/N] " a; [[ $a == y || $a == Y ]] || die "left as it was"; }
+
+field() { jq -r "$1 // empty" <<<"$2"; }
+
+[[ $# -ge 1 ]] || usage
+cmd=$1; shift
+
+case $cmd in
+pending)
+	api GET /v1/library/pending | jq -r '.[] | [.id, .status, .builder, (.repo // "?"), .tag, ((.report.id // "-") + " " + (.report.version // "")), (.reason // "")] | @tsv' \
+		| clean | column -t -s $'\t'
+	;;
+
+show)
+	[[ $# -eq 1 ]] || usage
+	s=$(submission "$1")
+	r=$(jq '.report // {}' <<<"$s")
+	{
+		echo "Submission $1: $(field .status "$s") ($(field .builder "$s") source), $(field .repo "$s") $(field .tag "$s")"
+		[[ -n $(field .reason "$s") ]] && echo "Reason: $(field .reason "$s")"
+		echo "Addon: $(field .id "$r") $(field .version "$r")  \"$(field .name "$r")\" by $(jq -r '(.authors // []) | join(", ")' <<<"$r")"
+		echo "  $(field .description "$r")"
+		echo "Provides: $(jq -r '(.provides // []) | join(", ")' <<<"$r")   Minecraft: $(field .minecraft "$r")   Classes: $(field .classes "$r")"
+		echo "Developer keys: $(jq -r '(.keys // []) | join(" ")' <<<"$r")"
+		echo "Published jar: $(field .url "$r")"
+		echo "  sha256 $(field .sha256 "$r") ($(field .size "$r") bytes)"
+		if [[ -n $(field .built "$r") ]]; then
+			if [[ $(field .built "$r") == $(field .sha256 "$r") ]]; then echo "  matches what its source builds"; else echo "  DOESN'T match what its source builds ($(field .built "$r"))"; fi
+		fi
+		echo "Commit: $(field .commit "$r")   Build logic: $(field .buildHash "$r")"
+		echo "Findings:"
+		jq -r '(.findings // [])[] | "  " + .id + "   (" + ((.where // []) | join(", ")) + ")"' <<<"$r"
+		[[ $(jq '(.findings // []) | length' <<<"$r") == 0 ]] && echo "  none"
+	} | clean
+	if [[ $(field .builder "$s") == open && -n $(field .commit "$r") ]]; then
+		echo "Source: https://github.com/$(field .repo "$s" | clean)/tree/$(field .commit "$r")"
+	elif [[ $(field .builder "$s") == closed && -n $(field .run "$r") ]]; then
+		need gh
+		id=$(field .id "$r"); ver=$(field .version "$r")
+		[[ $id =~ ^[a-z][a-z0-9_-]{1,63}$ && $ver =~ ^[0-9A-Za-z.+-]{1,64}$ ]] || die "odd id or version in the report"
+		dir="$STATE/review/$1"; rm -rf "$dir"; mkdir -p "$dir/src"
+		gh run download "$(field .run "$r")" -R "$PRIVATE_BUILDER" -n source -D "$dir" || die "couldn't download the source (artifacts last three days)"
+		tar -xzf "$dir/source.tar.gz" -C "$dir/src" --no-same-owner --no-same-permissions
+		echo "Source: $dir/src"
+		if [[ -f $STATE/closed/$id/latest.tar.gz ]]; then
+			mkdir -p "$dir/before"; tar -xzf "$STATE/closed/$id/latest.tar.gz" -C "$dir/before" --no-same-owner --no-same-permissions
+			diff -ruN "$dir/before" "$dir/src" >"$dir/changes.diff" || true
+			echo "Changes since the last approved version: $dir/changes.diff ($(grep -c '^[-+][^-+]' "$dir/changes.diff" || true) lines)"
+		else
+			echo "No earlier approved version: read all of it."
+		fi
+	fi
+	;;
+
+accept)
+	[[ $# -eq 1 ]] || usage
+	submission "$1" >/dev/null
+	api POST "/v1/library/submissions/$1/accept" '{}' >/dev/null && echo "Accepted: the private builder will build it."
+	;;
+
+reject)
+	[[ $# -ge 2 ]] || usage
+	n=$1; shift
+	submission "$n" >/dev/null
+	api POST "/v1/library/submissions/$n/reject" "$(jq -n --arg r "$*" '{reason: $r}')" >/dev/null && echo "Rejected."
+	;;
+
+approve-version | approve-listing)
+	[[ $# -ge 1 ]] || usage
+	n=$1; shift
+	accepted=(); listing_only=0
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+			--accept) accepted+=("$2"); shift 2 ;;
+			--listing-only) listing_only=1; shift ;;
+			*) usage ;;
+		esac
+	done
+	[[ -f $KEYS/library-listing.key ]] || die "no listing key at $KEYS/library-listing.key"
+	s=$(submission "$n")
+	r=$(jq '.report // {}' <<<"$s")
+	id=$(field .id "$r"); ver=$(field .version "$r"); builder=$(field .builder "$s")
+	[[ $id =~ ^[a-z][a-z0-9_-]{1,63}$ && $ver =~ ^[0-9A-Za-z.+-]{1,64}$ ]] || die "the report has no usable id and version"
+	sha=$(field .sha256 "$r"); size=$(field .size "$r"); commit=$(field .commit "$r"); url=$(field .url "$r")
+	[[ $sha =~ ^[0-9a-f]{64}$ && $commit =~ ^[0-9a-f]{40}$ && $url =~ ^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/releases/download/[A-Za-z0-9._+-]+/[A-Za-z0-9._+-]+\.jar$ ]] \
+		|| die "the report's jar, hash or commit is missing"
+	[[ $(field .built "$r") == "$sha" ]] || die "the published jar isn't what its source builds: not signing"
+
+	if [[ $cmd == approve-listing ]]; then
+		buildhash=$(field .buildHash "$r"); owner=$(field .ownerId "$s"); repo_id=$(field .repoId "$s")
+		[[ $buildhash =~ ^[0-9a-f]{64}$ && $owner =~ ^[0-9]+$ && $repo_id =~ ^[0-9]+$ ]] || die "the submission lacks its build hash or repository"
+		revision=$(curl -fsS "$API/v1/index.json" | jq -r '.body | fromjson | .addons[] | select(.listing.id == "'"$id"'") | .listing.revision' || true)
+		revision=$(( ${revision:-0} + 1 ))
+		fields=(id="$id" revision="$revision" owner-id="$owner" source="$builder" build="$buildhash" provides="$(jq -r '(.provides // []) | join(",")' <<<"$r")")
+		shown_repo=$(field .repo "$s")
+		if [[ $builder == closed ]]; then
+			need gh
+			pub=$(field .updates "$r")
+			[[ $pub =~ ^[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}$ ]] || die "the addon names no public releases repository"
+			pub_id=$(gh api "repos/$pub" -q .id); pub_owner=$(gh api "repos/$pub" -q .owner.id); pub_private=$(gh api "repos/$pub" -q .private)
+			[[ $pub_owner == "$owner" && $pub_private == false ]] || die "$pub isn't a public repository of the same owner"
+			# A release from the public repository is an update: its listing's source repository stays as it was.
+			src_id=$(curl -fsS "$API/v1/index.json" | jq -r '.body | fromjson | .addons[] | select(.listing.id == "'"$id"'") | .listing.repoId' || true)
+			[[ $repo_id == "$pub_id" ]] && repo_id=${src_id:-$repo_id}
+			[[ $repo_id != "$pub_id" ]] || die "can't tell the private source repository from the public one"
+			fields+=(repo-id="$repo_id" download-repo-id="$pub_id")
+			shown_repo=$pub
+		else
+			fields+=(repo-id="$repo_id")
+		fi
+		for k in $(jq -r '(.keys // [])[]' <<<"$r"); do fields+=(key="$k"); done
+		echo "Listing $id (revision $revision, $builder source) from $(field .repo "$s" | clean):"
+		signer library-statement listing "${fields[@]}" | sed 's/^/  /'
+		[[ ${#accepted[@]} -gt 0 ]] && echo "Accepted findings: ${accepted[*]}" | clean
+		confirm "Sign this listing with the listing key?"
+		sig=$(signed library-sign listing "$KEYS/library-listing.key" "${fields[@]}")
+		acc=$(printf '%s\n' "${accepted[@]+"${accepted[@]}"}" | jq -R . | jq -s 'map(select(length > 0))')
+		doc=$(jq -n --argjson r "$r" --argjson s "$sig" --argjson acc "$acc" --arg id "$id" --argjson rev "$revision" --argjson repo "$repo_id" \
+			--argjson owner "$owner" --arg src "$builder" --arg build "$buildhash" --arg shown "$shown_repo" --arg pub "${pub_id:-0}" '
+			{id: $id, revision: $rev, repoId: $repo, ownerId: $owner, source: $src, build: $build, provides: ($r.provides // []), keys: ($r.keys // []),
+			 signatures: [$s], accepted: $acc,
+			 info: {name: ($r.name // $id), description: ($r.description // ""), author: (($r.authors // [])[0] // ""), repo: $shown}}
+			+ (if $src == "closed" then {downloadRepoId: ($pub | tonumber)} else {} end)')
+		api POST /v1/library/approvals "$(jq -n --argjson d "$doc" --argjson n "$n" '{kind: "listing", doc: $d, submission: $n}')" >/dev/null
+		echo "Listed."
+		[[ $listing_only == 1 ]] && exit 0
+	fi
+
+	# The version: the published jar downloaded and hashed here, never trusting the report alone.
+	tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+	curl -fsSL --proto '=https' --max-filesize 67108864 -o "$tmp/addon.jar" "$url" || die "couldn't download $url"
+	[[ $(sha256sum "$tmp/addon.jar" | cut -d' ' -f1) == "$sha" && $(stat -c %s "$tmp/addon.jar") == "$size" ]] || die "the published jar changed since it was built: not signing"
+	echo "Version $id $ver: $url"
+	echo "  sha256 $sha, $size bytes, commit $commit"
+	confirm "Sign this version with the listing key?"
+	sig=$(signed library-sign version "$KEYS/library-listing.key" id="$id" version="$ver" size="$size" sha256="$sha" commit="$commit")
+	doc=$(jq -n --argjson r "$r" --argjson s "$sig" --arg id "$id" --arg url "$url" '
+		{id: $id, version: $r.version, size: $r.size, sha256: $r.sha256, commit: $r.commit, url: $url, signatures: [$s], developer: ($r.developer // [])}
+		+ (if $r.minecraft then {minecraft: $r.minecraft} else {} end)')
+	api POST /v1/library/approvals "$(jq -n --argjson d "$doc" --argjson n "$n" '{kind: "version", doc: $d, submission: $n}')" >/dev/null
+	echo "Signed: $id $ver is in the Library."
+	if [[ $builder == closed && -f $STATE/review/$n/source.tar.gz ]]; then
+		mkdir -p "$STATE/closed/$id"
+		cp "$STATE/review/$n/source.tar.gz" "$STATE/closed/$id/$ver.tar.gz"
+		cp "$STATE/review/$n/source.tar.gz" "$STATE/closed/$id/latest.tar.gz"
+	fi
+	;;
+
+yank)
+	[[ $# -eq 2 ]] || usage
+	confirm "Yank $1 $2 for everyone?"
+	api POST /v1/library/yank "$(jq -n --arg id "$1" --arg v "$2" '{id: $id, version: $v}')" >/dev/null && echo "Yanked."
+	;;
+
+pause)
+	[[ $# -eq 1 ]] || usage
+	confirm "Take $1 out of the Library until it's listed again?"
+	api POST "/v1/library/listings/$1/pause" '{}' >/dev/null && echo "Paused."
+	;;
+
+cert)
+	[[ $# -ge 2 ]] || usage
+	role=$1 key=$2 days=${3:-365} root=${4:-$KEYS/root-primary.key}
+	[[ $role =~ ^(listing|version|index)$ && $days =~ ^[0-9]{1,4}$ && -f $root ]] || usage
+	fields=(key="$key" role="$role")
+	[[ $role == index ]] && fields+=(not-after="$(( $(date +%s) + days * 86400 ))")
+	signer library-statement key "${fields[@]}"
+	confirm "Certify this with the root key $root?"
+	sig=$(signed library-sign key "$root" "${fields[@]}")
+	na=$( [[ $role == index ]] && echo "${fields[2]#not-after=}" || echo 0)
+	api POST /v1/library/approvals "$(jq -n --arg k "$key" --arg r "$role" --argjson na "$na" --argjson s "$sig" \
+		'{kind: "cert", doc: ({key: $k, role: $r, signatures: [$s]} + (if $r == "index" then {notAfter: $na} else {} end))}')" >/dev/null
+	echo "Certified."
+	;;
+
+revoke)
+	[[ $# -ge 2 ]] || usage
+	seq=$1; shift; root=$KEYS/root-primary.key; keys=()
+	while [[ $# -gt 0 ]]; do
+		case $1 in --root) root=$2; shift 2 ;; *) keys+=("$1"); shift ;; esac
+	done
+	fields=(seq="$seq"); for k in "${keys[@]}"; do fields+=(key="$k"); done
+	signer library-statement revocations "${fields[@]}"
+	confirm "Revoke these with the root key $root? (Everything they signed stops counting.)"
+	sig=$(signed library-sign revocations "$root" "${fields[@]}")
+	api POST /v1/library/approvals "$(jq -n --argjson seq "$seq" --argjson s "$sig" '{kind: "revocations", doc: {seq: $seq, keys: $ARGS.positional, signatures: [$s]}}' --args "${keys[@]}")" >/dev/null
+	echo "Revoked."
+	;;
+
+archive)
+	mkdir -p "$STATE/index"
+	tmp=$(mktemp); curl -fsS "$API/v1/index.json" -o "$tmp"
+	issued=$(jq -r '.body | fromjson | .issued' "$tmp")
+	[[ $issued =~ ^[0-9]+$ ]] || die "not an index"
+	mv "$tmp" "$STATE/index/$issued.json"
+	echo "Kept $STATE/index/$issued.json"
+	;;
+
+*) usage ;;
+esac
