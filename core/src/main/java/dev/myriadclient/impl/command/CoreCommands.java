@@ -122,8 +122,11 @@ public final class CoreCommands {
 		};
 	}
 
+	/** What the last ".update add <link>" offered, waiting for "yes". */
+	private static dev.myriadclient.impl.update.LinkInstall.Offer pendingOffer;
+
 	private static Command update() {
-		return new Command("update", "Updates Myriad and addons from GitHub: .update lists, .update check, .update all, .update <addon>.") {
+		return new Command("update", "Updates Myriad and addons: .update lists, .update check, .update all, .update <addon>, .update add <link> installs a new addon.") {
 			@Override
 			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
 				UpdateManager updates = MyriadImpl.get().updates();
@@ -152,7 +155,7 @@ public final class CoreCommands {
 				});
 				b.then(literal("check").executes(c -> {
 					updates.check(true);
-					info("Checking GitHub for updates…");
+					info("Checking for updates…");
 					return SINGLE_SUCCESS;
 				}));
 				b.then(literal("all").executes(c -> {
@@ -164,6 +167,41 @@ public final class CoreCommands {
 					info("Downloading " + updates.updatable().size() + " update(s)…");
 					return SINGLE_SUCCESS;
 				}));
+				// A new addon from a link: looked up and checked first, installed only after "yes". (A private source's token
+				// goes in the Addons window, never in chat, whose history is saved.)
+				b.then(literal("add").then(literal("yes").executes(c -> {
+					var offer = pendingOffer;
+					pendingOffer = null;
+					if (offer == null) {
+						error("Nothing to install: .update add <link> first");
+						return 0;
+					}
+					try {
+						updates.install(offer);
+						info(offer.name() + " " + offer.version() + " is in your mods folder and loads when you restart the game");
+					} catch (java.io.IOException e) {
+						error("Couldn't install " + offer.name() + ": " + e.getMessage());
+					}
+					return SINGLE_SUCCESS;
+				})).then(argument("link", StringArgumentType.greedyString()).executes(c -> {
+					String link = StringArgumentType.getString(c, "link");
+					pendingOffer = null;
+					info("Looking up " + link + "…");
+					updates.lookUp(link, null).whenComplete((o, err) -> dev.myriadclient.api.util.Async.onRenderThread(() -> {
+						if (err != null) {
+							error("Can't install it: " + UpdateManager.reasonOf(err));
+							return;
+						}
+						pendingOffer = o;
+						info(Component.literal(o.name() + " " + o.version()).withStyle(ChatFormatting.WHITE)
+							.append(Component.literal("  " + o.id() + " from " + o.from()).withStyle(ChatFormatting.GRAY)));
+						if (o.signed()) info(Component.literal("Signed with key " + o.keyId() + "; every update will need it.").withStyle(ChatFormatting.GREEN));
+						else info(Component.literal("Unsigned: whoever controls " + o.from() + " decides what you get, now and in every update.")
+							.withStyle(ChatFormatting.RED));
+						info("Install it with .update add yes");
+					}));
+					return SINGLE_SUCCESS;
+				})));
 				b.then(argument("addon", Arguments.choice(updates::updatable)).executes(c -> {
 					String id = StringArgumentType.getString(c, "addon");
 					if (!updates.updatable().contains(id)) {

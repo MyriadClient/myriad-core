@@ -12,17 +12,22 @@ import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.Note;
+import dev.myriadclient.api.ui.widget.TextField;
+import dev.myriadclient.api.util.Async;
 import dev.myriadclient.api.ui.widget.SettingsView;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.ui.widget.Widget;
 import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.addon.AddonLoader;
+import dev.myriadclient.impl.update.LinkInstall;
 import dev.myriadclient.impl.update.UpdateManager;
 
 import java.net.URI;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /** Every addon Myriad found, as cards: what it adds, who made it, where to find it, and why it failed if it did. */
@@ -31,12 +36,23 @@ public final class AddonsPanel extends WidgetPanel {
 	/** Addons' settings blocks (and core's own sections) folded away; all open at first. */
 	private final Set<String> folded = new HashSet<>();
 	private final UpdateManager updates = MyriadImpl.get().updates();
+	/** The "add from link" form: open, what's typed, and what the link offered (or why it can't be installed). */
+	private boolean adding, looking;
+	private String link = "", linkToken = "";
+	private LinkInstall.Offer offer;
+	private String linkProblem, installed;
+	/** Private-source tokens being typed, per addon. */
+	private final Map<String, String> tokenDrafts = new HashMap<>();
 	/** In the title bar: checking at start, checking now, and installing every update. */
 	private final List<TitleControl> titleControls = List.of(
 		TitleControl.toggle(updates::checkEnabled, updates::setCheckEnabled,
-			() -> "Check GitHub for new releases when the game starts: " + (updates.checkEnabled() ? "on" : "off")),
+			() -> "Check for new releases when the game starts: " + (updates.checkEnabled() ? "on" : "off")),
 		TitleControl.button(() -> updates.isChecking() ? "\uf110" : "\uf021", () -> updates.check(true),
 			() -> updates.isChecking() ? "Checking…" : "Check for updates now"),
+		TitleControl.button(() -> "\uf0c1", () -> {
+			adding = !adding;
+			rebuild();
+		}, () -> adding ? "Close adding an addon from a link" : "Add an addon from a link"),
 		TitleControl.button(() -> "\uf019", updates::updateAll, () -> "Update all " + updates.updatable().size() + " (they install when you quit)")
 			.visible(() -> updates.updatable().size() > 1));
 
@@ -64,7 +80,79 @@ public final class AddonsPanel extends WidgetPanel {
 
 	@Override
 	protected void build(VBox content) {
+		if (adding) content.add(addForm());
 		for (Addon a : Myriad.addons()) content.add(new AddonEntry(a));
+	}
+
+	/** Adding an addon from a link: look it up (downloaded and checked, nothing written), see what it is, then install. */
+	private Widget addForm() {
+		VBox form = new VBox(4, 0);
+		form.add(new Label("Add an addon from a link").bold());
+		form.add(new Label("A GitHub repo (owner/repo, or its address) or an addon's https feed. It's downloaded and checked first; nothing is installed "
+			+ "until you say so.").dim());
+		form.add(new TextField(() -> link).onChange(s -> link = s).onSubmit(s -> lookUp()).placeholder("github.com/owner/repo, or https://…/feed.json"));
+		form.add(new TextField(() -> linkToken).onChange(s -> linkToken = s).masked().placeholder("Access token, for a private repo or feed (optional)"));
+		HBox buttons = new HBox(4);
+		buttons.add(new Button(() -> looking ? "Looking…" : "Look up", this::lookUp).accent());
+		buttons.add(new Button("Cancel", this::closeForm).quiet());
+		form.add(buttons);
+		if (linkProblem != null) form.add(new Note("Can't install it: " + linkProblem + ".").error());
+		if (installed != null) form.add(new Note(installed).color(() -> Myriad.ui().theme().green.argb()));
+		LinkInstall.Offer o = offer;
+		if (o != null) {
+			form.add(new Label(o.name() + " " + o.version()).bold());
+			form.add(new Label(o.id() + "  ·  from " + o.from() + "  ·  " + (o.jar().length / 1024) + " KB").dim());
+			if (o.signed()) {
+				form.add(new Note("Signed with key " + o.keyId() + ". If its developer publishes their key, check it's this one: every update will "
+					+ "have to be signed with it."));
+			} else {
+				form.add(new Note("Unsigned: whoever controls " + o.from() + " decides what you get, now and in every update. Install it only if you "
+					+ "trust them.").error());
+			}
+			HBox act = new HBox(4);
+			Button install = new Button("Install " + o.name(), () -> install(o));
+			act.add(o.signed() ? install.accent() : install.danger());
+			act.add(new Button("Don't install", () -> {
+				offer = null;
+				rebuild();
+			}).quiet());
+			form.add(act);
+		}
+		return form;
+	}
+
+	private void lookUp() {
+		if (looking || link.isBlank()) return;
+		looking = true;
+		offer = null;
+		linkProblem = installed = null;
+		rebuild();
+		updates.lookUp(link, linkToken).whenComplete((o, err) -> Async.onRenderThread(() -> {
+			looking = false;
+			if (err != null) linkProblem = UpdateManager.reasonOf(err);
+			else offer = o;
+			rebuild();
+		}));
+	}
+
+	private void install(LinkInstall.Offer o) {
+		try {
+			updates.install(o);
+			installed = o.name() + " " + o.version() + " is in your mods folder and loads when you restart the game.";
+			link = linkToken = "";
+		} catch (java.io.IOException e) {
+			linkProblem = e.getMessage();
+		}
+		offer = null;
+		rebuild();
+	}
+
+	private void closeForm() {
+		adding = looking = false;
+		offer = null;
+		link = linkToken = "";
+		linkProblem = installed = null;
+		rebuild();
 	}
 
 	private final class AddonEntry extends CardEntry {
@@ -167,6 +255,7 @@ public final class AddonsPanel extends WidgetPanel {
 			}
 			if (!links.isEmpty()) body.add(links);
 			buildUpdate(body, u);
+			buildSigning(body);
 			// Core's own settings: profiles and the anti-cheat.
 			if (id.equals("myriad")) ProfilesSection.build(body, AddonsPanel.this::rebuild, folded);
 			// Each block of settings folds like a module's group: its rows straight in when it has one group, its groups
@@ -188,6 +277,34 @@ public final class AddonsPanel extends WidgetPanel {
 					else folded.add(key);
 				}).indent(10).hint(() -> folded.contains(key) ? String.valueOf(s.settings().all().stream().filter(dev.myriadclient.api.setting.Setting::isVisible).count()) : ""));
 			}
+		}
+
+		/** Whether its updates are signed, where they come from, and a token for a private source. */
+		private void buildSigning(VBox body) {
+			String source = UpdateManager.sourceOf(addon);
+			if (source == null) return;
+			List<String> keys = UpdateManager.signingKeys(addon);
+			String id = addon.id();
+			body.add(new Label(keys.isEmpty() ? "Updates from " + source + ", unsigned."
+				: "Updates from " + source + ", signed: only updates signed with key " + String.join(" or ", keys) + " are taken.").dim()
+				.tooltip(keys.isEmpty() ? "Its developer doesn't sign its releases, so an update is only as safe as " + source + "."
+					: "Each update is checked against its developer's signature before it's installed."));
+			HBox token = new HBox(4);
+			token.addWeighted(new TextField(() -> tokenDrafts.getOrDefault(id, "")).onChange(t -> tokenDrafts.put(id, t)).masked()
+				.placeholder(updates.hasToken(id) ? "Access token saved; paste another to replace it" : "Access token, if its source is private"), 1);
+			token.addFixed(new Button("Save", () -> {
+				if (updates.setToken(id, tokenDrafts.getOrDefault(id, ""))) tokenDrafts.remove(id);
+				rebuild();
+			}).quiet(), 40);
+			if (updates.hasToken(id)) token.addFixed(new Button("Forget", () -> {
+				updates.setToken(id, null);
+				rebuild();
+			}).quiet(), 46);
+			String key = id + "/private-source";
+			body.add(new Collapsible(() -> "Private source", token, () -> unfolded.contains(key), open -> {
+				if (open) unfolded.add(key);
+				else unfolded.remove(key);
+			}).indent(10).hint(() -> updates.hasToken(id) ? "token saved" : ""));
 		}
 
 		private void buildUpdate(VBox body, UpdateManager.State u) {

@@ -40,7 +40,14 @@ final class UpdateInstaller {
 	}
 
 	/** What the last session's updates came to: installed, or still waiting (the swap at exit didn't happen or failed). */
-	record Outcome(List<Pending> installed, List<Pending> stillWaiting) {
+	record Outcome(List<Pending> installed, List<Pending> stillWaiting, List<Added> added) {
+		Outcome(List<Pending> installed, List<Pending> stillWaiting) {
+			this(installed, stillWaiting, List.of());
+		}
+	}
+
+	/** A new addon installed from a link, already in the mods folder: said once the game has loaded it. */
+	record Added(String id, String version) {
 	}
 
 	/** An installed addon: its real version and jar. */
@@ -49,6 +56,7 @@ final class UpdateInstaller {
 
 	private final Path dir;
 	private final Map<String, Pending> pending = new LinkedHashMap<>();
+	private final Map<String, Added> added = new LinkedHashMap<>();
 	/** False in tests: nothing is installed when the JVM exits. */
 	private final boolean installAtExit;
 	private boolean hooked;
@@ -76,14 +84,30 @@ final class UpdateInstaller {
 	 */
 	synchronized Outcome reconcile(Map<String, Installed> installed) {
 		pending.clear();
+		added.clear();
 		List<Pending> done = new ArrayList<>(), waiting = new ArrayList<>();
+		List<Added> loaded = new ArrayList<>();
+		JsonFiles.read(dir.resolve("pending.json")).filter(JsonElement::isJsonObject).map(e -> e.getAsJsonObject().get("added"))
+			.filter(JsonElement::isJsonArray).ifPresent(a -> {
+				for (JsonElement e : a.getAsJsonArray()) {
+					try {
+						JsonObject o = e.getAsJsonObject();
+						Added n = new Added(o.get("id").getAsString(), o.get("version").getAsString());
+						Installed now = installed.get(n.id());
+						if (now != null && now.version().equals(n.version())) loaded.add(n);
+					} catch (RuntimeException ex) {
+						LOG.warn("Skipping a broken entry in {}", dir.resolve("pending.json"), ex);
+					}
+				}
+			});
 		JsonFiles.read(dir.resolve("pending.json")).filter(JsonElement::isJsonObject).map(e -> e.getAsJsonObject().get("updates"))
 			.filter(JsonElement::isJsonArray).ifPresent(a -> {
 				for (JsonElement e : a.getAsJsonArray()) {
 					try {
 						JsonObject o = e.getAsJsonObject();
-						Pending p = new Pending(o.get("id").getAsString(), o.get("version").getAsString(), dir.resolve(o.get("staged").getAsString()),
-							Path.of(o.get("replaces").getAsString()));
+						Path staged = Names.fileIn(dir, o.get("staged").getAsString());
+						if (staged == null) throw new IOException("its file is outside " + dir);
+						Pending p = new Pending(o.get("id").getAsString(), o.get("version").getAsString(), staged, Path.of(o.get("replaces").getAsString()));
 						Installed now = installed.get(p.id());
 						if (now != null && now.version().equals(p.version())) {
 							done.add(p);
@@ -102,14 +126,39 @@ final class UpdateInstaller {
 			});
 		save();
 		if (!pending.isEmpty()) hook();
-		return new Outcome(done, waiting);
+		return new Outcome(done, waiting, loaded);
+	}
+
+	/** Notes a new addon installed into the mods folder, to say so once the next start has loaded it. */
+	synchronized void added(String id, String version) {
+		added.put(id, new Added(id, version));
+		save();
+	}
+
+	/**
+	 * The file name an update installs as, worked out here and never taken from the release (which could otherwise name
+	 * any jar in mods to replace): the installed jar's name with the new version ({@code addon-1.0.jar} becomes
+	 * {@code addon-1.1.jar}), or its name as it is when it has no version in it, or {@code <id>-<version>.jar} when that
+	 * isn't a plain jar name.
+	 */
+	static String installName(String id, String installedVersion, String version, String installedFile) {
+		String suffix = "-" + installedVersion + ".jar";
+		String name = installedFile.endsWith(suffix) ? installedFile.substring(0, installedFile.length() - suffix.length()) + "-" + version + ".jar" : installedFile;
+		return Names.isFile(name) ? name : id + "-" + version + ".jar";
 	}
 
 	/** Writes {@code jar} to the updates folder and schedules it to replace {@code replaces} when the game exits. */
 	synchronized Pending stage(String id, String version, String fileName, byte[] jar, Path replaces) throws IOException {
+		Path staged = Names.fileIn(dir, fileName);
+		if (staged == null || !Names.isId(id) || !Names.isVersion(version)) throw new IOException("the release names an odd file");
+		// An update replaces its own jar and nothing else: never another file in mods, nor another update waiting here.
+		Path target = replaces.resolveSibling(fileName);
+		if (!target.equals(replaces) && Files.exists(target)) throw new IOException("a file named " + fileName + " is already in mods");
+		for (Pending other : pending.values()) {
+			if (!other.id().equals(id) && (other.staged().equals(staged) || other.target().equals(target))) throw new IOException(fileName + " is another update's file");
+		}
 		Files.createDirectories(dir);
-		Path staged = dir.resolve(fileName);
-		Path part = dir.resolve(fileName + ".part");
+		Path part = staged.resolveSibling(fileName + ".part");
 		Files.write(part, jar);
 		Files.move(part, staged, StandardCopyOption.REPLACE_EXISTING);
 		Pending old = pending.get(id);
@@ -131,10 +180,18 @@ final class UpdateInstaller {
 			o.addProperty("replaces", p.replaces().toAbsolutePath().toString());
 			list.add(o);
 		}
-		if (list.isEmpty() && !Files.exists(dir.resolve("pending.json"))) return;
+		JsonArray news = new JsonArray();
+		for (Added a : added.values()) {
+			JsonObject o = new JsonObject();
+			o.addProperty("id", a.id());
+			o.addProperty("version", a.version());
+			news.add(o);
+		}
+		if (list.isEmpty() && news.isEmpty() && !Files.exists(dir.resolve("pending.json"))) return;
 		JsonObject root = new JsonObject();
-		root.addProperty("_format", 1);
+		root.addProperty("_format", 2);
 		root.add("updates", list);
+		root.add("added", news);
 		JsonFiles.write(dir.resolve("pending.json"), root);
 	}
 
@@ -213,7 +270,10 @@ final class UpdateInstaller {
 
 	/** A PowerShell single-quoted string: nothing inside is expanded, and {@code '} is doubled. */
 	private static String quote(Path p) {
-		return "'" + p.toAbsolutePath().toString().replace("'", "''") + "'";
+		// PowerShell takes the curly single quotes as quotes too, so each is doubled like ' is.
+		String text = p.toAbsolutePath().toString();
+		for (String q : new String[] {"'", "\u2018", "\u2019", "\u201A", "\u201B"}) text = text.replace(q, q + q);
+		return "'" + text + "'";
 	}
 
 	/** PowerShell's {@code -EncodedCommand} takes Base64 of UTF-16LE, which sidesteps command-line quoting. */

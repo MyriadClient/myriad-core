@@ -2,15 +2,19 @@ package dev.myriadclient.impl.update;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import dev.myriadclient.api.network.Http;
+import com.google.gson.JsonParser;
+import dev.myriadclient.impl.update.Releases.Asset;
+import dev.myriadclient.impl.update.Releases.Found;
+import dev.myriadclient.impl.update.Releases.Release;
 import net.fabricmc.loader.api.Version;
-import net.fabricmc.loader.api.VersionParsingException;
-import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 import org.jetbrains.annotations.Nullable;
 
+import java.net.URI;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -18,65 +22,40 @@ import java.util.regex.Pattern;
 /**
  * Reads a repo's GitHub releases and picks the jar to install from one. A release says which Minecraft it's for in a
  * line of its notes, {@code Minecraft: ~26.2} (a Fabric version range, as a {@code fabric.mod.json} gives it); one
- * without that line is taken to be for any.
+ * without that line is taken to be for any. A signed release has {@code <jar>.sig} next to the jar: one feed entry for
+ * it (see {@link FeedReleases}) with its developer's signatures.
  */
 final class GitHubReleases {
+	/** The most a release list may be. */
+	private static final long MAX_LIST = 4L * 1024 * 1024;
 	private GitHubReleases() {
 	}
 
-	/**
-	 * A release; {@code asset} is null when no jar in it could be told apart as the one to install, {@code minecraft}
-	 * when its notes don't say which Minecraft it's for.
-	 */
-	record Release(String version, String url, @Nullable Asset asset, @Nullable String minecraft) {
-		/** Whether it's for Minecraft {@code version}: when its notes don't say, or their range can't be read, yes. */
-		boolean worksOn(Version version) {
-			if (minecraft == null) return true;
-			try {
-				return VersionPredicate.parse(minecraft).test(version);
-			} catch (VersionParsingException e) {
-				return true;
-			}
-		}
-
-		/** Its Minecraft for the user: {@code ~26.3} as {@code 26.3}. */
-		String minecraftShown() {
-			return minecraft == null ? "" : minecraft.replaceFirst("^[~^=]+", "");
-		}
-	}
-
-	/**
-	 * What a repo has released: the newest release for the running Minecraft, and the newest of all (another Minecraft's,
-	 * when it's newer than any for this one). Either is null when there's none.
-	 */
-	record Found(@Nullable Release forThisMinecraft, @Nullable Release newest) {
-	}
-
 	private static final Pattern MINECRAFT = Pattern.compile("(?m)^Minecraft:\\s*(\\S[^\\r\\n]*?)\\s*$");
-
-	/** {@code sha256} is the hex digest GitHub reports for the file, or null if it reports none. */
-	record Asset(String name, String url, long size, @Nullable String sha256) {
-	}
 
 	/**
 	 * The repo's latest full releases (drafts and pre-releases left out), for Minecraft {@code minecraft}. Fails with
 	 * "HTTP 404" when the repo can't be found.
 	 */
-	static CompletableFuture<Found> releases(String repo, @Nullable String installedFile, String installedVersion, Version minecraft) {
-		return Http.getJson("https://api.github.com/repos/" + repo + "/releases?per_page=30")
-			.thenApply(json -> find(json.getAsJsonArray(), installedFile, installedVersion, minecraft));
+	static CompletableFuture<Found> releases(String repo, @Nullable String token, @Nullable String installedFile, String installedVersion, Version minecraft) {
+		return Fetch.text(URI.create("https://api.github.com/repos/" + repo + "/releases?per_page=30"), MAX_LIST, token, "application/vnd.github+json")
+			.thenApply(text -> find(JsonParser.parseString(text).getAsJsonArray(), installedFile, installedVersion, minecraft, token != null));
 	}
 
 	static Found find(Iterable<JsonElement> list, @Nullable String installedFile, String installedVersion, Version minecraft) {
-		Release forThis = null, newest = null;
+		return find(list, installedFile, installedVersion, minecraft, false);
+	}
+
+	/** {@code authed}: a token goes with the downloads, so they're made through the API (a private repo's only way). */
+	static Found find(Iterable<JsonElement> list, @Nullable String installedFile, String installedVersion, Version minecraft, boolean authed) {
+		List<Release> out = new ArrayList<>();
 		for (JsonElement e : list) {
 			JsonObject json = e.getAsJsonObject();
 			if (flag(json, "draft") || flag(json, "prerelease") || !json.has("tag_name")) continue;
-			Release r = parse(json, installedFile, installedVersion);
-			if (newest == null || isNewer(r.version(), newest.version())) newest = r;
-			if (r.worksOn(minecraft) && (forThis == null || isNewer(r.version(), forThis.version()))) forThis = r;
+			Release r = parse(json, installedFile, installedVersion, authed);
+			if (Names.isVersion(r.version())) out.add(r);
 		}
-		return new Found(forThis, newest);
+		return Releases.newest(out, minecraft);
 	}
 
 	private static boolean flag(JsonObject json, String key) {
@@ -84,14 +63,27 @@ final class GitHubReleases {
 	}
 
 	static Release parse(JsonObject json, @Nullable String installedFile, String installedVersion) {
+		return parse(json, installedFile, installedVersion, false);
+	}
+
+	static Release parse(JsonObject json, @Nullable String installedFile, String installedVersion, boolean authed) {
 		String version = versionOf(json.get("tag_name").getAsString());
 		List<Asset> assets = new ArrayList<>();
+		Map<String, String> sigs = new HashMap<>();
 		if (json.has("assets")) {
 			for (JsonElement e : json.getAsJsonArray("assets")) {
 				JsonObject a = e.getAsJsonObject();
+				String name = a.get("name").getAsString();
+				String url = authed && a.has("url") ? a.get("url").getAsString() : a.get("browser_download_url").getAsString();
+				if (name.endsWith(".jar.sig")) {
+					sigs.put(name.substring(0, name.length() - 4), url);
+					continue;
+				}
+				// A file name that isn't a plain jar name is never a candidate.
+				if (!Names.isFile(name)) continue;
 				String digest = a.has("digest") && a.get("digest").isJsonPrimitive() ? a.get("digest").getAsString() : null;
 				String sha256 = digest != null && digest.startsWith("sha256:") ? digest.substring(7).toLowerCase(Locale.ROOT) : null;
-				assets.add(new Asset(a.get("name").getAsString(), a.get("browser_download_url").getAsString(), a.get("size").getAsLong(), sha256));
+				assets.add(new Asset(name, url, a.get("size").getAsLong(), sha256));
 			}
 		}
 		String url = json.has("html_url") ? json.get("html_url").getAsString() : null;
@@ -100,21 +92,16 @@ final class GitHubReleases {
 			Matcher m = MINECRAFT.matcher(json.get("body").getAsString());
 			if (m.find()) minecraft = m.group(1);
 		}
-		return new Release(version, url, pick(assets, installedFile, installedVersion, version), minecraft);
+		Asset asset = pick(assets, installedFile, installedVersion, version);
+		if (asset != null && sigs.containsKey(asset.name())) {
+			asset = new Asset(asset.name(), asset.url(), asset.size(), asset.sha256(), List.of(), sigs.get(asset.name()));
+		}
+		return new Release(version, url, asset, minecraft);
 	}
 
 	/** {@code v0.1.2} → {@code 0.1.2}. */
 	static String versionOf(String tag) {
 		return tag.startsWith("v") || tag.startsWith("V") ? tag.substring(1) : tag;
-	}
-
-	/** Whether {@code candidate} is a newer version than {@code installed}; false if either can't be read. */
-	static boolean isNewer(String candidate, String installed) {
-		try {
-			return Version.parse(candidate).compareTo(Version.parse(installed)) > 0;
-		} catch (VersionParsingException e) {
-			return false;
-		}
 	}
 
 	/**

@@ -26,6 +26,14 @@
 		"java": ">=25",
 		"fabric-api": "*"
 	},
+	"custom": {
+		"myriad": {
+			"keys": [
+				"ed25519:nCz3FbS30fsLg-MkX2de8AOrACc3xUYYo_RYAwpvRww",
+				"ed25519:50gMky_GrJ-mjBAlIKuWDURAFNzJYrBXzOUEuFG5RcI"
+			]
+		}
+	},
 	"breaks": {
 		"myriad-essentials": "<2.0.0",
 		"myriad-boze": "<0.3.0",

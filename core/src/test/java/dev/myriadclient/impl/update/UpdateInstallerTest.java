@@ -107,4 +107,22 @@ class UpdateInstallerTest {
 		assertTrue(script.contains("'/game/it''s/mods/addon-1.0.0.jar'"));
 		assertTrue(script.contains("-Destination '/game/it''s/mods/addon-1.1.0.jar'"));
 	}
+
+	@Test
+	void theInstallNameIsWorkedOutHereNotTakenFromTheRelease() {
+		assertEquals("addon-1.1.0.jar", UpdateInstaller.installName("addon", "1.0.0", "1.1.0", "addon-1.0.0.jar"));
+		assertEquals("renamed.jar", UpdateInstaller.installName("addon", "1.0.0", "1.1.0", "renamed.jar"));
+		assertEquals("addon-1.1.0.jar", UpdateInstaller.installName("addon", "1.0.0", "1.1.0", "My Addon (1).jar"));
+	}
+
+	@Test
+	void anUpdateNeverReplacesAnotherFile() throws Exception {
+		Path old = Files.writeString(mods().resolve("addon-1.0.0.jar"), "old");
+		Files.writeString(mods().resolve("myriad-2.6.0.jar"), "core");
+		UpdateInstaller u = installer();
+		org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class, () -> u.stage("addon", "1.1.0", "myriad-2.6.0.jar", "new".getBytes(), old));
+		Path other = Files.writeString(mods().resolve("other-1.0.0.jar"), "o");
+		u.stage("other", "2.0.0", "other-2.0.0.jar", "o2".getBytes(), other);
+		org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class, () -> u.stage("addon", "1.1.0", "other-2.0.0.jar", "new".getBytes(), old));
+	}
 }

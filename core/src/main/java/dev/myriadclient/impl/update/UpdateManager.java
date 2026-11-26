@@ -6,7 +6,6 @@ import dev.myriadclient.api.event.EventBus;
 import dev.myriadclient.api.event.events.GameReadyEvent;
 import dev.myriadclient.api.event.events.ScreenOpenEvent;
 import dev.myriadclient.api.event.events.WorldEvent;
-import dev.myriadclient.api.network.Http;
 import dev.myriadclient.api.service.Notifications;
 import dev.myriadclient.api.util.Async;
 import dev.myriadclient.impl.ui.UiScreen;
@@ -20,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -38,9 +38,14 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Checks GitHub for newer releases of Myriad and its addons, downloads the ones the user picks and installs them when the
- * game exits (see {@link UpdateInstaller}). An addon is checked when its {@code fabric.mod.json} names a GitHub repo
- * (see {@link UpdateSource}) and it runs from a jar.
+ * Checks for newer releases of Myriad and its addons, downloads the ones the user picks and installs them when the game
+ * exits (see {@link UpdateInstaller}). An addon is checked when its {@code fabric.mod.json} names a GitHub repo or an
+ * update feed (see {@link UpdateSource}) and it runs from a jar.
+ * <p>
+ * An addon whose installed jar lists signing keys ({@link DevKey}) takes only updates signed with one of them; core
+ * takes only updates signed with Myriad's root keys ({@link RootKeys}). An addon that lists none updates as before,
+ * marked unsigned. Every download is also checked against its size and SHA-256 and, before it's staged, read as the
+ * loader will read it ({@link JarCheck}).
  */
 public final class UpdateManager {
 	private static final Logger LOG = LoggerFactory.getLogger("Myriad/Updates");
@@ -56,7 +61,7 @@ public final class UpdateManager {
 		UNKNOWN,
 		/** Running from a folder (a dev build) or a nested jar, so there's no jar to replace. */
 		DEV_BUILD,
-		/** Not checked: its {@code fabric.mod.json} names no GitHub repository (or turns updates off). */
+		/** Not checked: its {@code fabric.mod.json} names no GitHub repository or feed (or turns updates off). */
 		NO_SOURCE
 	}
 
@@ -65,8 +70,9 @@ public final class UpdateManager {
 	}
 
 	private final UpdateInstaller installer;
+	private final FeedTokens tokens;
 	private final Map<String, State> states = new ConcurrentHashMap<>();
-	private final Map<String, GitHubReleases.Release> releases = new ConcurrentHashMap<>();
+	private final Map<String, Releases.Release> releases = new ConcurrentHashMap<>();
 	/** Installed versions to pretend, for testing: {@code -Dmyriad.updates.pretend=myriad=0.1.0,myriad-essentials=0.0.9}. */
 	private final Map<String, String> pretend = parsePretend(System.getProperty("myriad.updates.pretend", ""));
 	/** Toasts wait until something draws them (the menu or the HUD); render thread only. */
@@ -78,6 +84,33 @@ public final class UpdateManager {
 
 	public UpdateManager(Path root) {
 		this.installer = new UpdateInstaller(root.resolve("updates"));
+		this.tokens = new FeedTokens(root.resolve("updates"));
+	}
+
+	/** The ids of the keys {@code a}'s updates must be signed with; empty when its updates aren't signed. */
+	public static List<String> signingKeys(Addon a) {
+		return trustedKeys(a).stream().map(DevKey::id).toList();
+	}
+
+	/** Where {@code a}'s updates come from, for the user; null when it names nowhere. */
+	public static @Nullable String sourceOf(Addon a) {
+		return UpdateSource.of(a.metadata()).map(UpdateSource::describe).orElse(null);
+	}
+
+	/** Whether {@code id} has a token for a private source. */
+	public boolean hasToken(String id) {
+		return tokens.has(id);
+	}
+
+	/** Sets {@code id}'s private-source token (blank removes it); false when it isn't a valid token. */
+	public boolean setToken(String id, @Nullable String token) {
+		return tokens.set(id, token);
+	}
+
+	/** The keys {@code a}'s updates must be signed with: Myriad's root keys for core, else those its jar lists. */
+	static List<DevKey> trustedKeys(Addon a) {
+		if (a.isCore() && !RootKeys.ALL.isEmpty()) return RootKeys.ALL;
+		return DevKey.of(a.metadata());
 	}
 
 	/** The notes about other Minecraft versions' releases already shown (see {@link #announce}), for the config. */
@@ -112,6 +145,10 @@ public final class UpdateManager {
 			String names = String.join(", ", o.installed().stream().map(p -> name(p.id()) + " " + p.version()).toList());
 			toast("Updated", names, Notifications.Level.SUCCESS);
 		}
+		if (!o.added().isEmpty()) {
+			String names = String.join(", ", o.added().stream().map(p -> name(p.id()) + " " + p.version()).toList());
+			toast("Installed", names, Notifications.Level.SUCCESS);
+		}
 		for (UpdateInstaller.Pending p : o.stillWaiting()) {
 			states.put(p.id(), new State(Kind.STAGED, p.version(), null, "Couldn't be installed last time; trying again when you quit"));
 			toast("Update not installed", name(p.id()) + " " + p.version() + " couldn't be installed. Trying again when you quit; "
@@ -145,16 +182,16 @@ public final class UpdateManager {
 	}
 
 	/**
-	 * Asks GitHub about every addon that names a repo. {@code manual} (the user asked) always reports the result; the
+	 * Checks every addon that names a repo or a feed. {@code manual} (the user asked) always reports the result; the
 	 * automatic check only speaks up when there's something to install.
 	 */
 	public void check(boolean manual) {
 		if (checking) return;
-		Map<Addon, String> todo = new LinkedHashMap<>();
+		Map<Addon, UpdateSource> todo = new LinkedHashMap<>();
 		for (Addon a : Myriad.addons()) {
-			Optional<String> repo = UpdateSource.of(a.metadata());
+			Optional<UpdateSource> repo = UpdateSource.of(a.metadata());
 			if (repo.isEmpty()) {
-				states.put(a.id(), new State(Kind.NO_SOURCE, null, null, "Not checked: it names no GitHub repository"));
+				states.put(a.id(), new State(Kind.NO_SOURCE, null, null, "Not checked: it names nowhere to update from"));
 				continue;
 			}
 			State s = states.get(a.id());
@@ -171,26 +208,30 @@ public final class UpdateManager {
 		}
 		checking = true;
 		AtomicInteger left = new AtomicInteger(todo.size());
-		for (Map.Entry<Addon, String> entry : todo.entrySet()) {
+		for (Map.Entry<Addon, UpdateSource> entry : todo.entrySet()) {
 			Addon a = entry.getKey();
 			String id = a.id(), installed = installedVersion(a);
 			states.put(id, new State(Kind.CHECKING, null, null, null));
-			GitHubReleases.releases(entry.getValue(), jarOf(a).getFileName().toString(), installed, minecraftVersion()).whenComplete((found, err) -> {
-				GitHubReleases.Release r = found == null ? null : found.forThisMinecraft();
-				GitHubReleases.Release newest = found == null ? null : found.newest();
+			boolean mustBeSigned = !trustedKeys(a).isEmpty();
+			find(id, entry.getValue(), jarOf(a).getFileName().toString(), installed).whenComplete((found, err) -> {
+				Releases.Release r = found == null ? null : found.forThisMinecraft();
+				Releases.Release newest = found == null ? null : found.newest();
 				if (err != null) {
 					String why = reason(err);
 					LOG.info("Could not check {} for updates: {}", id, why);
 					states.put(id, new State(Kind.UNKNOWN, null, null, why.contains("HTTP 404") ? "No releases yet" : "Couldn't check: " + why));
 				} else if (newest == null) {
 					states.put(id, new State(Kind.UNKNOWN, null, null, "No releases yet"));
-				} else if (r == null || !GitHubReleases.isNewer(r.version(), installed)) {
+				} else if (r == null || !Releases.isNewer(r.version(), installed)) {
 					// Up to date for this Minecraft; a newer release for another one is only said, never installed.
-					boolean elsewhere = GitHubReleases.isNewer(newest.version(), installed) && newest != r;
+					boolean elsewhere = Releases.isNewer(newest.version(), installed) && newest != r;
 					String note = elsewhere ? newest.version() + " is out for Minecraft " + newest.minecraftShown() : null;
 					states.put(id, new State(Kind.UP_TO_DATE, r != null ? r.version() : installed, elsewhere ? newest.url() : r != null ? r.url() : null, note));
 				} else if (r.asset() == null) {
 					states.put(id, new State(Kind.UNKNOWN, r.version(), r.url(), r.version() + " is out, but its release has no jar to install"));
+				} else if (mustBeSigned && !r.asset().signed()) {
+					// Not worth downloading: it would be refused.
+					states.put(id, new State(Kind.UNKNOWN, r.version(), r.url(), r.version() + " is out, but isn't signed by its developer yet"));
 				} else {
 					releases.put(id, r);
 					states.put(id, new State(Kind.AVAILABLE, r.version(), r.url(), null));
@@ -233,9 +274,49 @@ public final class UpdateManager {
 		toast(ids.size() == 1 ? "Update available" : "Updates available", list + ". Open Addons to install.", Notifications.Level.INFO);
 	}
 
+	/**
+	 * Looks up what {@code link} (a GitHub repo or a feed) offers to install: downloaded and checked, nothing written.
+	 * Fails with why it can't be installed.
+	 */
+	public CompletableFuture<LinkInstall.Offer> lookUp(String link, @Nullable String token) {
+		Set<String> myriadIds = otherAddons("");
+		return LinkInstall.look(link, token == null || token.isBlank() ? null : token.strip(), minecraftVersion(), coreVersionAfterUpdates(), myriadIds,
+			id -> FabricLoader.getInstance().isModLoaded(id) || addon(id) != null, modsFolder());
+	}
+
+	/** Installs what {@link #lookUp} offered into the mods folder; it loads at the next start. */
+	public void install(LinkInstall.Offer offer) throws IOException {
+		LinkInstall.install(offer, modsFolder());
+		installer.added(offer.id(), offer.version());
+		if (offer.token() != null) tokens.set(offer.id(), offer.token());
+		LOG.info("Installed {} {} from {} ({}); it loads at the next start", offer.id(), offer.version(), offer.from(),
+			offer.signed() ? "signed by key " + offer.keyId() : "unsigned");
+	}
+
+	private static Path modsFolder() {
+		return FabricLoader.getInstance().getGameDir().resolve("mods");
+	}
+
+	/** The releases at {@code source}, for this Minecraft. */
+	private CompletableFuture<Releases.Found> find(String id, UpdateSource source, String installedFile, String installed) {
+		String token = tokens.get(id);
+		return switch (source) {
+			case UpdateSource.GitHub g -> GitHubReleases.releases(g.repo(), token, installedFile, installed, minecraftVersion());
+			case UpdateSource.Feed f -> Fetch.text(f.uri(), FeedReleases.MAX_FEED, token, "application/json").thenApply(text -> {
+				try {
+					FeedReleases.Feed feed = FeedReleases.parse(text, f.uri());
+					if (!feed.id().equals(id)) throw new IOException("the feed is for " + feed.id() + ", not " + id);
+					return Releases.newest(feed.releases(), minecraftVersion());
+				} catch (IOException e) {
+					throw new CompletionException(e);
+				}
+			});
+		};
+	}
+
 	/** Downloads, checks and stages {@code id}'s update. The future never fails; the result is in {@link #state}. */
 	public CompletableFuture<Void> update(String id) {
-		GitHubReleases.Release r = releases.get(id);
+		Releases.Release r = releases.get(id);
 		State s = states.get(id);
 		Addon addon = addon(id);
 		Path jar = addon == null ? null : jarOf(addon);
@@ -243,17 +324,21 @@ public final class UpdateManager {
 			return CompletableFuture.completedFuture(null);
 		}
 		states.put(id, new State(Kind.DOWNLOADING, r.version(), r.url(), null));
-		return Http.getBytes(r.asset().url()).thenAccept(bytes -> {
-			String why = JarCheck.verifyDownload(bytes, r.asset());
-			if (why == null) why = JarCheck.check(bytes, id, r.version(), minecraftVersion(), addon.isCore() ? null : coreVersionAfterUpdates());
-			if (why != null) throw new CompletionException(new IOException(why));
+		String token = tokens.get(id);
+		List<DevKey> trusted = trustedKeys(addon);
+		Set<String> others = otherAddons(id);
+		Version core = addon.isCore() ? null : coreVersionAfterUpdates();
+		URI origin = UpdateSource.of(addon.metadata()).map(UpdateManager::tokenOrigin).orElse(null);
+		return download(id, r, token, origin).thenAccept(got -> {
+			Verified v = verify(id, r.version(), got, trusted, addon.isCore(), others, minecraftVersion(), core);
+			if (v.problem() != null) throw new CompletionException(new IOException(v.problem()));
 			try {
-				installer.stage(id, r.version(), r.asset().name(), bytes, jar);
+				installer.stage(id, r.version(), UpdateInstaller.installName(id, addon.version(), r.version(), jar.getFileName().toString()), got.jar(), jar);
 			} catch (IOException e) {
 				throw new CompletionException(new IOException("couldn't save it to " + installer.dir() + ": " + e.getMessage(), e));
 			}
 			states.put(id, new State(Kind.STAGED, r.version(), r.url(), null));
-			LOG.info("Staged {} {}; it installs when the game exits", id, r.version());
+			LOG.info("Staged {} {} ({}); it installs when the game exits", id, r.version(), v.signer() == null ? "unsigned" : "signed by key " + v.signer().id());
 			Async.onRenderThread(() -> toast("Update ready", name(id) + " " + r.version() + " installs when you quit", Notifications.Level.SUCCESS));
 		}).exceptionally(err -> {
 			String why = reason(err);
@@ -262,6 +347,101 @@ public final class UpdateManager {
 			Async.onRenderThread(() -> toast("Update failed", name(id) + ": " + why, Notifications.Level.ERROR));
 			return null;
 		});
+	}
+
+	/** A download: the jar, and what it must be (from the release, and its {@code .sig} when it has one). */
+	record Downloaded(byte[] jar, long size, @Nullable String sha256, List<SignatureCheck.Sig> signatures) {
+	}
+
+	/** The jar and its signatures: a GitHub release's {@code .sig} is read first, and must describe this very jar. */
+	static CompletableFuture<Downloaded> download(String id, Releases.Release r, @Nullable String token) {
+		return download(id, r, token, null);
+	}
+
+	/**
+	 * {@code origin}: where the token belongs (the feed's address, or GitHub's API); downloads elsewhere go without it,
+	 * whatever the release lists.
+	 */
+	static CompletableFuture<Downloaded> download(String id, Releases.Release r, @Nullable String token, @Nullable URI origin) {
+		Releases.Asset a = r.asset();
+		CompletableFuture<Releases.Release> described = a.sigUrl() == null ? CompletableFuture.completedFuture(r)
+			: Fetch.text(URI.create(a.sigUrl()), 64 * 1024, tokenFor(token, origin, URI.create(a.sigUrl())), "application/octet-stream").thenApply(text -> {
+			try {
+				Releases.Release sig = FeedReleases.entry(com.google.gson.JsonParser.parseString(text).getAsJsonObject(), URI.create(a.url()));
+				if (sig == null || !sig.version().equals(r.version()) || !sig.asset().name().equals(a.name()) || sig.asset().size() != a.size()
+					|| (a.sha256() != null && !a.sha256().equals(sig.asset().sha256()))) {
+					throw new IOException("its signature file is for another download");
+				}
+				return new Releases.Release(r.version(), r.url(), new Releases.Asset(a.name(), a.url(), a.size(), sig.asset().sha256(),
+					sig.asset().signatures(), a.sigUrl()), r.minecraft());
+			} catch (IOException e) {
+				throw new CompletionException(e);
+			} catch (RuntimeException e) {
+				throw new CompletionException(new IOException("its signature file can't be read"));
+			}
+		});
+		return described.thenCompose(d -> {
+			Releases.Asset asset = d.asset();
+			if (asset.size() <= 0 || asset.size() > JarCheck.MAX_JAR) {
+				return CompletableFuture.failedFuture(new IOException("the release lists a size Myriad won't download"));
+			}
+			return Fetch.bytes(URI.create(asset.url()), asset.size(), tokenFor(token, origin, URI.create(asset.url())), "application/octet-stream")
+				.thenApply(bytes -> new Downloaded(bytes, asset.size(), asset.sha256(), asset.signatures()));
+		});
+	}
+
+	private static @Nullable String tokenFor(@Nullable String token, @Nullable URI origin, URI url) {
+		return token != null && origin != null && Fetch.sameOrigin(origin, url) ? token : null;
+	}
+
+	/** Where {@code source}'s token belongs. */
+	static URI tokenOrigin(UpdateSource source) {
+		return switch (source) {
+			case UpdateSource.GitHub g -> URI.create("https://api.github.com/");
+			case UpdateSource.Feed f -> f.uri();
+		};
+	}
+
+	/** What {@link #verify} found: the problem, or the key that signed it (null when it's unsigned and may be). */
+	record Verified(@Nullable String problem, @Nullable DevKey signer) {
+	}
+
+	/**
+	 * Every check a download must pass before it's staged, in order: it's the file described, it's signed by a key the
+	 * installed version trusts (when that lists any), and it's the mod and version asked for and will load here.
+	 */
+	static Verified verify(String id, String version, Downloaded got, List<DevKey> trusted, boolean isCore, Set<String> others, Version minecraft,
+		@Nullable Version core) {
+		String why = JarCheck.verifyDownload(got.jar(), got.size(), got.sha256());
+		if (why != null) return new Verified(why, null);
+		DevKey signer = null;
+		if (!trusted.isEmpty()) {
+			if (got.signatures().isEmpty()) return new Verified("it isn't signed, and " + (isCore ? "Myriad" : "this addon") + " only takes signed updates", null);
+			ReleaseStatement statement;
+			try {
+				statement = ReleaseStatement.of(id, version, got.jar(), JarCheck.sha256(got.jar()));
+			} catch (IllegalArgumentException e) {
+				return new Verified("its version can't be signed for", null);
+			}
+			signer = SignatureCheck.signer(statement.bytes(), got.signatures(), trusted);
+			if (signer == null) return new Verified(isCore ? "it isn't signed with Myriad's keys" : "it isn't signed with its developer's key", null);
+		}
+		JarCheck.Checked checked = JarCheck.check(got.jar(), id, version, minecraft, core, others);
+		if (checked.problem() != null) return new Verified(checked.problem(), signer);
+		if (!trusted.isEmpty() && checked.keys().isEmpty()) {
+			if (isCore) return new Verified("it drops Myriad's signing keys", signer);
+			// Signed by a trusted key, so its developer chose to stop signing.
+			LOG.warn("{} {} lists no signing keys: its later updates won't need a signature", id, version);
+		}
+		return new Verified(null, signer);
+	}
+
+	private static Set<String> otherAddons(String id) {
+		Set<String> out = new java.util.HashSet<>();
+		out.add(Myriad.MOD_ID);
+		for (Addon a : Myriad.addons()) out.add(a.id());
+		out.remove(id);
+		return out;
 	}
 
 	/** Updates everything that can be, core first so addons that need the newer core pass their checks. */
@@ -312,6 +492,11 @@ public final class UpdateManager {
 	private static String name(String id) {
 		Addon a = addon(id);
 		return a == null ? id : a.name();
+	}
+
+	/** Why {@code err} happened, for the user. */
+	public static String reasonOf(Throwable err) {
+		return reason(err);
 	}
 
 	private static String reason(Throwable err) {

@@ -36,7 +36,7 @@ public class TextField extends Widget {
 	};
 	private String placeholder = "";
 	private @Nullable String icon;
-	private boolean clearable;
+	private boolean clearable, masked;
 	private String text = "";
 	private int cursor;
 	private boolean selectAll;
@@ -81,6 +81,16 @@ public class TextField extends Widget {
 	public TextField search() {
 		this.clearable = true;
 		return icon(Icons.SEARCH);
+	}
+
+	/**
+	 * For secrets (a token, a password): shows a dot for each character instead of the text, and won't copy it out.
+	 * Returns this field.
+	 */
+	@ApiStatus.AvailableSince("2.7")
+	public TextField masked() {
+		this.masked = true;
+		return this;
 	}
 
 	/** What's typed while it's being edited, otherwise {@code getter}'s value. */
@@ -149,6 +159,7 @@ public class TextField extends Widget {
 		if (focused) c.outline(x, y, width, height, 4, 1, ColorUtil.withAlpha(theme().accent.argb(), 180));
 
 		String shown = focused ? text : getter.get();
+		if (masked) shown = "\u2022".repeat(shown.length());
 		float tx = x + textLeft(), ty = y + (height - c.textHeight()) / 2;
 		float right = showsClear() ? CLEAR : 4;
 		if (icon != null) {
@@ -263,7 +274,7 @@ public class TextField extends Widget {
 				if (edit) selectAll = true;
 			}
 			case InputConstants.KEY_C -> {
-				if (edit) Minecraft.getInstance().keyboardHandler.setClipboard(text);
+				if (edit && !masked) Minecraft.getInstance().keyboardHandler.setClipboard(text);
 			}
 			case InputConstants.KEY_V -> {
 				if (edit) insert(Minecraft.getInstance().keyboardHandler.getClipboard().replace("\n", " "));
