@@ -17,6 +17,32 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.8.0
+
+The API is unchanged, for Minecraft 26.3. This release brings the Myriad Library.
+
+### The Myriad Library
+
+- **Browse** in the Addons window opens the Myriad Library: addons Myriad has checked. **Verified** ones are built by
+  Myriad from their public source, and the released jar is checked to be exactly that build; **Reviewed** ones are
+  closed source and read by Myriad before each release is listed. Search runs in the game and nothing you type is sent
+  anywhere; the Library's list is downloaded only when Browse opens and at the update check.
+- **Installing from the Library** needs two signatures on the jar: its developer's and the Library's, both over its
+  exact size and SHA-256. The Library is signed with keys Myriad's offline root keys certify, so neither the website
+  nor the server behind it can add an addon or change a jar on their own; a list that doesn't check out, or that's
+  older than one already seen, is refused.
+- **An addon installed from the Library updates only through it**, and only to releases signed by a developer key both
+  the listing and the installed jar name. A release the Library withdraws is never offered again. **Unpin** on its card
+  goes back to updating from the addon's own source (its developer's signature is still needed).
+- **Badges** on installed addons come from the jar's own SHA-256, never from its name or id.
+- When the Library's information is more than two days old, Browse shows it as last read and nothing is installed or
+  updated from it until it's fresh.
+
+### Gradle plugin
+
+- The tools the Library's builder runs, and two for developers to run before releasing: `inspect` (what the builder
+  would note about a jar, as JSON) and `build-hash` (the hash of an addon's build logic).
+
 ## 2.7.0
 
 Adds API, for Minecraft 26.3: `TextField.masked()` (below).
