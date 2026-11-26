@@ -29,10 +29,16 @@ import java.util.function.Predicate;
  */
 public final class LinkInstall {
 	/** What a link offers, downloaded and checked, waiting for the player's yes. */
-	public record Offer(String id, String name, String version, String from, @Nullable String keyId, String fileName, byte[] jar, @Nullable String token) {
+	public record Offer(String id, String name, String version, String from, @Nullable String keyId, String fileName, byte[] jar, @Nullable String token,
+		@Nullable Library library) {
 		public boolean signed() {
 			return keyId != null;
 		}
+	}
+
+	/** How the Myriad Library vouches for an offer from it: Verified (built from its public source) or Reviewed. */
+	public enum Library {
+		VERIFIED, REVIEWED
 	}
 
 	private LinkInstall() {
@@ -94,7 +100,7 @@ public final class LinkInstall {
 		if (Files.exists(mods.resolve(r.asset().name()))) throw fail("a file named " + r.asset().name() + " is already in mods");
 		// The token is kept for its updates only if they come from where it was given for.
 		String kept = token != null && sameSource(meta, source) ? token : null;
-		return new Offer(id, name.equals("unknown") ? id : name, r.version(), source.describe(), signer == null ? null : signer.id(), r.asset().name(), got.jar(), kept);
+		return new Offer(id, name.equals("unknown") ? id : name, r.version(), source.describe(), signer == null ? null : signer.id(), r.asset().name(), got.jar(), kept, null);
 	}
 
 	/** Whether the jar's own update source ({@code custom.myriad.updates}, or its sources link) is at {@code link}'s origin. */
@@ -125,12 +131,12 @@ public final class LinkInstall {
 		}
 	}
 
-	private static boolean isMyriadAddon(JsonObject meta) {
+	static boolean isMyriadAddon(JsonObject meta) {
 		JsonElement e = meta.get("entrypoints");
 		return e != null && e.isJsonObject() && e.getAsJsonObject().has("myriad");
 	}
 
-	private static JsonObject modJson(byte[] jar) {
+	static JsonObject modJson(byte[] jar) {
 		try {
 			byte[] json = JarEntries.read(jar).content("fabric.mod.json", JarCheck.MAX_MOD_JSON);
 			if (json == null) throw fail("it isn't a Fabric mod");
@@ -143,12 +149,12 @@ public final class LinkInstall {
 		}
 	}
 
-	private static String string(JsonObject o, String key) {
+	static String string(JsonObject o, String key) {
 		JsonElement e = o.get(key);
 		return e != null && e.isJsonPrimitive() ? e.getAsString() : "unknown";
 	}
 
-	private static CompletionException fail(String why) {
+	static CompletionException fail(String why) {
 		return new CompletionException(new IOException(why));
 	}
 }

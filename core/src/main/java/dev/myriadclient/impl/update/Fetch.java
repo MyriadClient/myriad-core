@@ -68,13 +68,40 @@ final class Fetch {
 		}, Async.executor());
 	}
 
+	/** An answer to a conditional request: 304 (with an empty body) when {@code etag} still matches. */
+	record Got(int status, byte[] body, @Nullable String etag) {
+	}
+
+	/**
+	 * {@code uri}'s body unless it still has the ETag {@code etag} (then {@link Got#status()} is 304), with the ETag it has
+	 * now. Same rules as {@link #bytes}; no token.
+	 */
+	static CompletableFuture<Got> conditional(URI uri, long max, @Nullable String etag, String accept) {
+		String sent = etag != null && etag.length() <= 200 && etag.chars().allMatch(c -> c >= 0x20 && c < 0x7f) ? etag : null;
+		return CompletableFuture.supplyAsync(() -> {
+			try {
+				return fetch(uri, max, null, accept, sent);
+			} catch (IOException e) {
+				throw new java.util.concurrent.CompletionException(e);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				throw new java.util.concurrent.CompletionException(e);
+			}
+		}, Async.executor());
+	}
+
 	private static byte[] get(URI start, long max, @Nullable String token, String accept) throws IOException, InterruptedException {
+		return fetch(start, max, token, accept, null).body();
+	}
+
+	private static Got fetch(URI start, long max, @Nullable String token, String accept, @Nullable String etag) throws IOException, InterruptedException {
 		URI uri = start;
 		for (int hop = 0; hop <= MAX_REDIRECTS; hop++) {
 			String why = refused(uri);
 			if (why != null) throw new IOException(why + ": " + uri.getHost());
 			HttpRequest.Builder req = HttpRequest.newBuilder(uri).GET().timeout(Duration.ofSeconds(120)).header("User-Agent", USER_AGENT).header("Accept", accept);
 			if (token != null && sameOrigin(uri, start)) req.header("Authorization", "Bearer " + token);
+			if (etag != null) req.header("If-None-Match", etag);
 			HttpResponse<InputStream> res = CLIENT.send(req.build(), HttpResponse.BodyHandlers.ofInputStream());
 			try (InputStream body = res.body()) {
 				int status = res.statusCode();
@@ -83,6 +110,8 @@ final class Fetch {
 					uri = uri.resolve(to);
 					continue;
 				}
+				String tag = res.headers().firstValue("ETag").filter(t -> t.length() <= 200 && t.chars().allMatch(c -> c >= 0x20 && c < 0x7f)).orElse(null);
+				if (status == 304 && etag != null) return new Got(304, new byte[0], tag != null ? tag : etag);
 				if (status < 200 || status >= 300) throw new IOException("HTTP " + status);
 				long declared = res.headers().firstValueAsLong("Content-Length").orElse(-1);
 				if (declared > max) throw new IOException("the download is larger than it should be");
@@ -95,7 +124,7 @@ final class Fetch {
 					}
 				}, CompletableFuture.delayedExecutor(DEADLINE_SECONDS, java.util.concurrent.TimeUnit.SECONDS, Async.executor()));
 				try {
-					return read(body, max);
+					return new Got(status, read(body, max), tag);
 				} catch (IOException e) {
 					throw cutoff.isDone() ? new IOException("the download took too long") : e;
 				} finally {

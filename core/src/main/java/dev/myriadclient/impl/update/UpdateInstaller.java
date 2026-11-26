@@ -129,6 +129,11 @@ final class UpdateInstaller {
 		return new Outcome(done, waiting, loaded);
 	}
 
+	/** Whether {@code id} was installed this session and loads at the next start. */
+	synchronized boolean pendingAdded(String id) {
+		return added.containsKey(id);
+	}
+
 	/** Notes a new addon installed into the mods folder, to say so once the next start has loaded it. */
 	synchronized void added(String id, String version) {
 		added.put(id, new Added(id, version));

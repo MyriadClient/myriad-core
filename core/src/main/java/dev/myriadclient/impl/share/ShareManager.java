@@ -52,8 +52,8 @@ public final class ShareManager implements ConfigShares {
 	private static final Logger LOG = LoggerFactory.getLogger("Myriad/Shares");
 	private static final String FILE = "shares.json";
 	private static final Pattern CODE = Pattern.compile("myriad_[A-Za-z0-9]{6}");
-	private static final String API = System.getProperty("myriad.api", "https://api.myriadclient.dev");
-	private static final String SITE = System.getProperty("myriad.site", "https://myriadclient.dev");
+	private static final String API = dev.myriadclient.impl.MyriadApi.API;
+	private static final String SITE = dev.myriadclient.impl.MyriadApi.SITE;
 
 	private record Own(Published published, String deleteKey) {
 	}

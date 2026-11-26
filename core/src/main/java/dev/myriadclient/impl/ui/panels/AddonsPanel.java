@@ -43,12 +43,20 @@ public final class AddonsPanel extends WidgetPanel {
 	private String linkProblem, installed;
 	/** Private-source tokens being typed, per addon. */
 	private final Map<String, String> tokenDrafts = new HashMap<>();
+	/** Browse: the Myriad Library instead of what's installed; the search typed; one listing's offer at a time. */
+	private boolean browsing;
+	private String query = "";
+	private String libraryLooking, libraryOfferFor;
+	private LinkInstall.Offer libraryOffer;
+	private final Map<String, String> libraryNotes = new HashMap<>();
 	/** In the title bar: checking at start, checking now, and installing every update. */
 	private final List<TitleControl> titleControls = List.of(
 		TitleControl.toggle(updates::checkEnabled, updates::setCheckEnabled,
 			() -> "Check for new releases when the game starts: " + (updates.checkEnabled() ? "on" : "off")),
 		TitleControl.button(() -> updates.isChecking() ? "\uf110" : "\uf021", () -> updates.check(true),
 			() -> updates.isChecking() ? "Checking…" : "Check for updates now"),
+		TitleControl.button(() -> browsing ? "\uf0ca" : "\uf02d", this::toggleBrowse,
+			() -> browsing ? "Back to your addons" : "Browse the Myriad Library: addons Myriad has checked"),
 		TitleControl.button(() -> "\uf0c1", () -> {
 			adding = !adding;
 			rebuild();
@@ -64,6 +72,10 @@ public final class AddonsPanel extends WidgetPanel {
 	/** How many, and how many failed. */
 	@Override
 	public String subtitle() {
+		if (browsing) {
+			int n = updates.libraryAddons().size();
+			return "Myriad Library · " + n + (n == 1 ? " addon" : " addons");
+		}
 		long failed = Myriad.addons().stream().filter(a -> a.state() == AddonState.FAILED).count();
 		return Myriad.addons().size() + " installed" + (failed > 0 ? ", " + failed + " failed" : "");
 	}
@@ -81,7 +93,156 @@ public final class AddonsPanel extends WidgetPanel {
 	@Override
 	protected void build(VBox content) {
 		if (adding) content.add(addForm());
+		if (browsing) {
+			browse(content);
+			return;
+		}
 		for (Addon a : Myriad.addons()) content.add(new AddonEntry(a));
+	}
+
+	private void toggleBrowse() {
+		browsing = !browsing;
+		if (browsing) updates.refreshLibrary().whenComplete((v, e) -> Async.onRenderThread(this::rebuild));
+		rebuild();
+	}
+
+	/**
+	 * The Myriad Library: addons Myriad has checked, searched here (nothing typed leaves the game). Verified ones are built
+	 * from their public source; Reviewed ones are closed source, read by Myriad. Neither badge means safe.
+	 */
+	private void browse(VBox content) {
+		content.add(new Label("Addons Myriad has checked. Verified: built by Myriad from their public source. Reviewed: closed source, read by "
+			+ "Myriad before each release. Either way, install only what you trust.").dim());
+		content.add(new TextField(() -> query).onChange(q -> query = q).placeholder("Search the Library"));
+		if (updates.libraryLoading() && updates.libraryAddons().isEmpty()) content.add(new Label("Reading the Library…").dim());
+		String problem = updates.libraryProblem();
+		if (problem != null) content.add(updates.libraryAddons().isEmpty() ? new Note("Can't show the Library: " + problem + ".").error()
+			: new Note("Showing the Library as it was last read: " + problem + "."));
+		List<UpdateManager.LibraryAddon> list = updates.libraryAddons();
+		if (list.isEmpty() && problem == null && !updates.libraryLoading()) content.add(new Label("Nothing in the Library yet.").dim());
+		for (UpdateManager.LibraryAddon a : list) content.add(new LibraryCard(a).visible(() -> matches(a)));
+	}
+
+	private boolean matches(UpdateManager.LibraryAddon a) {
+		String q = query.strip().toLowerCase(java.util.Locale.ROOT);
+		if (q.isEmpty()) return true;
+		return (a.name() + " " + a.id() + " " + a.description() + " " + a.author()).toLowerCase(java.util.Locale.ROOT).contains(q);
+	}
+
+	private void lookUpLibrary(String id) {
+		if (libraryLooking != null) return;
+		libraryLooking = id;
+		libraryOffer = null;
+		libraryOfferFor = id;
+		libraryNotes.remove(id);
+		rebuild();
+		updates.lookUpLibrary(id).whenComplete((o, err) -> Async.onRenderThread(() -> {
+			libraryLooking = null;
+			if (err != null) libraryNotes.put(id, "Can't install it: " + UpdateManager.reasonOf(err) + ".");
+			else libraryOffer = o;
+			rebuild();
+		}));
+	}
+
+	private void installFromLibrary(LinkInstall.Offer o) {
+		try {
+			updates.install(o);
+			libraryNotes.put(o.id(), o.name() + " " + o.version() + " is in your mods folder and loads when you restart the game. It updates through the Library.");
+		} catch (java.io.IOException e) {
+			libraryNotes.put(o.id(), "Can't install it: " + e.getMessage() + ".");
+		}
+		libraryOffer = null;
+		libraryOfferFor = null;
+		rebuild();
+	}
+
+	/** One Library listing. */
+	private final class LibraryCard extends CardEntry {
+		private final UpdateManager.LibraryAddon a;
+
+		LibraryCard(UpdateManager.LibraryAddon a) {
+			super(true, false);
+			this.a = a;
+		}
+
+		@Override
+		protected String title() {
+			return a.name();
+		}
+
+		@Override
+		protected boolean isOn() {
+			return a.installed();
+		}
+
+		@Override
+		protected int accent() {
+			return a.verified() ? theme().green.argb() : theme().accent.argb();
+		}
+
+		@Override
+		protected boolean isExpanded() {
+			return unfolded.contains("library/" + a.id());
+		}
+
+		@Override
+		protected void setExpanded(boolean expanded) {
+			if (expanded) unfolded.add("library/" + a.id());
+			else unfolded.remove("library/" + a.id());
+		}
+
+		@Override
+		protected float drawBadges(Canvas c, float right, float cy) {
+			if (a.installed()) right = badge(c, " Installed", right, cy, theme().green.argb(), false) - 4;
+			right = badge(c, a.verified() ? " Verified" : " Reviewed", right, cy, a.verified() ? theme().green.argb() : theme().accent.argb(), true) - 4;
+			if (a.version() != null) right = badge(c, a.version(), right, cy, theme().textDim.argb(), false) - 4;
+			return right;
+		}
+
+		@Override
+		protected String tooltipText() {
+			return (a.description().isEmpty() ? "" : a.description() + "\n") + (a.verified()
+				? "Verified: Myriad built it from its public source and checked the release is exactly that build."
+				: "Reviewed: closed source; Myriad read each release before listing it.");
+		}
+
+		@Override
+		protected Object bodyKey() {
+			return List.of(a, libraryOffer == null ? "" : libraryOffer.id(), String.valueOf(libraryLooking), libraryNotes.getOrDefault(a.id(), ""));
+		}
+
+		@Override
+		protected void buildBody(VBox body) {
+			if (!a.description().isEmpty()) body.add(new Label(a.description()).dim());
+			if (!a.author().isEmpty()) body.add(new Label("By " + a.author()).dim());
+			body.add(new Label(a.id() + (a.keyId() == null ? "" : "  ·  developer key " + a.keyId())).dim());
+			Toolbar links = new Toolbar();
+			if (a.repo() != null) {
+				String url = "https://github.com/" + a.repo();
+				links.add("\uf121", a.verified() ? "Source" : "Releases", url, () -> Blaze3D.openUri(URI.create(url)));
+			}
+			if (!links.isEmpty()) body.add(links);
+			if (a.version() == null) body.add(new Label("No release for Minecraft " + net.fabricmc.loader.api.FabricLoader.getInstance().getModContainer("minecraft")
+				.map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("") + (a.newestElsewhere() == null ? "" : " (newest: " + a.newestElsewhere() + ")") + ".").dim());
+			String note = libraryNotes.get(a.id());
+			if (note != null) body.add(note.startsWith("Can't") ? new Note(note).error() : new Note(note).color(() -> theme().green.argb()));
+			LinkInstall.Offer o = libraryOffer;
+			if (o != null && a.id().equals(libraryOfferFor)) {
+				body.add(new Label(o.name() + " " + o.version() + "  ·  " + (o.jar().length / 1024) + " KB").bold());
+				body.add(new Note((o.library() == LinkInstall.Library.VERIFIED ? "Verified by Myriad: built from its public source." : "Reviewed by Myriad.")
+					+ " Signed by its developer's key " + o.keyId() + "; its updates come through the Library and must be signed with that key too."));
+				HBox act = new HBox(4);
+				act.add(new Button("Install " + o.name(), () -> installFromLibrary(o)).accent());
+				act.add(new Button("Don't install", () -> {
+					libraryOffer = null;
+					libraryOfferFor = null;
+					rebuild();
+				}).quiet());
+				body.add(act);
+			} else if (!a.installed() && a.version() != null && !updates.libraryStale()) {
+				body.add(new Button(() -> a.id().equals(libraryLooking) ? "Checking…" : "Install " + a.version(), () -> lookUpLibrary(a.id())).accent());
+			}
+		}
 	}
 
 	/** Adding an addon from a link: look it up (downloaded and checked, nothing written), see what it is, then install. */
@@ -204,6 +365,9 @@ public final class AddonsPanel extends WidgetPanel {
 				case FAILED -> badge(c, " Update failed", right, cy, theme().red.argb(), true) - 4;
 				default -> right;
 			};
+			LinkInstall.Library vouched = updates.vouched(addon);
+			if (vouched != null) right = badge(c, vouched == LinkInstall.Library.VERIFIED ? " Verified" : " Reviewed", right, cy,
+				vouched == LinkInstall.Library.VERIFIED ? theme().green.argb() : theme().accent.argb(), false) - 4;
 			right = badge(c, addon.version(), right, cy, theme().textDim.argb(), false) - 4;
 			return right;
 		}
@@ -281,6 +445,17 @@ public final class AddonsPanel extends WidgetPanel {
 
 		/** Whether its updates are signed, where they come from, and a token for a private source. */
 		private void buildSigning(VBox body) {
+			String id0 = addon.id();
+			if (updates.pinnedToLibrary(id0)) {
+				HBox row = new HBox(4);
+				row.addWeighted(new Label("Updates only through the Myriad Library, which checks each release first.").dim(), 1);
+				row.addFixed(new Button("Unpin", () -> {
+					updates.unpinFromLibrary(id0);
+					rebuild();
+				}).quiet().tooltip("Update from its own source instead, without the Library's checks (its developer's signature is still needed)."), 46);
+				body.add(row);
+				return;
+			}
 			String source = UpdateManager.sourceOf(addon);
 			if (source == null) return;
 			List<String> keys = UpdateManager.signingKeys(addon);

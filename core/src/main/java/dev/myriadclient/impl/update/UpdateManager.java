@@ -71,6 +71,11 @@ public final class UpdateManager {
 
 	private final UpdateInstaller installer;
 	private final FeedTokens tokens;
+	private final LibraryClient library;
+	/** Addons whose release in {@link #releases} came from the Library (they're held to its key rule too). */
+	private final Set<String> fromLibrary = ConcurrentHashMap.newKeySet();
+	/** SHA-256 of installed jars, by path, size and modification time: for badges, worked out once. */
+	private final Map<String, String> jarHashes = new ConcurrentHashMap<>();
 	private final Map<String, State> states = new ConcurrentHashMap<>();
 	private final Map<String, Releases.Release> releases = new ConcurrentHashMap<>();
 	/** Installed versions to pretend, for testing: {@code -Dmyriad.updates.pretend=myriad=0.1.0,myriad-essentials=0.0.9}. */
@@ -85,6 +90,7 @@ public final class UpdateManager {
 	public UpdateManager(Path root) {
 		this.installer = new UpdateInstaller(root.resolve("updates"));
 		this.tokens = new FeedTokens(root.resolve("updates"));
+		this.library = new LibraryClient(root.resolve("updates"));
 	}
 
 	/** The ids of the keys {@code a}'s updates must be signed with; empty when its updates aren't signed. */
@@ -187,10 +193,27 @@ public final class UpdateManager {
 	 */
 	public void check(boolean manual) {
 		if (checking) return;
-		Map<Addon, UpdateSource> todo = new LinkedHashMap<>();
+		checking = true;
+		// The Library first: addons pinned to it update only through it, and an installed jar it lists gets pinned.
+		library.refresh().handle((index, err) -> {
+			for (Addon a : Myriad.addons()) {
+				String sha = jarHash(a);
+				if (sha != null && library.vouching(a.id(), sha) != null) library.pin(a.id());
+			}
+			Async.onRenderThread(() -> {
+				checking = false;
+				checkNow(manual);
+			});
+			return null;
+		});
+	}
+
+	private void checkNow(boolean manual) {
+		if (checking) return;
+		Map<Addon, Optional<UpdateSource>> todo = new LinkedHashMap<>();
 		for (Addon a : Myriad.addons()) {
 			Optional<UpdateSource> repo = UpdateSource.of(a.metadata());
-			if (repo.isEmpty()) {
+			if (repo.isEmpty() && !library.pinned(a.id())) {
 				states.put(a.id(), new State(Kind.NO_SOURCE, null, null, "Not checked: it names nowhere to update from"));
 				continue;
 			}
@@ -200,7 +223,7 @@ public final class UpdateManager {
 				states.put(a.id(), new State(Kind.DEV_BUILD, null, null, "Running from a dev build; updates are off"));
 				continue;
 			}
-			todo.put(a, repo.get());
+			todo.put(a, repo);
 		}
 		if (todo.isEmpty()) {
 			if (manual) toast("Updates", "Nothing to check", Notifications.Level.INFO);
@@ -208,12 +231,19 @@ public final class UpdateManager {
 		}
 		checking = true;
 		AtomicInteger left = new AtomicInteger(todo.size());
-		for (Map.Entry<Addon, UpdateSource> entry : todo.entrySet()) {
+		for (Map.Entry<Addon, Optional<UpdateSource>> entry : todo.entrySet()) {
 			Addon a = entry.getKey();
 			String id = a.id(), installed = installedVersion(a);
 			states.put(id, new State(Kind.CHECKING, null, null, null));
 			boolean mustBeSigned = !trustedKeys(a).isEmpty();
-			find(id, entry.getValue(), jarOf(a).getFileName().toString(), installed).whenComplete((found, err) -> {
+			CompletableFuture<Releases.Found> look;
+			if (library.pinned(id)) {
+				look = fromLibrary(id);
+			} else {
+				fromLibrary.remove(id);
+				look = find(id, entry.getValue().orElseThrow(), jarOf(a).getFileName().toString(), installed);
+			}
+			look.whenComplete((found, err) -> {
 				Releases.Release r = found == null ? null : found.forThisMinecraft();
 				Releases.Release newest = found == null ? null : found.newest();
 				if (err != null) {
@@ -289,12 +319,124 @@ public final class UpdateManager {
 		LinkInstall.install(offer, modsFolder());
 		installer.added(offer.id(), offer.version());
 		if (offer.token() != null) tokens.set(offer.id(), offer.token());
+		if (offer.library() != null) library.pin(offer.id());
 		LOG.info("Installed {} {} from {} ({}); it loads at the next start", offer.id(), offer.version(), offer.from(),
 			offer.signed() ? "signed by key " + offer.keyId() : "unsigned");
 	}
 
 	private static Path modsFolder() {
 		return FabricLoader.getInstance().getGameDir().resolve("mods");
+	}
+
+	/**
+	 * A pinned addon's releases, from the Library alone: when it's not listed now, or the Library can't be read or is out
+	 * of date, it gets no update (never one from its own source instead, which would skip the Library's checks).
+	 */
+	private CompletableFuture<Releases.Found> fromLibrary(String id) {
+		LibraryIndex.Index index = library.index();
+		if (index == null) return CompletableFuture.failedFuture(new IOException("the Myriad Library couldn't be reached" + problemSuffix()));
+		if (index.stale()) return CompletableFuture.failedFuture(new IOException("the Myriad Library's information is out of date"));
+		LibraryIndex.Entry e = index.entry(id);
+		if (e == null) return CompletableFuture.failedFuture(new IOException("it's not in the Myriad Library right now, so it gets no updates (unpin it in Addons to update from its own source)"));
+		fromLibrary.add(id);
+		return CompletableFuture.completedFuture(Releases.newest(LibraryInstall.releases(e), minecraftVersion()));
+	}
+
+	private String problemSuffix() {
+		String p = library.problem();
+		return p == null ? "" : ": " + p;
+	}
+
+	// ---- the Library, for the Addons window -------------------------------------------------------------------------
+
+	/** One Library listing as Browse shows it. {@code version}: the newest for this Minecraft, or null when none works here. */
+	public record LibraryAddon(String id, String name, String description, String author, @Nullable String repo, boolean verified,
+		@Nullable String version, @Nullable String minecraft, @Nullable String newestElsewhere, boolean installed, @Nullable String keyId) {
+	}
+
+	/** Fetches the Library's index (only changes), for Browse. */
+	public CompletableFuture<Void> refreshLibrary() {
+		return library.refresh().handle((i, e) -> null);
+	}
+
+	public boolean libraryLoading() {
+		return library.loading();
+	}
+
+	/** Why the Library can't be shown or used right now, or null. */
+	public @Nullable String libraryProblem() {
+		return library.problem();
+	}
+
+	/** Whether the Library's information is too old to install from (it can still be browsed). */
+	public boolean libraryStale() {
+		LibraryIndex.Index i = library.index();
+		return i != null && i.stale();
+	}
+
+	/** Every listing, for Browse; empty until the index has been read. */
+	public List<LibraryAddon> libraryAddons() {
+		LibraryIndex.Index index = library.index();
+		if (index == null) return List.of();
+		Version mc = minecraftVersion();
+		List<LibraryAddon> out = new ArrayList<>();
+		for (LibraryIndex.Entry e : index.entries()) {
+			LibraryIndex.Offered here = LibraryInstall.forMinecraft(e, mc);
+			LibraryIndex.Offered newest = e.versions().isEmpty() ? null : e.versions().getFirst();
+			String key = e.listing().keys().isEmpty() ? null : e.listing().keys().getFirst().id();
+			boolean installed = FabricLoader.getInstance().isModLoaded(e.listing().id()) || addon(e.listing().id()) != null || installer.pendingAdded(e.listing().id());
+			out.add(new LibraryAddon(e.listing().id(), e.name(), e.description(), e.author(), e.repo(), e.verified(), here == null ? null : here.version().version(),
+				here == null ? null : here.minecraft(), here == null && newest != null ? newest.version().version() + " for Minecraft " + newest.minecraft() : null, installed, key));
+		}
+		out.sort(Comparator.comparing(a -> a.name().toLowerCase(java.util.Locale.ROOT)));
+		return out;
+	}
+
+	/** Looks up {@code id}'s newest release for this Minecraft in the Library: downloaded and checked, nothing written. */
+	public CompletableFuture<LinkInstall.Offer> lookUpLibrary(String id) {
+		LibraryIndex.Index index = library.index();
+		LibraryIndex.Entry e = index == null ? null : index.entry(id);
+		if (e == null) return CompletableFuture.failedFuture(new IOException("it isn't in the Library"));
+		LibraryIndex.Offered o = LibraryInstall.forMinecraft(e, minecraftVersion());
+		if (o == null) return CompletableFuture.failedFuture(new IOException("it has no release for Minecraft " + minecraftVersion().getFriendlyString()));
+		return LibraryInstall.look(index, e, o, minecraftVersion(), coreVersionAfterUpdates(), otherAddons(""),
+			x -> FabricLoader.getInstance().isModLoaded(x) || addon(x) != null || installer.pendingAdded(x), modsFolder());
+	}
+
+	/** How the Library vouches for {@code a}'s installed jar (exactly that jar, by its hash), or null. */
+	public LinkInstall.@Nullable Library vouched(Addon a) {
+		String sha = jarHash(a);
+		LibraryIndex.Entry e = sha == null ? null : library.vouching(a.id(), sha);
+		return e == null ? null : e.verified() ? LinkInstall.Library.VERIFIED : LinkInstall.Library.REVIEWED;
+	}
+
+	public boolean pinnedToLibrary(String id) {
+		return library.pinned(id);
+	}
+
+	/** The player's choice: {@code id} updates from its own source again, not only through the Library. */
+	public void unpinFromLibrary(String id) {
+		library.unpin(id);
+		fromLibrary.remove(id);
+		releases.remove(id);
+		states.remove(id);
+	}
+
+	private @Nullable String jarHash(Addon a) {
+		Path jar = jarOf(a);
+		if (jar == null) return null;
+		try {
+			String key = jar + "|" + Files.size(jar) + "|" + Files.getLastModifiedTime(jar).toMillis();
+			return jarHashes.computeIfAbsent(key, k -> {
+				try {
+					return java.util.HexFormat.of().formatHex(JarCheck.sha256(Files.readAllBytes(jar)));
+				} catch (IOException e) {
+					return "";
+				}
+			});
+		} catch (IOException e) {
+			return null;
+		}
 	}
 
 	/** The releases at {@code source}, for this Minecraft. */
@@ -332,6 +474,11 @@ public final class UpdateManager {
 		return download(id, r, token, origin).thenAccept(got -> {
 			Verified v = verify(id, r.version(), got, trusted, addon.isCore(), others, minecraftVersion(), core);
 			if (v.problem() != null) throw new CompletionException(new IOException(v.problem()));
+			if (fromLibrary.contains(id)) {
+				// From the Library: still listed and fresh, and signed by a key the installed jar, the listing and the new jar all name.
+				String why = libraryKeyRule(id, v.signer(), got.jar(), r.version(), others, core);
+				if (why != null) throw new CompletionException(new IOException(why));
+			}
 			try {
 				installer.stage(id, r.version(), UpdateInstaller.installName(id, addon.version(), r.version(), jar.getFileName().toString()), got.jar(), jar);
 			} catch (IOException e) {
@@ -347,6 +494,15 @@ public final class UpdateManager {
 			Async.onRenderThread(() -> toast("Update failed", name(id) + ": " + why, Notifications.Level.ERROR));
 			return null;
 		});
+	}
+
+	private @Nullable String libraryKeyRule(String id, @Nullable DevKey signer, byte[] jar, String version, Set<String> others, @Nullable Version core) {
+		LibraryIndex.Index index = library.index();
+		LibraryIndex.Entry e = index == null ? null : index.entry(id);
+		if (e == null || index.stale()) return "the Myriad Library no longer lists it, or its information is out of date";
+		if (signer == null || !e.listing().keys().contains(signer)) return "it isn't signed by a key its Library listing names";
+		if (!JarCheck.check(jar, id, version, minecraftVersion(), core, others).keys().contains(signer)) return "the new jar doesn't list the key it's signed with";
+		return null;
 	}
 
 	/** A download: the jar, and what it must be (from the release, and its {@code .sig} when it has one). */
