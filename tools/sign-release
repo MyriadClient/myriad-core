@@ -9,12 +9,14 @@
 #    tampered CI nor a tampered release asset gets signed).
 # 3. Asks for the key file's passphrase (on this terminal; the key never leaves this machine) and signs the jar.
 # 4. Uploads <jar>.sig to the release. Players' Myriad only installs the update once the .sig is there.
+# 5. Publishes the release if CI left it as a draft (Essentials does), so it's seen, by players and by the Myriad
+#    Library's builder, only once it's signed.
 #
 # Core is signed with a Myriad root key, Essentials with its own key (the one its fabric.mod.json lists).
 set -euo pipefail
 
 if [[ $# -ne 3 ]]; then
-	sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
 	exit 2
 fi
 what=$1 version=$2 key=$3
@@ -60,4 +62,8 @@ echo "CI's jar matches this build: $ci"
 
 echo "Uploading $jar.sig"
 gh release upload "v$version" --repo "$repo" "$work/ci/$jar.sig"
+if [[ $(gh release view "v$version" --repo "$repo" --json isDraft --jq .isDraft) == true ]]; then
+	echo "Publishing the draft release"
+	gh release edit "v$version" --repo "$repo" --draft=false >/dev/null
+fi
 echo "Done: v$version is signed."
