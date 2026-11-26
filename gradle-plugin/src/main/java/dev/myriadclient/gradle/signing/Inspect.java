@@ -38,11 +38,20 @@ import java.util.zip.ZipInputStream;
  * <li>{@code classloader}: defines classes at run time (custom class loaders, {@code defineClass}, hidden classes).</li>
  * <li>{@code unsafe}: {@code sun.misc.Unsafe} or the JDK's internal one.</li>
  * <li>{@code process}: starts programs ({@code Runtime.exec}, {@code ProcessBuilder}).</li>
- * <li>{@code native-load}, {@code native-file:<path>}: loads native code, or carries some.</li>
- * <li>{@code network}, {@code host:<host>}: opens connections itself; the hosts named in its constants.</li>
+ * <li>{@code native-load}, {@code native-file:<path>}: loads native code ({@code System.load}, {@code java.lang.foreign}),
+ * or carries some.</li>
+ * <li>{@code network}, {@code host:<host>}: opens connections itself (sockets, channels, HTTP clients, URL streams,
+ * Minecraft's and common libraries' download helpers); the hosts named in its constants.</li>
+ * <li>{@code reflection}: looks up or calls code by name at run time ({@code Class.forName}, {@code Method.invoke},
+ * {@code setAccessible}, method handle lookups), which can reach anything the other checks look for.</li>
  * <li>{@code instrument}: {@code java.lang.instrument} or scripting engines.</li>
+ * <li>{@code desktop}, {@code jndi}, {@code deserialization}: opens files or links outside the game, JNDI lookups,
+ * Java object deserialization.</li>
  * <li>{@code myriad-internals}: reaches into Myriad's {@code impl} packages, which addons mustn't use.</li>
- * <li>{@code nested:<path>:<sha256>}: a jar inside the jar.</li>
+ * <li>{@code nested:<path>:<sha256>}: a jar inside the jar, wherever it is: any entry that is a zip, and anything its
+ * {@code fabric.mod.json} names under {@code jars}.</li>
+ * <li>{@code hidden-class:<path>}: a class file under {@code META-INF/} or not named {@code .class}.</li>
+ * <li>{@code multi-release}: a multi-release jar, whose classes differ by Java version.</li>
  * <li>{@code obfuscated}: mostly one- and two-letter class names: unreadable in review, so refused.</li>
  * <li>{@code unexplained:<class>}: a class with no source file it could come from (only with the source given).</li>
  * </ul>
@@ -86,12 +95,26 @@ public final class Inspect {
 
 		Set<String> classes = new TreeSet<>();
 		int shortNames = 0;
+		// Nested jars the loader would load: whatever fabric.mod.json names, zip or not.
+		for (Object j : meta.get("jars") instanceof List<?> l ? l : List.of()) {
+			String file = j instanceof Map<?, ?> m && m.get("file") instanceof String s ? s : null;
+			if (file == null) continue;
+			byte[] nested = entries.get(file.startsWith("/") ? file.substring(1) : file);
+			add(findings, "nested:" + file + ":" + (nested == null ? "missing" : Signing.hex(Signing.sha256(nested))), file);
+		}
+		byte[] manifest = entries.get("META-INF/MANIFEST.MF");
+		if (manifest != null && new String(manifest, StandardCharsets.UTF_8).toLowerCase(java.util.Locale.ROOT).matches("(?s).*(^|\n)multi-release:\\s*true.*")) {
+			add(findings, "multi-release", "META-INF/MANIFEST.MF");
+		}
 		for (Map.Entry<String, byte[]> e : entries.entrySet()) {
 			String name = e.getKey();
+			byte[] b = e.getValue();
 			if (NATIVE.matcher(name).matches()) add(findings, "native-file:" + name, name);
-			if (name.startsWith("META-INF/jars/") && name.endsWith(".jar")) add(findings, "nested:" + name + ":" + Signing.hex(Signing.sha256(e.getValue())), name);
-			if (!name.endsWith(".class") || name.startsWith("META-INF/")) continue;
-			String cls = name.substring(0, name.length() - 6);
+			// By name and by content: any jar or zip inside is one the loader might be told to load.
+			if (name.endsWith(".jar") || startsWith(b, 0x50, 0x4b, 0x03, 0x04) || startsWith(b, 0x50, 0x4b, 0x05, 0x06)) add(findings, "nested:" + name + ":" + Signing.hex(Signing.sha256(b)), name);
+			if (!startsWith(b, 0xca, 0xfe, 0xba, 0xbe)) continue;
+			if (!name.endsWith(".class") || name.startsWith("META-INF/")) add(findings, "hidden-class:" + name, name);
+			String cls = name.endsWith(".class") ? name.substring(0, name.length() - 6) : name;
 			classes.add(cls);
 			String simple = cls.substring(cls.lastIndexOf('/') + 1);
 			if (simple.length() <= 2 || !simple.chars().allMatch(c -> c < 0x80)) shortNames++;
@@ -208,12 +231,22 @@ public final class Inspect {
 		}
 	}
 
+	private static final Set<String> NETWORK_CLASSES = Set.of("java/net/Socket", "java/net/ServerSocket", "java/net/DatagramSocket", "java/net/MulticastSocket",
+		"java/net/URLConnection", "java/net/HttpURLConnection", "java/nio/channels/SocketChannel", "java/nio/channels/ServerSocketChannel",
+		"java/nio/channels/DatagramChannel", "java/nio/channels/AsynchronousSocketChannel", "java/nio/channels/AsynchronousServerSocketChannel",
+		"net/minecraft/util/HttpUtil");
+	private static final List<String> NETWORK_PACKAGES = List.of("java/net/http/", "javax/net/ssl/", "org/apache/http/", "org/apache/hc/", "okhttp3/",
+		"com/sun/net/httpserver/", "jdk/internal/net/");
+
 	private static void classRef(String cls, String ref, TreeMap<String, TreeSet<String>> f) {
 		if (ref.equals("sun/misc/Unsafe") || ref.equals("jdk/internal/misc/Unsafe")) add(f, "unsafe", cls);
 		if (ref.equals("java/lang/ProcessBuilder")) add(f, "process", cls);
-		if (ref.startsWith("java/net/http/") || ref.equals("java/net/Socket") || ref.equals("java/net/ServerSocket") || ref.equals("java/net/DatagramSocket")
-			|| ref.equals("java/net/URLConnection") || ref.equals("java/net/HttpURLConnection") || ref.startsWith("javax/net/ssl/")) add(f, "network", cls);
+		if (NETWORK_CLASSES.contains(ref) || NETWORK_PACKAGES.stream().anyMatch(ref::startsWith)) add(f, "network", cls);
+		if (ref.startsWith("java/lang/foreign/")) add(f, "native-load", cls);
 		if (ref.startsWith("java/lang/instrument/") || ref.startsWith("javax/script/")) add(f, "instrument", cls);
+		if (ref.equals("java/awt/Desktop")) add(f, "desktop", cls);
+		if (ref.startsWith("javax/naming/")) add(f, "jndi", cls);
+		if (ref.equals("java/io/ObjectInputStream")) add(f, "deserialization", cls);
 		if (ref.startsWith("dev/myriadclient/impl/")) add(f, "myriad-internals", cls);
 	}
 
@@ -222,6 +255,21 @@ public final class Inspect {
 		if (owner.equals("java/lang/Runtime") && name.equals("exec")) add(f, "process", cls);
 		if ((owner.equals("java/lang/System") || owner.equals("java/lang/Runtime")) && (name.equals("load") || name.equals("loadLibrary"))) add(f, "native-load", cls);
 		if (owner.equals("java/net/URL") && (name.equals("openConnection") || name.equals("openStream"))) add(f, "network", cls);
+		if (owner.equals("org/apache/commons/io/FileUtils") && name.startsWith("copyURL")) add(f, "network", cls);
+		if ((owner.equals("java/lang/Class") && (name.equals("forName") || name.startsWith("getDeclared") || name.equals("getMethod") || name.equals("getField")))
+			|| (owner.equals("java/lang/reflect/Method") && name.equals("invoke"))
+			|| (owner.equals("java/lang/reflect/AccessibleObject") || owner.equals("java/lang/reflect/Field") || owner.equals("java/lang/reflect/Method")
+				|| owner.equals("java/lang/reflect/Constructor")) && (name.equals("setAccessible") || name.equals("trySetAccessible"))
+			|| (owner.equals("java/lang/reflect/Constructor") && name.equals("newInstance"))
+			|| (owner.equals("java/lang/invoke/MethodHandles$Lookup") && (name.startsWith("find") || name.startsWith("unreflect")))
+			|| (owner.equals("java/lang/invoke/MethodHandles") && name.equals("privateLookupIn"))
+			|| (owner.equals("java/lang/ClassLoader") && name.equals("loadClass"))) add(f, "reflection", cls);
+	}
+
+	private static boolean startsWith(byte[] b, int... magic) {
+		if (b.length < magic.length) return false;
+		for (int i = 0; i < magic.length; i++) if ((b[i] & 0xff) != magic[i]) return false;
+		return true;
 	}
 
 	private static void constant(String cls, String s, TreeMap<String, TreeSet<String>> f) {

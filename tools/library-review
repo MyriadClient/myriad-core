@@ -9,8 +9,8 @@
 #                                                    then sign this version too
 #   tools/library-review approve-version <n>         sign a version that waited for review
 #   tools/library-review reject <n> <reason...>      turn a submission down (the developer sees the reason)
-#   tools/library-review yank <id> <version>         take a release back (signed with the API's index key)
-#   tools/library-review pause <id>                  take a listing out of the index until it's listed again
+#   tools/library-review yank <id> <version>         take a release back, for good (signed with the listing key)
+#   tools/library-review pause <id>                  take a listing out of the index until it's listed again (quick, no key)
 #   tools/library-review cert <listing|version|index> <ed25519:key> [days] [root key file]
 #                                                    certify a Library key with a root key (index keys expire, default 365 days)
 #   tools/library-review revoke <seq> <ed25519:key>... [--root <file>]  revoke Library keys with a root key
@@ -100,7 +100,11 @@ show)
 		echo "Published jar: $(field .url "$r")"
 		echo "  sha256 $(field .sha256 "$r") ($(field .size "$r") bytes)"
 		if [[ -n $(field .built "$r") ]]; then
-			if [[ $(field .built "$r") == $(field .sha256 "$r") ]]; then echo "  matches what its source builds"; else echo "  DOESN'T match what its source builds ($(field .built "$r"))"; fi
+			if [[ $(field .built "$r") == $(field .sha256 "$r") ]]; then echo "  matches what its build made"; else echo "  DOESN'T match what its build made ($(field .built "$r"))"; fi
+			# The build ran the addon's own build logic: until a person has read it, it could have reported any hash.
+			listed_build=$(curl -fsS "$API/v1/index.json" | jq -r --arg id "$(field .id "$r")" '.body | fromjson | .addons[] | select(.listing.id == $id) | .listing.build' 2>/dev/null || true)
+			[[ -n $listed_build && $listed_build == $(field .buildHash "$r") ]] \
+				|| echo "  The build logic isn't one you've approved: that match proves nothing until you've read build.gradle, settings, gradle.properties and the wrapper."
 		fi
 		echo "Commit: $(field .commit "$r")   Build logic: $(field .buildHash "$r")"
 		echo "Findings:"
@@ -190,10 +194,17 @@ approve-version | approve-listing)
 		confirm "Sign this listing with the listing key?"
 		sig=$(signed library-sign listing "$KEYS/library-listing.key" "${fields[@]}")
 		acc=$(printf '%s\n' "${accepted[@]+"${accepted[@]}"}" | jq -R . | jq -s 'map(select(length > 0))')
-		doc=$(jq -n --argjson r "$r" --argjson s "$sig" --argjson acc "$acc" --arg id "$id" --argjson rev "$revision" --argjson repo "$repo_id" \
+		accsigs='[]'
+		if [[ ${#accepted[@]} -gt 0 ]]; then
+			# Accepted findings let later versions through without review, so they're signed too (the builder checks it).
+			afields=(id="$id" revision="$revision"); for f in "${accepted[@]}"; do afields+=(finding="$f"); done
+			signer library-statement accepted "${afields[@]}" | clean | sed 's/^/  /'
+			accsigs="[$(signed library-sign accepted "$KEYS/library-listing.key" "${afields[@]}")]"
+		fi
+		doc=$(jq -n --argjson r "$r" --argjson s "$sig" --argjson acc "$acc" --argjson accsigs "$accsigs" --arg id "$id" --argjson rev "$revision" --argjson repo "$repo_id" \
 			--argjson owner "$owner" --arg src "$builder" --arg build "$buildhash" --arg shown "$shown_repo" --arg pub "${pub_id:-0}" '
 			{id: $id, revision: $rev, repoId: $repo, ownerId: $owner, source: $src, build: $build, provides: ($r.provides // []), keys: ($r.keys // []),
-			 signatures: [$s], accepted: $acc,
+			 signatures: [$s], accepted: $acc, acceptedSignatures: $accsigs,
 			 info: {name: ($r.name // $id), description: ($r.description // ""), author: (($r.authors // [])[0] // ""), repo: $shown}}
 			+ (if $src == "closed" then {downloadRepoId: ($pub | tonumber)} else {} end)')
 		api POST /v1/library/approvals "$(jq -n --argjson d "$doc" --argjson n "$n" '{kind: "listing", doc: $d, submission: $n}')" >/dev/null
@@ -223,8 +234,16 @@ approve-version | approve-listing)
 
 yank)
 	[[ $# -eq 2 ]] || usage
-	confirm "Yank $1 $2 for everyone?"
-	api POST /v1/library/yank "$(jq -n --arg id "$1" --arg v "$2" '{id: $id, version: $v}')" >/dev/null && echo "Yanked."
+	id=$1 ver=$2
+	[[ $id =~ ^[a-z][a-z0-9_-]{1,63}$ && $ver =~ ^[0-9A-Za-z.+-]{1,64}$ ]] || die "odd id or version"
+	[[ -f $KEYS/library-listing.key ]] || die "no listing key at $KEYS/library-listing.key"
+	sha=$(curl -fsS "$API/v1/library/addons/$id" | jq -r --arg v "$ver" '[.versions[] | select(.version == $v) | .sha256][0] // empty')
+	[[ $sha =~ ^[0-9a-f]{64}$ ]] || die "$id has no listed version $ver (to stop it at once, pause it)"
+	signer library-statement yank id="$id" version="$ver" sha256="$sha" | sed 's/^/  /'
+	confirm "Yank $id $ver for everyone, for good?"
+	sig=$(signed library-sign yank "$KEYS/library-listing.key" id="$id" version="$ver" sha256="$sha")
+	api POST /v1/library/approvals "$(jq -n --arg id "$id" --arg v "$ver" --arg sha "$sha" --argjson s "$sig" \
+		'{kind: "yank", doc: {id: $id, version: $v, sha256: $sha, signatures: [$s]}}')" >/dev/null && echo "Yanked."
 	;;
 
 pause)

@@ -199,7 +199,10 @@ public final class AddonPlugin implements Plugin<Project> {
 			t.getInputs().property("version", version);
 			t.getInputs().property("myriad_version", myriad);
 			t.getInputs().property("minecraft_version", minecraft);
-			t.filesMatching("fabric.mod.json", file -> file.expand(Map.of("version", version.get(), "myriad_version", myriad.get(), "minecraft_version", minecraft.get())));
+			// Plain text replacement, never Gradle's expand: that runs the file as a Groovy template, and fabric.mod.json is
+			// the addon's own file, not its build logic (the Myriad Library's builder hashes the two apart).
+			t.filesMatching("fabric.mod.json", file -> file.filter(line -> line.replace("${version}", version.get())
+				.replace("${myriad_version}", myriad.get()).replace("${minecraft_version}", minecraft.get())));
 		});
 
 		project.getTasks().withType(Test.class).configureEach(Test::useJUnitPlatform);

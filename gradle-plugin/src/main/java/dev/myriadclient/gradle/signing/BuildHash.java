@@ -21,17 +21,20 @@ import java.util.regex.Pattern;
  * has read how the jar is built. Changed build logic waits for review.
  *
  * <p>The addon's own files (left out): {@code src/main/**} and {@code src/client/**} (except scripts and Gradle files in
- * them), {@code src/test/**}, {@code docs/**}, {@code .github/**}, Markdown files and licences anywhere. Everything else
- * is build logic: the Gradle files, the wrapper, {@code buildSrc}, settings, any script. In {@code gradle.properties}
- * the {@code mod_version} line is ignored, since it changes every release. A symbolic link anywhere refuses the whole
- * repository: it could make a file look like something it isn't. {@code .git} is skipped.
+ * them), {@code src/test/**}, {@code docs/**}, {@code .github/**}, and at the top level only, Markdown files and the
+ * licence ({@code LICENSE}, {@code COPYING} or {@code NOTICE}, plain or {@code .txt}/{@code .md}). Everything else is build
+ * logic: the Gradle files, the wrapper, {@code buildSrc}, settings, any script. In {@code gradle.properties} the
+ * {@code mod_version} line is ignored, since it changes every release, but only when there's exactly one and neither it
+ * nor the line before it continues onto the next (a trailing {@code \}); otherwise the whole file counts. A symbolic
+ * link anywhere refuses the whole repository: it could make a file look like something it isn't. {@code .git} is
+ * skipped.
  *
  * <p>The hash is SHA-256 over {@code <path>\0<file sha256 hex>\n} for each build-logic file, sorted by path, paths
  * relative with {@code /}.
  */
 public final class BuildHash {
 	private static final Pattern PAYLOAD = Pattern.compile(
-		"src/(main|client)/.+|src/test/.+|docs/.+|\\.github/.+|(.+/)?[^/]+\\.md|(.+/)?(LICEN[CS]E|COPYING|NOTICE)[^/]*");
+		"src/(main|client)/.+|src/test/.+|docs/.+|\\.github/.+|[^/]+\\.md|(LICEN[CS]E|COPYING|NOTICE)(\\.(txt|md))?");
 	/** Never the addon's own, wherever they are: they run during a build. */
 	private static final Pattern SCRIPT = Pattern.compile(".+\\.(gradle|kts|sh|bat|cmd|ps1|py|groovy)");
 	private static final Pattern MOD_VERSION = Pattern.compile("\\s*mod_version\\s*[=:].*");
@@ -84,11 +87,22 @@ public final class BuildHash {
 	private static byte[] content(String rel, Path file) throws IOException {
 		byte[] bytes = Files.readAllBytes(file);
 		if (!rel.equals("gradle.properties")) return bytes;
-		StringBuilder kept = new StringBuilder();
-		for (String line : new String(bytes, StandardCharsets.ISO_8859_1).split("\n", -1)) {
-			if (!MOD_VERSION.matcher(line).matches()) kept.append(line).append('\n');
+		String[] lines = new String(bytes, StandardCharsets.ISO_8859_1).split("\n", -1);
+		int at = -1;
+		for (int i = 0; i < lines.length; i++) {
+			if (!MOD_VERSION.matcher(lines[i]).matches()) continue;
+			if (at >= 0) return bytes; // twice: there's no telling which counts
+			at = i;
 		}
+		if (at < 0 || continues(lines[at]) || (at > 0 && continues(lines[at - 1]))) return bytes;
+		StringBuilder kept = new StringBuilder();
+		for (int i = 0; i < lines.length; i++) if (i != at) kept.append(lines[i]).append('\n');
 		return kept.toString().getBytes(StandardCharsets.ISO_8859_1);
+	}
+
+	/** Whether a properties line goes on onto the next one (it ends in a backslash). */
+	private static boolean continues(String line) {
+		return line.stripTrailing().endsWith("\\");
 	}
 
 	private static String rel(Path root, Path p) {

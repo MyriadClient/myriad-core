@@ -163,6 +163,104 @@ class LibraryToolsTest {
 		assertTrue(LibraryTrust.listingSigned(listing, body, roots, 1_800_000_000L));
 		listing.put("signatures", List.of(sig(other, LibraryTrust.listingStatement(listing))));
 		assertFalse(LibraryTrust.listingSigned(listing, body, roots, 1_800_000_000L));
+
+		// Accepted findings count only when a listing key signed exactly them, for this id and revision.
+		List<String> found = List.of("process", "host:example.com");
+		Object good = List.of(sig(listingKey, st("accepted", "id=my-addon revision=1 finding=process finding=host:example.com")));
+		assertEquals(Set.copyOf(found), LibraryTrust.acceptedFindings(listing, found, good, body, roots, 1_800_000_000L));
+		assertEquals(Set.of(), LibraryTrust.acceptedFindings(listing, List.of("process", "host:example.com", "unsafe"), good, body, roots, 1_800_000_000L), "one added by the API");
+		Object oldRevision = List.of(sig(listingKey, st("accepted", "id=my-addon revision=2 finding=process finding=host:example.com")));
+		assertEquals(Set.of(), LibraryTrust.acceptedFindings(listing, found, oldRevision, body, roots, 1_800_000_000L), "another revision's");
+		Object byOther = List.of(sig(other, st("accepted", "id=my-addon revision=1 finding=process finding=host:example.com")));
+		assertEquals(Set.of(), LibraryTrust.acceptedFindings(listing, found, byOther, body, roots, 1_800_000_000L), "not a listing key");
+		assertEquals(Set.of(), LibraryTrust.acceptedFindings(listing, found, null, body, roots, 1_800_000_000L), "unsigned");
+	}
+
+	// ---- what could change a build without changing its hash --------------------------------------------------------
+
+	@Test
+	void sourceThatCouldRunCodeIsRefused(@TempDir Path dir) throws Exception {
+		Path mod = dir.resolve("src/main/resources/fabric.mod.json");
+		Files.createDirectories(mod.getParent());
+		Files.writeString(mod, "{\"version\": \"${version}\", \"depends\": {\"myriad\": \">=${myriad_version}\", \"minecraft\": \"~${minecraft_version}\"}}");
+		Builder.checkSource(dir);
+		for (String bad : List.of("<% new File('x').text = 'y' %>", "${new File('x').text}", "$evil", "<%= 1 %>")) {
+			Files.writeString(mod, "{\"name\": \"" + bad + "\"}");
+			assertThrows(IllegalArgumentException.class, () -> Builder.checkSource(dir), bad);
+		}
+		Files.writeString(mod, "{}");
+
+		Path wrapper = dir.resolve("gradle/wrapper/gradle-wrapper.properties");
+		Files.createDirectories(wrapper.getParent());
+		Files.writeString(wrapper, "distributionUrl=https\\://services.gradle.org/distributions/gradle-9.7.1-bin.zip\n");
+		Builder.checkSource(dir);
+		Files.writeString(wrapper, "distributionUrl=https\\://evil.example/gradle-9.7.1-bin.zip\n");
+		assertThrows(IllegalArgumentException.class, () -> Builder.checkSource(dir), "Gradle from elsewhere, unpinned");
+		Files.writeString(wrapper, "distributionUrl=https\\://evil.example/gradle-9.7.1-bin.zip\ndistributionSha256Sum=" + "c".repeat(64) + "\n");
+		Builder.checkSource(dir);
+		Files.writeString(wrapper, "distributionUrl=https\\://services.gradle.org/distributions/gradle-9.7.1-bin.zip\n");
+
+		for (String attr : List.of("*.gradle export-subst", "build.gradle export-ignore", "* filter=lfs diff=lfs merge=lfs")) {
+			Files.writeString(dir.resolve(".gitattributes"), "*.java text\n" + attr + "\n");
+			assertThrows(IllegalArgumentException.class, () -> Builder.checkSource(dir), attr);
+		}
+		Files.writeString(dir.resolve(".gitattributes"), "* text=auto eol=lf\n");
+		Builder.checkSource(dir);
+	}
+
+	@Test
+	void buildHashCoversWhatABuildCanRead(@TempDir Path dir) throws Exception {
+		assertTrue(BuildHash.payload("LICENSE"));
+		assertTrue(BuildHash.payload("README.md"));
+		assertTrue(BuildHash.payload("src/main/java/a/B.java"));
+		assertFalse(BuildHash.payload("libs/NOTICE.jar"), "a licence-like name elsewhere is build logic");
+		assertFalse(BuildHash.payload("buildSrc/src/main/java/a/LICENSEUtil.java"));
+		assertFalse(BuildHash.payload("gradle/notes.md"));
+		assertFalse(BuildHash.payload("src/main/resources/x.gradle"));
+
+		Path props = dir.resolve("gradle.properties");
+		Files.writeString(props, "org.gradle.jvmargs=-Xmx2G\nmod_version=1.0.0\n");
+		String h1 = BuildHash.of(dir);
+		Files.writeString(props, "org.gradle.jvmargs=-Xmx2G\nmod_version=1.0.1\n");
+		assertEquals(h1, BuildHash.of(dir), "a new version alone keeps the hash");
+		Files.writeString(props, "org.gradle.jvmargs=-Xmx2G\nmod_version=1.0.1\\\norg.gradle.jvmargs=-javaagent:evil.jar\n");
+		assertNotEquals(h1, BuildHash.of(dir), "a continued line can't hide the next one");
+		Files.writeString(props, "org.gradle.jvmargs=-Xmx2G\\\nmod_version=1.0.1\n");
+		assertNotEquals(h1, BuildHash.of(dir), "nor can a line continued into it");
+		Files.writeString(props, "org.gradle.jvmargs=-Xmx2G\nmod_version=1.0.1\nmod_version=2\n");
+		assertNotEquals(h1, BuildHash.of(dir), "two of them count");
+	}
+
+	@Test
+	void inspectorFindsClassesAndJarsWhereverTheyAre(@TempDir Path dir) throws Exception {
+		Path built = addonJar(dir.resolve("a"), true);
+		byte[] good;
+		try (var z = new java.util.zip.ZipFile(built.toFile())) {
+			good = z.getInputStream(z.getEntry("com/example/Good.class")).readAllBytes();
+		}
+		Path jar = dir.resolve("hidden.jar");
+		try (ZipOutputStream z = new ZipOutputStream(Files.newOutputStream(jar))) {
+			z.putNextEntry(new ZipEntry("META-INF/MANIFEST.MF"));
+			z.write("Manifest-Version: 1.0\nMulti-Release: true\n".getBytes(StandardCharsets.UTF_8));
+			z.putNextEntry(new ZipEntry("fabric.mod.json"));
+			z.write("{\"id\":\"my-addon\",\"version\":\"1.0.0\",\"jars\":[{\"file\":\"assets/x/data.bin\"}]}".getBytes(StandardCharsets.UTF_8));
+			z.putNextEntry(new ZipEntry("META-INF/x/Evil.class"));
+			z.write(good);
+			z.putNextEntry(new ZipEntry("assets/x/pic.png"));
+			z.write(good);
+			z.putNextEntry(new ZipEntry("assets/x/data.bin"));
+			z.write(new byte[]{1, 2, 3});
+			z.putNextEntry(new ZipEntry("assets/x/other.bin"));
+			z.write(new byte[]{0x50, 0x4b, 0x03, 0x04, 0, 0});
+		}
+		List<String> ids = new ArrayList<>();
+		for (Object f : Json.array(Inspect.inspect(jar, null).get("findings"), "findings")) ids.add((String) ((Map<?, ?>) f).get("id"));
+		assertTrue(ids.contains("hidden-class:META-INF/x/Evil.class"), ids.toString());
+		assertTrue(ids.contains("hidden-class:assets/x/pic.png"), ids.toString());
+		assertTrue(ids.contains("process"), "hidden classes are scanned too: " + ids);
+		assertTrue(ids.stream().anyMatch(i -> i.startsWith("nested:assets/x/data.bin:")), ids.toString());
+		assertTrue(ids.stream().anyMatch(i -> i.startsWith("nested:assets/x/other.bin:")), ids.toString());
+		assertTrue(ids.contains("multi-release"), ids.toString());
 	}
 
 	// ---- the signing decision ---------------------------------------------------------------------------------------

@@ -139,6 +139,7 @@ public final class Builder {
 			String commit = check(SHA1, Json.string(Json.object(Json.parse(get("https://api.github.com/repos/" + full + "/commits/" + tag, gh, 4 * 1024 * 1024)), "the commit").get("sha"), "sha"), "commit");
 			Path src = work.resolve("src");
 			checkout(full, "refs/tags/" + tag, src, commit);
+			checkSource(src);
 			String buildHash = BuildHash.of(src);
 			String assetUrl = spec.get("assetUrl") instanceof String a && ASSET.matcher(a).matches() ? a : null;
 			if (assetUrl == null) throw new IllegalArgumentException("the release has no jar attached");
@@ -146,11 +147,13 @@ public final class Builder {
 			if (!m.matches() || !m.group(1).equals(full) || !m.group(2).equals(tag)) throw new IllegalArgumentException("the release's jar isn't in this release");
 			Object listing = spec.get("listing");
 			boolean listed = false;
+			Set<String> accepted = Set.of();
 			if (listing instanceof Map<?, ?>) {
 				Map<String, Object> l = Json.object(listing, "the listing");
 				Map<String, Object> body = LibraryTrust.verifiedBody(get(api + "/v1/index.json", null, 8L * 1024 * 1024), LibraryTrust.ROOT_KEYS, now());
 				if (!LibraryTrust.listingSigned(l, body, LibraryTrust.ROOT_KEYS, now())) throw new IllegalArgumentException("its listing isn't signed by a Myriad listing key");
 				if (Json.number(l.get("repoId"), "repoId") != repoId || Json.number(l.get("ownerId"), "ownerId") != ownerId) throw new IllegalArgumentException("its listing is for another repository");
+				accepted = LibraryTrust.acceptedFindings(l, spec.get("accepted"), spec.get("acceptedSignatures"), body, LibraryTrust.ROOT_KEYS, now());
 				listed = true;
 			}
 			output("ok", "true");
@@ -162,7 +165,7 @@ public final class Builder {
 			output("asset_name", m.group(3));
 			output("listed", String.valueOf(listed));
 			output("listing", listed ? Json.write(listing) : "");
-			output("accepted", Json.write(spec.get("accepted") instanceof List<?> a ? strings(a) : List.of()));
+			output("accepted", Json.write(new ArrayList<>(accepted)));
 		} catch (IllegalArgumentException | IOException e) {
 			output("ok", "false");
 			output("problem", oneLine(e.getMessage()));
@@ -189,6 +192,7 @@ public final class Builder {
 			if (!sourceRepo.equals(source.get("fullName"))) throw new IllegalArgumentException("the token is for another repository");
 			Path src = work.resolve("src");
 			String commit = checkoutWith(sourceRepo, "refs/tags/" + tag, src, Json.string(grant.get("token"), "token"));
+			checkSource(src);
 			String buildHash = BuildHash.of(src);
 			Path archive = work.resolve("source.tar.gz");
 			git(src, "archive", "--format=tar.gz", "-o", archive.toString(), "HEAD");
@@ -205,10 +209,19 @@ public final class Builder {
 				}
 				publicRepo = u;
 			}
+			// The public releases repository must really be public and have the source repository's owner.
+			long ownerId = Json.number(source.get("ownerId"), "owner id");
+			String auth = System.getenv("GH_TOKEN") == null ? null : "token " + System.getenv("GH_TOKEN");
+			Map<String, Object> pub = Json.object(Json.parse(get("https://api.github.com/repos/" + publicRepo, auth, 1024 * 1024)), "the public repository");
+			if (!Boolean.FALSE.equals(pub.get("private")) || Json.number(Json.object(pub.get("owner"), "owner").get("id"), "owner id") != ownerId) {
+				throw new IllegalArgumentException(publicRepo + " isn't a public repository with the same owner as the source");
+			}
+			long publicRepoId = Json.number(pub.get("id"), "id");
 			Object listing = spec.get("listing");
 			output("ok", "true");
 			output("source_repo", sourceRepo);
 			output("public_repo", publicRepo);
+			output("public_repo_id", String.valueOf(publicRepoId));
 			output("tag", tag);
 			output("commit", commit);
 			output("build_hash", buildHash);
@@ -363,6 +376,60 @@ public final class Builder {
 			result.put("report", report);
 		}
 		post(api + "/v1/library/builds/" + id + "/result", token, Json.write(result));
+	}
+
+	// ---- source checks ----------------------------------------------------------------------------------------------
+
+	/** What {@code fabric.mod.json} may hold of Gradle's template syntax: the plugin's three placeholders, nothing else. */
+	private static final Pattern PLACEHOLDER = Pattern.compile("\\$\\{(version|myriad_version|minecraft_version)}");
+	private static final Pattern GRADLE_DIST = Pattern.compile("https\\\\?://services\\.gradle\\.org/distributions/gradle-[0-9A-Za-z.-]{1,40}-(bin|all)\\.zip");
+
+	/**
+	 * Refuses source that could run code or change the build without changing its build-logic hash:
+	 * <ul>
+	 * <li>a {@code fabric.mod.json} with template code: older plugins fill it in with Gradle's {@code expand}, which runs
+	 * Groovy, and the file is the addon's own (not build logic);</li>
+	 * <li>a Gradle wrapper that downloads Gradle from anywhere but services.gradle.org without pinning its SHA-256;</li>
+	 * <li>git attributes that change files on checkout or archive ({@code filter}, {@code export-ignore},
+	 * {@code export-subst}), so what's hashed is what's built.</li>
+	 * </ul>
+	 */
+	static void checkSource(Path src) throws IOException {
+		try (var walk = Files.walk(src)) {
+			for (Path p : (Iterable<Path>) walk.filter(Files::isRegularFile)::iterator) {
+				String rel = src.relativize(p).toString().replace('\\', '/');
+				if (rel.startsWith(".git/")) continue;
+				String name = p.getFileName().toString();
+				if (name.equals("fabric.mod.json")) {
+					String text = PLACEHOLDER.matcher(Files.readString(p, StandardCharsets.UTF_8)).replaceAll("");
+					if (text.indexOf('$') >= 0 || text.contains("<%")) {
+						throw new IllegalArgumentException(rel + " holds template code ('$' or '<%' other than ${version}, ${myriad_version}, ${minecraft_version})");
+					}
+				}
+				if (name.equals(".gitattributes")) {
+					for (String line : Files.readAllLines(p, StandardCharsets.UTF_8)) {
+						String l = line.strip();
+						if (l.startsWith("#")) continue;
+						if (l.matches(".*(\\s|^)(-?)(filter|export-ignore|export-subst)(=|\\s|$).*")) {
+							throw new IllegalArgumentException(rel + " uses filter, export-ignore or export-subst, which change files on checkout");
+						}
+					}
+				}
+			}
+		}
+		Path wrapper = src.resolve("gradle/wrapper/gradle-wrapper.properties");
+		if (Files.isRegularFile(wrapper)) {
+			java.util.Properties props = new java.util.Properties();
+			try (var in = Files.newInputStream(wrapper)) {
+				props.load(in);
+			}
+			String url = props.getProperty("distributionUrl", "");
+			String sum = props.getProperty("distributionSha256Sum");
+			if (sum == null && !GRADLE_DIST.matcher(url.replace("\\:", ":")).matches()) {
+				throw new IllegalArgumentException("the Gradle wrapper downloads Gradle from somewhere other than services.gradle.org without distributionSha256Sum");
+			}
+			if (sum != null && !SHA256.matcher(sum).matches()) throw new IllegalArgumentException("the Gradle wrapper's distributionSha256Sum isn't a SHA-256");
+		}
 	}
 
 	// ---- helpers ----------------------------------------------------------------------------------------------------

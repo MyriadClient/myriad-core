@@ -54,14 +54,27 @@ public final class LibraryTrust {
 		}
 	}
 
-	/** The key among {@code keys} that made one of {@code sigs} (each {@code {"key", "sig"}}) over {@code message}, or null. */
+	/**
+	 * The key among {@code keys} that made one of {@code sigs} (each {@code {"key", "sig"}}) over {@code message}, or null.
+	 * Each signature is checked only against the key it names, as the game checks the Library's signatures.
+	 */
 	public static String signer(byte[] message, Object sigs, Collection<String> keys) {
 		if (!(sigs instanceof List<?> list)) return null;
 		for (Object o : list.subList(0, Math.min(8, list.size()))) {
-			if (!(o instanceof Map<?, ?> m) || !(m.get("sig") instanceof String sig)) continue;
-			for (String k : keys) if (verify(k, message, sig)) return k;
+			if (!(o instanceof Map<?, ?> m) || !(m.get("sig") instanceof String sig) || !(m.get("key") instanceof String label)) continue;
+			for (String k : keys) if (label.equals(keyId(k)) && verify(k, message, sig)) return k;
 		}
 		return null;
+	}
+
+	/** A public key's id: the first 8 bytes of its SHA-256, in hex (how a signature names its key). */
+	static String keyId(String key) {
+		try {
+			byte[] raw = Base64.getUrlDecoder().decode(key.substring(Signing.PUBLIC.length()));
+			return HexFormat.of().formatHex(Signing.sha256(raw), 0, 8);
+		} catch (RuntimeException e) {
+			return "";
+		}
 	}
 
 	/**
@@ -138,6 +151,27 @@ public final class LibraryTrust {
 		for (Object k : Json.array(l.get("keys"), "keys")) keys.add(Json.string(k, "key"));
 		f.put("key", keys);
 		return LibraryStatements.statement("listing", f);
+	}
+
+	/**
+	 * The findings the maintainer accepted for {@code listing}'s current revision: only when a listing key in force in
+	 * {@code body} signed exactly that list for that id and revision. Anything else accepts nothing (so every finding waits
+	 * for review): the list comes from the API, which mustn't be able to accept findings itself.
+	 */
+	public static Set<String> acceptedFindings(Map<String, Object> listing, Object accepted, Object signatures, Map<String, Object> body, List<String> roots, long now) {
+		try {
+			List<String> found = new ArrayList<>();
+			for (Object f : accepted instanceof List<?> l ? l : List.of()) found.add(Json.string(f, "finding"));
+			if (found.isEmpty()) return Set.of();
+			Map<String, List<String>> f = new HashMap<>();
+			f.put("id", List.of(Json.string(listing.get("id"), "id")));
+			f.put("revision", List.of(String.valueOf(Json.number(listing.get("revision"), "revision"))));
+			f.put("finding", found);
+			byte[] statement = LibraryStatements.statement("accepted", f);
+			return signer(statement, signatures, certifiedKeys(body, roots, now).get("listing")) != null ? new java.util.TreeSet<>(found) : Set.of();
+		} catch (RuntimeException e) {
+			return Set.of();
+		}
 	}
 
 	/** Whether {@code listing} is signed by one of the listing keys in force in {@code body}. */

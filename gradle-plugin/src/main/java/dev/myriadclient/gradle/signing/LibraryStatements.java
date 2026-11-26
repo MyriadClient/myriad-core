@@ -21,6 +21,8 @@ import java.util.regex.Pattern;
  * version      id version size sha256 commit
  * yank         id version sha256
  * snapshot     issued expires body-sha256
+ * accepted     id revision finding=…(0..200, sorted): the findings the maintainer accepted for that listing revision,
+ *              which the builder alone reads (the game never needs them)
  * </pre>
  */
 public final class LibraryStatements {
@@ -30,7 +32,8 @@ public final class LibraryStatements {
 	private static final Pattern COMMIT = Pattern.compile("[0-9a-f]{40}");
 	private static final Pattern NUMBER = Pattern.compile("[1-9][0-9]{0,18}");
 	private static final long MAX_JAR = 64L * 1024 * 1024;
-	public static final Set<String> KINDS = Set.of("key", "revocations", "listing", "version", "yank", "snapshot");
+	private static final Pattern FINDING = Pattern.compile("[!-<>-~]{1,300}");
+	public static final Set<String> KINDS = Set.of("key", "revocations", "listing", "version", "yank", "snapshot", "accepted");
 
 	private LibraryStatements() {
 	}
@@ -77,6 +80,16 @@ public final class LibraryStatements {
 				String issued = f.number("issued"), expires = f.number("expires");
 				if (Long.parseLong(expires) <= Long.parseLong(issued)) throw new IllegalArgumentException("expires comes after issued");
 				yield "myriad-library-snapshot:1\nissued=" + issued + "\nexpires=" + expires + "\nbody-sha256=" + f.hex("body-sha256", SHA256) + "\n";
+			}
+			case "accepted" -> {
+				List<String> found = new ArrayList<>(new java.util.TreeSet<>(f.all("finding")));
+				if (found.size() > 200) throw new IllegalArgumentException("too many accepted findings");
+				StringBuilder lines = new StringBuilder();
+				for (String s : found) {
+					if (!FINDING.matcher(s).matches()) throw new IllegalArgumentException("a finding is printable ASCII without spaces or '='");
+					lines.append("finding=").append(s).append('\n');
+				}
+				yield "myriad-library-accepted:1\nid=" + f.id("id") + "\nrevision=" + f.number("revision") + "\n" + lines;
 			}
 			default -> throw new IllegalArgumentException("not a Library statement: " + kind + " (" + String.join(", ", KINDS) + ")");
 		};
@@ -160,6 +173,12 @@ public final class LibraryStatements {
 			String s = one(name);
 			checkKey(s);
 			return s;
+		}
+
+		/** Every value of a field that may repeat (none is fine). */
+		List<String> all(String name) {
+			used.add(name);
+			return fields.getOrDefault(name, List.of());
 		}
 
 		String keyLines(int min, int max) {
