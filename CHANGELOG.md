@@ -17,6 +17,42 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.7.0
+
+Adds API, for Minecraft 26.3: `TextField.masked()` (below).
+
+### Updates
+
+- **Signed updates.** An addon can list its developer's signing keys in `fabric.mod.json`
+  (`"custom": {"myriad": {"keys": ["ed25519:..."]}}`); from then on Myriad takes only updates signed with one of them,
+  over the addon's id, the version and the jar's exact size and SHA-256. A release without a valid signature isn't
+  offered. Keys change by listing the new one in a release signed with the old one. Addons that list no key update as
+  before, and their card says so. Myriad itself now takes only updates signed with Myriad's own keys, which are kept
+  offline: each release is signed once the released jar has been rebuilt from its tag and found identical
+  (`tools/sign-release`). Release builds now come out byte for byte the same from the same source, and the release
+  workflow attests where each jar was built.
+- **Update feeds.** Besides GitHub releases, an addon can update from a feed it hosts anywhere over https
+  (`"updates": "https://..."`): a small JSON file listing versions, their jars, hashes and signatures. Private feeds and
+  private GitHub repositories take an access token, pasted into the addon's **Private source** in Addons; it's sent
+  only to that source's own address, never shown or copied back out, and kept out of profiles and shares.
+- **Add an addon from a link.** The link button in Addons (or `.update add <link>`) takes a GitHub repository or a
+  feed's address, downloads and checks the addon first, shows its name, source and key fingerprint (or a red warning
+  when it's unsigned), and installs it into `mods` only when you say so.
+- **Every download is read the way the loader reads it** before it's staged: a jar with two entries of one name, local
+  headers that disagree with its directory, odd entry names or one that brings in another Myriad addon (as itself,
+  through `provides`, or in a nested jar) is refused. Downloads are https only, capped at their listed size, and cut
+  off when they take too long.
+
+### Gradle plugin
+
+- `generateSigningKey` makes a key (the private half to a file, never printed), `signAddon` signs the built jar and
+  writes `<jar>.sig`, and every jar it builds is reproducible. The addon template's release workflow signs in a job of
+  its own when a `MYRIAD_SIGNING_KEY` secret is set.
+
+### API
+
+- `TextField.masked()` shows dots for a secret and won't copy it out.
+
 ## 2.6.0
 
 Adds API, for Minecraft 26.3: background effects, and a few for settings and buttons (below).
