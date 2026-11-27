@@ -62,17 +62,25 @@ public final class Invites {
 
 	/** A request's fields (only those its action uses are read). */
 	public record Request(String id, String action, String api, long issued, String nonce, String codeSha256, long uses, long notAfter, String label,
-						  long invite, String uuid) {
+						  long invite, String uuid, java.util.List<String> show) {
+		public Request(String id, String action, String api, long issued, String nonce, String codeSha256, long uses, long notAfter, String label,
+					   long invite, String uuid) {
+			this(id, action, api, issued, nonce, codeSha256, uses, notAfter, label, invite, uuid, java.util.List.of());
+		}
 	}
+
+	/** What an invite-only listing may show everyone beyond its modules, in the order requests spell it. */
+	public static final java.util.List<String> SHOWABLE = java.util.List.of("changelog", "repo");
 
 	/**
 	 * The signed bytes: the kind, {@code id}, {@code action}, {@code api} (the origin of the API it's for, so it never counts
 	 * at another), {@code issued}, {@code nonce}, then what the action needs, in this order: {@code code-sha256 uses
-	 * not-after label} (create), {@code invite} (revoke), {@code uuid} (revoke-grant, restore-grant).
+	 * not-after label} (create), {@code invite} (revoke, revoke-all), {@code uuid} (revoke-grant, restore-grant), {@code show}
+	 * (show: a sorted comma list of {@code changelog} and {@code repo}, empty for nothing).
 	 */
 	public static byte[] bytes(Request r) {
 		need(ID.matcher(r.id()).matches(), "not a mod id");
-		need(java.util.List.of("create", "list", "revoke", "grants", "revoke-grant", "restore-grant").contains(r.action()), "not an invite action");
+		need(java.util.List.of("create", "list", "revoke", "revoke-all", "grants", "revoke-grant", "restore-grant", "show").contains(r.action()), "not an invite action");
 		need(r.api() != null && r.api().matches("https?://[a-z0-9.-]{1,253}(:\\d{1,5})?"), "not an API origin");
 		need(r.issued() > 0, "issued isn't a time");
 		need(NONCE.matcher(r.nonce()).matches(), "not a nonce");
@@ -88,13 +96,19 @@ public final class Invites {
 				s.append("code-sha256=").append(r.codeSha256()).append("\nuses=").append(r.uses()).append("\nnot-after=").append(r.notAfter())
 					.append("\nlabel=").append(label).append('\n');
 			}
-			case "revoke" -> {
+			case "revoke", "revoke-all" -> {
 				need(r.invite() > 0, "which invite?");
 				s.append("invite=").append(r.invite()).append('\n');
 			}
 			case "revoke-grant", "restore-grant" -> {
 				need(r.uuid() != null && UUID.matcher(r.uuid()).matches(), "not a player's UUID");
 				s.append("uuid=").append(r.uuid()).append('\n');
+			}
+			case "show" -> {
+				java.util.List<String> show = r.show() == null ? java.util.List.of() : r.show();
+				need(SHOWABLE.containsAll(show), "show is changelog and/or repo");
+				need(show.equals(SHOWABLE.stream().filter(show::contains).toList()), "show is in order, each once");
+				s.append("show=").append(String.join(",", show)).append('\n');
 			}
 			default -> {
 			}

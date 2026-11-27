@@ -463,30 +463,38 @@ public final class UpdateManager {
 	public record LibraryDetails(String version, List<LibraryModule> modules, @Nullable Changelog changelog) {
 	}
 
-	/** Details documents being fetched or fetched, by hash: each is fetched once a session. */
+	/** Details documents being fetched or fetched, by hash (and whether with a grant): each is fetched once a session. */
 	private final Map<String, CompletableFuture<LibraryDetails>> details = new ConcurrentHashMap<>();
 
 	/**
 	 * {@code id}'s details, fetched from Myriad's API and used only if they hash to {@code sha256} (the signed index's).
-	 * The same future for the same hash, so asking again is free; {@code onLoaded} runs on the render thread once it's in.
+	 * For an invite-only addon this account has a grant on, the changelog its developer keeps from everyone else comes
+	 * from the API's private route too (with the session, display only, and only for the version the checked document
+	 * names); the modules are always the checked document's. The same future for the same document, so asking again is
+	 * free; {@code onLoaded} runs on the render thread once it's in.
 	 */
 	public @Nullable LibraryDetails libraryDetails(String id, @Nullable String sha256, Runnable onLoaded) {
-		if (sha256 == null || !Names.isId(id)) return null;
-		CompletableFuture<LibraryDetails> f = details.computeIfAbsent(sha256, k -> Fetch.bytes(
-				URI.create(dev.myriadclient.impl.MyriadApi.API + "/v1/library/addons/" + id + "/details.json"), 256 * 1024, null, "application/json")
-			.thenApply(bytes -> {
-				if (!LibraryIndex.sha256(bytes).equals(sha256)) throw new CompletionException(new IOException("the details aren't the ones the Library lists"));
-				try {
-					LibraryIndex.Details d = LibraryIndex.details(new String(bytes, java.nio.charset.StandardCharsets.UTF_8), id);
-					return new LibraryDetails(d.version(), d.modules().stream().map(m -> new LibraryModule(m.name(), m.description(), m.tag())).toList(),
-						d.changelog() == null ? null : new Changelog(d.changelog().version(), d.changelog().text()));
-				} catch (IOException e) {
-					throw new CompletionException(e);
+		if (!Names.isId(id)) return null;
+		LibraryIndex.Index index = library.index();
+		LibraryIndex.Entry entry = index == null ? null : index.entry(id);
+		String token = entry != null && entry.invite() && account.grants().contains(id) ? account.token() : null;
+		if (sha256 == null && token == null) return null;
+		String key = (sha256 == null ? id : sha256) + (token == null ? "" : "+granted");
+		CompletableFuture<LibraryDetails> f = details.computeIfAbsent(key, k -> {
+			CompletableFuture<LibraryDetails> checked = sha256 == null ? CompletableFuture.completedFuture(null) : detailsFrom("/v1/library/addons/" + id + "/details.json", id, sha256, null);
+			if (token == null) return checked;
+			return checked.thenCompose(pub -> detailsFrom("/v1/library/private/" + id + "/details.json", id, null, token).handle((mine, err) -> {
+				if (mine == null) {
+					if (pub == null) throw new CompletionException(new IOException("no details"));
+					return pub;
 				}
+				if (pub == null) return mine;
+				return mine.version().equals(pub.version()) && mine.changelog() != null ? new LibraryDetails(pub.version(), pub.modules(), mine.changelog()) : pub;
 			}));
+		});
 		if (f.isDone()) {
 			if (!f.isCompletedExceptionally()) return f.join();
-			details.remove(sha256, f); // tried again the next time it's asked for
+			details.remove(key, f); // tried again the next time it's asked for
 			return null;
 		}
 		f.whenComplete((d, e) -> {
@@ -495,7 +503,21 @@ public final class UpdateManager {
 		return null;
 	}
 
-	/** A module a Library addon adds: its name, description and kind. */
+	/** A details document from Myriad's API: checked against {@code sha256} when given; {@code token} goes to the API alone. */
+	private static CompletableFuture<LibraryDetails> detailsFrom(String path, String id, @Nullable String sha256, @Nullable String token) {
+		return Fetch.bytes(URI.create(dev.myriadclient.impl.MyriadApi.API + path), 256 * 1024, token, "application/json").thenApply(bytes -> {
+			if (sha256 != null && !LibraryIndex.sha256(bytes).equals(sha256)) throw new CompletionException(new IOException("the details aren't the ones the Library lists"));
+			try {
+				LibraryIndex.Details d = LibraryIndex.details(new String(bytes, java.nio.charset.StandardCharsets.UTF_8), id);
+				return new LibraryDetails(d.version(), d.modules().stream().map(m -> new LibraryModule(m.name(), m.description(), m.tag())).toList(),
+					d.changelog() == null ? null : new Changelog(d.changelog().version(), d.changelog().text()));
+			} catch (IOException e) {
+				throw new CompletionException(e);
+			}
+		});
+	}
+
+		/** A module a Library addon adds: its name, description and kind. */
 	public record LibraryModule(String name, String description, String tag) {
 	}
 

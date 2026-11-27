@@ -30,9 +30,11 @@ import java.util.Map;
  *   ./gradlew libraryInvite -Paction=create [-Puses=1] [-Pdays=7] [-Plabel=friends]   a new code, printed once
  *   ./gradlew libraryInvite -Paction=list                                             the invites and their uses left
  *   ./gradlew libraryInvite -Paction=revoke -Pinvite=3                                that code stops working
- *   ./gradlew libraryInvite -Paction=grants                                           who has access
+ *   ./gradlew libraryInvite -Paction=revoke-all -Pinvite=3                            that code stops working, and everyone it let in loses access
+ *   ./gradlew libraryInvite -Paction=grants [-Pinvite=3]                              who has access (only through that code)
  *   ./gradlew libraryInvite -Paction=revoke-grant -Pplayer=&lt;uuid&gt;                       that player loses access (codes can't undo it)
  *   ./gradlew libraryInvite -Paction=restore-grant -Pplayer=&lt;uuid&gt;                      gives it back
+ *   ./gradlew libraryInvite -Paction=show -Pshow=changelog,repo                       what everyone sees beyond the modules (-Pshow= for nothing)
  * </pre>
  *
  * The code is made here and never sent: the API keeps only its hash, so not even Myriad's server could tell anyone a code.
@@ -66,6 +68,9 @@ public abstract class LibraryInvite extends DefaultTask {
 	@Internal
 	public abstract Property<String> getPlayer();
 
+	@Internal
+	public abstract Property<String> getShow();
+
 	@TaskAction
 	public void run() throws Exception {
 		String action = getAction().getOrElse("list");
@@ -81,15 +86,21 @@ public abstract class LibraryInvite extends DefaultTask {
 				if (days < 1 || days > 365) throw new GradleException("-Pdays is 1 to 365");
 				request = new Invites.Request(id, action, api, now, Invites.nonce(), Invites.hash(code), uses, now + days * 86_400L, getLabel().getOrElse(""), 0, null);
 			}
-			case "revoke" -> request = new Invites.Request(id, action, api, now, Invites.nonce(), null, 0, 0, null,
+			case "revoke", "revoke-all" -> request = new Invites.Request(id, action, api, now, Invites.nonce(), null, 0, 0, null,
 				getInvite().getOrElse(0L), null);
+			case "show" -> {
+				List<String> asked = java.util.Arrays.stream(getShow().getOrElse("").split(",")).map(String::strip).filter(x -> !x.isEmpty()).toList();
+				if (!Invites.SHOWABLE.containsAll(asked)) throw new GradleException("-Pshow is changelog, repo, both (changelog,repo) or nothing");
+				request = new Invites.Request(id, action, api, now, Invites.nonce(), null, 0, 0, null, 0, null,
+					Invites.SHOWABLE.stream().filter(asked::contains).toList());
+			}
 			case "revoke-grant", "restore-grant" -> {
 				String uuid = Invites.uuid(getPlayer().getOrNull());
 				if (uuid == null) throw new GradleException("-Pplayer is the player's UUID (with or without dashes)");
 				request = new Invites.Request(id, action, api, now, Invites.nonce(), null, 0, 0, null, 0, uuid);
 			}
 			case "list", "grants" -> request = new Invites.Request(id, action, api, now, Invites.nonce(), null, 0, 0, null, 0, null);
-			default -> throw new GradleException("-Paction is create, list, revoke, grants, revoke-grant or restore-grant");
+			default -> throw new GradleException("-Paction is create, list, revoke, revoke-all, grants, revoke-grant, restore-grant or show");
 		}
 		byte[] statement;
 		try {
@@ -110,7 +121,8 @@ public abstract class LibraryInvite extends DefaultTask {
 			req.put("notAfter", request.notAfter());
 			req.put("label", request.label());
 		}
-		if (action.equals("revoke")) req.put("invite", request.invite());
+		if (action.equals("revoke") || action.equals("revoke-all")) req.put("invite", request.invite());
+		if (action.equals("show")) req.put("show", request.show());
 		if (action.equals("revoke-grant") || action.equals("restore-grant")) req.put("uuid", request.uuid());
 		String body = "{\"request\": " + Json.write(req) + ", \"signatures\": [" + LibraryStatements.signatureJson(key, statement) + "]}";
 
@@ -128,7 +140,8 @@ public abstract class LibraryInvite extends DefaultTask {
 		switch (action) {
 			case "create" -> {
 				long invite = answer instanceof Map<?, ?> m && m.get("invite") instanceof Number n ? n.longValue() : 0;
-				getLogger().lifecycle("""
+				// Everything this task says is its answer, so quiet level: -q mustn't hide it (a code is shown only once).
+				getLogger().quiet("""
 
 					  Invite %d for %s: %d %s, until %s%s
 
@@ -140,8 +153,19 @@ public abstract class LibraryInvite extends DefaultTask {
 					request.label().isEmpty() ? "" : " (" + request.label() + ")", Invites.shown(code), id, invite));
 			}
 			case "list" -> table(answer, List.of("id", "label", "usesLeft", "maxUses", "expires", "revoked"), List.of("Invite", "Label", "Left", "Of", "Expires", "Revoked"));
-			case "grants" -> table(answer, List.of("name", "uuid", "invite", "created", "revoked"), List.of("Player", "UUID", "Invite", "Since", "Revoked"));
-			default -> getLogger().lifecycle("Done.");
+			case "grants" -> {
+				long only = getInvite().getOrElse(0L);
+				Object rows = only <= 0 || !(answer instanceof List<?> all) ? answer
+					: all.stream().filter(g -> g instanceof Map<?, ?> m && m.get("invite") instanceof Number n && n.longValue() == only).toList();
+				table(rows, List.of("name", "uuid", "invite", "created", "revoked"), List.of("Player", "UUID", "Invite", "Since", "Revoked"));
+			}
+			case "revoke-all" -> {
+				long n = answer instanceof Map<?, ?> m && m.get("grantsRevoked") instanceof Number x ? x.longValue() : 0;
+				getLogger().quiet("Done: invite {} no longer works, and {} {} it let in lost access.", request.invite(), n, n == 1 ? "player" : "players");
+			}
+			case "show" -> getLogger().quiet(request.show().isEmpty() ? "Done: everyone sees the name, description, icon and modules; the changelog and repository are for your players."
+				: "Done: everyone also sees the " + String.join(" and ", request.show().stream().map(x -> x.equals("repo") ? "repository" : x).toList()) + ".");
+			default -> getLogger().quiet("Done.");
 		}
 	}
 
@@ -149,7 +173,7 @@ public abstract class LibraryInvite extends DefaultTask {
 	private void table(Object answer, List<String> keys, List<String> heads) {
 		List<?> rows = answer instanceof List<?> l ? l : List.of();
 		if (rows.isEmpty()) {
-			getLogger().lifecycle("Nothing yet.");
+			getLogger().quiet("Nothing yet.");
 			return;
 		}
 		int[] widths = new int[keys.size()];
@@ -170,7 +194,7 @@ public abstract class LibraryInvite extends DefaultTask {
 		StringBuilder out = new StringBuilder("\n");
 		append(out, heads.toArray(String[]::new), widths);
 		for (String[] row : cells) append(out, row, widths);
-		getLogger().lifecycle(out.toString());
+		getLogger().quiet(out.toString());
 	}
 
 	private static void append(StringBuilder out, String[] row, int[] widths) {

@@ -373,6 +373,7 @@ public final class AddonPlugin implements Plugin<Project> {
 			t.getLabel().set(project.provider(() -> (String) project.findProperty("label")));
 			t.getInvite().set(project.provider(() -> project.hasProperty("invite") ? Long.parseLong(project.property("invite").toString()) : null));
 			t.getPlayer().set(project.provider(() -> (String) project.findProperty("player")));
+			t.getShow().set(project.provider(() -> (String) project.findProperty("show")));
 		});
 		project.getTasks().register("signAddon", SignAddon.class, t -> {
 			t.setGroup("publishing");
