@@ -17,6 +17,31 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.10.0
+
+Invite-only addons in the Myriad Library: listed for everyone to see, installable only by players a code lets in. The API
+is unchanged (no addon needs rebuilding).
+
+### Addons window
+
+- **Invite-only addons** show in Browse with an "Invite only" badge, like any other listing: what it is, its modules and
+  what's new. Installing one needs an invite from its developer.
+- **Sign in with Minecraft**, from an invite-only listing, proves your account to Myriad's API the way joining a server
+  does: your Minecraft login goes only to Mojang, never to Myriad. You stay signed in for 30 days of use; Browse says
+  who you're signed in as, with Sign out beside it.
+- **Redeem code** on the listing, with the code its developer gave you. Typos are caught before anything is sent. Once
+  redeemed it's "Invited", and it installs and updates like any Library addon, with every signature and hash check the
+  same.
+- `.account` shows who you're signed in as, signs in, or signs out.
+
+### Gradle plugin
+
+- `./gradlew libraryInvite` manages an invite-only listing's invites, signed with the developer key the addon's releases
+  are signed with: `create` makes a code (printed once; the Library keeps only its hash), `list`, `revoke`, `grants`
+  (who has access), `revoke-grant` (which no code can undo) and `restore-grant`.
+- The Library's builder fetches an invite-only listing's release from its private repo, and inspects the jar that will be
+  offered, matched by hash.
+
 ## 2.9.0
 
 The Addons window, redone: Browse up front, shorter cards, icons, auto update and removing addons. The API is unchanged
