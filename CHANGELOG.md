@@ -17,6 +17,41 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.11.0
+
+A smoother Addons window, invite-only listings that choose what everyone sees, and a Library that keeps no key to
+developers' repositories on its server. One new API: `Spacer.fill()`.
+
+### API
+
+- `Spacer.fill()`: a spacer that takes whatever height is left in a scroll view, so a footer sits at the bottom of the
+  window rather than straight after the content.
+
+### Addons window
+
+- **One-click installs** from the Library, with every signature and hash check as before. **Redeem and install** does
+  both in one step on an invite-only listing, and redeeming a code on the wrong listing says which addon it's for.
+- Cards have a two-line header (author, then counts), sharp icons at any size, and keep their open state when the list
+  refreshes. Footers (sign-in, Reset to default, dialogs, Add from link) stay at the foot of their window.
+- **Invited players see the changelog** of an invite-only addon even when its developer keeps it from everyone else.
+- Notes and profiler tiles are outlined all round instead of marked with a bar on the left.
+
+### Account
+
+- A saved Myriad session is only ever sent back to the API it was made with; sessions from older versions sign in again
+  once. The session file is written owner-only from its first byte, and Sign out says when Myriad's API couldn't be
+  reached to end the session there too.
+
+### Gradle plugin
+
+- `libraryInvite -Paction=show -Pshow=changelog,repo` chooses what everyone sees of an invite-only listing beyond its
+  name, description, icon and modules: its changelog, its repository, both or neither (the default, `-Pshow=`).
+- `libraryInvite -Paction=revoke-all -Pinvite=N` ends a code and removes everyone it let in, in one step;
+  `-Paction=grants -Pinvite=N` lists who a code let in. Everything the task prints shows even with `-q`.
+- The Library's private builder makes its own short-lived token for each repository it reads, from the Library App's
+  key, which now lives only there. It reads only the repository an addon's signed listing names, and posts the check
+  runs you see on your releases.
+
 ## 2.10.0
 
 Invite-only addons in the Myriad Library: listed for everyone to see, installable only by players a code lets in. The API
