@@ -9,6 +9,7 @@
 #                                                    then sign this version too
 #   tools/library-review approve-version <n>         sign a version that waited for review
 #   tools/library-review reject <n> <reason...>      turn a submission down (the developer sees the reason)
+#   tools/library-review upload-jar <id> <version> <jar>  hand an invite-only release's signed jar to the API (a retry)
 #   tools/library-review yank <id> <version>         take a release back, for good (signed with the listing key)
 #   tools/library-review pause <id>                  take a listing out of the index until it's listed again (quick, no key)
 #   tools/library-review cert <listing|version|index> <ed25519:key> [days] [root key file]
@@ -17,9 +18,12 @@
 #   tools/library-review archive                     keep a copy of the current index (for recovery)
 #
 # Keys and the admin token live in ~/.myriad-keys (MYRIAD_KEYS): library-listing.key, root-primary.key,
-# library-admin-token. Reviewed closed-source code and index copies go to ~/.myriad-library (MYRIAD_LIBRARY_DIR).
+# library-admin-token. Index copies go to ~/.myriad-library (MYRIAD_LIBRARY_DIR), owner-only. A closed-source
+# submission's code is kept only while it's reviewed (review/<n>, gone once it's approved or rejected) plus each addon's
+# newest approved source (closed/<id>/latest.tar.gz, to diff the next version against); nothing older.
 # Nothing a developer wrote is ever run here; everything they wrote is shown with control characters stripped.
 set -euo pipefail
+umask 077
 
 here=$(cd "$(dirname "$0")/.." && pwd)
 export JAVA_HOME=${JAVA_HOME:-/usr/lib/jvm/jbr_jcef-25.0.1-linux-x64-b285.56}
@@ -27,8 +31,19 @@ API=${LIBRARY_API:-https://api.myriadclient.dev}
 KEYS=${MYRIAD_KEYS:-$HOME/.myriad-keys}
 STATE=${MYRIAD_LIBRARY_DIR:-$HOME/.myriad-library}
 PRIVATE_BUILDER=MyriadClient/myriad-builder-private
+mkdir -p "$STATE"; chmod 700 "$STATE"
+for d in review closed; do [[ -d $STATE/$d ]] && chmod -R go-rwx "$STATE/$d"; done
 
-usage() { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+# An invite-only release's jar to the API (kept there only if it's the jar a signed version names).
+upload_jar() { # id version file
+	curl -fsS --proto '=https' -X PUT -H "Authorization: Bearer $(token)" -H "Content-Type: application/octet-stream" \
+		--data-binary @"$3" "$API/v1/library/jars/$1/$2" >/dev/null
+}
+
+# A submission's review copy (its source and jar), once it's decided.
+forget_review() { rm -rf "${STATE:?}/review/$1"; }
+
+usage() { sed -n '2,/^set -euo/{/^#/p}' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 die() { echo "$*" >&2; exit 1; }
 need() { command -v "$1" >/dev/null || die "needs $1"; }
 need curl; need jq
@@ -137,11 +152,17 @@ accept)
 	api POST "/v1/library/submissions/$1/accept" '{}' >/dev/null && echo "Accepted: the private builder will build it."
 	;;
 
+upload-jar)
+	[[ $# -eq 3 && $1 =~ ^[a-z][a-z0-9_-]{1,63}$ && $2 =~ ^[0-9A-Za-z.+-]{1,64}$ && -f $3 ]] || usage
+	upload_jar "$1" "$2" "$3" && echo "Uploaded." && rm -f "$3"
+	;;
+
 reject)
 	[[ $# -ge 2 ]] || usage
 	n=$1; shift
 	submission "$n" >/dev/null
 	api POST "/v1/library/submissions/$n/reject" "$(jq -n --arg r "$*" '{reason: $r}')" >/dev/null && echo "Rejected."
+	forget_review "$n"
 	;;
 
 approve-version | approve-listing)
@@ -177,14 +198,16 @@ approve-version | approve-listing)
 			need gh
 			pub=$(field .updates "$r")
 			[[ $pub =~ ^[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}$ ]] || die "the addon names no public releases repository"
-			pub_id=$(gh api "repos/$pub" -q .id); pub_owner=$(gh api "repos/$pub" -q .owner.id); pub_private=$(gh api "repos/$pub" -q .private)
 			if [[ $invite == 1 ]]; then
-				# Invite-only: its releases stay in its private source repository, handed out only by the API to accounts with
-				# a grant. The repository the release came from must be that one.
-				[[ $pub_owner == "$owner" && $pub_private == true && $pub_id == "$repo_id" ]] || die "an invite-only addon releases from its own private repository ($pub)"
+				# Invite-only: its releases stay in its private repository, handed out only by the API to accounts with a
+				# grant. You can't read a developer's private repository yourself: the builder read it with the Library App
+				# (it only built this if the release came from the repository the addon names), and the API refuses an
+				# invite-only listing whose releases repository isn't private.
+				[[ $pub == "$(field .repo "$s")" ]] || die "an invite-only addon releases from its own private repository ($pub)"
 				fields+=(repo-id="$repo_id" download-repo-id="$repo_id")
 				shown_repo=""
 			else
+				pub_id=$(gh api "repos/$pub" -q .id); pub_owner=$(gh api "repos/$pub" -q .owner.id); pub_private=$(gh api "repos/$pub" -q .private)
 				[[ $pub_owner == "$owner" && $pub_private == false ]] || die "$pub isn't a public repository of the same owner"
 				# A release from the public repository is an update: its listing's source repository stays as it was.
 				src_id=$(curl -fsS "$API/v1/index.json" | jq -r '.body | fromjson | .addons[] | select(.listing.id == "'"$id"'") | .listing.repoId' || true)
@@ -223,13 +246,21 @@ approve-version | approve-listing)
 		[[ $listing_only == 1 ]] && exit 0
 	fi
 
-	# The version: the published jar downloaded and hashed here, never trusting the report alone.
+	# The version: the published jar downloaded and hashed here, never trusting the report alone. A public release straight
+	# from GitHub; an invite-only addon's private one from the private builder's run (it fetched it with the Library App,
+	# which only the builder holds), as `show` saved it, or downloaded now.
 	tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-	# A public release straight from GitHub; an invite-only addon's private one through the API (your admin token), which
-	# fetches it with the Library App's token for that repository alone.
+	private_jar=0
 	if ! curl -fsSL --proto '=https' --max-filesize 67108864 -o "$tmp/addon.jar" "$url" 2>/dev/null; then
-		curl -fsS --proto '=https' --max-filesize 67108864 -H "Authorization: Bearer $(token)" -o "$tmp/addon.jar" "$API/v1/library/submissions/$n/jar" \
-			|| die "couldn't download $url"
+		private_jar=1
+		if [[ ! -f $STATE/review/$n/released.jar ]]; then
+			need gh
+			run=$(field .run "$r")
+			[[ $run =~ ^[0-9]{1,20}$ ]] || die "couldn't download $url, and the report names no builder run"
+			mkdir -p "$STATE/review/$n"
+			gh run download "$run" -R "$PRIVATE_BUILDER" -n source -D "$STATE/review/$n" || die "couldn't fetch the jar from the builder's run (it keeps it one day)"
+		fi
+		cp "$STATE/review/$n/released.jar" "$tmp/addon.jar"
 	fi
 	[[ $(sha256sum "$tmp/addon.jar" | cut -d' ' -f1) == "$sha" && $(stat -c %s "$tmp/addon.jar") == "$size" ]] || die "the published jar changed since it was built: not signing"
 	echo "Version $id $ver: $url"
@@ -241,11 +272,22 @@ approve-version | approve-listing)
 		+ (if $r.minecraft then {minecraft: $r.minecraft} else {} end)')
 	api POST /v1/library/approvals "$(jq -n --argjson d "$doc" --argjson n "$n" '{kind: "version", doc: $d, submission: $n}')" >/dev/null
 	echo "Signed: $id $ver is in the Library."
-	if [[ $builder == closed && -f $STATE/review/$n/source.tar.gz ]]; then
-		mkdir -p "$STATE/closed/$id"
-		cp "$STATE/review/$n/source.tar.gz" "$STATE/closed/$id/$ver.tar.gz"
-		cp "$STATE/review/$n/source.tar.gz" "$STATE/closed/$id/latest.tar.gz"
+	if [[ $private_jar == 1 ]]; then
+		# Players with a grant download it from the API, which keeps it only because it's the jar you just signed.
+		if ! upload_jar "$id" "$ver" "$tmp/addon.jar"; then
+			cp "$tmp/addon.jar" "$STATE/review/$n/released.jar"
+			die "signed, but the jar didn't upload. Retry: tools/library-review upload-jar $id $ver $STATE/review/$n/released.jar"
+		fi
+		echo "Uploaded the jar for invited players."
 	fi
+	if [[ $builder == closed && -f $STATE/review/$n/source.tar.gz ]]; then
+		# Only the newest approved source stays (the next version is diffed against it); older copies go.
+		mkdir -p "$STATE/closed/$id"
+		cp "$STATE/review/$n/source.tar.gz" "$STATE/closed/$id/latest.tar.gz.new"
+		find "$STATE/closed/$id" -maxdepth 1 -name '*.tar.gz' -delete
+		mv "$STATE/closed/$id/latest.tar.gz.new" "$STATE/closed/$id/latest.tar.gz"
+	fi
+	forget_review "$n"
 	;;
 
 yank)
