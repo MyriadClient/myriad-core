@@ -17,6 +17,40 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.9.0
+
+The Addons window, redone: Browse up front, shorter cards, icons, auto update and removing addons. The API is unchanged
+(no addon needs rebuilding). Library listings show what an addon adds before it's installed.
+
+### Addons window
+
+- **Installed and Browse are two buttons at the top**, with Add from link beside them; the Library is no longer a small
+  icon in the title bar.
+- **Cards are shorter.** A card says what the addon is, what's new in an update, and folds the rest away under Details
+  (who made it, what it adds, its startup time and running cost, where it updates from). What can be done with it sits
+  along its foot: update, auto update, remove.
+- **Addons show their own icons**, installed ones from their jar, Library ones from the Library.
+- **Remove an addon** from its card, after a confirmation: its jar leaves the mods folder when you quit (a copy stays in
+  `myriad/updates/old`), and Keep it takes that back until then.
+- **Auto update**, off for every addon until you turn it on, and only offered where updates are signature-checked (the
+  Library, Myriad itself, or an addon that signs its releases). An update found is downloaded on its own and installs
+  next restart, never mid-game; with any addon on auto update, a long session checks again every six hours.
+- **Add from link opens as a small window** of its own, instead of a form at the top of the list.
+- **Browse shows what you'd install**: each listing's icon and module count, and when you open it, its modules (names,
+  kinds and descriptions) and what's new in its newest release. They're fetched from Myriad's API and shown only when
+  they match the hashes in the Library's signed index.
+- Confirmations have a coloured confirm button (red for removing).
+
+### Gradle plugin
+
+- The Library's builder reads what an addon adds from its jar: each module's name, description and kind, and this
+  version's part of `CHANGELOG.md`. Browse and the website show them.
+- Findings that reach outside the game (network, reflection, programs, class loaders and the like) are kept per class, so
+  accepting one class's never covers a new class doing the same.
+- A new `account` finding (the session token, by getter, field or access widener; Mojang's session service; the
+  launcher's account files; browser or Discord storage) sends every release that has it to review. Mixins into the connection, packets, login or account classes are
+  a finding too, and bare host names and IP addresses in constants are caught like URLs.
+
 ## 2.8.2
 
 A patch: the API and the game are unchanged. Two fixes to the Myriad Library's builder, from rehearsing it with
