@@ -30,6 +30,8 @@ public final class DialogPanel extends WidgetPanel {
 	private static final Map<Integer, DialogPanel> OPEN = new HashMap<>();
 
 	private final String title, confirmLabel;
+	/** The confirm button is red: what it does can't be taken back from here (removing an addon). */
+	private boolean danger;
 	private final Supplier<String> message;
 	private final Runnable onConfirm, onCancel;
 	/** When it answers itself as cancel (System.currentTimeMillis), or 0 for never. */
@@ -63,6 +65,13 @@ public final class DialogPanel extends WidgetPanel {
 		PENDING.put(id, new DialogPanel(id, title, text, confirmLabel, onConfirm, onCancel, deadline));
 		JsonObject args = new JsonObject();
 		args.addProperty("id", id);
+		return args;
+	}
+
+	/** {@link #prepare(String, String, String, Runnable, Runnable)} with a red confirm button. */
+	public static JsonObject prepareDanger(String title, String message, String confirmLabel, Runnable onConfirm, Runnable onCancel) {
+		JsonObject args = prepare(title, message, confirmLabel, onConfirm, onCancel);
+		PENDING.get(args.get("id").getAsInt()).danger = true;
 		return args;
 	}
 
@@ -103,8 +112,9 @@ public final class DialogPanel extends WidgetPanel {
 		OPEN.put(id, this);
 		content.add(new Label(message));
 		HBox buttons = new HBox(4);
-		buttons.add(new Button(confirmLabel, () -> answer(true)));
-		buttons.add(new Button("Cancel", () -> answer(false)));
+		Button confirm = new Button(confirmLabel, () -> answer(true));
+		buttons.add(danger ? confirm.danger() : confirm.accent());
+		buttons.add(new Button("Cancel", () -> answer(false)).quiet());
 		content.add(buttons);
 	}
 

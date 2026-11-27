@@ -125,4 +125,67 @@ class UpdateInstallerTest {
 		u.stage("other", "2.0.0", "other-2.0.0.jar", "o2".getBytes(), other);
 		org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class, () -> u.stage("addon", "1.1.0", "other-2.0.0.jar", "new".getBytes(), old));
 	}
+
+	@Test
+	void aRemovedAddonLeavesAtExitAndIsSaidOnce() throws Exception {
+		Path jar = Files.writeString(mods().resolve("addon-1.0.0.jar"), "jar");
+		UpdateInstaller u = installer();
+		u.remove("addon", "Addon", "1.0.0", jar);
+		assertTrue(u.removing("addon"));
+		Path oldDir = u.dir().resolve("old");
+		assertEquals(1, UpdateInstaller.removeAll(List.of(new UpdateInstaller.Removal("addon", "Addon", "1.0.0", jar)), oldDir).size());
+		assertFalse(Files.exists(jar));
+		assertEquals("jar", Files.readString(oldDir.resolve("addon/addon-1.0.0.jar")));
+
+		UpdateInstaller.Outcome o = installer().reconcile(Map.of());
+		assertEquals(List.of("Addon"), o.removed().stream().map(UpdateInstaller.Removal::name).toList());
+		assertEquals(List.of(), installer().reconcile(Map.of()).removed());
+	}
+
+	@Test
+	void removingDropsItsUpdateAndCanBeTakenBack() throws Exception {
+		Path jar = Files.writeString(mods().resolve("addon-1.0.0.jar"), "jar");
+		UpdateInstaller u = installer();
+		UpdateInstaller.Pending p = u.stage("addon", "1.1.0", "addon-1.1.0.jar", "new".getBytes(), jar);
+		u.remove("addon", "Addon", "1.0.0", jar);
+		assertNull(u.pending("addon"));
+		assertFalse(Files.exists(p.staged()));
+		u.keep("addon");
+		assertFalse(u.removing("addon"));
+		assertEquals(List.of(), installer().reconcile(Map.of("addon", new UpdateInstaller.Installed("1.0.0", jar))).removed());
+	}
+
+	@Test
+	void aRemovalThatDidntHappenIsTriedAgainOnTheJarInstalledNow() throws Exception {
+		Path jar = Files.writeString(mods().resolve("addon-1.0.0.jar"), "jar");
+		installer().remove("addon", "Addon", "1.0.0", jar);
+		UpdateInstaller next = installer();
+		UpdateInstaller.Outcome o = next.reconcile(Map.of("addon", new UpdateInstaller.Installed("1.0.0", jar)));
+		assertEquals(List.of(), o.removed());
+		assertTrue(next.removing("addon"));
+	}
+
+	@Test
+	void onlyJarsCanBeRemoved() throws Exception {
+		Path dir = Files.createDirectories(mods().resolve("folder"));
+		org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class, () -> installer().remove("addon", "Addon", "1.0.0", dir));
+		org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class, () -> installer().remove("../evil", "Evil", "1.0.0", dir));
+	}
+
+	@Test
+	void theWindowsScriptMovesRemovalsToo() throws Exception {
+		Path jar = mods().resolve("addon-1.0.0.jar");
+		String script = UpdateInstaller.windowsScript(List.of(), List.of(new UpdateInstaller.Removal("addon", "Addon", "1.0.0", jar)), installer().dir().resolve("old"), 42);
+		assertTrue(script.contains("Wait-Process -Id 42"));
+		assertTrue(script.contains("Move-Item -LiteralPath '" + jar.toAbsolutePath() + "'"));
+	}
+
+	@Test
+	void nothingIsStagedForAnAddonBeingRemoved() throws Exception {
+		Path jar = Files.writeString(mods().resolve("addon-1.0.0.jar"), "jar");
+		UpdateInstaller u = installer();
+		u.remove("addon", "Addon", "1.0.0", jar);
+		org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class, () -> u.stage("addon", "1.1.0", "addon-1.1.0.jar", "new".getBytes(), jar));
+		assertNull(u.pending("addon"));
+	}
 }

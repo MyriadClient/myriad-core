@@ -9,38 +9,43 @@ import dev.myriadclient.api.ui.TitleControl;
 import dev.myriadclient.api.ui.WidgetPanel;
 import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.widget.Button;
+import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.Note;
-import dev.myriadclient.api.ui.widget.TextField;
-import dev.myriadclient.api.util.Async;
 import dev.myriadclient.api.ui.widget.SettingsView;
+import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.ui.widget.Widget;
-import dev.myriadclient.api.ui.widget.Collapsible;
+import dev.myriadclient.api.util.Async;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.addon.AddonLoader;
+import dev.myriadclient.impl.event.Profiler;
+import dev.myriadclient.impl.ui.AddonIcons;
+import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.update.LinkInstall;
 import dev.myriadclient.impl.update.UpdateManager;
+import net.minecraft.resources.Identifier;
 
 import java.net.URI;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
-/** Every addon Myriad found, as cards: what it adds, who made it, where to find it, and why it failed if it did. */
+/**
+ * Every addon Myriad found, as cards, and the Myriad Library to browse. A card says what the addon is in a line or two;
+ * the rest (who made it, where it updates from, what it costs) folds away under Details, and what can be done with it
+ * sits along its foot: update, auto update, remove.
+ */
 public final class AddonsPanel extends WidgetPanel {
 	private final Set<String> unfolded = new HashSet<>();
 	/** Addons' settings blocks (and core's own sections) folded away; all open at first. */
 	private final Set<String> folded = new HashSet<>();
 	private final UpdateManager updates = MyriadImpl.get().updates();
-	/** The "add from link" form: open, what's typed, and what the link offered (or why it can't be installed). */
-	private boolean adding, looking;
-	private String link = "", linkToken = "";
-	private LinkInstall.Offer offer;
-	private String linkProblem, installed;
 	/** Private-source tokens being typed, per addon. */
 	private final Map<String, String> tokenDrafts = new HashMap<>();
 	/** Browse: the Myriad Library instead of what's installed; the search typed; one listing's offer at a time. */
@@ -49,27 +54,18 @@ public final class AddonsPanel extends WidgetPanel {
 	private String libraryLooking, libraryOfferFor;
 	private LinkInstall.Offer libraryOffer;
 	private final Map<String, String> libraryNotes = new HashMap<>();
-	/** In the title bar: checking at start, checking now, and installing every update. */
+	/** Shortcuts in the title bar: checking at start and checking now. */
 	private final List<TitleControl> titleControls = List.of(
 		TitleControl.toggle(updates::checkEnabled, updates::setCheckEnabled,
 			() -> "Check for new releases when the game starts: " + (updates.checkEnabled() ? "on" : "off")),
-		TitleControl.button(() -> updates.isChecking() ? "\uf110" : "\uf021", () -> updates.check(true),
-			() -> updates.isChecking() ? "Checking…" : "Check for updates now"),
-		TitleControl.button(() -> browsing ? "\uf0ca" : "\uf02d", this::toggleBrowse,
-			() -> browsing ? "Back to your addons" : "Browse the Myriad Library: addons Myriad has checked"),
-		TitleControl.button(() -> "\uf0c1", () -> {
-			adding = !adding;
-			rebuild();
-		}, () -> adding ? "Close adding an addon from a link" : "Add an addon from a link"),
-		TitleControl.button(() -> "\uf019", updates::updateAll, () -> "Update all " + updates.updatable().size() + " (they install when you quit)")
-			.visible(() -> updates.updatable().size() > 1));
+		TitleControl.button(() -> updates.isChecking() ? "" : "", () -> updates.check(true),
+			() -> updates.isChecking() ? "Checking…" : "Check for updates now"));
 
 	@Override
 	public List<TitleControl> titleControls() {
 		return titleControls;
 	}
 
-	/** How many, and how many failed. */
 	@Override
 	public String subtitle() {
 		if (browsing) {
@@ -87,33 +83,48 @@ public final class AddonsPanel extends WidgetPanel {
 
 	@Override
 	public String icon() {
-		return "";
+		return "";
 	}
 
 	@Override
 	protected void build(VBox content) {
-		if (adding) content.add(addForm());
+		// Installed or the Library, as two buttons up top: the one showing is lit.
+		// Installed or the Library, in the menu's own row of small buttons: the one showing is tinted.
+		Toolbar views = new Toolbar()
+			.add("\uf0ae", "Installed (" + Myriad.addons().size() + ")", "The addons in your mods folder", () -> show(false), false, !browsing, () -> true)
+			.add("\uf02d", "Browse the Library", "Addons Myriad has checked, to install in a click", () -> show(true), false, browsing, () -> true)
+			.gap()
+			.add("\uf0c1", "Add from link", "Install an addon from a GitHub repo or its feed", () -> AddAddonPanel.open(here()));
+		content.add(views);
 		if (browsing) {
 			browse(content);
 			return;
 		}
+		content.add(new Button(() -> "Update all (" + updates.updatable().size() + ")", updates::updateAll).accent()
+			.tooltip("Downloads every update now; they install when you quit.").visible(() -> updates.updatable().size() > 1));
 		for (Addon a : Myriad.addons()) content.add(new AddonEntry(a));
 	}
 
-	private void toggleBrowse() {
-		browsing = !browsing;
+	/** The workspace this window is on: its popups open there. */
+	private int here() {
+		return window() != null ? window().workspace() : Myriad.ui().activeWorkspace();
+	}
+
+	private void show(boolean library) {
+		if (browsing == library) return;
+		browsing = library;
 		if (browsing) updates.refreshLibrary().whenComplete((v, e) -> Async.onRenderThread(this::rebuild));
 		rebuild();
 	}
+
+	// ---- the Library ------------------------------------------------------------------------------------------------
 
 	/**
 	 * The Myriad Library: addons Myriad has checked, searched here (nothing typed leaves the game). Verified ones are built
 	 * from their public source; Reviewed ones are closed source, read by Myriad. Neither badge means safe.
 	 */
 	private void browse(VBox content) {
-		content.add(new Label("Addons Myriad has checked. Verified: built by Myriad from their public source. Reviewed: closed source, read by "
-			+ "Myriad before each release. Either way, install only what you trust.").dim());
-		content.add(new TextField(() -> query).onChange(q -> query = q).placeholder("Search the Library"));
+		content.add(new TextField(() -> query).onChange(q -> query = q).placeholder("Search the Library").search());
 		if (updates.libraryLoading() && updates.libraryAddons().isEmpty()) content.add(new Label("Reading the Library…").dim());
 		String problem = updates.libraryProblem();
 		if (problem != null) content.add(updates.libraryAddons().isEmpty() ? new Note("Can't show the Library: " + problem + ".").error()
@@ -121,12 +132,18 @@ public final class AddonsPanel extends WidgetPanel {
 		List<UpdateManager.LibraryAddon> list = updates.libraryAddons();
 		if (list.isEmpty() && problem == null && !updates.libraryLoading()) content.add(new Label("Nothing in the Library yet.").dim());
 		for (UpdateManager.LibraryAddon a : list) content.add(new LibraryCard(a).visible(() -> matches(a)));
+		content.add(new Label("Verified: built by Myriad from its public source. Reviewed: closed source, read by Myriad before each release. "
+			+ "Neither means safe: install only what you trust.").dim());
 	}
 
 	private boolean matches(UpdateManager.LibraryAddon a) {
-		String q = query.strip().toLowerCase(java.util.Locale.ROOT);
+		String q = query.strip().toLowerCase(Locale.ROOT);
 		if (q.isEmpty()) return true;
-		return (a.name() + " " + a.id() + " " + a.description() + " " + a.author()).toLowerCase(java.util.Locale.ROOT).contains(q);
+		StringBuilder text = new StringBuilder(a.name() + " " + a.id() + " " + a.description() + " " + a.author());
+		UpdateManager.LibraryDetails d = updates.libraryDetails(a.id(), a.detailsSha(), () -> {
+		});
+		if (d != null) for (UpdateManager.LibraryModule m : d.modules()) text.append(' ').append(m.name());
+		return text.toString().toLowerCase(Locale.ROOT).contains(q);
 	}
 
 	private void lookUpLibrary(String id) {
@@ -147,7 +164,7 @@ public final class AddonsPanel extends WidgetPanel {
 	private void installFromLibrary(LinkInstall.Offer o) {
 		try {
 			updates.install(o);
-			libraryNotes.put(o.id(), o.name() + " " + o.version() + " is in your mods folder and loads when you restart the game. It updates through the Library.");
+			libraryNotes.put(o.id(), o.name() + " " + o.version() + " loads when you restart the game. It updates through the Library.");
 		} catch (java.io.IOException e) {
 			libraryNotes.put(o.id(), "Can't install it: " + e.getMessage() + ".");
 		}
@@ -156,9 +173,34 @@ public final class AddonsPanel extends WidgetPanel {
 		rebuild();
 	}
 
-	/** One Library listing. */
+	/** A fold with a few things in it, closed at first, remembered while the window is open. */
+	private Collapsible fold(String key, Supplier<String> title, Widget body, Supplier<String> hint) {
+		return new Collapsible(title, body, () -> unfolded.contains(key), open -> {
+			if (open) unfolded.add(key);
+			else unfolded.remove(key);
+		}).indent(10).hint(hint);
+	}
+
+	/** "What's new in 2.9.0": the first few lines, the rest in a fold. */
+	private void whatsNew(VBox body, String key, UpdateManager.Changelog log) {
+		if (log == null || log.text().isBlank()) return;
+		List<String> lines = log.text().lines().filter(l -> !l.isBlank()).toList();
+		VBox all = new VBox(2, 0);
+		for (String l : lines) {
+			// Markdown's emphasis and code marks go; list items get a bullet.
+			String t = l.replace("**", "").replace("`", "").strip();
+			if (t.startsWith("- ") || t.startsWith("* ")) t = "\u2022 " + t.substring(2);
+			else if (t.startsWith("#")) t = t.replaceFirst("^#+\\s*", "");
+			all.add(new Label(t).dim());
+		}
+		body.add(fold(key + "/changelog", () -> "What's new in " + log.version(), all, () -> lines.size() + (lines.size() == 1 ? " line" : " lines")));
+	}
+
+	/** One Library listing: what it is, what it adds, what's new, and Install. */
 	private final class LibraryCard extends CardEntry {
 		private final UpdateManager.LibraryAddon a;
+		/** Its details came in: the body is built again to show them. */
+		private boolean detailsIn;
 
 		LibraryCard(UpdateManager.LibraryAddon a) {
 			super(true, false);
@@ -168,6 +210,11 @@ public final class AddonsPanel extends WidgetPanel {
 		@Override
 		protected String title() {
 			return a.name();
+		}
+
+		@Override
+		protected Identifier iconTexture() {
+			return AddonIcons.library(a.id(), a.iconSha(), () -> updates.libraryIcon(a.id(), a.iconSha()));
 		}
 
 		@Override
@@ -195,6 +242,7 @@ public final class AddonsPanel extends WidgetPanel {
 		protected float drawBadges(Canvas c, float right, float cy) {
 			if (a.installed()) right = badge(c, " Installed", right, cy, theme().green.argb(), false) - 4;
 			right = badge(c, a.verified() ? " Verified" : " Reviewed", right, cy, a.verified() ? theme().green.argb() : theme().accent.argb(), true) - 4;
+			if (a.moduleCount() > 0) right = badge(c, a.moduleCount() + (a.moduleCount() == 1 ? " module" : " modules"), right, cy, theme().textDim.argb(), false) - 4;
 			if (a.version() != null) right = badge(c, a.version(), right, cy, theme().textDim.argb(), false) - 4;
 			return right;
 		}
@@ -208,22 +256,33 @@ public final class AddonsPanel extends WidgetPanel {
 
 		@Override
 		protected Object bodyKey() {
-			return List.of(a, libraryOffer == null ? "" : libraryOffer.id(), String.valueOf(libraryLooking), libraryNotes.getOrDefault(a.id(), ""));
+			return List.of(a, libraryOffer == null ? "" : libraryOffer.id(), String.valueOf(libraryLooking), libraryNotes.getOrDefault(a.id(), ""), detailsIn);
 		}
 
 		@Override
 		protected void buildBody(VBox body) {
-			if (!a.description().isEmpty()) body.add(new Label(a.description()).dim());
-			if (!a.author().isEmpty()) body.add(new Label("By " + a.author()).dim());
-			body.add(new Label(a.id() + (a.keyId() == null ? "" : "  ·  developer key " + a.keyId())).dim());
-			Toolbar links = new Toolbar();
-			if (a.repo() != null) {
-				String url = "https://github.com/" + a.repo();
-				links.add("\uf121", a.verified() ? "Source" : "Releases", url, () -> Blaze3D.openUri(URI.create(url)));
+			String key = "library/" + a.id();
+			if (!a.description().isEmpty()) body.add(new Label(a.description()));
+			// What it adds, before it's installed: fetched when the card opens, checked against the Library's hash.
+			UpdateManager.LibraryDetails adds = updates.libraryDetails(a.id(), a.detailsSha(), () -> detailsIn = true);
+			if (adds == null && a.detailsSha() != null) body.add(new Label("Reading what it adds…").dim());
+			if (adds != null && !adds.modules().isEmpty()) {
+				VBox mods = new VBox(1, 0);
+				for (UpdateManager.LibraryModule m : adds.modules()) {
+					Label l = new Label("• " + m.name() + (m.tag().isEmpty() ? "" : "  ·  " + m.tag()));
+					mods.add(m.description().isEmpty() ? l.dim() : l.dim().tooltip(m.description()));
+				}
+				int n = adds.modules().size();
+				body.add(fold(key + "/modules", () -> n + (n == 1 ? " module" : " modules"), mods, () -> ""));
 			}
-			if (!links.isEmpty()) body.add(links);
-			if (a.version() == null) body.add(new Label("No release for Minecraft " + net.fabricmc.loader.api.FabricLoader.getInstance().getModContainer("minecraft")
+			if (adds != null) whatsNew(body, key, adds.changelog());
+			VBox details = new VBox(2, 0);
+			if (!a.author().isEmpty()) details.add(new Label("By " + a.author()).dim());
+			details.add(new Label(a.id() + (a.keyId() == null ? "" : "  ·  developer key " + a.keyId())).dim());
+			if (a.version() == null) details.add(new Label("No release for Minecraft " + net.fabricmc.loader.api.FabricLoader.getInstance().getModContainer("minecraft")
 				.map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("") + (a.newestElsewhere() == null ? "" : " (newest: " + a.newestElsewhere() + ")") + ".").dim());
+			body.add(fold(key + "/details", () -> "Details", details, () -> ""));
+
 			String note = libraryNotes.get(a.id());
 			if (note != null) body.add(note.startsWith("Can't") ? new Note(note).error() : new Note(note).color(() -> theme().green.argb()));
 			LinkInstall.Offer o = libraryOffer;
@@ -239,85 +298,44 @@ public final class AddonsPanel extends WidgetPanel {
 					rebuild();
 				}).quiet());
 				body.add(act);
-			} else if (!a.installed() && a.version() != null && !updates.libraryStale()) {
-				body.add(new Button(() -> a.id().equals(libraryLooking) ? "Checking…" : "Install " + a.version(), () -> lookUpLibrary(a.id())).accent());
+				return;
 			}
+			// The foot: the source on the left, Install on the right.
+			Toolbar foot = new Toolbar();
+			if (a.repo() != null) {
+				String url = "https://github.com/" + a.repo();
+				foot.add("", a.verified() ? "Source" : "Releases", url, () -> Blaze3D.openUri(URI.create(url)));
+			}
+			foot.gap();
+			if (!a.installed() && a.version() != null && !updates.libraryStale()) {
+				foot.add("", a.id().equals(libraryLooking) ? "Checking…" : "Install " + a.version(), "Downloads and checks it first; nothing is written until you say so.",
+					() -> lookUpLibrary(a.id()), false, true, () -> true);
+			}
+			if (!foot.isEmpty()) body.add(foot);
 		}
 	}
 
-	/** Adding an addon from a link: look it up (downloaded and checked, nothing written), see what it is, then install. */
-	private Widget addForm() {
-		VBox form = new VBox(4, 0);
-		form.add(new Label("Add an addon from a link").bold());
-		form.add(new Label("A GitHub repo (owner/repo, or its address) or an addon's https feed. It's downloaded and checked first; nothing is installed "
-			+ "until you say so.").dim());
-		form.add(new TextField(() -> link).onChange(s -> link = s).onSubmit(s -> lookUp()).placeholder("github.com/owner/repo, or https://…/feed.json"));
-		form.add(new TextField(() -> linkToken).onChange(s -> linkToken = s).masked().placeholder("Access token, for a private repo or feed (optional)"));
-		HBox buttons = new HBox(4);
-		buttons.add(new Button(() -> looking ? "Looking…" : "Look up", this::lookUp).accent());
-		buttons.add(new Button("Cancel", this::closeForm).quiet());
-		form.add(buttons);
-		if (linkProblem != null) form.add(new Note("Can't install it: " + linkProblem + ".").error());
-		if (installed != null) form.add(new Note(installed).color(() -> Myriad.ui().theme().green.argb()));
-		LinkInstall.Offer o = offer;
-		if (o != null) {
-			form.add(new Label(o.name() + " " + o.version()).bold());
-			form.add(new Label(o.id() + "  ·  from " + o.from() + "  ·  " + (o.jar().length / 1024) + " KB").dim());
-			if (o.signed()) {
-				form.add(new Note("Signed with key " + o.keyId() + ". If its developer publishes their key, check it's this one: every update will "
-					+ "have to be signed with it."));
-			} else {
-				form.add(new Note("Unsigned: whoever controls " + o.from() + " decides what you get, now and in every update. Install it only if you "
-					+ "trust them.").error());
-			}
-			HBox act = new HBox(4);
-			Button install = new Button("Install " + o.name(), () -> install(o));
-			act.add(o.signed() ? install.accent() : install.danger());
-			act.add(new Button("Don't install", () -> {
-				offer = null;
-				rebuild();
-			}).quiet());
-			form.add(act);
-		}
-		return form;
-	}
+	// ---- what's installed ---------------------------------------------------------------------------------------------
 
-	private void lookUp() {
-		if (looking || link.isBlank()) return;
-		looking = true;
-		offer = null;
-		linkProblem = installed = null;
-		rebuild();
-		updates.lookUp(link, linkToken).whenComplete((o, err) -> Async.onRenderThread(() -> {
-			looking = false;
-			if (err != null) linkProblem = UpdateManager.reasonOf(err);
-			else offer = o;
+	private void confirmRemove(Addon addon) {
+		List<String> needing = UpdateManager.dependents(addon);
+		String message = "Remove " + addon.name() + "? It's taken out of your mods folder when you quit (a copy stays in myriad/updates/old)."
+			+ (needing.isEmpty() ? "" : " " + String.join(", ", needing) + (needing.size() == 1 ? " needs" : " need") + " it and won't load without it.");
+		((WindowManager) Myriad.ui()).confirmDanger(here(), "Remove " + addon.name(), message, "Remove", () -> {
+			try {
+				updates.remove(addon);
+				Myriad.notifications().toast("Removing " + addon.name(), "It's removed when you quit").show();
+			} catch (java.io.IOException e) {
+				Myriad.notifications().toast("Can't remove " + addon.name(), e.getMessage()).level(dev.myriadclient.api.service.Notifications.Level.ERROR).show();
+			}
 			rebuild();
-		}));
-	}
-
-	private void install(LinkInstall.Offer o) {
-		try {
-			updates.install(o);
-			installed = o.name() + " " + o.version() + " is in your mods folder and loads when you restart the game.";
-			link = linkToken = "";
-		} catch (java.io.IOException e) {
-			linkProblem = e.getMessage();
-		}
-		offer = null;
-		rebuild();
-	}
-
-	private void closeForm() {
-		adding = looking = false;
-		offer = null;
-		link = linkToken = "";
-		linkProblem = installed = null;
-		rebuild();
+		});
 	}
 
 	private final class AddonEntry extends CardEntry {
 		private final Addon addon;
+		/** Its update's changelog came in: the body is built again to show it. */
+		private boolean changelogIn;
 
 		AddonEntry(Addon addon) {
 			super(addon.state() == AddonState.LOADED, false);
@@ -334,13 +352,18 @@ public final class AddonsPanel extends WidgetPanel {
 		}
 
 		@Override
+		protected Identifier iconTexture() {
+			return AddonIcons.of(addon);
+		}
+
+		@Override
 		protected boolean isOn() {
-			return addon.state() == AddonState.LOADED;
+			return addon.state() == AddonState.LOADED && !updates.removing(addon.id());
 		}
 
 		@Override
 		protected int accent() {
-			return failed() ? theme().red.argb() : theme().accent.argb();
+			return failed() || updates.removing(addon.id()) ? theme().red.argb() : theme().accent.argb();
 		}
 
 		@Override
@@ -356,15 +379,17 @@ public final class AddonsPanel extends WidgetPanel {
 
 		@Override
 		protected float drawBadges(Canvas c, float right, float cy) {
-			if (failed()) right = badge(c, " Failed", right, cy, theme().red.argb(), true) - 4;
+			if (failed()) right = badge(c, " Failed", right, cy, theme().red.argb(), true) - 4;
+			if (updates.removing(addon.id())) return badge(c, " Removed when you quit", right, cy, theme().red.argb(), true) - 4;
 			UpdateManager.State u = updates.state(addon.id());
 			if (u != null) right = switch (u.kind()) {
-				case AVAILABLE -> badge(c, " " + u.version(), right, cy, theme().accent.argb(), true) - 4;
-				case DOWNLOADING -> badge(c, " " + u.version(), right, cy, theme().textDim.argb(), false) - 4;
-				case STAGED -> badge(c, " Restart to apply", right, cy, theme().green.argb(), true) - 4;
-				case FAILED -> badge(c, " Update failed", right, cy, theme().red.argb(), true) - 4;
+				case AVAILABLE -> badge(c, " " + u.version(), right, cy, theme().accent.argb(), true) - 4;
+				case DOWNLOADING -> badge(c, " " + u.version(), right, cy, theme().textDim.argb(), false) - 4;
+				case STAGED -> badge(c, " Restart to apply", right, cy, theme().green.argb(), true) - 4;
+				case FAILED -> badge(c, " Update failed", right, cy, theme().red.argb(), true) - 4;
 				default -> right;
 			};
+			if (updates.autoUpdates(addon.id())) right = badge(c, "Auto", right, cy, theme().textDim.argb(), false) - 4;
 			LinkInstall.Library vouched = updates.vouched(addon);
 			if (vouched != null) right = badge(c, vouched == LinkInstall.Library.VERIFIED ? " Verified" : " Reviewed", right, cy,
 				vouched == LinkInstall.Library.VERIFIED ? theme().green.argb() : theme().accent.argb(), false) - 4;
@@ -394,32 +419,22 @@ public final class AddonsPanel extends WidgetPanel {
 
 		@Override
 		protected Object bodyKey() {
-			return updates.state(addon.id());
+			return List.of(String.valueOf(updates.state(addon.id())), updates.autoUpdates(addon.id()), updates.removing(addon.id()), updates.pinnedToLibrary(addon.id()),
+				changelogIn);
 		}
 
 		@Override
 		protected void buildBody(VBox body) {
-			if (failed()) body.add(new Note("Failed to load: " + addon.failure()).error());
-			if (addon.description() != null && !addon.description().isEmpty()) body.add(new Label(addon.description()).dim());
-			if (!addon.authors().isEmpty()) body.add(new Label("By " + String.join(", ", addon.authors())).dim());
 			String id = addon.id();
-			body.add(new Label(() -> counts(id)));
-			AddonLoader.Startup started = MyriadImpl.get().addonLoader().startup(id);
-			if (started != null) body.add(new Label(started.describe(failed())).dim());
-			// Links from the addon's fabric.mod.json "contact" block, and its update, in one row.
-			Toolbar links = new Toolbar();
-			addon.homepage().ifPresent(url -> links.add("\uf0ac", "Website", url, () -> Blaze3D.openUri(URI.create(url))));
-			addon.sources().ifPresent(url -> links.add("\uf121", "Source", url, () -> Blaze3D.openUri(URI.create(url))));
-			addon.issues().ifPresent(url -> links.add("\uf188", "Issues", url, () -> Blaze3D.openUri(URI.create(url))));
+			if (failed()) body.add(new Note("Failed to load: " + addon.failure()).error());
+			if (updates.removing(id)) body.add(new Note("Removed when you quit. Changed your mind? Keep it below.").error());
+			if (addon.description() != null && !addon.description().isEmpty()) body.add(new Label(addon.description()));
 			UpdateManager.State u = updates.state(id);
-			if (u != null && (u.kind() == UpdateManager.Kind.AVAILABLE || u.kind() == UpdateManager.Kind.FAILED)) {
-				links.gap();
-				if (u.releaseUrl() != null) links.add("\uf15c", "Notes", u.releaseUrl(), () -> Blaze3D.openUri(URI.create(u.releaseUrl())));
-				links.add("\uf019", "Update to " + u.version(), "Downloads it now; it installs when you quit.", () -> updates.update(id), false, true, () -> true);
+			if (u != null && (u.kind() == UpdateManager.Kind.AVAILABLE || u.kind() == UpdateManager.Kind.STAGED)) {
+				whatsNew(body, id, updates.changelog(id, u.version(), () -> changelogIn = true));
 			}
-			if (!links.isEmpty()) body.add(links);
 			buildUpdate(body, u);
-			buildSigning(body);
+			body.add(fold(id + "/details", () -> "Details", details(), () -> ""));
 			// Core's own settings: profiles and the anti-cheat.
 			if (id.equals("myriad")) ProfilesSection.build(body, AddonsPanel.this::rebuild, folded);
 			// Each block of settings folds like a module's group: its rows straight in when it has one group, its groups
@@ -441,16 +456,65 @@ public final class AddonsPanel extends WidgetPanel {
 					else folded.add(key);
 				}).indent(10).hint(() -> folded.contains(key) ? String.valueOf(s.settings().all().stream().filter(dev.myriadclient.api.setting.Setting::isVisible).count()) : ""));
 			}
+			body.add(foot(u));
+		}
+
+		/** Who made it, what it adds, what it costs, and where its updates come from. */
+		private VBox details() {
+			String id = addon.id();
+			VBox d = new VBox(2, 0);
+			if (!addon.authors().isEmpty()) d.add(new Label("By " + String.join(", ", addon.authors())).dim());
+			d.add(new Label(id + "  ·  " + addon.version()).dim());
+			d.add(new Label(() -> counts(id)).dim());
+			AddonLoader.Startup started = MyriadImpl.get().addonLoader().startup(id);
+			if (started != null) d.add(new Label(started.describe(failed())).dim());
+			d.add(new Label(() -> cost(addon)).dim());
+			buildSigning(d);
+			return d;
+		}
+
+		/** The foot of the card: its links on the left, what can be done with it on the right. */
+		private Toolbar foot(UpdateManager.State u) {
+			String id = addon.id();
+			Toolbar t = new Toolbar();
+			addon.homepage().ifPresent(url -> t.add("", "Website", url, () -> Blaze3D.openUri(URI.create(url))));
+			addon.sources().ifPresent(url -> t.add("", "Source", url, () -> Blaze3D.openUri(URI.create(url))));
+			addon.issues().ifPresent(url -> t.add("", "Issues", url, () -> Blaze3D.openUri(URI.create(url))));
+			t.gap();
+			boolean removing = updates.removing(id);
+			if (!removing && u != null && (u.kind() == UpdateManager.Kind.AVAILABLE || u.kind() == UpdateManager.Kind.FAILED)) {
+				if (u.releaseUrl() != null) t.add("", "Notes", u.releaseUrl(), () -> Blaze3D.openUri(URI.create(u.releaseUrl())));
+				t.add("", "Update to " + u.version(), "Downloads it now; it installs when you quit.", () -> updates.update(id), false, true, () -> true);
+			}
+			if (!removing && updates.canAutoUpdate(addon)) {
+				boolean on = updates.autoUpdates(id);
+				t.add(on ? "" : "", on ? "Auto update on" : "Auto update", on
+						? "Signed updates download on their own and install next restart. Click to turn off."
+						: "Let signed updates download on their own; each installs next restart, never mid-game.",
+					() -> {
+						updates.setAutoUpdates(addon, !on);
+						rebuild();
+					}, false, on, () -> true);
+			}
+			if (removing) {
+				t.add("", "Keep it", "Don't remove it after all", () -> {
+					updates.keep(id);
+					rebuild();
+				}, false, true, () -> true);
+			} else if (updates.removable(addon)) {
+				t.add("", "Remove", "Takes it out of your mods folder when you quit", () -> confirmRemove(addon), true, false, () -> true);
+			}
+			return t;
 		}
 
 		/** Whether its updates are signed, where they come from, and a token for a private source. */
 		private void buildSigning(VBox body) {
-			String id0 = addon.id();
-			if (updates.pinnedToLibrary(id0)) {
+			String id = addon.id();
+			if (updates.pinnedToLibrary(id)) {
 				HBox row = new HBox(4);
 				row.addWeighted(new Label("Updates only through the Myriad Library, which checks each release first.").dim(), 1);
 				row.addFixed(new Button("Unpin", () -> {
-					updates.unpinFromLibrary(id0);
+					updates.unpinFromLibrary(id);
 					rebuild();
 				}).quiet().tooltip("Update from its own source instead, without the Library's checks (its developer's signature is still needed)."), 46);
 				body.add(row);
@@ -459,9 +523,8 @@ public final class AddonsPanel extends WidgetPanel {
 			String source = UpdateManager.sourceOf(addon);
 			if (source == null) return;
 			List<String> keys = UpdateManager.signingKeys(addon);
-			String id = addon.id();
 			body.add(new Label(keys.isEmpty() ? "Updates from " + source + ", unsigned."
-				: "Updates from " + source + ", signed: only updates signed with key " + String.join(" or ", keys) + " are taken.").dim()
+				: "Updates from " + source + ", signed with key " + String.join(" or ", keys) + ".").dim()
 				.tooltip(keys.isEmpty() ? "Its developer doesn't sign its releases, so an update is only as safe as " + source + "."
 					: "Each update is checked against its developer's signature before it's installed."));
 			HBox token = new HBox(4);
@@ -475,27 +538,19 @@ public final class AddonsPanel extends WidgetPanel {
 				updates.setToken(id, null);
 				rebuild();
 			}).quiet(), 46);
-			String key = id + "/private-source";
-			body.add(new Collapsible(() -> "Private source", token, () -> unfolded.contains(key), open -> {
-				if (open) unfolded.add(key);
-				else unfolded.remove(key);
-			}).indent(10).hint(() -> updates.hasToken(id) ? "token saved" : ""));
+			body.add(fold(id + "/private-source", () -> "Private source", token, () -> updates.hasToken(id) ? "token saved" : ""));
 		}
 
 		private void buildUpdate(VBox body, UpdateManager.State u) {
-			if (u == null) return;
-			String id = addon.id();
+			if (u == null || updates.removing(addon.id())) return;
 			switch (u.kind()) {
-				// The update button is in the links' row (buildBody).
-				case AVAILABLE -> {
-				}
 				case FAILED -> body.add(new Note("Updating to " + u.version() + " failed: " + u.message()).error());
-				case CHECKING -> body.add(new Label("Checking for updates…").dim());
 				case DOWNLOADING -> body.add(new Label("Downloading " + u.version() + "…").dim());
-				case STAGED -> body.add(new Note(u.version() + " is downloaded and installs when you quit."
-					+ (u.message() != null ? " " + u.message() + "." : "")).color(() -> theme().green.argb()));
-				case UP_TO_DATE -> body.add(new Label(u.message() == null ? "Up to date." : "Up to date. " + u.message() + ".").dim());
-				case UNKNOWN, DEV_BUILD, NO_SOURCE -> body.add(new Label(u.message() + ".").dim());
+				case STAGED -> body.add(new Note(u.version() + " installs when you quit." + (u.message() != null ? " " + u.message() + "." : ""))
+					.color(() -> theme().green.argb()));
+				default -> {
+					// Up to date, checking, or not checked: said in Details' update line, not here.
+				}
 			}
 		}
 
@@ -516,6 +571,17 @@ public final class AddonsPanel extends WidgetPanel {
 			if (n == 0) return;
 			if (!sb.isEmpty()) sb.append("  ·  ");
 			sb.append(n).append(' ').append(what).append(n == 1 ? "" : "s");
+		}
+
+		/** What it costs while the game runs, from the profiler when it's on. */
+		private static String cost(Addon a) {
+			Profiler p = MyriadImpl.get().events().profiler();
+			if (p == null) return "Running cost: open the Profiler to measure it.";
+			double ms = 0;
+			for (Profiler.Entry e : p.snapshot()) {
+				if (!e.isJob() && (a.id().equals(e.addon()) || a.name().equals(e.addon()))) ms += e.totalMs();
+			}
+			return String.format(Locale.ROOT, "Running cost: %.2f ms each second", ms);
 		}
 	}
 }

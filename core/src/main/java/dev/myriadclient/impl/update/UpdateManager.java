@@ -50,6 +50,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class UpdateManager {
 	private static final Logger LOG = LoggerFactory.getLogger("Myriad/Updates");
 	private static final String TOAST_KEY = "myriad:updates";
+	private static final long AUTO_CHECK_HOURS = 6;
 
 	public enum Kind {
 		CHECKING, UP_TO_DATE, AVAILABLE, DOWNLOADING,
@@ -72,6 +73,7 @@ public final class UpdateManager {
 	private final UpdateInstaller installer;
 	private final FeedTokens tokens;
 	private final LibraryClient library;
+	private final AutoUpdates auto;
 	/** Addons whose release in {@link #releases} came from the Library (they're held to its key rule too). */
 	private final Set<String> fromLibrary = ConcurrentHashMap.newKeySet();
 	/** SHA-256 of installed jars, by path, size and modification time: for badges, worked out once. */
@@ -91,6 +93,68 @@ public final class UpdateManager {
 		this.installer = new UpdateInstaller(root.resolve("updates"));
 		this.tokens = new FeedTokens(root.resolve("updates"));
 		this.library = new LibraryClient(root.resolve("updates"));
+		this.auto = new AutoUpdates(root.resolve("updates"));
+	}
+
+	// ---- auto update and removal, the player's choices per addon --------------------------------------------------
+
+	/**
+	 * Whether {@code a} may update on its own: only when its updates are checked against a signature (its Library
+	 * listing, Myriad's root keys for core, or keys its jar lists), and it runs from a jar that can be replaced.
+	 */
+	public boolean canAutoUpdate(Addon a) {
+		return jarOf(a) != null && (library.pinned(a.id()) || !trustedKeys(a).isEmpty());
+	}
+
+	/** Whether the player turned on auto update for {@code id} (off unless they did). */
+	public boolean autoUpdates(String id) {
+		return auto.on(id);
+	}
+
+	/** Turns {@code a}'s auto update on or off; on, an update already found is fetched now (it installs when you quit). */
+	public void setAutoUpdates(Addon a, boolean on) {
+		if (on && !canAutoUpdate(a)) return;
+		auto.set(a.id(), on);
+		State s = states.get(a.id());
+		if (on && s != null && s.kind() == Kind.AVAILABLE) update(a.id(), true);
+	}
+
+	/** Whether {@code a} can be removed here: not core, and loaded from a jar in the mods folder. */
+	public boolean removable(Addon a) {
+		return !a.isCore() && jarOf(a) != null;
+	}
+
+	/** Whether {@code id} is removed when the game exits. */
+	public boolean removing(String id) {
+		return installer.removing(id);
+	}
+
+	/** Removes {@code a} when the game exits (its jar goes to myriad/updates/old). Core can't be removed. */
+	public void remove(Addon a) throws IOException {
+		if (a.isCore()) throw new IOException("Myriad itself can't be removed here");
+		Path jar = jarOf(a);
+		if (jar == null) throw new IOException("it isn't running from a jar in the mods folder");
+		installer.remove(a.id(), a.name(), a.version(), jar);
+		releases.remove(a.id());
+		states.remove(a.id());
+		LOG.info("{} {} is removed when the game exits", a.id(), a.version());
+	}
+
+	/** Keeps {@code id} after all. */
+	public void keep(String id) {
+		installer.keep(id);
+	}
+
+	/** The loaded addons that need {@code a} (their fabric.mod.json depends on it), by name. */
+	public static List<String> dependents(Addon a) {
+		List<String> out = new ArrayList<>();
+		for (Addon other : Myriad.addons()) {
+			if (other == a) continue;
+			boolean needs = other.metadata().getDependencies().stream()
+				.anyMatch(d -> d.getKind() == net.fabricmc.loader.api.metadata.ModDependency.Kind.DEPENDS && d.getModId().equals(a.id()));
+			if (needs) out.add(other.name());
+		}
+		return out;
 	}
 
 	/** The ids of the keys {@code a}'s updates must be signed with; empty when its updates aren't signed. */
@@ -155,6 +219,15 @@ public final class UpdateManager {
 			String names = String.join(", ", o.added().stream().map(p -> name(p.id()) + " " + p.version()).toList());
 			toast("Installed", names, Notifications.Level.SUCCESS);
 		}
+		if (!o.removed().isEmpty()) {
+			toast("Removed", String.join(", ", o.removed().stream().map(UpdateInstaller.Removal::name).toList()), Notifications.Level.SUCCESS);
+			// Nothing left to update: its Library pin, saved token and auto update go with it.
+			for (UpdateInstaller.Removal r : o.removed()) {
+				library.unpin(r.id());
+				tokens.set(r.id(), null);
+				auto.set(r.id(), false);
+			}
+		}
 		for (UpdateInstaller.Pending p : o.stillWaiting()) {
 			states.put(p.id(), new State(Kind.STAGED, p.version(), null, "Couldn't be installed last time; trying again when you quit"));
 			toast("Update not installed", name(p.id()) + " " + p.version() + " couldn't be installed. Trying again when you quit; "
@@ -163,6 +236,15 @@ public final class UpdateManager {
 		events.listen(GameReadyEvent.class, e -> {
 			if (checkEnabled) check(false);
 		});
+		// With auto update on for something, a long session checks again every few hours.
+		java.util.concurrent.ScheduledExecutorService timer = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+			Thread t = new Thread(r, "Myriad Update Timer");
+			t.setDaemon(true);
+			return t;
+		});
+		timer.scheduleAtFixedRate(() -> Async.onRenderThread(() -> {
+			if (checkEnabled && auto.any()) check(false);
+		}), AUTO_CHECK_HOURS, AUTO_CHECK_HOURS, java.util.concurrent.TimeUnit.HOURS);
 		events.listen(ScreenOpenEvent.class, e -> {
 			if (e.screen() instanceof UiScreen) flushToasts();
 		});
@@ -182,7 +264,7 @@ public final class UpdateManager {
 		List<String> out = new ArrayList<>();
 		for (Addon a : Myriad.addons()) {
 			State s = states.get(a.id());
-			if (s != null && (s.kind() == Kind.AVAILABLE || s.kind() == Kind.FAILED) && releases.containsKey(a.id())) out.add(a.id());
+			if (s != null && (s.kind() == Kind.AVAILABLE || s.kind() == Kind.FAILED) && releases.containsKey(a.id()) && !installer.removing(a.id())) out.add(a.id());
 		}
 		return out;
 	}
@@ -209,6 +291,8 @@ public final class UpdateManager {
 		if (checking) return;
 		Map<Addon, Optional<UpdateSource>> todo = new LinkedHashMap<>();
 		for (Addon a : Myriad.addons()) {
+			// One being removed gets nothing more: an update would undo the removal.
+			if (installer.removing(a.id())) continue;
 			Optional<UpdateSource> repo = UpdateSource.of(a.metadata());
 			if (repo.isEmpty() && !library.pinned(a.id())) {
 				states.put(a.id(), new State(Kind.NO_SOURCE, null, null, "Not checked: it names nowhere to update from"));
@@ -281,7 +365,14 @@ public final class UpdateManager {
 				if (Myriad.isReady()) Myriad.config().markDirty();
 			}
 		}
-		List<String> ids = updatable();
+		// Those the player trusts to update on their own are fetched now, quietly; they install when the game exits.
+		List<String> ids = new ArrayList<>();
+		for (String id : updatable()) {
+			Addon a = addon(id);
+			State s = states.get(id);
+			if (a != null && s != null && s.kind() == Kind.AVAILABLE && auto.on(id) && canAutoUpdate(a)) update(id, true);
+			else ids.add(id);
+		}
 		if (ids.isEmpty()) {
 			if (!manual) return;
 			// Only claim "up to date" for what was actually checked, and say what wasn't and why.
@@ -352,9 +443,76 @@ public final class UpdateManager {
 
 	// ---- the Library, for the Addons window -------------------------------------------------------------------------
 
-	/** One Library listing as Browse shows it. {@code version}: the newest for this Minecraft, or null when none works here. */
+	/**
+	 * One Library listing as Browse shows it. {@code version}: the newest for this Minecraft, or null when none works here.
+	 * {@code modules}, {@code changelog} and {@code iconSha} are what its index entry says, display only.
+	 */
 	public record LibraryAddon(String id, String name, String description, String author, @Nullable String repo, boolean verified,
-		@Nullable String version, @Nullable String minecraft, @Nullable String newestElsewhere, boolean installed, @Nullable String keyId) {
+		@Nullable String version, @Nullable String minecraft, @Nullable String newestElsewhere, boolean installed, @Nullable String keyId,
+		int moduleCount, @Nullable String detailsSha, @Nullable String iconSha) {
+	}
+
+	/** What a listing's newest version adds and what changed in it, from its details document. */
+	public record LibraryDetails(String version, List<LibraryModule> modules, @Nullable Changelog changelog) {
+	}
+
+	/** Details documents being fetched or fetched, by hash: each is fetched once a session. */
+	private final Map<String, CompletableFuture<LibraryDetails>> details = new ConcurrentHashMap<>();
+
+	/**
+	 * {@code id}'s details, fetched from Myriad's API and used only if they hash to {@code sha256} (the signed index's).
+	 * The same future for the same hash, so asking again is free; {@code onLoaded} runs on the render thread once it's in.
+	 */
+	public @Nullable LibraryDetails libraryDetails(String id, @Nullable String sha256, Runnable onLoaded) {
+		if (sha256 == null || !Names.isId(id)) return null;
+		CompletableFuture<LibraryDetails> f = details.computeIfAbsent(sha256, k -> Fetch.bytes(
+				URI.create(dev.myriadclient.impl.MyriadApi.API + "/v1/library/addons/" + id + "/details.json"), 256 * 1024, null, "application/json")
+			.thenApply(bytes -> {
+				if (!LibraryIndex.sha256(bytes).equals(sha256)) throw new CompletionException(new IOException("the details aren't the ones the Library lists"));
+				try {
+					LibraryIndex.Details d = LibraryIndex.details(new String(bytes, java.nio.charset.StandardCharsets.UTF_8), id);
+					return new LibraryDetails(d.version(), d.modules().stream().map(m -> new LibraryModule(m.name(), m.description(), m.tag())).toList(),
+						d.changelog() == null ? null : new Changelog(d.changelog().version(), d.changelog().text()));
+				} catch (IOException e) {
+					throw new CompletionException(e);
+				}
+			}));
+		if (f.isDone()) {
+			if (!f.isCompletedExceptionally()) return f.join();
+			details.remove(sha256, f); // tried again the next time it's asked for
+			return null;
+		}
+		f.whenComplete((d, e) -> {
+			if (e == null) Async.onRenderThread(onLoaded);
+		});
+		return null;
+	}
+
+	/** A module a Library addon adds: its name, description and kind. */
+	public record LibraryModule(String name, String description, String tag) {
+	}
+
+	/** What changed in {@code version}. */
+	public record Changelog(String version, String text) {
+	}
+
+	/** What changed in {@code id}'s {@code version}, when the Library says (fetched once, then {@code onLoaded}); else null. */
+	public @Nullable Changelog changelog(String id, @Nullable String version, Runnable onLoaded) {
+		LibraryIndex.Index index = library.index();
+		LibraryIndex.Entry e = index == null ? null : index.entry(id);
+		if (e == null || version == null) return null;
+		LibraryDetails d = libraryDetails(id, e.detailsSha(), onLoaded);
+		return d == null || d.changelog() == null || !d.changelog().version().equals(version) ? null : d.changelog();
+	}
+
+	/** A Library listing's icon: fetched from Myriad's API and used only if it hashes to {@code sha256}, the index's. */
+	public CompletableFuture<byte[]> libraryIcon(String id, @Nullable String sha256) {
+		if (sha256 == null || !Names.isId(id)) return CompletableFuture.failedFuture(new IOException("no icon"));
+		return Fetch.bytes(URI.create(dev.myriadclient.impl.MyriadApi.API + "/v1/library/addons/" + id + "/icon.png"), 64 * 1024, null, "image/png")
+			.thenApply(png -> {
+				if (!LibraryIndex.sha256(png).equals(sha256)) throw new CompletionException(new IOException("the icon isn't the one the Library lists"));
+				return png;
+			});
 	}
 
 	/** Fetches the Library's index (only changes), for Browse. */
@@ -389,7 +547,8 @@ public final class UpdateManager {
 			String key = e.listing().keys().isEmpty() ? null : e.listing().keys().getFirst().id();
 			boolean installed = FabricLoader.getInstance().isModLoaded(e.listing().id()) || addon(e.listing().id()) != null || installer.pendingAdded(e.listing().id());
 			out.add(new LibraryAddon(e.listing().id(), e.name(), e.description(), e.author(), e.repo(), e.verified(), here == null ? null : here.version().version(),
-				here == null ? null : here.minecraft(), here == null && newest != null ? newest.version().version() + " for Minecraft " + newest.minecraft() : null, installed, key));
+				here == null ? null : here.minecraft(), here == null && newest != null ? newest.version().version() + " for Minecraft " + newest.minecraft() : null, installed, key,
+				e.moduleCount(), e.detailsSha(), e.iconSha()));
 		}
 		out.sort(Comparator.comparing(a -> a.name().toLowerCase(java.util.Locale.ROOT)));
 		return out;
@@ -461,11 +620,16 @@ public final class UpdateManager {
 
 	/** Downloads, checks and stages {@code id}'s update. The future never fails; the result is in {@link #state}. */
 	public CompletableFuture<Void> update(String id) {
+		return update(id, false);
+	}
+
+	/** {@link #update(String)}; {@code automatic}: auto update started it, and its toast says so. */
+	private CompletableFuture<Void> update(String id, boolean automatic) {
 		Releases.Release r = releases.get(id);
 		State s = states.get(id);
 		Addon addon = addon(id);
 		Path jar = addon == null ? null : jarOf(addon);
-		if (r == null || r.asset() == null || s == null || jar == null || (s.kind() != Kind.AVAILABLE && s.kind() != Kind.FAILED)) {
+		if (r == null || r.asset() == null || s == null || jar == null || (s.kind() != Kind.AVAILABLE && s.kind() != Kind.FAILED) || installer.removing(id)) {
 			return CompletableFuture.completedFuture(null);
 		}
 		states.put(id, new State(Kind.DOWNLOADING, r.version(), r.url(), null));
@@ -491,7 +655,10 @@ public final class UpdateManager {
 			}
 			states.put(id, new State(Kind.STAGED, r.version(), r.url(), null));
 			LOG.info("Staged {} {} ({}); it installs when the game exits", id, r.version(), v.signer() == null ? "unsigned" : "signed by key " + v.signer().id());
-			Async.onRenderThread(() -> toast("Update ready", name(id) + " " + r.version() + " installs when you quit", Notifications.Level.SUCCESS));
+			Async.onRenderThread(() -> {
+				if (automatic) toast("Auto update", name(id) + " " + r.version() + " updates next restart", Notifications.Level.SUCCESS);
+				else toast("Update ready", name(id) + " " + r.version() + " installs when you quit", Notifications.Level.SUCCESS);
+			});
 		}).exceptionally(err -> {
 			String why = reason(err);
 			LOG.warn("Could not update {} to {}: {}", id, r.version(), why);

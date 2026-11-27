@@ -239,6 +239,54 @@ class LibraryIndexTest {
 	}
 
 	@Test
+	void browseInfoIsReadAndCleaned() throws IOException {
+		LibraryFixture f = one();
+		JsonObject info = f.addons.get(0).getAsJsonObject().getAsJsonObject("info");
+		info.addProperty("moduleCount", 52);
+		info.addProperty("details", "b".repeat(64));
+		info.addProperty("icon", "a".repeat(64));
+		LibraryIndex.Entry e = f.verify(new LibraryState()).index().entry("good");
+		assertEquals(52, e.moduleCount());
+		assertEquals("b".repeat(64), e.detailsSha());
+		assertEquals("a".repeat(64), e.iconSha());
+	}
+
+	@Test
+	void browseInfoThatIsWrongIsLeftOut() throws IOException {
+		LibraryFixture f = one();
+		JsonObject info = f.addons.get(0).getAsJsonObject().getAsJsonObject("info");
+		info.addProperty("moduleCount", "lots");
+		info.addProperty("details", "../not-a-hash");
+		info.addProperty("icon", 5);
+		LibraryIndex.Entry e = f.verify(new LibraryState()).index().entry("good");
+		assertEquals(0, e.moduleCount());
+		assertNull(e.detailsSha());
+		assertNull(e.iconSha());
+		info.addProperty("moduleCount", 1_000_000);
+		assertEquals(LibraryIndex.MAX_MODULES, f.verify(new LibraryState()).index().entry("good").moduleCount());
+	}
+
+	@Test
+	void detailsAreReadAndCleaned() throws IOException {
+		String doc = "{\"id\":\"good\",\"version\":\"1.1.0\",\"modules\":[{\"name\":\"Kill Aura\\uf00c\",\"description\":\"Attacks targets.\",\"tag\":\"Combat\"},"
+			+ "\"junk\",{\"description\":\"nameless\"}],\"changelog\":\"- Faster\\r\\n\\n\\n\\n- Fixed \\u00a7cred\\u0000 text\\n\"}";
+		LibraryIndex.Details d = LibraryIndex.details(doc, "good");
+		assertEquals(List.of(new LibraryIndex.Module("Kill Aura", "Attacks targets.", "Combat")), d.modules());
+		assertEquals(new LibraryIndex.Changelog("1.1.0", "- Faster\n\n- Fixed cred text"), d.changelog());
+		assertThrows(IOException.class, () -> LibraryIndex.details(doc, "other"), "details for another addon");
+		assertThrows(IOException.class, () -> LibraryIndex.details("{\"id\":\"good\"}", "good"), "no version");
+		assertThrows(IOException.class, () -> LibraryIndex.details("not json", "good"));
+	}
+
+	@Test
+	void longChangelogsAreCut() {
+		String many = "line\n".repeat(500);
+		String cut = LibraryIndex.cleanLines(many, LibraryIndex.MAX_CHANGELOG, LibraryIndex.MAX_CHANGELOG_LINES);
+		assertEquals(LibraryIndex.MAX_CHANGELOG_LINES, cut.lines().count());
+		assertTrue(LibraryIndex.cleanLines("x".repeat(9000), 4000, 80).length() <= 4000);
+	}
+
+	@Test
 	void downloadsOnlyFromGitHubReleases() {
 		assertTrue(LibraryIndex.downloadable("https://github.com/a/b/releases/download/v1.0.0/b-1.0.0.jar"));
 		assertFalse(LibraryIndex.downloadable("https://evil.example/a/b/releases/download/v1.0.0/b-1.0.0.jar"));

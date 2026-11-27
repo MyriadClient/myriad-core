@@ -44,6 +44,11 @@ abstract class CardEntry extends Widget {
 		return null;
 	}
 
+	/** A picture before the title (an addon's own icon), drawn instead of {@link #icon()}, or null. */
+	protected net.minecraft.resources.Identifier iconTexture() {
+		return null;
+	}
+
 	/** How far along it is, 0 to 1, as a thin line along the header's foot; NaN for none. */
 	protected double progress() {
 		return Double.NaN;
@@ -143,7 +148,12 @@ abstract class CardEntry extends Widget {
 		float rx = x + width - 10;
 		float tx = x + 6;
 		String icon = icon();
-		if (icon != null && !icon.isEmpty()) {
+		net.minecraft.resources.Identifier picture = iconTexture();
+		if (picture != null) {
+			float is = rowH - 6;
+			c.texture(picture, tx, y + 3, is, is, 0, 0, 1, 1, 0xFFFFFFFF);
+			tx += is + 5;
+		} else if (icon != null && !icon.isEmpty()) {
 			float is = c.defaultFontSize();
 			c.text(FontFamily.MONO, is, icon, tx + (9 - c.textWidth(FontFamily.MONO, is, icon)) / 2, y + (rowH - c.textHeight(FontFamily.MONO, is)) / 2, t > 0.5f ? accent : theme().textDim.argb());
 			tx += 12;

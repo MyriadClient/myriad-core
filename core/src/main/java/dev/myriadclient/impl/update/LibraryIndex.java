@@ -51,6 +51,9 @@ final class LibraryIndex {
 	/** How far ahead of this computer's clock an index may say it was made. */
 	static final long FUTURE_SLACK = 24 * 3600;
 	private static final int MAX_CERTS = 16, MAX_ADDONS = 2000, MAX_VERSIONS = 20, MAX_YANKS = 200;
+	/** What Browse shows of an addon before it's installed: at most this many modules, and this much changelog. */
+	static final int MAX_MODULES = 300, MAX_CHANGELOG = 4000, MAX_CHANGELOG_LINES = 80;
+	private static final Pattern SHA256 = Pattern.compile("[0-9a-f]{64}");
 	private static final Pattern REPO = Pattern.compile("[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}");
 	private static final Pattern TAG = Pattern.compile("[A-Za-z0-9._+-]{1,100}");
 
@@ -60,12 +63,50 @@ final class LibraryIndex {
 
 	/**
 	 * A listed addon and its releases that may be offered, newest first. {@code name}, {@code description},
-	 * {@code author} and {@code repo} are display text only, never trusted.
+	 * {@code author}, {@code repo}, {@code moduleCount} and the hashes are display only, never trusted (the index key
+	 * signs them, nothing more). The icon and the details (modules and changelog, kept out of the index so it stays
+	 * small) are fetched separately and used only if their bytes hash to {@code iconSha} and {@code detailsSha}.
 	 */
-	record Entry(Listing listing, String name, String description, String author, @Nullable String repo, List<Offered> versions) {
+	record Entry(Listing listing, String name, String description, String author, @Nullable String repo, List<Offered> versions,
+		int moduleCount, @Nullable String detailsSha, @Nullable String iconSha) {
+		Entry(Listing listing, String name, String description, String author, @Nullable String repo, List<Offered> versions) {
+			this(listing, name, description, author, repo, versions, 0, null, null);
+		}
+
 		boolean verified() {
 			return listing.source() == Source.OPEN;
 		}
+	}
+
+	/** A module the addon adds, as its builder read it from the jar: name, description and kind (its tag). */
+	record Module(String name, String description, String tag) {
+	}
+
+	/** What changed in {@code version}, from its developer's changelog: plain lines. */
+	record Changelog(String version, String text) {
+	}
+
+	/** A listing's details document: its newest version's modules and changelog. */
+	record Details(String version, List<Module> modules, @Nullable Changelog changelog) {
+	}
+
+	/**
+	 * Reads a details document for {@code id} whose hash the caller has already checked against the index; anything
+	 * malformed in it is left out, a document for another addon or with no version is refused.
+	 */
+	static Details details(String text, String id) throws IOException {
+		JsonObject o;
+		try {
+			o = JsonParser.parseString(text).getAsJsonObject();
+		} catch (RuntimeException e) {
+			throw new IOException("the addon's details can't be read");
+		}
+		if (!id.equals(shown(o, "id", 64))) throw new IOException("the details are for another addon");
+		String version = shown(o, "version", 64);
+		if (version.isEmpty()) throw new IOException("the details name no version");
+		JsonElement t = o.get("changelog");
+		String text0 = t != null && t.isJsonPrimitive() && t.getAsJsonPrimitive().isString() ? cleanLines(t.getAsString(), MAX_CHANGELOG, MAX_CHANGELOG_LINES) : "";
+		return new Details(version, modules(o), text0.isEmpty() ? null : new Changelog(version, text0));
 	}
 
 	/**
@@ -245,8 +286,12 @@ final class LibraryIndex {
 			JsonObject info = a.get("info") instanceof JsonObject io ? io : new JsonObject();
 			String name = shown(info, "name", 64);
 			String repo = shown(info, "repo", 201);
+			String icon = shown(info, "icon", 64), details = shown(info, "details", 64);
+			int moduleCount = info.get("moduleCount") instanceof JsonElement mc && mc.isJsonPrimitive() && mc.getAsJsonPrimitive().isNumber()
+				? (int) Math.clamp(mc.getAsLong(), 0, MAX_MODULES) : 0;
 			return new Entry(listing, name.isEmpty() ? listing.id() : name, shown(info, "description", 300), shown(info, "author", 64),
-				REPO.matcher(repo).matches() ? repo : null, List.copyOf(offered));
+				REPO.matcher(repo).matches() ? repo : null, List.copyOf(offered), moduleCount, SHA256.matcher(details).matches() ? details : null,
+				SHA256.matcher(icon).matches() ? icon : null);
 		} catch (IOException | IllegalArgumentException ex) {
 			LOG.info("Leaving a Library listing out: {}", ex.getMessage());
 			return null;
@@ -308,6 +353,39 @@ final class LibraryIndex {
 		}
 		return Boolean.getBoolean("myriad.dev") && "http".equals(u.getScheme())
 			&& ("localhost".equals(u.getHost()) || "127.0.0.1".equals(u.getHost())) && Fetch.refused(u) == null;
+	}
+
+	/** The modules a details document lists, display text only; anything malformed is left out. */
+	private static List<Module> modules(JsonObject info) {
+		if (!(info.get("modules") instanceof JsonArray list)) return List.of();
+		List<Module> out = new ArrayList<>();
+		for (JsonElement e : list) {
+			if (out.size() >= MAX_MODULES) break;
+			if (!(e instanceof JsonObject m)) continue;
+			String name = shown(m, "name", 64);
+			if (!name.isEmpty()) out.add(new Module(name, shown(m, "description", 200), shown(m, "tag", 32)));
+		}
+		return List.copyOf(out);
+	}
+
+	/** {@link #clean} line by line: the line breaks kept (at most {@code maxLines} lines), blank runs squeezed to one. */
+	static String cleanLines(String s, int max, int maxLines) {
+		List<String> lines = new ArrayList<>();
+		boolean blank = false;
+		for (String line : s.split("\\R", -1)) {
+			String c = clean(line, max);
+			if (c.isEmpty()) {
+				if (!blank && !lines.isEmpty()) lines.add("");
+				blank = true;
+				continue;
+			}
+			blank = false;
+			lines.add(c);
+			if (lines.size() >= maxLines) break;
+		}
+		while (!lines.isEmpty() && lines.getLast().isEmpty()) lines.removeLast();
+		String out = String.join("\n", lines);
+		return out.codePointCount(0, out.length()) > max ? out.substring(0, out.offsetByCodePoints(0, max)).strip() : out;
 	}
 
 	/** Display text from {@code o}: see {@link #clean}. */

@@ -195,6 +195,12 @@ public final class WindowManager implements Ui {
 		openPanel(CorePanels.DIALOG, DialogPanel.prepare(title, message, confirmLabel, onConfirm, onCancel), active == HUD_WORKSPACE ? 1 : active, true);
 	}
 
+	/** {@link #confirm} with a red confirm button, for what can't be undone from here, on {@code workspace}. */
+	public void confirmDanger(int workspace, String title, String message, String confirmLabel, Runnable onConfirm) {
+		if (!isOpen()) open();
+		openPanel(CorePanels.DIALOG, DialogPanel.prepareDanger(title, message, confirmLabel, onConfirm, null), workspace, true);
+	}
+
 	@Override
 	public Optional<Window> openPanel(MyriadId type, JsonObject args) {
 		Optional<PanelType> t = Myriad.panels().get(type);
