@@ -34,8 +34,10 @@ class LibraryAccountTest {
 	@Test
 	void theSessionIsOwnerOnlyAndRoundTrips() throws Exception {
 		Path file = dir.resolve("account/session.json");
-		LibraryAccount.save(file, new LibraryAccount.Session("myr_s_" + "a".repeat(43), "Steve"));
+		String token = "myr_s_" + "a".repeat(43);
+		LibraryAccount.save(file, new LibraryAccount.Session(token, "Steve", dev.myriadclient.impl.MyriadApi.API));
 		assertEquals("Steve", LibraryAccount.load(file).name());
+		assertFalse(LibraryAccount.load(file).toString().contains(token), "a session never prints its token");
 		if (Files.getFileStore(file).supportsFileAttributeView("posix")) {
 			assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(file)));
 		}
@@ -43,5 +45,15 @@ class LibraryAccountTest {
 		assertFalse(Files.exists(file.resolveSibling("session.json.bak")), "no backup holding the token");
 		Files.writeString(file, "{\"token\": \"stolen<script>\", \"name\": \"Steve\"}");
 		assertNull(LibraryAccount.load(file), "an odd token is ignored");
+	}
+
+	@Test
+	void aSessionIsOnlyEverSentToTheApiItWasMadeWith() throws Exception {
+		Path file = dir.resolve("account/session.json");
+		String token = "myr_s_" + "b".repeat(43);
+		LibraryAccount.save(file, new LibraryAccount.Session(token, "Steve", "https://evil.example"));
+		assertNull(LibraryAccount.load(file), "made with another API (say -Dmyriad.api was changed since)");
+		Files.writeString(file, "{\"token\": \"" + token + "\", \"name\": \"Steve\"}");
+		assertNull(LibraryAccount.load(file), "one that doesn't say which API");
 	}
 }

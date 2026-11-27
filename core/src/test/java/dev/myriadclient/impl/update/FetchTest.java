@@ -50,6 +50,8 @@ class FetchTest {
 		}
 		assertTrue(Names.isVersion("2.7.0-beta.1+mc26.3"));
 		assertFalse(Names.isVersion("1.0\n"));
+		assertFalse(Names.isVersion("..")); // never a path step in /v1/library/private/<id>/<version>
+		assertFalse(Names.isVersion("."));
 		assertFalse(Names.isId("Myriad"));
 		assertTrue(FeedTokens.valid("github_pat_ABC123"));
 		assertFalse(FeedTokens.valid("abc\r\nX-Evil: 1"));

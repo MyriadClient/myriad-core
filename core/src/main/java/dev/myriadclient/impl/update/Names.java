@@ -11,7 +11,8 @@ import java.util.regex.Pattern;
  */
 final class Names {
 	private static final Pattern ID = Pattern.compile("[a-z][a-z0-9_-]{1,63}");
-	private static final Pattern VERSION = Pattern.compile("[0-9A-Za-z.+-]{1,64}");
+	/** Letters, digits and . + -, with at least one letter or digit (so never "." or ".." in a path). */
+	private static final Pattern VERSION = Pattern.compile("(?=.*[0-9A-Za-z])[0-9A-Za-z.+-]{1,64}");
 	private static final Pattern FILE = Pattern.compile("[A-Za-z0-9._+-]{1,128}\\.jar");
 
 	private Names() {

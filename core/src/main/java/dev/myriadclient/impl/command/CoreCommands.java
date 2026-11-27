@@ -144,8 +144,8 @@ public final class CoreCommands {
 					return SINGLE_SUCCESS;
 				}));
 				b.then(literal("logout").executes(c -> {
-					account.signOut();
-					info("Signed out.");
+					account.signOut().whenComplete((confirmed, e) -> dev.myriadclient.api.util.Async.onRenderThread(() -> info(Boolean.TRUE.equals(confirmed)
+						? "Signed out." : "Signed out here. Myriad's API couldn't be reached to end the session there; it lapses after 30 days unused.")));
 					return SINGLE_SUCCESS;
 				}));
 			}

@@ -3,7 +3,8 @@ package dev.myriadclient.impl;
 /**
  * Where Myriad's web API and website are: {@code api.myriadclient.dev} and {@code myriadclient.dev}, or
  * {@code -Dmyriad.api} and {@code -Dmyriad.site} for a local one. Pointing them elsewhere never changes what's trusted:
- * shares are only data, and the Library's index is checked against Myriad's root keys wherever it comes from.
+ * shares are only data, the Library's index is checked against Myriad's root keys wherever it comes from, and a saved
+ * Myriad session is only sent to the API it was made with.
  */
 public final class MyriadApi {
 	public static final String API = strip(System.getProperty("myriad.api", "https://api.myriadclient.dev"));

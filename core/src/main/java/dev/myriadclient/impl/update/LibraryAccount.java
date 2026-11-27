@@ -20,11 +20,15 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -51,7 +55,12 @@ public final class LibraryAccount {
 	private static final Pattern ID = Pattern.compile("[a-z][a-z0-9_-]{1,63}");
 	private static final long MAX_ANSWER = 64 * 1024;
 
-	record Session(String token, String name) {
+	/** A session, and the API it was made with: it's only ever sent back there. */
+	record Session(String token, String name, String api) {
+		@Override
+		public String toString() {
+			return "Session[" + name + " at " + api + "]"; // never the token
+		}
 	}
 
 	private final Path file;
@@ -130,7 +139,7 @@ public final class LibraryAccount {
 		}, Async.executor()).thenCompose(body -> call("POST", "/v1/auth/minecraft/finish", body, null)).thenAccept(done -> {
 			String token = string(done, "token"), name = string(done, "name");
 			if (!TOKEN.matcher(token).matches() || !NAME.matcher(name).matches()) throw new CompletionException(new IOException("Myriad's API answered oddly"));
-			session = new Session(token, name);
+			session = new Session(token, name, MyriadApi.API);
 			save(file, session);
 			LOG.info("Signed in to Myriad as {}", name);
 		}).thenCompose(v -> refresh()).whenComplete((v, e) -> busy = false);
@@ -170,18 +179,22 @@ public final class LibraryAccount {
 		}));
 	}
 
-	/** Ends the session, here and on the API. */
-	public CompletableFuture<Void> signOut() {
+	/**
+	 * Ends the session, here and on the API; answers whether the API confirmed it. When it couldn't be reached the token
+	 * is still forgotten here, and on the API it lapses after 30 days unused.
+	 */
+	public CompletableFuture<Boolean> signOut() {
 		String token = token();
 		forget();
-		if (token == null) return CompletableFuture.completedFuture(null);
-		return Fetch.call("DELETE", api("/v1/auth/session"), null, token, MAX_ANSWER).handle((a, e) -> null);
+		if (token == null) return CompletableFuture.completedFuture(true);
+		return Fetch.call("DELETE", api("/v1/auth/session"), null, token, MAX_ANSWER).handle((a, e) -> e == null && (a.ok() || a.status() == 401));
 	}
 
 	private void forget() {
 		session = null;
 		grants = Set.of();
 		try {
+			Files.deleteIfExists(file.resolveSibling("session.json.tmp"));
 			Files.deleteIfExists(file);
 		} catch (IOException e) {
 			LOG.warn("Couldn't delete {}", file, e);
@@ -250,30 +263,56 @@ public final class LibraryAccount {
 			if (!Files.isRegularFile(file) || Files.size(file) > 4096) return null;
 			JsonObject o = JsonParser.parseString(Files.readString(file)).getAsJsonObject();
 			String token = o.get("token").getAsString(), name = o.get("name").getAsString();
-			return TOKEN.matcher(token).matches() && NAME.matcher(name).matches() ? new Session(token, name) : null;
+			// Made with another API (or before sessions said which): never sent to this one, so a changed -Dmyriad.api
+			// can't collect it. Signing in again makes one for the API in use.
+			String api = o.has("api") ? o.get("api").getAsString() : "";
+			if (!api.equals(MyriadApi.API)) return null;
+			return TOKEN.matcher(token).matches() && NAME.matcher(name).matches() ? new Session(token, name, api) : null;
 		} catch (IOException | RuntimeException e) {
 			return null;
 		}
 	}
 
-	/** Written owner-only from its first byte (where the system has such permissions), then moved into place; no backup. */
+	/** A new file (never an existing one or a link's target), readable only by you where the system has permissions. */
+	private static SeekableByteChannel createOwnerOnly(Path path) throws IOException {
+		Set<StandardOpenOption> opts = Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+		try {
+			return Files.newByteChannel(path, opts, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+		} catch (UnsupportedOperationException e) {
+			return Files.newByteChannel(path, opts); // Windows: the profile folder's own permissions apply.
+		}
+	}
+
+	/**
+	 * Written owner-only from its first byte (where the system has such permissions), created and written in one open
+	 * that won't follow a link put in its place, then moved into place; no backup, and no copy left behind if it fails.
+	 */
 	static void save(Path file, Session s) {
 		JsonObject o = new JsonObject();
 		o.addProperty("token", s.token());
 		o.addProperty("name", s.name());
+		o.addProperty("api", s.api());
+		byte[] bytes = o.toString().getBytes(StandardCharsets.UTF_8);
+		Path tmp = file.resolveSibling("session.json.tmp");
 		try {
 			Files.createDirectories(file.getParent());
-			Path tmp = file.resolveSibling("session.json.tmp");
 			Files.deleteIfExists(tmp);
-			try {
-				Files.createFile(tmp, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
-			} catch (UnsupportedOperationException e) {
-				Files.createFile(tmp); // Windows: the profile folder's own permissions apply.
+			try (SeekableByteChannel out = createOwnerOnly(tmp)) {
+				out.write(ByteBuffer.wrap(bytes));
 			}
-			Files.writeString(tmp, o.toString());
-			Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+			try {
+				Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+			} catch (AtomicMoveNotSupportedException e) {
+				Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+			}
 		} catch (IOException e) {
-			LOG.warn("Couldn't save the Myriad session; you'll be asked to sign in again next time", e);
+			LOG.warn("Couldn't save the Myriad session; you'll be asked to sign in again next time: {}", e.toString());
+		} finally {
+			try {
+				Files.deleteIfExists(tmp);
+			} catch (IOException ignored) {
+				// Nothing more to do: it's owner-only.
+			}
 		}
 	}
 }

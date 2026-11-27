@@ -119,7 +119,21 @@ final class Fetch {
 					if (REDIRECTS.contains(res.statusCode())) throw new IOException("Myriad's API sent a redirect");
 					long declared = res.headers().firstValueAsLong("Content-Length").orElse(-1);
 					if (declared > max) throw new IOException("the answer is larger than it should be");
-					return new Answer(res.statusCode(), read(body, max));
+					// The timeout ends at the headers; a body that trickles in is cut off at the same deadline as downloads.
+					var cutoff = CompletableFuture.runAsync(() -> {
+						try {
+							body.close();
+						} catch (IOException ignored) {
+							// It's being abandoned anyway.
+						}
+					}, CompletableFuture.delayedExecutor(DEADLINE_SECONDS, java.util.concurrent.TimeUnit.SECONDS, Async.executor()));
+					try {
+						return new Answer(res.statusCode(), read(body, max));
+					} catch (IOException e) {
+						throw cutoff.isDone() ? new IOException("Myriad's API took too long to answer") : e;
+					} finally {
+						cutoff.cancel(false);
+					}
 				}
 			} catch (IOException e) {
 				throw new java.util.concurrent.CompletionException(e);
