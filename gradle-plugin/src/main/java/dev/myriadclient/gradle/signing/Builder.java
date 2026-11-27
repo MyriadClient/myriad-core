@@ -126,6 +126,7 @@ public final class Builder {
 			case "builder-inspect" -> inspect();
 			case "builder-sign" -> sign();
 			case "builder-report" -> report();
+			case "builder-checks" -> checks();
 			default -> throw new IllegalArgumentException("unknown builder command " + command);
 		}
 	}
@@ -185,8 +186,13 @@ public final class Builder {
 	}
 
 	/**
-	 * The private builder's first step: the closed-source repository, read once with a 15-minute token the API makes for
-	 * it alone, archived for the later jobs (they check the archive against the hash given here).
+	 * The private builder's first step: the closed-source repository, read with a token this job makes itself from the
+	 * Library App's key (which only the private builder holds), for that one repository and read-only, then archived for
+	 * the later jobs (they check the archive against the hash given here).
+	 *
+	 * <p>Which repository: for a listed addon, the one its <b>signed</b> listing names (checked against the signed index
+	 * here, and by id and owner against GitHub itself), so a compromised API can't point this at anyone else's code. For
+	 * a new addon (waiting for the maintainer until accepted), the repository the release came from.
 	 */
 	private static void fetchClosed() throws Exception {
 		String api = api(), token = env("BUILDER_TOKEN");
@@ -199,11 +205,23 @@ public final class Builder {
 			Map<String, Object> repo = Json.object(spec.get("repo"), "the repository");
 			Map<String, Object> source = Json.object(spec.get("source"), "the source repository");
 			String tag = check(TAG, Json.string(spec.get("tag"), "tag"), "tag");
-			Map<String, Object> grant = Json.object(Json.parse(postFor(api + "/v1/library/builds/" + id + "/source-token", token)), "the token");
-			String sourceRepo = check(REPO, Json.string(grant.get("repo"), "repo"), "repository");
-			if (!sourceRepo.equals(source.get("fullName"))) throw new IllegalArgumentException("the token is for another repository");
+			long sourceId, sourceOwner;
+			if (spec.get("listing") instanceof Map<?, ?> raw) {
+				@SuppressWarnings("unchecked") Map<String, Object> listing = (Map<String, Object>) raw;
+				Map<String, Object> body = LibraryTrust.verifiedBody(get(api + "/v1/index.json", null, 8L * 1024 * 1024), LibraryTrust.ROOT_KEYS, now());
+				if (!LibraryTrust.listingSigned(listing, body, LibraryTrust.ROOT_KEYS, now())) throw new IllegalArgumentException("its listing isn't signed by a Myriad listing key");
+				sourceId = Json.number(listing.get("repoId"), "repo id");
+				sourceOwner = Json.number(listing.get("ownerId"), "owner id");
+			} else {
+				sourceId = Json.number(repo.get("id"), "repo id");
+				sourceOwner = Json.number(repo.get("ownerId"), "owner id");
+				if (Json.number(source.get("id"), "id") != sourceId) throw new IllegalArgumentException("a new addon is built from the repository its release came from");
+			}
+			GitHubApp.Grant grant = GitHubApp.fromEnv().token(check(REPO, Json.string(source.get("fullName"), "repo"), "repository"), sourceId, Map.of("contents", "read"));
+			if (grant.repo().ownerId() != sourceOwner) throw new IllegalArgumentException(grant.repo().fullName() + " isn't owned by the listing's owner any more");
+			String sourceRepo = grant.repo().fullName();
 			Path src = work.resolve("src");
-			String commit = checkoutWith(sourceRepo, "refs/tags/" + tag, src, Json.string(grant.get("token"), "token"));
+			String commit = checkoutWith(sourceRepo, "refs/tags/" + tag, src, grant.token());
 			checkSource(src);
 			String buildHash = BuildHash.of(src);
 			Path archive = work.resolve("source.tar.gz");
@@ -226,7 +244,7 @@ public final class Builder {
 				// An invite-only addon: its releases are in its private source repository, read with this one token. The jar
 				// and its .sig are fetched here and handed to the inspect job by hash (no public address exists for them).
 				publicRepoId = Json.number(source.get("id"), "id");
-				String releasedName = fetchPrivateRelease(sourceRepo, tag, Json.string(grant.get("token"), "token"), work);
+				String releasedName = fetchPrivateRelease(sourceRepo, tag, grant.token(), work);
 				output("released_name", releasedName);
 				output("released_sha256", Signing.hex(Signing.sha256(Files.readAllBytes(work.resolve("released.jar")))));
 			} else {
@@ -249,7 +267,7 @@ public final class Builder {
 			output("build_hash", buildHash);
 			output("source_sha256", Signing.hex(Signing.sha256(Files.readAllBytes(archive))));
 			output("listed", String.valueOf(listing instanceof Map<?, ?>));
-		} catch (IllegalArgumentException | IOException e) {
+		} catch (IllegalArgumentException | IOException | java.security.GeneralSecurityException e) {
 			output("ok", "false");
 			output("problem", oneLine(e.getMessage()));
 		}
@@ -307,6 +325,72 @@ public final class Builder {
 			"https://github.com/" + repo + ".git", ref);
 		git(dir, "-c", "core.hooksPath=/dev/null", "checkout", "--quiet", "--detach", "FETCH_HEAD");
 		return check(SHA1, git(dir, "rev-parse", "HEAD").strip(), "commit");
+	}
+
+	/**
+	 * Posts the check runs the Library has waiting (the API holds no key to developers' repositories, so it asks this
+	 * builder to): for each, a token for that repository alone (checks write, contents read to find the tag's commit),
+	 * then a new run or an update to the one already there, and its id and commit reported back. Only the fixed fields
+	 * of a check run are passed on, under GitHub's limits. One failing run doesn't stop the rest.
+	 */
+	private static void checks() throws Exception {
+		String api = api(), token = env("BUILDER_TOKEN");
+		GitHubApp app = GitHubApp.fromEnv();
+		List<Object> pending = Json.array(Json.parse(get(api + "/v1/library/checks", "Bearer " + token, 4L * 1024 * 1024)), "the check runs");
+		int posted = 0, failed = 0;
+		for (Object o : pending) {
+			try {
+				Map<String, Object> p = Json.object(o, "a check run");
+				long submission = Json.number(p.get("submission"), "submission"), seq = Json.number(p.get("seq"), "seq");
+				Map<String, Object> repo = Json.object(p.get("repo"), "the repository");
+				String tag = check(TAG, Json.string(p.get("tag"), "tag"), "tag");
+				GitHubApp.Grant grant = app.token(check(REPO, Json.string(repo.get("fullName"), "repo"), "repository"), Json.number(repo.get("id"), "repo id"),
+					Map.of("checks", "write", "contents", "read"));
+				String full = grant.repo().fullName(), auth = "token " + grant.token();
+				String head = p.get("headSha") instanceof String h && SHA1.matcher(h).matches() ? h
+					: check(SHA1, Json.string(Json.object(Json.parse(GitHubApp.call("GET", "https://api.github.com/repos/" + full + "/commits/" + tag, auth, null)), "the commit").get("sha"), "sha"), "commit");
+				Map<String, Object> body = checkRunBody(Json.object(p.get("run"), "the run"));
+				long runId;
+				if (p.get("checkRunId") instanceof Number n && n.longValue() > 0) {
+					runId = n.longValue();
+					GitHubApp.call("PATCH", "https://api.github.com/repos/" + full + "/check-runs/" + runId, auth, Json.write(body));
+				} else {
+					body.put("name", "Myriad Library");
+					body.put("head_sha", head);
+					runId = Json.number(Json.object(Json.parse(GitHubApp.call("POST", "https://api.github.com/repos/" + full + "/check-runs", auth, Json.write(body))), "the check run").get("id"), "check run id");
+				}
+				post(api + "/v1/library/checks/" + submission, token, Json.write(Map.of("seq", seq, "checkRunId", runId, "headSha", head)));
+				posted++;
+			} catch (Exception e) {
+				failed++;
+				System.out.println("A check run wasn't posted: " + oneLine(e.getMessage()));
+			}
+		}
+		System.out.println("Check runs posted: " + posted + (failed > 0 ? ", not posted: " + failed : ""));
+	}
+
+	/** Only a check run's status, conclusion and text, as GitHub takes them (the API's word is never passed on whole). */
+	static Map<String, Object> checkRunBody(Map<String, Object> run) {
+		Map<String, Object> out = new java.util.LinkedHashMap<>();
+		String status = Json.string(run.get("status"), "status");
+		if (!List.of("queued", "in_progress", "completed").contains(status)) throw new IllegalArgumentException("odd check run status");
+		out.put("status", status);
+		if (status.equals("completed")) {
+			String c = run.get("conclusion") instanceof String s ? s : "neutral";
+			if (!List.of("success", "failure", "neutral", "action_required", "cancelled").contains(c)) throw new IllegalArgumentException("odd check run conclusion");
+			out.put("conclusion", c);
+		}
+		Map<String, Object> output = Json.object(run.get("output"), "the output");
+		Map<String, Object> text = new java.util.LinkedHashMap<>();
+		text.put("title", cap(Json.string(output.get("title"), "title"), 200));
+		text.put("summary", cap(Json.string(output.get("summary"), "summary"), 65_000));
+		if (output.get("text") instanceof String t) text.put("text", cap(t, 65_000));
+		out.put("output", text);
+		return out;
+	}
+
+	private static String cap(String s, int max) {
+		return s.length() > max ? s.substring(0, max) : s;
 	}
 
 	private static void inspect() throws Exception {
@@ -587,14 +671,6 @@ public final class Builder {
 			.header("Content-Type", "application/json").header("Authorization", "Bearer " + token).POST(HttpRequest.BodyPublishers.ofString(json)).build();
 		HttpResponse<String> res = HTTP.send(r, HttpResponse.BodyHandlers.ofString());
 		if (res.statusCode() / 100 != 2) throw new IOException("the API answered HTTP " + res.statusCode() + ": " + oneLine(res.body().substring(0, Math.min(300, res.body().length()))));
-	}
-
-	private static String postFor(String url, String token) throws IOException, InterruptedException {
-		HttpRequest r = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(60)).header("User-Agent", "myriad-builder")
-			.header("Content-Type", "application/json").header("Authorization", "Bearer " + token).POST(HttpRequest.BodyPublishers.ofString("{}")).build();
-		HttpResponse<String> res = HTTP.send(r, HttpResponse.BodyHandlers.ofString());
-		if (res.statusCode() / 100 != 2) throw new IOException("the API answered HTTP " + res.statusCode());
-		return res.body();
 	}
 
 	/** A GitHub release asset, following GitHub's redirects to its storage (https only, no credentials, capped). */

@@ -240,7 +240,7 @@ public final class Signing {
 				       library-sign-env <kind> <ENV VAR> name=value... (the same, the key from an environment variable)
 				       build-hash <repository dir>
 				       inspect <jar> [<source dir>]                    (what the Library would flag, as JSON)
-				       builder-prepare | builder-inspect | builder-sign | builder-report  (the Library builder's steps)""");
+				       builder-prepare | builder-fetch | builder-inspect | builder-sign | builder-report | builder-checks  (the Library builder's steps)""");
 			System.exit(2);
 		}
 		switch (args[0]) {
