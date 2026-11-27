@@ -221,14 +221,24 @@ public final class Builder {
 				}
 				publicRepo = u;
 			}
-			// The public releases repository must really be public and have the source repository's owner.
-			long ownerId = Json.number(source.get("ownerId"), "owner id");
-			String auth = System.getenv("GH_TOKEN") == null ? null : "token " + System.getenv("GH_TOKEN");
-			Map<String, Object> pub = Json.object(Json.parse(get("https://api.github.com/repos/" + publicRepo, auth, 1024 * 1024)), "the public repository");
-			if (!Boolean.FALSE.equals(pub.get("private")) || Json.number(Json.object(pub.get("owner"), "owner").get("id"), "owner id") != ownerId) {
-				throw new IllegalArgumentException(publicRepo + " isn't a public repository with the same owner as the source");
+			long publicRepoId;
+			if (publicRepo.equals(sourceRepo)) {
+				// An invite-only addon: its releases are in its private source repository, read with this one token. The jar
+				// and its .sig are fetched here and handed to the inspect job by hash (no public address exists for them).
+				publicRepoId = Json.number(source.get("id"), "id");
+				String releasedName = fetchPrivateRelease(sourceRepo, tag, Json.string(grant.get("token"), "token"), work);
+				output("released_name", releasedName);
+				output("released_sha256", Signing.hex(Signing.sha256(Files.readAllBytes(work.resolve("released.jar")))));
+			} else {
+				// The public releases repository must really be public and have the source repository's owner.
+				long ownerId = Json.number(source.get("ownerId"), "owner id");
+				String auth = System.getenv("GH_TOKEN") == null ? null : "token " + System.getenv("GH_TOKEN");
+				Map<String, Object> pub = Json.object(Json.parse(get("https://api.github.com/repos/" + publicRepo, auth, 1024 * 1024)), "the public repository");
+				if (!Boolean.FALSE.equals(pub.get("private")) || Json.number(Json.object(pub.get("owner"), "owner").get("id"), "owner id") != ownerId) {
+					throw new IllegalArgumentException(publicRepo + " isn't a public repository with the same owner as the source");
+				}
+				publicRepoId = Json.number(pub.get("id"), "id");
 			}
-			long publicRepoId = Json.number(pub.get("id"), "id");
 			Object listing = spec.get("listing");
 			output("ok", "true");
 			output("source_repo", sourceRepo);
@@ -242,6 +252,48 @@ public final class Builder {
 		} catch (IllegalArgumentException | IOException e) {
 			output("ok", "false");
 			output("problem", oneLine(e.getMessage()));
+		}
+	}
+
+	/**
+	 * An invite-only addon's release, from its private repository with the build's one token: the release's jar (not a
+	 * sources or javadoc jar) and its {@code .sig}, saved as {@code released.jar} and {@code released.jar.sig}. Returns the
+	 * jar's file name.
+	 */
+	private static String fetchPrivateRelease(String repo, String tag, String token, Path work) throws IOException, InterruptedException {
+		Map<String, Object> release = Json.object(Json.parse(get("https://api.github.com/repos/" + repo + "/releases/tags/" + tag, "token " + token, 1024 * 1024)), "the release");
+		Map<String, Object> jar = null, sig = null;
+		for (Object a : Json.array(release.get("assets"), "assets")) {
+			Map<String, Object> asset = Json.object(a, "asset");
+			String name = Json.string(asset.get("name"), "name");
+			if (jar == null && name.endsWith(".jar") && !name.endsWith("-sources.jar") && !name.endsWith("-javadoc.jar") && name.matches("[A-Za-z0-9][A-Za-z0-9._+-]{0,199}")) jar = asset;
+		}
+		if (jar == null) throw new IllegalArgumentException("the release has no jar attached");
+		String jarName = Json.string(jar.get("name"), "name");
+		for (Object a : Json.array(release.get("assets"), "assets")) {
+			Map<String, Object> asset = Json.object(a, "asset");
+			if ((jarName + ".sig").equals(asset.get("name"))) sig = asset;
+		}
+		if (sig == null) throw new IllegalArgumentException("the release has no .sig for its jar");
+		Files.write(work.resolve("released.jar"), privateAsset(repo, Json.number(jar.get("id"), "asset id"), token, 64L * 1024 * 1024));
+		Files.write(work.resolve("released.jar.sig"), privateAsset(repo, Json.number(sig.get("id"), "asset id"), token, 64 * 1024));
+		return jarName;
+	}
+
+	/** A private release asset through GitHub's API (with the token), then from GitHub's storage (without it), capped. */
+	private static byte[] privateAsset(String repo, long id, String token, long max) throws IOException, InterruptedException {
+		HttpRequest first = HttpRequest.newBuilder(URI.create("https://api.github.com/repos/" + repo + "/releases/assets/" + id)).timeout(Duration.ofSeconds(60))
+			.header("User-Agent", "myriad-builder").header("Accept", "application/octet-stream").header("Authorization", "token " + token).build();
+		HttpResponse<InputStream> res = HTTP.send(first, HttpResponse.BodyHandlers.ofInputStream());
+		try (InputStream in = res.body()) {
+			if (res.statusCode() / 100 == 3) {
+				String to = res.headers().firstValue("location").orElseThrow(() -> new IOException("a redirect to nowhere"));
+				return download(to, max);
+			}
+			if (res.statusCode() != 200) throw new IOException("GitHub answered HTTP " + res.statusCode() + " for a release asset");
+			byte[] b = in.readNBytes((int) Math.min(max + 1, Integer.MAX_VALUE));
+			if (b.length > max) throw new IOException("the download is too big");
+			return b;
 		}
 	}
 
@@ -276,10 +328,26 @@ public final class Builder {
 			if (tar.waitFor() != 0) throw new IOException("the source archive couldn't be read");
 			url = "https://github.com/" + check(REPO, env("PUBLIC_REPO"), "repository") + "/releases/download/" + check(TAG, env("TAG"), "tag") + "/" + env("JAR_NAME");
 		}
+		String releasedDir = System.getenv("RELEASED_DIR"), releasedName = System.getenv("RELEASED_NAME");
+		boolean fetched = archive != null && releasedDir != null && !releasedDir.isBlank() && releasedName != null && !releasedName.isBlank();
+		if (fetched) {
+			// An invite-only addon's jar, fetched by the fetch job from its private repository and passed on by hash.
+			url = "https://github.com/" + check(REPO, env("PUBLIC_REPO"), "repository") + "/releases/download/" + check(TAG, env("TAG"), "tag") + "/" + releasedName;
+		}
 		if (!ASSET.matcher(url).matches()) throw new IllegalArgumentException("not a release jar: " + oneLine(url));
 		Path jar = work.resolve("released.jar");
-		Files.write(jar, download(url, 64L * 1024 * 1024));
-		Map<String, Object> sigEntry = Json.object(Json.parse(new String(download(url + ".sig", 64 * 1024), StandardCharsets.UTF_8)), "the .sig");
+		Map<String, Object> sigEntry;
+		if (fetched) {
+			byte[] bytes = Files.readAllBytes(Path.of(releasedDir, "released.jar"));
+			if (!Signing.hex(Signing.sha256(bytes)).equals(env("RELEASED_SHA256"))) throw new IllegalArgumentException("the fetched jar was changed");
+			Files.write(jar, bytes);
+			byte[] sig = Files.readAllBytes(Path.of(releasedDir, "released.jar.sig"));
+			if (sig.length > 64 * 1024) throw new IllegalArgumentException("the .sig is too big");
+			sigEntry = Json.object(Json.parse(new String(sig, StandardCharsets.UTF_8)), "the .sig");
+		} else {
+			Files.write(jar, download(url, 64L * 1024 * 1024));
+			sigEntry = Json.object(Json.parse(new String(download(url + ".sig", 64 * 1024), StandardCharsets.UTF_8)), "the .sig");
+		}
 		Map<String, Object> report = Inspect.inspect(jar, src);
 		if (!report.get("sha256").equals(sigEntry.get("sha256")) || !Long.valueOf(Json.number(sigEntry.get("size"), "size")).equals(report.get("size"))
 			|| !java.util.Objects.equals(report.get("version"), sigEntry.get("version"))) {

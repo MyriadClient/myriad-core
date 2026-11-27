@@ -74,6 +74,7 @@ public final class UpdateManager {
 	private final FeedTokens tokens;
 	private final LibraryClient library;
 	private final AutoUpdates auto;
+	private final LibraryAccount account;
 	/** Addons whose release in {@link #releases} came from the Library (they're held to its key rule too). */
 	private final Set<String> fromLibrary = ConcurrentHashMap.newKeySet();
 	/** SHA-256 of installed jars, by path, size and modification time: for badges, worked out once. */
@@ -94,6 +95,12 @@ public final class UpdateManager {
 		this.tokens = new FeedTokens(root.resolve("updates"));
 		this.library = new LibraryClient(root.resolve("updates"));
 		this.auto = new AutoUpdates(root.resolve("updates"));
+		this.account = new LibraryAccount(root);
+	}
+
+	/** The player's Myriad account, for invite-only Library addons. */
+	public LibraryAccount account() {
+		return account;
 	}
 
 	// ---- auto update and removal, the player's choices per addon --------------------------------------------------
@@ -449,7 +456,7 @@ public final class UpdateManager {
 	 */
 	public record LibraryAddon(String id, String name, String description, String author, @Nullable String repo, boolean verified,
 		@Nullable String version, @Nullable String minecraft, @Nullable String newestElsewhere, boolean installed, @Nullable String keyId,
-		int moduleCount, @Nullable String detailsSha, @Nullable String iconSha) {
+		int moduleCount, @Nullable String detailsSha, @Nullable String iconSha, boolean invite, boolean granted) {
 	}
 
 	/** What a listing's newest version adds and what changed in it, from its details document. */
@@ -515,9 +522,9 @@ public final class UpdateManager {
 			});
 	}
 
-	/** Fetches the Library's index (only changes), for Browse. */
+	/** Fetches the Library's index (only changes), and what the account may install, for Browse. */
 	public CompletableFuture<Void> refreshLibrary() {
-		return library.refresh().handle((i, e) -> null);
+		return CompletableFuture.allOf(library.refresh().handle((i, e) -> null), account.refresh().handle((v, e) -> null));
 	}
 
 	public boolean libraryLoading() {
@@ -548,7 +555,7 @@ public final class UpdateManager {
 			boolean installed = FabricLoader.getInstance().isModLoaded(e.listing().id()) || addon(e.listing().id()) != null || installer.pendingAdded(e.listing().id());
 			out.add(new LibraryAddon(e.listing().id(), e.name(), e.description(), e.author(), e.repo(), e.verified(), here == null ? null : here.version().version(),
 				here == null ? null : here.minecraft(), here == null && newest != null ? newest.version().version() + " for Minecraft " + newest.minecraft() : null, installed, key,
-				e.moduleCount(), e.detailsSha(), e.iconSha()));
+				e.moduleCount(), e.detailsSha(), e.iconSha(), e.invite(), e.invite() && account.grants().contains(e.listing().id())));
 		}
 		out.sort(Comparator.comparing(a -> a.name().toLowerCase(java.util.Locale.ROOT)));
 		return out;
@@ -562,7 +569,7 @@ public final class UpdateManager {
 		LibraryIndex.Offered o = LibraryInstall.forMinecraft(e, minecraftVersion());
 		if (o == null) return CompletableFuture.failedFuture(new IOException("it has no release for Minecraft " + minecraftVersion().getFriendlyString()));
 		return LibraryInstall.look(index, e, o, minecraftVersion(), coreVersionAfterUpdates(), otherAddons(""),
-			x -> FabricLoader.getInstance().isModLoaded(x) || addon(x) != null || installer.pendingAdded(x), modsFolder());
+			x -> FabricLoader.getInstance().isModLoaded(x) || addon(x) != null || installer.pendingAdded(x), modsFolder(), e.invite() ? account.token() : null);
 	}
 
 	/** How the Library vouches for {@code a}'s installed jar (exactly that jar, by its hash), or null. */
@@ -639,6 +646,13 @@ public final class UpdateManager {
 		Version core = addon.isCore() ? null : coreVersionAfterUpdates();
 		URI origin = UpdateSource.of(addon.metadata()).map(UpdateManager::tokenOrigin).orElse(null);
 		boolean viaLibrary = fromLibrary.contains(id); // as it was when this update was found, whatever happens meanwhile
+		LibraryIndex.Index li = library.index();
+		LibraryIndex.Entry le = viaLibrary && li != null ? li.entry(id) : null;
+		if (le != null && le.invite()) {
+			// An invite-only addon updates from Myriad's API with the account's session, sent to the API alone.
+			token = account.token();
+			origin = URI.create(dev.myriadclient.impl.MyriadApi.API + "/");
+		}
 		return download(id, r, token, origin).thenAccept(got -> {
 			Verified v = verify(id, r.version(), got, trusted, addon.isCore(), others, minecraftVersion(), core);
 			if (v.problem() != null) throw new CompletionException(new IOException(v.problem()));

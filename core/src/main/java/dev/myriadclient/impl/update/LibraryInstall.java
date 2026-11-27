@@ -3,6 +3,8 @@ package dev.myriadclient.impl.update;
 import com.google.gson.JsonObject;
 import net.fabricmc.loader.api.Version;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
@@ -27,11 +29,13 @@ final class LibraryInstall {
 	}
 
 	static CompletableFuture<LinkInstall.Offer> look(LibraryIndex.Index index, LibraryIndex.Entry entry, LibraryIndex.Offered offered, Version minecraft,
-		Version core, Set<String> myriadIds, Predicate<String> installed, Path mods) {
+		Version core, Set<String> myriadIds, Predicate<String> installed, Path mods, @Nullable String session) {
 		if (index.stale()) return CompletableFuture.failedFuture(new IOException("the Library's information is out of date; try again in a moment"));
 		LibraryStatements.Version v = offered.version();
 		URI url = URI.create(offered.url());
-		return Fetch.bytes(url, v.size(), null, "application/octet-stream").thenApply(jar -> {
+		if (entry.invite() && session == null) return CompletableFuture.failedFuture(new IOException("it's invite-only: sign in with Minecraft and redeem your code first"));
+		// An invite-only jar comes from Myriad's API with the session (sent to the API's own address only).
+		return Fetch.bytes(url, v.size(), entry.invite() ? session : null, "application/octet-stream").thenApply(jar -> {
 			String why = JarCheck.verifyDownload(jar, v.size(), v.sha256());
 			if (why != null) throw LinkInstall.fail(why);
 			JsonObject meta = LinkInstall.modJson(jar);
@@ -50,14 +54,20 @@ final class LibraryInstall {
 			keys.retainAll(checked.keys());
 			DevKey signer = SignatureCheck.signerByLabel(ReleaseStatement.of(id, v.version(), jar, JarCheck.sha256(jar)).bytes(), offered.developer(), keys);
 			if (signer == null) throw LinkInstall.fail("it isn't signed by a developer key both its listing and its jar name");
-			String path = url.getPath();
-			String fileName = path.substring(path.lastIndexOf('/') + 1);
+			String fileName = fileName(entry, offered);
 			if (Names.fileIn(mods, fileName) == null) throw LinkInstall.fail("its file name is odd");
 			if (Files.exists(mods.resolve(fileName))) throw LinkInstall.fail("a file named " + fileName + " is already in mods");
 			String shownName = LibraryIndex.clean(name, 64);
 			return new LinkInstall.Offer(id, name.equals("unknown") || shownName.isEmpty() ? entry.name() : shownName, v.version(), "the Myriad Library", signer.id(), fileName, jar, null,
 				entry.verified() ? LinkInstall.Library.VERIFIED : LinkInstall.Library.REVIEWED);
 		});
+	}
+
+	/** The jar's file name: the release asset's, or for an invite-only release (whose address names no file) id-version.jar. */
+	static String fileName(LibraryIndex.Entry entry, LibraryIndex.Offered o) {
+		if (entry.invite()) return entry.listing().id() + "-" + o.version().version() + ".jar";
+		String path = URI.create(o.url()).getPath();
+		return path.substring(path.lastIndexOf('/') + 1);
 	}
 
 	/** The newest of {@code entry}'s releases that works on {@code minecraft} (by its listed range), or null. */
@@ -73,8 +83,7 @@ final class LibraryInstall {
 	static List<Releases.Release> releases(LibraryIndex.Entry entry) {
 		List<Releases.Release> out = new ArrayList<>();
 		for (LibraryIndex.Offered o : entry.versions()) {
-			String path = URI.create(o.url()).getPath();
-			String file = path.substring(path.lastIndexOf('/') + 1);
+			String file = fileName(entry, o);
 			out.add(new Releases.Release(o.version().version(), null, new Releases.Asset(file, o.url(), o.version().size(), o.version().sha256(), o.developer(), null), o.minecraft()));
 		}
 		return out;

@@ -108,6 +108,26 @@ class LibraryIndexTest {
 	}
 
 	@Test
+	void inviteOnlyReleasesDownloadOnlyFromTheApi() throws IOException {
+		LibraryFixture f = new LibraryFixture();
+		JsonObject closed = f.addon(listing("secret", 1, Source.CLOSED, DEV.pub()), LISTING, version("secret", "1.0.0", LISTING, DEV));
+		closed.getAsJsonObject("info").addProperty("access", "invite");
+		closed.getAsJsonArray("versions").get(0).getAsJsonObject().remove("url");
+		JsonObject open = f.addon(listing("open", 1, Source.OPEN, DEV.pub()), LISTING, version("open", "1.0.0", VERSION, DEV));
+		open.getAsJsonObject("info").addProperty("access", "invite");
+		JsonObject noUrl = f.addon(listing("nourl", 1, Source.CLOSED, DEV.pub()), LISTING, version("nourl", "1.0.0", LISTING, DEV));
+		noUrl.getAsJsonArray("versions").get(0).getAsJsonObject().remove("url");
+		LibraryIndex.Index index = f.verify(new LibraryState()).index();
+
+		LibraryIndex.Entry e = index.entry("secret");
+		assertTrue(e.invite());
+		assertEquals(LibraryIndex.privateUrl("secret", "1.0.0"), e.versions().getFirst().url(), "always the API's own address");
+		assertEquals("secret-1.0.0.jar", LibraryInstall.fileName(e, e.versions().getFirst()));
+		assertFalse(index.entry("open").invite(), "an open-source listing is never invite-only");
+		assertTrue(index.entry("nourl").versions().isEmpty(), "a public listing's release needs a GitHub address");
+	}
+
+	@Test
 	void versionKeyOnlySignsOpenSourceVersions() throws IOException {
 		LibraryFixture f = new LibraryFixture();
 		f.addon(listing("closed", 1, Source.CLOSED, DEV.pub()), LISTING, version("closed", "1.0.0", VERSION, DEV), version("closed", "1.1.0", LISTING, DEV));

@@ -90,6 +90,46 @@ final class Fetch {
 		}, Async.executor());
 	}
 
+	/** An answer from Myriad's API: its status and body, whatever the status (its errors say why in the body). */
+	record Answer(int status, byte[] body) {
+		boolean ok() {
+			return status >= 200 && status < 300;
+		}
+
+		String text() {
+			return new String(body, java.nio.charset.StandardCharsets.UTF_8);
+		}
+	}
+
+	/**
+	 * A call to Myriad's own API: {@code method} with an optional JSON body and session token. Same address rules as
+	 * {@link #bytes}; redirects aren't followed at all (the API never sends one, so a redirect is refused with its token).
+	 */
+	static CompletableFuture<Answer> call(String method, URI uri, @Nullable String json, @Nullable String token, long max) {
+		return CompletableFuture.supplyAsync(() -> {
+			try {
+				String why = refused(uri);
+				if (why != null) throw new IOException(why + ": " + uri.getHost());
+				HttpRequest.Builder req = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(60)).header("User-Agent", USER_AGENT).header("Accept", "application/json")
+					.method(method, json == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(json));
+				if (json != null) req.header("Content-Type", "application/json");
+				if (token != null) req.header("Authorization", "Bearer " + token);
+				HttpResponse<InputStream> res = CLIENT.send(req.build(), HttpResponse.BodyHandlers.ofInputStream());
+				try (InputStream body = res.body()) {
+					if (REDIRECTS.contains(res.statusCode())) throw new IOException("Myriad's API sent a redirect");
+					long declared = res.headers().firstValueAsLong("Content-Length").orElse(-1);
+					if (declared > max) throw new IOException("the answer is larger than it should be");
+					return new Answer(res.statusCode(), read(body, max));
+				}
+			} catch (IOException e) {
+				throw new java.util.concurrent.CompletionException(e);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				throw new java.util.concurrent.CompletionException(e);
+			}
+		}, Async.executor());
+	}
+
 	private static byte[] get(URI start, long max, @Nullable String token, String accept) throws IOException, InterruptedException {
 		return fetch(start, max, token, accept, null).body();
 	}

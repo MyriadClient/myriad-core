@@ -54,6 +54,8 @@ public final class AddonsPanel extends WidgetPanel {
 	private String libraryLooking, libraryOfferFor;
 	private LinkInstall.Offer libraryOffer;
 	private final Map<String, String> libraryNotes = new HashMap<>();
+	/** Invite codes being typed, per invite-only listing. */
+	private final Map<String, String> codeDrafts = new HashMap<>();
 	/** Shortcuts in the title bar: checking at start and checking now. */
 	private final List<TitleControl> titleControls = List.of(
 		TitleControl.toggle(updates::checkEnabled, updates::setCheckEnabled,
@@ -134,6 +136,15 @@ public final class AddonsPanel extends WidgetPanel {
 		for (UpdateManager.LibraryAddon a : list) content.add(new LibraryCard(a).visible(() -> matches(a)));
 		content.add(new Label("Verified: built by Myriad from its public source. Reviewed: closed source, read by Myriad before each release. "
 			+ "Neither means safe: install only what you trust.").dim());
+		var account = updates.account();
+		if (account.signedIn()) {
+			Toolbar who = new Toolbar();
+			who.add("\uf007", "Signed in as " + account.name(), "Your Myriad session, for invite-only addons", () -> {
+			});
+			who.gap();
+			who.add("\uf08b", "Sign out", "Ends the session here and on Myriad's API", () -> account.signOut().whenComplete((v, e) -> Async.onRenderThread(this::rebuild)));
+			content.add(who);
+		}
 	}
 
 	private boolean matches(UpdateManager.LibraryAddon a) {
@@ -241,6 +252,7 @@ public final class AddonsPanel extends WidgetPanel {
 		@Override
 		protected float drawBadges(Canvas c, float right, float cy) {
 			if (a.installed()) right = badge(c, " Installed", right, cy, theme().green.argb(), false) - 4;
+			if (a.invite()) right = badge(c, a.granted() ? " Invited" : " Invite only", right, cy, theme().accent.argb(), !a.granted()) - 4;
 			right = badge(c, a.verified() ? " Verified" : " Reviewed", right, cy, a.verified() ? theme().green.argb() : theme().accent.argb(), true) - 4;
 			if (a.moduleCount() > 0) right = badge(c, a.moduleCount() + (a.moduleCount() == 1 ? " module" : " modules"), right, cy, theme().textDim.argb(), false) - 4;
 			if (a.version() != null) right = badge(c, a.version(), right, cy, theme().textDim.argb(), false) - 4;
@@ -256,7 +268,8 @@ public final class AddonsPanel extends WidgetPanel {
 
 		@Override
 		protected Object bodyKey() {
-			return List.of(a, libraryOffer == null ? "" : libraryOffer.id(), String.valueOf(libraryLooking), libraryNotes.getOrDefault(a.id(), ""), detailsIn);
+			return List.of(a, libraryOffer == null ? "" : libraryOffer.id(), String.valueOf(libraryLooking), libraryNotes.getOrDefault(a.id(), ""), detailsIn,
+				updates.account().signedIn(), updates.account().busy());
 		}
 
 		@Override
@@ -300,6 +313,11 @@ public final class AddonsPanel extends WidgetPanel {
 				body.add(act);
 				return;
 			}
+			// Invite-only and not yet granted: signing in, then the code, in place of Install.
+			if (a.invite() && !a.granted()) {
+				invitePrompt(body, a);
+				return;
+			}
 			// The foot: the source on the left, Install on the right.
 			Toolbar foot = new Toolbar();
 			if (a.repo() != null) {
@@ -313,6 +331,49 @@ public final class AddonsPanel extends WidgetPanel {
 			}
 			if (!foot.isEmpty()) body.add(foot);
 		}
+	}
+
+	/** An invite-only listing the account can't install yet: sign in with Minecraft, then redeem the developer's code. */
+	private void invitePrompt(VBox body, UpdateManager.LibraryAddon a) {
+		var account = updates.account();
+		if (!account.signedIn()) {
+			body.add(new Note("Invite only. Sign in with your Minecraft account, then enter the code its developer gave you.").icon("\uf023"));
+			body.add(new Button(() -> account.busy() ? "Signing in…" : "Sign in with Minecraft", () -> signIn(a.id())).accent()
+				.tooltip("Proves which Minecraft account you are, the way joining a server does: your login goes only to Mojang, never to Myriad."));
+			return;
+		}
+		body.add(new Note("Invite only. Enter the code its developer gave you.").icon("\uf023"));
+		HBox row = new HBox(4);
+		row.addWeighted(new TextField(() -> codeDrafts.getOrDefault(a.id(), "")).onChange(t -> codeDrafts.put(a.id(), t)).onSubmit(t -> redeem(a.id()))
+			.placeholder("myr-ABCDE-FGHIJ-…"), 1);
+		row.addFixed(new Button("Redeem", () -> redeem(a.id())).accent(), 56);
+		body.add(row);
+	}
+
+	private void signIn(String id) {
+		var account = updates.account();
+		if (account.busy()) return;
+		libraryNotes.remove(id);
+		account.link().whenComplete((v, err) -> Async.onRenderThread(() -> {
+			if (err != null) libraryNotes.put(id, "Can't sign in: " + UpdateManager.reasonOf(err) + ".");
+			else Myriad.notifications().toast("Signed in", "Myriad knows you as " + account.name()).show();
+			rebuild();
+		}));
+		rebuild();
+	}
+
+	private void redeem(String id) {
+		String code = codeDrafts.getOrDefault(id, "");
+		if (code.isBlank()) return;
+		libraryNotes.remove(id);
+		updates.account().redeem(code).whenComplete((name, err) -> Async.onRenderThread(() -> {
+			if (err != null) libraryNotes.put(id, "Can't redeem it: " + UpdateManager.reasonOf(err) + ".");
+			else {
+				codeDrafts.remove(id);
+				libraryNotes.put(id, "Invited: you can install " + name + " now.");
+			}
+			rebuild();
+		}));
 	}
 
 	// ---- what's installed ---------------------------------------------------------------------------------------------

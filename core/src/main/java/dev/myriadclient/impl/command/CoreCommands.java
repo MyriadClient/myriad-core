@@ -77,7 +77,7 @@ public final class CoreCommands {
 		// In this order: .help lists them as registered.
 		for (Command c : List.of(
 			ModuleCommands.toggle(), ModuleCommands.bind(), ModuleCommands.set(), ModuleCommands.reset(),
-			ConfigCommands.profile(), ConfigCommands.friend(), ConfigCommands.enemy(), addons(), update(), diagnostics(), help(),
+			ConfigCommands.profile(), ConfigCommands.friend(), ConfigCommands.enemy(), addons(), update(), account(), diagnostics(), help(),
 			ModuleCommands.panic(), baritone(), ConfigCommands.prefix(), antiCheat(), profiler(),
 			ConfigCommands.control(), hooks(), ConfigCommands.macro(), ConfigCommands.cape(), ConfigCommands.theme(),
 			JobCommands.jobs(), JobCommands.job(), packets(),
@@ -124,6 +124,33 @@ public final class CoreCommands {
 
 	/** What the last ".update add <link>" offered, waiting for "yes". */
 	private static dev.myriadclient.impl.update.LinkInstall.Offer pendingOffer;
+
+	private static Command account() {
+		return new Command("account", "Your Myriad account, for invite-only Library addons: .account shows it, .account link signs in with Minecraft, .account logout signs out.") {
+			@Override
+			public void build(LiteralArgumentBuilder<SharedSuggestionProvider> b) {
+				var account = MyriadImpl.get().updates().account();
+				b.executes(c -> {
+					if (!account.signedIn()) info("Not signed in. .account link signs in with your Minecraft account (your login goes only to Mojang).");
+					else info("Signed in as " + account.name() + (account.grants().isEmpty() ? "" : "; invited to " + String.join(", ", account.grants())) + ".");
+					return SINGLE_SUCCESS;
+				});
+				b.then(literal("link").executes(c -> {
+					info("Signing in with Minecraft…");
+					account.link().whenComplete((v, e) -> dev.myriadclient.api.util.Async.onRenderThread(() -> {
+						if (e != null) error("Can't sign in: " + UpdateManager.reasonOf(e));
+						else info("Signed in as " + account.name() + ".");
+					}));
+					return SINGLE_SUCCESS;
+				}));
+				b.then(literal("logout").executes(c -> {
+					account.signOut();
+					info("Signed out.");
+					return SINGLE_SUCCESS;
+				}));
+			}
+		};
+	}
 
 	private static Command update() {
 		return new Command("update", "Updates Myriad and addons: .update lists, .update check, .update all, .update <addon>, .update add <link> installs a new addon.") {

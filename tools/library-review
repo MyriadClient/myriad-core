@@ -4,7 +4,7 @@
 #   tools/library-review pending                     what's waiting (and recent failures)
 #   tools/library-review show <n>                    one submission: its report, findings, and (closed source) its source
 #   tools/library-review accept <n>                  build a new closed-source addon (it waits until accepted)
-#   tools/library-review approve-listing <n> [--accept <finding>]... [--listing-only]
+#   tools/library-review approve-listing <n> [--accept <finding>]... [--listing-only] [--invite]
 #                                                    list a new addon (or re-list one: new build logic, accepted findings),
 #                                                    then sign this version too
 #   tools/library-review approve-version <n>         sign a version that waited for review
@@ -147,11 +147,12 @@ reject)
 approve-version | approve-listing)
 	[[ $# -ge 1 ]] || usage
 	n=$1; shift
-	accepted=(); listing_only=0
+	accepted=(); listing_only=0; invite=0
 	while [[ $# -gt 0 ]]; do
 		case $1 in
 			--accept) accepted+=("$2"); shift 2 ;;
 			--listing-only) listing_only=1; shift ;;
+			--invite) invite=1; shift ;;
 			*) usage ;;
 		esac
 	done
@@ -177,18 +178,27 @@ approve-version | approve-listing)
 			pub=$(field .updates "$r")
 			[[ $pub =~ ^[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}$ ]] || die "the addon names no public releases repository"
 			pub_id=$(gh api "repos/$pub" -q .id); pub_owner=$(gh api "repos/$pub" -q .owner.id); pub_private=$(gh api "repos/$pub" -q .private)
-			[[ $pub_owner == "$owner" && $pub_private == false ]] || die "$pub isn't a public repository of the same owner"
-			# A release from the public repository is an update: its listing's source repository stays as it was.
-			src_id=$(curl -fsS "$API/v1/index.json" | jq -r '.body | fromjson | .addons[] | select(.listing.id == "'"$id"'") | .listing.repoId' || true)
-			[[ $repo_id == "$pub_id" ]] && repo_id=${src_id:-$repo_id}
-			[[ $repo_id != "$pub_id" ]] || die "can't tell the private source repository from the public one"
-			fields+=(repo-id="$repo_id" download-repo-id="$pub_id")
-			shown_repo=$pub
+			if [[ $invite == 1 ]]; then
+				# Invite-only: its releases stay in its private source repository, handed out only by the API to accounts with
+				# a grant. The repository the release came from must be that one.
+				[[ $pub_owner == "$owner" && $pub_private == true && $pub_id == "$repo_id" ]] || die "an invite-only addon releases from its own private repository ($pub)"
+				fields+=(repo-id="$repo_id" download-repo-id="$repo_id")
+				shown_repo=""
+			else
+				[[ $pub_owner == "$owner" && $pub_private == false ]] || die "$pub isn't a public repository of the same owner"
+				# A release from the public repository is an update: its listing's source repository stays as it was.
+				src_id=$(curl -fsS "$API/v1/index.json" | jq -r '.body | fromjson | .addons[] | select(.listing.id == "'"$id"'") | .listing.repoId' || true)
+				[[ $repo_id == "$pub_id" ]] && repo_id=${src_id:-$repo_id}
+				[[ $repo_id != "$pub_id" ]] || die "can't tell the private source repository from the public one"
+				fields+=(repo-id="$repo_id" download-repo-id="$pub_id")
+				shown_repo=$pub
+			fi
 		else
 			fields+=(repo-id="$repo_id")
 		fi
 		for k in $(jq -r '(.keys // [])[]' <<<"$r"); do fields+=(key="$k"); done
-		echo "Listing $id (revision $revision, $builder source) from $(field .repo "$s" | clean):"
+		[[ $invite == 1 && $builder != closed ]] && die "only a closed-source addon can be invite-only"
+		echo "Listing $id (revision $revision, $builder source$([[ $invite == 1 ]] && echo ", invite-only")) from $(field .repo "$s" | clean):"
 		signer library-statement listing "${fields[@]}" | sed 's/^/  /'
 		[[ ${#accepted[@]} -gt 0 ]] && echo "Accepted findings: ${accepted[*]}" | clean
 		confirm "Sign this listing with the listing key?"
@@ -202,11 +212,12 @@ approve-version | approve-listing)
 			accsigs="[$(signed library-sign accepted "$KEYS/library-listing.key" "${afields[@]}")]"
 		fi
 		doc=$(jq -n --argjson r "$r" --argjson s "$sig" --argjson acc "$acc" --argjson accsigs "$accsigs" --arg id "$id" --argjson rev "$revision" --argjson repo "$repo_id" \
-			--argjson owner "$owner" --arg src "$builder" --arg build "$buildhash" --arg shown "$shown_repo" --arg pub "${pub_id:-0}" '
+			--argjson owner "$owner" --arg src "$builder" --arg build "$buildhash" --arg shown "$shown_repo" --arg pub "${pub_id:-0}" --argjson invite "$invite" '
 			{id: $id, revision: $rev, repoId: $repo, ownerId: $owner, source: $src, build: $build, provides: ($r.provides // []), keys: ($r.keys // []),
 			 signatures: [$s], accepted: $acc, acceptedSignatures: $accsigs,
 			 info: {name: ($r.name // $id), description: ($r.description // ""), author: (($r.authors // [])[0] // ""), repo: $shown}}
-			+ (if $src == "closed" then {downloadRepoId: ($pub | tonumber)} else {} end)')
+			+ (if $src == "closed" then {downloadRepoId: (if $invite == 1 then $repo else ($pub | tonumber) end)} else {} end)
+			+ (if $invite == 1 then {access: "invite"} else {} end)')
 		api POST /v1/library/approvals "$(jq -n --argjson d "$doc" --argjson n "$n" '{kind: "listing", doc: $d, submission: $n}')" >/dev/null
 		echo "Listed."
 		[[ $listing_only == 1 ]] && exit 0
@@ -214,7 +225,12 @@ approve-version | approve-listing)
 
 	# The version: the published jar downloaded and hashed here, never trusting the report alone.
 	tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-	curl -fsSL --proto '=https' --max-filesize 67108864 -o "$tmp/addon.jar" "$url" || die "couldn't download $url"
+	# A public release straight from GitHub; an invite-only addon's private one through the API (your admin token), which
+	# fetches it with the Library App's token for that repository alone.
+	if ! curl -fsSL --proto '=https' --max-filesize 67108864 -o "$tmp/addon.jar" "$url" 2>/dev/null; then
+		curl -fsS --proto '=https' --max-filesize 67108864 -H "Authorization: Bearer $(token)" -o "$tmp/addon.jar" "$API/v1/library/submissions/$n/jar" \
+			|| die "couldn't download $url"
+	fi
 	[[ $(sha256sum "$tmp/addon.jar" | cut -d' ' -f1) == "$sha" && $(stat -c %s "$tmp/addon.jar") == "$size" ]] || die "the published jar changed since it was built: not signing"
 	echo "Version $id $ver: $url"
 	echo "  sha256 $sha, $size bytes, commit $commit"

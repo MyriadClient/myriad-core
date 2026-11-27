@@ -353,6 +353,27 @@ public final class AddonPlugin implements Plugin<Project> {
 			t.setDescription("Makes a key to sign the addon's releases with (prints the public half, writes the private half to a file).");
 			t.getOutputDir().set(project.getLayout().getBuildDirectory().dir("signing"));
 		});
+		project.getTasks().register("libraryInvite", LibraryInvite.class, t -> {
+			t.setGroup("publishing");
+			t.setDescription("Manages an invite-only Library listing's invites (-Paction=create|list|revoke|grants|revoke-grant), signed with the developer key.");
+			t.getAddonId().set(project.provider(() -> {
+				Object given = project.findProperty("myriadAddonId");
+				if (given != null) return given.toString();
+				java.io.File mod = project.file("src/main/resources/fabric.mod.json");
+				if (!mod.isFile()) throw new org.gradle.api.GradleException("no src/main/resources/fabric.mod.json: say which addon with -PmyriadAddonId");
+				Object id = dev.myriadclient.gradle.signing.Json.object(dev.myriadclient.gradle.signing.Json.parse(java.nio.file.Files.readString(mod.toPath())), "fabric.mod.json").get("id");
+				if (!(id instanceof String s)) throw new org.gradle.api.GradleException("fabric.mod.json has no id");
+				return s;
+			}));
+			t.getAction().set(project.provider(() -> (String) project.findProperty("action")));
+			t.getKeyFile().set(project.provider(() -> (String) project.findProperty("myriadSigningKeyFile")));
+			t.getApi().set(project.provider(() -> (String) project.findProperty("libraryApi")));
+			t.getUses().set(project.provider(() -> project.hasProperty("uses") ? Integer.parseInt(project.property("uses").toString()) : null));
+			t.getDays().set(project.provider(() -> project.hasProperty("days") ? Integer.parseInt(project.property("days").toString()) : null));
+			t.getLabel().set(project.provider(() -> (String) project.findProperty("label")));
+			t.getInvite().set(project.provider(() -> project.hasProperty("invite") ? Long.parseLong(project.property("invite").toString()) : null));
+			t.getPlayer().set(project.provider(() -> (String) project.findProperty("player")));
+		});
 		project.getTasks().register("signAddon", SignAddon.class, t -> {
 			t.setGroup("publishing");
 			t.setDescription("Signs the built jar for Myriad's updater (writes <jar>.sig; key from MYRIAD_SIGNING_KEY).");

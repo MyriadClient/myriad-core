@@ -68,9 +68,9 @@ final class LibraryIndex {
 	 * small) are fetched separately and used only if their bytes hash to {@code iconSha} and {@code detailsSha}.
 	 */
 	record Entry(Listing listing, String name, String description, String author, @Nullable String repo, List<Offered> versions,
-		int moduleCount, @Nullable String detailsSha, @Nullable String iconSha) {
+		int moduleCount, @Nullable String detailsSha, @Nullable String iconSha, boolean invite) {
 		Entry(Listing listing, String name, String description, String author, @Nullable String repo, List<Offered> versions) {
-			this(listing, name, description, author, repo, versions, 0, null, null);
+			this(listing, name, description, author, repo, versions, 0, null, null, false);
 		}
 
 		boolean verified() {
@@ -271,10 +271,15 @@ final class LibraryIndex {
 
 			List<DevKey> versionSigners = new ArrayList<>(keys.get(Role.LISTING));
 			if (listing.source() == Source.OPEN) versionSigners.addAll(keys.get(Role.VERSION));
+			JsonObject info = a.get("info") instanceof JsonObject io ? io : new JsonObject();
+			// Invite-only (closed source only): its jars come from Myriad's API, for accounts with a grant, never from an
+			// address in the index. The flag can't make anything installable: each jar is still checked against the
+			// listing key's signature on its version.
+			boolean invite = "invite".equals(shown(info, "access", 10)) && listing.source() == Source.CLOSED;
 			List<Offered> offered = new ArrayList<>();
 			Map<String, String> hashOf = new HashMap<>();
 			for (JsonElement ve : array(a, "versions", "a listing", MAX_VERSIONS)) {
-				Offered o = version(ve, listing, versionSigners);
+				Offered o = version(ve, listing, versionSigners, invite);
 				if (o == null) continue;
 				String before = hashOf.putIfAbsent(o.version().version(), o.version().sha256());
 				if (before != null && !before.equals(o.version().sha256())) throw new IOException("it lists two different jars as one version");
@@ -283,7 +288,6 @@ final class LibraryIndex {
 			}
 			offered.sort((x, z) -> Releases.isNewer(x.version().version(), z.version().version()) ? -1 : Releases.isNewer(z.version().version(), x.version().version()) ? 1 : 0);
 
-			JsonObject info = a.get("info") instanceof JsonObject io ? io : new JsonObject();
 			String name = shown(info, "name", 64);
 			String repo = shown(info, "repo", 201);
 			String icon = shown(info, "icon", 64), details = shown(info, "details", 64);
@@ -291,7 +295,7 @@ final class LibraryIndex {
 				? (int) Math.clamp(mc.getAsLong(), 0, MAX_MODULES) : 0;
 			return new Entry(listing, name.isEmpty() ? listing.id() : name, shown(info, "description", 300), shown(info, "author", 64),
 				REPO.matcher(repo).matches() ? repo : null, List.copyOf(offered), moduleCount, SHA256.matcher(details).matches() ? details : null,
-				SHA256.matcher(icon).matches() ? icon : null);
+				SHA256.matcher(icon).matches() ? icon : null, invite);
 		} catch (IOException | IllegalArgumentException ex) {
 			LOG.info("Leaving a Library listing out: {}", ex.getMessage());
 			return null;
@@ -314,7 +318,7 @@ final class LibraryIndex {
 	}
 
 	/** One release, or null when it doesn't check out (then it's simply not offered). */
-	private static @Nullable Offered version(JsonElement ve, Listing listing, List<DevKey> signers) {
+	private static @Nullable Offered version(JsonElement ve, Listing listing, List<DevKey> signers, boolean invite) {
 		try {
 			JsonObject v = object(ve, "a release");
 			Version version = new Version(listing.id(), string(v, "version", "a release", 64), number(v, "size", "a release"),
@@ -323,8 +327,14 @@ final class LibraryIndex {
 			List<Sig> developer = sigs(v, "developer", "a release");
 			ReleaseStatement release = new ReleaseStatement(version.id(), version.version(), version.size(), version.sha256());
 			if (SignatureCheck.signerByLabel(release.bytes(), developer, listing.keys()) == null) return null;
-			String url = string(v, "url", "a release", 500);
-			if (!downloadable(url)) return null;
+			String url;
+			if (invite) {
+				// Whatever the index says, an invite-only release downloads from this one address, with the session.
+				url = privateUrl(listing.id(), version.version());
+			} else {
+				url = string(v, "url", "a release", 500);
+				if (!downloadable(url)) return null;
+			}
 			String minecraft = v.has("minecraft") ? clean(string(v, "minecraft", "a release", 200), 200) : null;
 			return new Offered(version, url, minecraft, developer);
 		} catch (IOException | IllegalArgumentException ex) {
@@ -386,6 +396,11 @@ final class LibraryIndex {
 		while (!lines.isEmpty() && lines.getLast().isEmpty()) lines.removeLast();
 		String out = String.join("\n", lines);
 		return out.codePointCount(0, out.length()) > max ? out.substring(0, out.offsetByCodePoints(0, max)).strip() : out;
+	}
+
+	/** Where an invite-only release downloads from: Myriad's API, which hands it only to accounts with a grant. */
+	static String privateUrl(String id, String version) {
+		return dev.myriadclient.impl.MyriadApi.API + "/v1/library/private/" + id + "/" + version;
 	}
 
 	/** Display text from {@code o}: see {@link #clean}. */
