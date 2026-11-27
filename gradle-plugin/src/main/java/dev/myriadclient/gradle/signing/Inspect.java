@@ -54,7 +54,17 @@ import java.util.zip.ZipInputStream;
  * <li>{@code multi-release}: a multi-release jar, whose classes differ by Java version.</li>
  * <li>{@code obfuscated}: mostly one- and two-letter class names: unreadable in review, so refused.</li>
  * <li>{@code unexplained:<class>}: a class with no source file it could come from (only with the source given).</li>
+ * <li>{@code account:<class>}: reaches for the player's session or login (the access token, Mojang's session service, the
+ * launcher's account files, browser or Discord storage): never accepted for good, every version that has it is read.</li>
+ * <li>{@code mixin-network:<class>}: a mixin into the game's connection, packet handling, login or account classes.</li>
  * </ul>
+ *
+ * <p>What can reach the outside world or other code ({@link #PER_CLASS}) is found per class ({@code network:<class>}), so
+ * accepting it for one class never lets a new class do the same unseen.
+ *
+ * <p>Beside the findings, the report says what the addon adds, for Browse: its modules (read from the bytecode, each
+ * Module subclass's name, description and tag as passed to {@code super(...)}), and its changelog for this version (from
+ * the source's {@code CHANGELOG.md}, when the source is given).
  */
 public final class Inspect {
 	private static final long MAX_ENTRY = 32L * 1024 * 1024;
@@ -62,6 +72,20 @@ public final class Inspect {
 	private static final Pattern URL = Pattern.compile("(?i)\\b(?:https?|wss?)://([a-z0-9.-]{1,253})(?::\\d{1,5})?(?:[/?#]|$)");
 	private static final Pattern NATIVE = Pattern.compile("(?i).+\\.(so|dll|dylib|jnilib)");
 	private static final Set<String> LOADER_SUPERS = Set.of("java/lang/ClassLoader", "java/net/URLClassLoader", "java/security/SecureClassLoader");
+	/** Kinds found per class: accepting one class's never covers another's. */
+	static final Set<String> PER_CLASS = Set.of("classloader", "unsafe", "process", "native-load", "network", "reflection", "instrument", "desktop", "jndi",
+		"deserialization", "myriad-internals", "account");
+	/** Bare host names and addresses in constants (a URL's host is caught with its scheme too). */
+	private static final Pattern BARE_HOST = Pattern.compile("(?i)(?<![\\w.-])((?:[a-z0-9-]{1,63}\\.)+(?:com|net|org|io|dev|gg|xyz|me|co|ru|cn|uk|de|app|cloud|site|online|tk|top|info|biz|link|sh|pw|cc|su|ws|club|fun|lol))(?![\\w.-])");
+	private static final Pattern IPV4 = Pattern.compile("(?<![\\w.])((?:25[0-5]|2[0-4]\\d|1?\\d?\\d)(?:\\.(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)){3})(?::\\d{1,5})?(?![\\w.])");
+	/** Constants that name the player's accounts or a browser's or Discord's storage. */
+	private static final List<String> ACCOUNT_TEXT = List.of("launcher_accounts", "launcher_profiles", "accesstoken", "local storage", "leveldb", "login data",
+		"microsoft_accounts", "session.json", ".minecraft" + "/");
+	private static final String MODULE = "dev/myriadclient/api/module/Module", TAG_DESC = "Ldev/myriadclient/api/module/Tag;";
+	private static final String USER = "net/minecraft/client/User";
+	/** The account's secrets, by getter or by field. */
+	private static final Set<String> ACCOUNT_MEMBERS = Set.of("accessToken", "getAccessToken", "sessionId", "getSessionId", "xuid", "getXuid", "clientId", "getClientId");
+	private static final int MAX_MODULES = 300, MAX_CHANGELOG = 4000;
 
 	private Inspect() {
 	}
@@ -94,6 +118,7 @@ public final class Inspect {
 		report.put("updates", myriad.get("updates") instanceof String s ? s : null);
 
 		Set<String> classes = new TreeSet<>();
+		Map<String, ClassInfo> infos = new LinkedHashMap<>();
 		int shortNames = 0;
 		// Nested jars the loader would load: whatever fabric.mod.json names, zip or not.
 		for (Object j : meta.get("jars") instanceof List<?> l ? l : List.of()) {
@@ -118,9 +143,16 @@ public final class Inspect {
 			classes.add(cls);
 			String simple = cls.substring(cls.lastIndexOf('/') + 1);
 			if (simple.length() <= 2 || !simple.chars().allMatch(c -> c < 0x80)) shortNames++;
-			scanClass(cls, e.getValue(), findings);
+			ClassInfo info = scanClass(cls, e.getValue(), findings);
+			if (info != null) infos.put(cls, info);
 		}
 		report.put("classes", (long) classes.size());
+		accessWidener(meta, entries, findings);
+		report.put("modules", modules(infos));
+		if (source != null) {
+			String log = changelog(source, Json.string(meta.get("version"), "the version"));
+			if (log != null) report.put("changelog", log);
+		}
 		if (classes.size() >= 10 && shortNames * 10 >= classes.size() * 3) add(findings, "obfuscated", shortNames + " of " + classes.size() + " classes have one- or two-letter names");
 		if (source != null) unexplained(classes, source, findings);
 
@@ -180,10 +212,18 @@ public final class Inspect {
 		return out;
 	}
 
-	/** What a class refers to, from its constant pool (nothing is loaded or run). */
-	static void scanClass(String cls, byte[] bytes, TreeMap<String, TreeSet<String>> findings) {
+	/** What one class is, for finding modules: its superclass, whether it's abstract, and how its constructor calls super. */
+	record ClassInfo(String superName, boolean isAbstract, SuperCall superCall) {
+	}
+
+	/** The string constants pushed and the tag read just before a constructor called its superclass's. */
+	record SuperCall(List<String> strings, String tag, String descriptor) {
+	}
+
+	/** What a class refers to and how it calls its super constructor, from its bytes (nothing is loaded or run). */
+	static ClassInfo scanClass(String cls, byte[] bytes, TreeMap<String, TreeSet<String>> findings) {
 		try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes))) {
-			if (in.readInt() != 0xCAFEBABE) return;
+			if (in.readInt() != 0xCAFEBABE) return null;
 			in.readUnsignedShort();
 			in.readUnsignedShort();
 			int count = in.readUnsignedShort();
@@ -209,32 +249,245 @@ public final class Inspect {
 					}
 					default -> {
 						add(findings, "unreadable-class", cls);
-						return;
+						return null;
 					}
 				}
 			}
-			in.readUnsignedShort();
+			int access = in.readUnsignedShort();
 			in.readUnsignedShort();
 			int superIndex = in.readUnsignedShort();
 			String superName = superIndex > 0 && superIndex < count && tag[superIndex] == 7 ? utf[a[superIndex]] : null;
 			if (superName != null && LOADER_SUPERS.contains(superName)) add(findings, "classloader", cls);
+			boolean mixin = false;
 			for (int k = 1; k < count; k++) {
+				if (tag[k] == 1 && "Lorg/spongepowered/asm/mixin/Mixin;".equals(utf[k])) mixin = true;
 				if (tag[k] == 7 && utf[a[k]] != null) classRef(cls, utf[a[k]], findings);
 				if ((tag[k] == 10 || tag[k] == 11) && a[k] < count && b[k] < count && tag[a[k]] == 7 && tag[b[k]] == 12) {
 					String owner = utf[a[a[k]]], name = utf[a[b[k]]];
 					if (owner != null && name != null) methodRef(cls, owner, name, findings);
 				}
+				// A field read directly (made accessible by an access widener) counts like its getter.
+				if (tag[k] == 9 && a[k] < count && b[k] < count && tag[a[k]] == 7 && tag[b[k]] == 12) {
+					String owner = utf[a[a[k]]], name = utf[a[b[k]]];
+					if (owner != null && name != null && owner.equals(USER) && ACCOUNT_MEMBERS.contains(name)) add(findings, "account", cls);
+				}
 				if (tag[k] == 8 && a[k] < count && utf[a[k]] != null) constant(cls, utf[a[k]], findings);
 			}
+			if (mixin) {
+				for (int k = 1; k < count; k++) {
+					if (tag[k] != 1 || utf[k] == null) continue;
+					String target = utf[k].startsWith("L") && utf[k].endsWith(";") ? utf[k].substring(1, utf[k].length() - 1) : utf[k].replace('.', '/');
+					if (accountClass(target)) add(findings, "account", cls);
+					else if (networkClass(target)) add(findings, "mixin-network", cls);
+				}
+			}
+			// The rest of the class: interfaces and fields skipped, each method's code read for its super constructor call.
+			int interfaces = in.readUnsignedShort();
+			in.skipNBytes(interfaces * 2L);
+			int fields = in.readUnsignedShort();
+			for (int f = 0; f < fields; f++) {
+				in.skipNBytes(6);
+				skipAttributes(in);
+			}
+			SuperCall superCall = null;
+			int methods = in.readUnsignedShort();
+			for (int m = 0; m < methods; m++) {
+				in.readUnsignedShort();
+				int nameIndex = in.readUnsignedShort();
+				in.readUnsignedShort();
+				boolean init = nameIndex < count && "<init>".equals(utf[nameIndex]);
+				int attrs = in.readUnsignedShort();
+				for (int at = 0; at < attrs; at++) {
+					int attrName = in.readUnsignedShort();
+					int length = in.readInt();
+					if (init && superCall == null && attrName < count && "Code".equals(utf[attrName])) {
+						byte[] attr = in.readNBytes(length);
+						superCall = superCall(attr, superName, utf, tag, a, b, count);
+					} else {
+						in.skipNBytes(length);
+					}
+				}
+			}
+			return new ClassInfo(superName, (access & 0x0400) != 0 || (access & 0x0200) != 0, superCall);
 		} catch (IOException | RuntimeException e) {
 			add(findings, "unreadable-class", cls);
+			return null;
+		}
+	}
+
+	private static void skipAttributes(DataInputStream in) throws IOException {
+		int attrs = in.readUnsignedShort();
+		for (int at = 0; at < attrs; at++) {
+			in.readUnsignedShort();
+			in.skipNBytes(in.readInt() & 0xffffffffL);
+		}
+	}
+
+	/**
+	 * Walks a constructor's bytecode to its first call of the superclass's constructor: the string constants pushed since
+	 * the last other call, and the last {@code Tag} read, are what it was given.
+	 */
+	private static SuperCall superCall(byte[] attr, String superName, String[] utf, int[] tag, int[] a, int[] b, int count) {
+		if (superName == null || attr.length < 8) return null;
+		int codeLength = ((attr[4] & 0xff) << 24) | ((attr[5] & 0xff) << 16) | ((attr[6] & 0xff) << 8) | (attr[7] & 0xff);
+		int start = 8, end = Math.min(attr.length, start + codeLength);
+		List<String> strings = new ArrayList<>();
+		String lastTag = null;
+		int pc = start;
+		while (pc < end) {
+			int op = attr[pc] & 0xff;
+			int len = instructionLength(attr, pc, start);
+			if (len <= 0) return null;
+			int index = op == 0x12 ? attr[pc + 1] & 0xff : (pc + 2 < end) ? ((attr[pc + 1] & 0xff) << 8) | (attr[pc + 2] & 0xff) : -1;
+			if ((op == 0x12 || op == 0x13) && index > 0 && index < count && tag[index] == 8 && utf[a[index]] != null) {
+				strings.add(utf[a[index]]);
+			} else if (op == 0xb2 && index > 0 && index < count && tag[index] == 9 && tag[b[index]] == 12) {
+				if (TAG_DESC.equals(utf[b[b[index]]])) lastTag = utf[a[b[index]]];
+			} else if (op >= 0xb6 && op <= 0xba) {
+				if (op == 0xb7 && index > 0 && index < count && (tag[index] == 10 || tag[index] == 11) && tag[a[index]] == 7 && tag[b[index]] == 12) {
+					String owner = utf[a[a[index]]], name = utf[a[b[index]]];
+					if (superName.equals(owner) && "<init>".equals(name)) return new SuperCall(List.copyOf(strings), lastTag, utf[b[b[index]]]);
+				}
+				strings.clear();
+			}
+			pc += len;
+		}
+		return null;
+	}
+
+	/** How many bytes the instruction at {@code pc} takes ({@code base}: where the code starts, for the switches' padding). */
+	private static int instructionLength(byte[] code, int pc, int base) {
+		int op = code[pc] & 0xff;
+		return switch (op) {
+			case 0x10, 0x12, 0x15, 0x16, 0x17, 0x18, 0x19, 0x36, 0x37, 0x38, 0x39, 0x3a, 0xa9, 0xbc -> 2;
+			case 0x11, 0x13, 0x14, 0x84, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8, 0xbb, 0xbd, 0xc0, 0xc1, 0xc6, 0xc7 -> 3;
+			case 0xc5 -> 4;
+			case 0xb9, 0xba, 0xc8, 0xc9 -> 5;
+			case 0xc4 -> (code[pc + 1] & 0xff) == 0x84 ? 6 : 4;
+			case 0xaa -> {
+				int p = pc + 1 + ((4 - ((pc + 1 - base) % 4)) % 4);
+				int low = readInt(code, p + 4), high = readInt(code, p + 8);
+				yield (p - pc) + 12 + (high - low + 1) * 4;
+			}
+			case 0xab -> {
+				int p = pc + 1 + ((4 - ((pc + 1 - base) % 4)) % 4);
+				int pairs = readInt(code, p + 4);
+				yield (p - pc) + 8 + pairs * 8;
+			}
+			default -> op >= 0x99 && op <= 0xa8 ? 3 : 1;
+		};
+	}
+
+	private static int readInt(byte[] b, int p) {
+		return ((b[p] & 0xff) << 24) | ((b[p + 1] & 0xff) << 16) | ((b[p + 2] & 0xff) << 8) | (b[p + 3] & 0xff);
+	}
+
+	/** The modules the jar adds: every concrete class whose superclasses (in this jar) reach Module, by what it passed up. */
+	static List<Map<String, Object>> modules(Map<String, ClassInfo> infos) {
+		List<Map<String, Object>> out = new ArrayList<>();
+		Set<String> names = new HashSet<>();
+		for (Map.Entry<String, ClassInfo> e : infos.entrySet()) {
+			ClassInfo c = e.getValue();
+			if (c.isAbstract() || c.superCall() == null || !reachesModule(e.getKey(), infos)) continue;
+			List<String> s = c.superCall().strings();
+			if (s.isEmpty()) continue;
+			String name = s.size() >= 2 ? s.get(s.size() - 2) : s.getFirst();
+			String description = s.size() >= 2 ? s.getLast() : "";
+			if (name.isBlank() || name.length() > 64 || !names.add(name)) continue;
+			Map<String, Object> m = new LinkedHashMap<>();
+			m.put("name", name);
+			m.put("description", description.length() > 200 ? description.substring(0, 200) : description);
+			m.put("tag", c.superCall().tag() == null ? "" : titleCase(c.superCall().tag()));
+			out.add(m);
+			if (out.size() >= MAX_MODULES) break;
+		}
+		out.sort(java.util.Comparator.comparing(m -> ((String) m.get("name")).toLowerCase(java.util.Locale.ROOT)));
+		return out;
+	}
+
+	private static boolean reachesModule(String cls, Map<String, ClassInfo> infos) {
+		String at = cls;
+		for (int depth = 0; depth < 16 && at != null; depth++) {
+			ClassInfo c = infos.get(at);
+			if (c == null) return false;
+			if (MODULE.equals(c.superName())) return true;
+			at = c.superName();
+		}
+		return false;
+	}
+
+	private static String titleCase(String constant) {
+		String lower = constant.toLowerCase(java.util.Locale.ROOT).replace('_', ' ');
+		return lower.isEmpty() ? lower : Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
+	}
+
+	/**
+	 * This version's part of {@code CHANGELOG.md} at the source's root: the lines under the heading that names it
+	 * ({@code ## 2.9.0}, {@code ## [2.9.0] - date}), up to the next heading of that level; null when there's none.
+	 */
+	static String changelog(Path source, String version) {
+		Path file = source.resolve("CHANGELOG.md");
+		if (!Files.isRegularFile(file)) return null;
+		List<String> lines;
+		try {
+			if (Files.size(file) > 2 * 1024 * 1024) return null;
+			lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+		} catch (IOException e) {
+			return null;
+		}
+		Pattern heading = Pattern.compile("^##\\s+\\[?v?" + Pattern.quote(version) + "\\]?(?:\\s|$|[-(:]).*");
+		StringBuilder out = new StringBuilder();
+		boolean in = false;
+		for (String line : lines) {
+			if (line.startsWith("## ") || line.equals("##")) {
+				if (in) break;
+				in = heading.matcher(line).matches();
+				continue;
+			}
+			if (in) out.append(line).append('\n');
+		}
+		String text = out.toString().strip();
+		if (text.isEmpty()) return null;
+		return text.length() > MAX_CHANGELOG ? text.substring(0, MAX_CHANGELOG).strip() : text;
+	}
+
+	/** The player's account: a mixin into it, or an access widener opening it, is read every release. */
+	private static boolean accountClass(String t) {
+		return t.equals(USER) || t.startsWith("com/mojang/authlib/");
+	}
+
+	/** The connection, packets and login: a mixin into them is a finding of its own. */
+	private static boolean networkClass(String t) {
+		return t.equals("net/minecraft/network/Connection") || t.startsWith("net/minecraft/network/Connection$")
+			|| t.equals("net/minecraft/client/multiplayer/ClientPacketListener") || t.equals("net/minecraft/client/multiplayer/ClientHandshakePacketListenerImpl");
+	}
+
+	/**
+	 * The access widener (or class tweaker) {@code fabric.mod.json} names: one that opens the player's account to the
+	 * addon's code is an {@code account} finding, as reading it through a getter would be.
+	 */
+	private static void accessWidener(Map<String, Object> meta, Map<String, byte[]> entries, TreeMap<String, TreeSet<String>> findings) {
+		for (String key : List.of("accessWidener", "classTweaker")) {
+			if (!(meta.get(key) instanceof String path)) continue;
+			byte[] file = entries.get(path.startsWith("/") ? path.substring(1) : path);
+			if (file == null) continue;
+			for (String line : new String(file, StandardCharsets.UTF_8).split("\\R")) {
+				String[] words = line.strip().split("\\s+");
+				for (String w : words) {
+					if (accountClass(w)) {
+						add(findings, "account", path);
+						break;
+					}
+				}
+			}
 		}
 	}
 
 	private static final Set<String> NETWORK_CLASSES = Set.of("java/net/Socket", "java/net/ServerSocket", "java/net/DatagramSocket", "java/net/MulticastSocket",
 		"java/net/URLConnection", "java/net/HttpURLConnection", "java/nio/channels/SocketChannel", "java/nio/channels/ServerSocketChannel",
 		"java/nio/channels/DatagramChannel", "java/nio/channels/AsynchronousSocketChannel", "java/nio/channels/AsynchronousServerSocketChannel",
-		"net/minecraft/util/HttpUtil");
+		"net/minecraft/util/HttpUtil", "net/minecraft/network/Connection", "com/mojang/authlib/minecraft/client/MinecraftClient",
+		"com/mojang/authlib/HttpAuthenticationService");
 	private static final List<String> NETWORK_PACKAGES = List.of("java/net/http/", "javax/net/ssl/", "org/apache/http/", "org/apache/hc/", "okhttp3/",
 		"com/sun/net/httpserver/", "jdk/internal/net/");
 
@@ -248,6 +501,7 @@ public final class Inspect {
 		if (ref.startsWith("javax/naming/")) add(f, "jndi", cls);
 		if (ref.equals("java/io/ObjectInputStream")) add(f, "deserialization", cls);
 		if (ref.startsWith("dev/myriadclient/impl/")) add(f, "myriad-internals", cls);
+		if (ref.equals("com/mojang/authlib/minecraft/MinecraftSessionService") || ref.startsWith("com/mojang/authlib/yggdrasil/")) add(f, "account", cls);
 	}
 
 	private static void methodRef(String cls, String owner, String name, TreeMap<String, TreeSet<String>> f) {
@@ -264,6 +518,7 @@ public final class Inspect {
 			|| (owner.equals("java/lang/invoke/MethodHandles$Lookup") && (name.startsWith("find") || name.startsWith("unreflect")))
 			|| (owner.equals("java/lang/invoke/MethodHandles") && name.equals("privateLookupIn"))
 			|| (owner.equals("java/lang/ClassLoader") && name.equals("loadClass"))) add(f, "reflection", cls);
+		if (owner.equals(USER) && ACCOUNT_MEMBERS.contains(name)) add(f, "account", cls);
 	}
 
 	private static boolean startsWith(byte[] b, int... magic) {
@@ -276,6 +531,17 @@ public final class Inspect {
 		if (s.startsWith("dev.myriadclient.impl.")) add(f, "myriad-internals", cls);
 		Matcher m = URL.matcher(s);
 		while (m.find()) add(f, "host:" + m.group(1).toLowerCase(java.util.Locale.ROOT), cls);
+		Matcher bare = BARE_HOST.matcher(s);
+		while (bare.find()) add(f, "host:" + bare.group(1).toLowerCase(java.util.Locale.ROOT), cls);
+		Matcher ip = IPV4.matcher(s);
+		while (ip.find()) add(f, "host:" + ip.group(1), cls);
+		String lower = s.toLowerCase(java.util.Locale.ROOT);
+		for (String t : ACCOUNT_TEXT) {
+			if (lower.contains(t)) {
+				add(f, "account", cls);
+				break;
+			}
+		}
 	}
 
 	/** Classes that no source file in the repository could have made (inner and synthetic classes follow their outer class). */
@@ -340,7 +606,9 @@ public final class Inspect {
 		}
 	}
 
+	/** Notes a finding; kinds in {@link #PER_CLASS} are kept apart per class ({@code where} is the class then). */
 	private static void add(TreeMap<String, TreeSet<String>> f, String id, String where) {
-		f.computeIfAbsent(id, k -> new TreeSet<>()).add(where);
+		String key = PER_CLASS.contains(id) || id.equals("mixin-network") ? id + ":" + where : id;
+		f.computeIfAbsent(key, k -> new TreeSet<>()).add(where);
 	}
 }

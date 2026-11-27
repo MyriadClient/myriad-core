@@ -85,9 +85,9 @@ class LibraryToolsTest {
 		assertEquals("~26.3", r.get("minecraft"));
 		List<String> ids = new ArrayList<>();
 		for (Object f : Json.array(r.get("findings"), "findings")) ids.add((String) ((Map<?, ?>) f).get("id"));
-		assertTrue(ids.contains("process"), ids.toString());
+		assertTrue(ids.contains("process:com/example/Good"), ids.toString());
 		assertTrue(ids.contains("host:example.com"), ids.toString());
-		assertTrue(ids.contains("classloader"), ids.toString());
+		assertTrue(ids.contains("classloader:com/example/Sneaky"), ids.toString());
 		assertTrue(ids.contains("native-file:natives/libevil.so"), ids.toString());
 		assertTrue(ids.stream().anyMatch(i -> i.startsWith("nested:META-INF/jars/lib.jar:")), ids.toString());
 		assertTrue(ids.contains("unexplained:com/example/Sneaky"), ids.toString());
@@ -257,7 +257,7 @@ class LibraryToolsTest {
 		for (Object f : Json.array(Inspect.inspect(jar, null).get("findings"), "findings")) ids.add((String) ((Map<?, ?>) f).get("id"));
 		assertTrue(ids.contains("hidden-class:META-INF/x/Evil.class"), ids.toString());
 		assertTrue(ids.contains("hidden-class:assets/x/pic.png"), ids.toString());
-		assertTrue(ids.contains("process"), "hidden classes are scanned too: " + ids);
+		assertTrue(ids.stream().anyMatch(i -> i.startsWith("process:")), "hidden classes are scanned too: " + ids);
 		assertTrue(ids.stream().anyMatch(i -> i.startsWith("nested:assets/x/data.bin:")), ids.toString());
 		assertTrue(ids.stream().anyMatch(i -> i.startsWith("nested:assets/x/other.bin:")), ids.toString());
 		assertTrue(ids.contains("multi-release"), ids.toString());
@@ -308,6 +308,12 @@ class LibraryToolsTest {
 		assertFalse(Builder.decide(l, Set.of(), summary(dev, List.of(stranger.publicText()), List.of()), a, BUILD, Map.of()).sign(), "the jar stopped listing the key");
 		assertFalse(Builder.decide(l, Set.of(), summary(dev, jarKeys, List.of("process")), a, BUILD, Map.of()).sign(), "a new finding");
 		assertFalse(Builder.decide(l, Set.of("obfuscated"), summary(dev, jarKeys, List.of("obfuscated")), a, BUILD, Map.of()).sign(), "obfuscation is never accepted");
+		assertFalse(Builder.decide(l, Set.of("account:com/example/A"), summary(dev, jarKeys, List.of("account:com/example/A")), a, BUILD, Map.of()).sign(),
+			"reaching for the account is read every release");
+		assertFalse(Builder.decide(l, Set.of("too-many-findings"), summary(dev, jarKeys, List.of("too-many-findings")), a, BUILD, Map.of()).sign(),
+			"findings that weren't all passed on are never accepted");
+		assertFalse(Builder.decide(l, Set.of("network:com/example/Old"), summary(dev, jarKeys, List.of("network:com/example/Old", "network:com/example/New")), a, BUILD,
+			Map.of()).sign(), "accepting one class's network use doesn't cover a new class");
 		Map<String, Object> other = summary(dev, jarKeys, List.of());
 		other.put("id", "other-addon");
 		assertFalse(Builder.decide(l, Set.of(), other, a, BUILD, Map.of()).sign(), "another addon");
@@ -351,5 +357,104 @@ class LibraryToolsTest {
 	void downloadsOnlyFromGitHub() {
 		assertThrows(java.io.IOException.class, () -> Builder.download("https://evil.example/x.jar", 10));
 		assertThrows(java.io.IOException.class, () -> Builder.download("http://github.com/x.jar", 10));
+	}
+
+	// ---- what Browse shows: modules and the changelog ------------------------------------------------------------------
+
+	/** Compiles {@code sources} (path → code) against stand-ins for Myriad's Module and Tag, into a jar with them. */
+	static Path moduleJar(Path dir, Map<String, String> sources) throws Exception {
+		Map<String, String> all = new java.util.LinkedHashMap<>();
+		all.put("dev/myriadclient/api/module/Tag.java", "package dev.myriadclient.api.module; public record Tag(String id) {}");
+		all.put("dev/myriadclient/api/module/Module.java", "package dev.myriadclient.api.module; public abstract class Module { protected Module(Tag tag, String name, String description) {} }");
+		all.put("com/example/Tags.java", "package com.example; import dev.myriadclient.api.module.Tag; public final class Tags { public static final Tag COMBAT = new Tag(\"combat\"); "
+			+ "public static final Tag WORLD = new Tag(\"world\"); }");
+		all.putAll(sources);
+		Path src = dir.resolve("src"), out = dir.resolve("classes");
+		List<String> args = new ArrayList<>(List.of("-d", out.toString()));
+		all.put("net/minecraft/client/User.java", "package net.minecraft.client; public class User { public String accessToken; public String getName() { return \"\"; } }");
+		for (Map.Entry<String, String> e : all.entrySet()) {
+			if (e.getKey().startsWith("@")) continue;
+			Path f = src.resolve(e.getKey());
+			Files.createDirectories(f.getParent());
+			Files.writeString(f, e.getValue());
+			args.add(f.toString());
+		}
+		Files.createDirectories(out);
+		assertEquals(0, ToolProvider.getSystemJavaCompiler().run(null, null, null, args.toArray(String[]::new)));
+		Path jar = dir.resolve("modules.jar");
+		try (ZipOutputStream z = new ZipOutputStream(Files.newOutputStream(jar)); var walk = Files.walk(out)) {
+			z.putNextEntry(new ZipEntry("fabric.mod.json"));
+			z.write("{\"schemaVersion\":1,\"id\":\"mods\",\"version\":\"2.0.0\",\"accessWidener\":\"mods.accesswidener\"}".getBytes(StandardCharsets.UTF_8));
+			z.putNextEntry(new ZipEntry("mods.accesswidener"));
+			z.write(sources.getOrDefault("@aw", "accessWidener v2 named\n").getBytes(StandardCharsets.UTF_8));
+			for (Path p : walk.filter(Files::isRegularFile).toList()) {
+				String name = out.relativize(p).toString().replace('\\', '/');
+				// The stand-ins are core's, not the addon's: like a real addon jar, it doesn't carry them.
+				if (name.startsWith("dev/") || name.startsWith("net/")) continue;
+				z.putNextEntry(new ZipEntry(name));
+				z.write(Files.readAllBytes(p));
+			}
+		}
+		return jar;
+	}
+
+	@Test
+	void modulesAreReadFromTheBytecode(@TempDir Path dir) throws Exception {
+		Path jar = moduleJar(dir, Map.of(
+			"com/example/KillAura.java", "package com.example; public class KillAura extends dev.myriadclient.api.module.Module { "
+				+ "public KillAura() { super(Tags.COMBAT, \"Kill Aura\", \"Attacks targets in reach.\"); } }",
+			"com/example/Nuker.java", "package com.example; public class Nuker extends dev.myriadclient.api.module.Module { "
+				+ "private final int r; public Nuker() { super(Tags.WORLD, \"Nuker\", \"Breaks blocks around you.\"); r = Integer.parseInt(\"3\"); } }",
+			"com/example/Base.java", "package com.example; public abstract class Base extends dev.myriadclient.api.module.Module { "
+				+ "protected Base(String name) { super(Tags.COMBAT, name, \"shared\"); } }",
+			"com/example/Child.java", "package com.example; public class Child extends Base { public Child() { super(\"Child Module\"); } }",
+			"com/example/NotAModule.java", "package com.example; public class NotAModule { public NotAModule() { String s = \"Fake\"; } }"));
+		List<?> modules = Json.array(Inspect.inspect(jar, null).get("modules"), "modules");
+		List<String> names = new ArrayList<>();
+		for (Object m : modules) names.add((String) ((Map<?, ?>) m).get("name"));
+		assertEquals(List.of("Child Module", "Kill Aura", "Nuker"), names);
+		Map<?, ?> kill = (Map<?, ?>) modules.get(1);
+		assertEquals("Attacks targets in reach.", kill.get("description"));
+		assertEquals("Combat", kill.get("tag"));
+		assertEquals("World", ((Map<?, ?>) modules.get(2)).get("tag"));
+	}
+
+	@Test
+	void theChangelogSectionForTheVersionIsRead(@TempDir Path dir) throws Exception {
+		Files.writeString(dir.resolve("CHANGELOG.md"), "# Changelog\n\n## 2.1.0\n\n- Newer\n\n## [2.0.0] - 2026-11-26\n\n### Added\n- Kill Aura\n- Nuker\n\n## 1.9.0\n- Old\n");
+		assertEquals("### Added\n- Kill Aura\n- Nuker", Inspect.changelog(dir, "2.0.0"));
+		assertEquals("- Newer", Inspect.changelog(dir, "2.1.0"));
+		assertNull(Inspect.changelog(dir, "2.0"), "a version is matched whole");
+		assertNull(Inspect.changelog(dir, "3.0.0"));
+		Files.writeString(dir.resolve("CHANGELOG.md"), "## 2.0.0\n" + "x".repeat(9000));
+		assertEquals(4000, Inspect.changelog(dir, "2.0.0").length());
+	}
+
+	@Test
+	void accountsHostsAndSensitiveMixinsAreFound(@TempDir Path dir) throws Exception {
+		Path jar = moduleJar(dir, Map.of(
+			"com/example/Grab.java", "package com.example; public class Grab { String a = \"%APPDATA%/.minecraft/launcher_accounts.json\"; "
+				+ "String b = \"evil-collector.xyz\"; String c = \"10.0.0.5:8080\"; String d = \"1.21.4\"; String e = \"com.example.thing\"; }",
+			"com/example/Plain.java", "package com.example; public class Plain { String x = \"just text\"; }"));
+		List<String> ids = new ArrayList<>();
+		for (Object f : Json.array(Inspect.inspect(jar, null).get("findings"), "findings")) ids.add((String) ((Map<?, ?>) f).get("id"));
+		assertTrue(ids.contains("account:com/example/Grab"), ids.toString());
+		assertTrue(ids.contains("host:evil-collector.xyz"), ids.toString());
+		assertTrue(ids.contains("host:10.0.0.5"), ids.toString());
+		assertFalse(ids.stream().anyMatch(i -> i.contains("1.21.4") || i.contains("com.example")), ids.toString());
+		assertFalse(ids.stream().anyMatch(i -> i.endsWith("com/example/Plain")), ids.toString());
+	}
+
+	@Test
+	void readingTheAccessTokenAnyWayIsFound(@TempDir Path dir) throws Exception {
+		Path jar = moduleJar(dir, Map.of(
+			"com/example/Field.java", "package com.example; public class Field { String grab(net.minecraft.client.User u) { return u.accessToken; } }",
+			"com/example/Name.java", "package com.example; public class Name { String name(net.minecraft.client.User u) { return u.getName(); } }",
+			"@aw", "accessWidener v2 named\naccessible field net/minecraft/client/User accessToken Ljava/lang/String;\n"));
+		List<String> ids = new ArrayList<>();
+		for (Object f : Json.array(Inspect.inspect(jar, null).get("findings"), "findings")) ids.add((String) ((Map<?, ?>) f).get("id"));
+		assertTrue(ids.contains("account:com/example/Field"), "a direct field read: " + ids);
+		assertTrue(ids.contains("account:mods.accesswidener"), "an access widener opening the account: " + ids);
+		assertFalse(ids.contains("account:com/example/Name"), "the player's name is fine: " + ids);
 	}
 }

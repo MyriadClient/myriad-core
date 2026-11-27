@@ -36,6 +36,9 @@ import java.util.regex.Pattern;
  * signs: every closed-source version waits for a person.
  */
 public final class Builder {
+	/** The findings passed from the inspect step to the sign step; past this the release waits for a person. */
+	static final int MAX_SUMMARY_FINDINGS = 1000;
+
 	static final Pattern REPO = Pattern.compile("[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}");
 	static final Pattern TAG = Pattern.compile("[A-Za-z0-9._+-]{1,100}");
 	static final Pattern SHA1 = Pattern.compile("[0-9a-f]{40}");
@@ -91,6 +94,8 @@ public final class Builder {
 		if (!developerSigned(summary, devKeys)) why.add("the release isn't signed by a developer key both the listing and the jar name");
 		for (String f : strings(summary.get("findings"))) {
 			if (f.equals("obfuscated")) why.add("the jar looks obfuscated");
+			// Reaching for the player's account, or more findings than were passed on, is read every time.
+			else if (f.startsWith("account:") || f.equals("too-many-findings")) review.add("needs a look every release: " + f);
 			else if (!accepted.contains(f)) review.add("new finding: " + f);
 		}
 		return new Decision(List.copyOf(why), List.copyOf(review));
@@ -287,8 +292,11 @@ public final class Builder {
 		Files.writeString(reportFile, Json.write(report));
 		List<String> findings = new ArrayList<>();
 		for (Object f : Json.array(report.get("findings"), "findings")) findings.add(Json.string(Json.object(f, "finding").get("id"), "id"));
-		if (findings.size() > 200) {
-			findings = new ArrayList<>(findings.subList(0, 200));
+		if (findings.size() > MAX_SUMMARY_FINDINGS) {
+			// What's never accepted goes first, so cutting the list can't hide it.
+			List<String> first = new ArrayList<>(findings.stream().filter(f -> f.equals("obfuscated") || f.startsWith("account:")).toList());
+			for (String f : findings) if (first.size() < MAX_SUMMARY_FINDINGS && !first.contains(f)) first.add(f);
+			findings = first;
 			findings.add("too-many-findings");
 		}
 		Map<String, Object> summary = new LinkedHashMap<>();
