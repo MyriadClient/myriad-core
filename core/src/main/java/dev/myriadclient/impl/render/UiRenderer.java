@@ -611,8 +611,10 @@ public final class UiRenderer implements Canvas {
 
 	@Override
 	public void texture(GpuTextureView view, float x, float y, float w, float h, float u0, float v0, float u1, float v1, int tint) {
+		// On whole pixels, as text is: a picture straddling pixel edges is sampled soft.
 		float s = state.scale;
-		box(px(x), py(y), w * s, h * s, 0, 0, 0, 0, tint, tint, IMAGE, 0, 0, u0, v0, u1, v1, view);
+		float x0 = Math.round(px(x)), y0 = Math.round(py(y));
+		box(x0, y0, Math.max(1, Math.round(px(x) + w * s) - x0), Math.max(1, Math.round(py(y) + h * s) - y0), 0, 0, 0, 0, tint, tint, IMAGE, 0, 0, u0, v0, u1, v1, view);
 	}
 
 	@Override

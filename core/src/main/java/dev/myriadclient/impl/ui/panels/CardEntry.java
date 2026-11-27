@@ -44,9 +44,22 @@ abstract class CardEntry extends Widget {
 		return null;
 	}
 
-	/** A picture before the title (an addon's own icon), drawn instead of {@link #icon()}, or null. */
-	protected net.minecraft.resources.Identifier iconTexture() {
+	/** A picture before the title (an addon's own icon), {@code px} pixels a side, drawn instead of {@link #icon()}, or null. */
+	protected net.minecraft.resources.Identifier iconTexture(int px) {
 		return null;
+	}
+
+	/**
+	 * A second line under the title (who made it, what it adds), or null for a one-line header. With one, the header is
+	 * two lines tall and its picture bigger.
+	 */
+	protected String subtitle() {
+		return null;
+	}
+
+	/** The header's height: one row, or two with a {@link #subtitle()}. */
+	private float headerHeight() {
+		return subtitle() != null ? ROW * 2 - 2 : ROW + 2;
 	}
 
 	/** How far along it is, 0 to 1, as a thin line along the header's foot; NaN for none. */
@@ -111,7 +124,7 @@ abstract class CardEntry extends Widget {
 	protected float measure(Canvas c, float width) {
 		open.animateTo(isExpanded() ? 1 : 0, 200, Bezier.EASE_OUT_QUINT);
 		float t = open.get();
-		float h = ROW + 2;
+		float h = headerHeight();
 		if (t > 0.001f || isExpanded()) {
 			float bh = body().layout(c, x + PAD_X, y + h + PAD_TOP, width - PAD_X * 2);
 			h += (bh + PAD_TOP + PAD_BOTTOM) * t;
@@ -121,14 +134,15 @@ abstract class CardEntry extends Widget {
 
 	@Override
 	public float navHeight() {
-		return ROW + 2;
+		return headerHeight();
 	}
 
 	@Override
 	public void render(Canvas c, float mx, float my) {
 		on.animateTo(isOn() ? 1 : 0, 180, Bezier.EASE_OUT_QUINT);
 		float t = on.get(), o = open.get();
-		float rowH = ROW + 2;
+		String subtitle = subtitle();
+		float rowH = headerHeight();
 		boolean hover = mx >= x && my >= y && mx < x + width && my < y + rowH;
 		int accent = accent();
 
@@ -148,14 +162,14 @@ abstract class CardEntry extends Widget {
 		float rx = x + width - 10;
 		float tx = x + 6;
 		String icon = icon();
-		net.minecraft.resources.Identifier picture = iconTexture();
+		float is = rowH - 6;
+		net.minecraft.resources.Identifier picture = iconTexture(Math.round(is * c.pixelScale()));
 		if (picture != null) {
-			float is = rowH - 6;
 			c.texture(picture, tx, y + 3, is, is, 0, 0, 1, 1, 0xFFFFFFFF);
 			tx += is + 5;
 		} else if (icon != null && !icon.isEmpty()) {
-			float is = c.defaultFontSize();
-			c.text(FontFamily.MONO, is, icon, tx + (9 - c.textWidth(FontFamily.MONO, is, icon)) / 2, y + (rowH - c.textHeight(FontFamily.MONO, is)) / 2, t > 0.5f ? accent : theme().textDim.argb());
+			float gs = c.defaultFontSize();
+			c.text(FontFamily.MONO, gs, icon, tx + (9 - c.textWidth(FontFamily.MONO, gs, icon)) / 2, y + (rowH - c.textHeight(FontFamily.MONO, gs)) / 2, t > 0.5f ? accent : theme().textDim.argb());
 			tx += 12;
 		}
 		// The title comes first: pills only take what it leaves, the last asked for going first.
@@ -163,6 +177,12 @@ abstract class CardEntry extends Widget {
 		badgeFloor = tx + Math.min(c.textWidth(title), MIN_TITLE);
 		float right = drawBadges(c, rx - 6, y + rowH / 2);
 		badgeFloor = Float.NEGATIVE_INFINITY;
+		if (subtitle != null) {
+			float ss = c.defaultFontSize() * 0.8f, sh = c.textHeight(FontFamily.SANS, ss);
+			float top = y + (rowH - c.textHeight() - sh - 1) / 2;
+			ty = top;
+			c.text(FontFamily.SANS, ss, c.ellipsize(FontFamily.SANS, ss, subtitle, right - tx), tx, top + c.textHeight() + 1, theme().textDim.argb());
+		}
 		c.text(c.ellipsize(c.defaultFont(), c.defaultFontSize(), title, right - tx), tx, ty, ColorUtil.lerp(theme().textDim.argb(), theme().text.argb(), t));
 		double progress = progress();
 		if (!Double.isNaN(progress)) {
@@ -217,7 +237,7 @@ abstract class CardEntry extends Widget {
 
 	@Override
 	public boolean mouseClicked(float mx, float my, int button) {
-		float rowH = ROW + 2;
+		float rowH = headerHeight();
 		if (mx >= x && my >= y && mx < x + width && my < y + rowH) {
 			boolean chevron = mx >= x + width - 14;
 			if (button == InputConstants.MOUSE_BUTTON_RIGHT && InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)) {

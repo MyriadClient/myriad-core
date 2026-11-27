@@ -14,6 +14,7 @@ import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.Note;
 import dev.myriadclient.api.ui.widget.SettingsView;
+import dev.myriadclient.api.ui.widget.Spacer;
 import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.ui.widget.Widget;
@@ -51,8 +52,7 @@ public final class AddonsPanel extends WidgetPanel {
 	/** Browse: the Myriad Library instead of what's installed; the search typed; one listing's offer at a time. */
 	private boolean browsing;
 	private String query = "";
-	private String libraryLooking, libraryOfferFor;
-	private LinkInstall.Offer libraryOffer;
+	private String libraryLooking;
 	private final Map<String, String> libraryNotes = new HashMap<>();
 	/** Invite codes being typed, per invite-only listing. */
 	private final Map<String, String> codeDrafts = new HashMap<>();
@@ -134,6 +134,8 @@ public final class AddonsPanel extends WidgetPanel {
 		List<UpdateManager.LibraryAddon> list = updates.libraryAddons();
 		if (list.isEmpty() && problem == null && !updates.libraryLoading()) content.add(new Label("Nothing in the Library yet.").dim());
 		for (UpdateManager.LibraryAddon a : list) content.add(new LibraryCard(a).visible(() -> matches(a)));
+		// The key and who's signed in sit at the window's foot, below the list.
+		content.add(Spacer.fill());
 		content.add(new Label("Verified: built by Myriad from its public source. Reviewed: closed source, read by Myriad before each release. "
 			+ "Neither means safe: install only what you trust.").dim());
 		var account = updates.account();
@@ -142,7 +144,10 @@ public final class AddonsPanel extends WidgetPanel {
 			who.add("\uf007", "Signed in as " + account.name(), "Your Myriad session, for invite-only addons", () -> {
 			});
 			who.gap();
-			who.add("\uf08b", "Sign out", "Ends the session here and on Myriad's API", () -> account.signOut().whenComplete((v, e) -> Async.onRenderThread(this::rebuild)));
+			who.add("\uf08b", "Sign out", "Ends the session here and on Myriad's API", () -> account.signOut().whenComplete((confirmed, e) -> Async.onRenderThread(() -> {
+				if (!Boolean.TRUE.equals(confirmed)) Myriad.notifications().toast("Signed out here", "Myriad's API couldn't be reached; the session lapses there after 30 days unused").show();
+				rebuild();
+			})));
 			content.add(who);
 		}
 	}
@@ -157,31 +162,29 @@ public final class AddonsPanel extends WidgetPanel {
 		return text.toString().toLowerCase(Locale.ROOT).contains(q);
 	}
 
+	/**
+	 * Installs a Library addon in one go: downloaded, then every check (the Library's signed index, its version
+	 * signature, the developer's, size and hash, the jar itself) before anything is written. The card already says what
+	 * it is and who vouched for it, so there's no second confirmation (Add from link, with no Library behind it, keeps one).
+	 */
 	private void lookUpLibrary(String id) {
 		if (libraryLooking != null) return;
 		libraryLooking = id;
-		libraryOffer = null;
-		libraryOfferFor = id;
 		libraryNotes.remove(id);
 		rebuild();
 		updates.lookUpLibrary(id).whenComplete((o, err) -> Async.onRenderThread(() -> {
 			libraryLooking = null;
 			if (err != null) libraryNotes.put(id, "Can't install it: " + UpdateManager.reasonOf(err) + ".");
-			else libraryOffer = o;
+			else {
+				try {
+					updates.install(o);
+					libraryNotes.put(id, o.name() + " " + o.version() + " loads when you restart the game.");
+				} catch (java.io.IOException e) {
+					libraryNotes.put(id, "Can't install it: " + e.getMessage() + ".");
+				}
+			}
 			rebuild();
 		}));
-	}
-
-	private void installFromLibrary(LinkInstall.Offer o) {
-		try {
-			updates.install(o);
-			libraryNotes.put(o.id(), o.name() + " " + o.version() + " loads when you restart the game. It updates through the Library.");
-		} catch (java.io.IOException e) {
-			libraryNotes.put(o.id(), "Can't install it: " + e.getMessage() + ".");
-		}
-		libraryOffer = null;
-		libraryOfferFor = null;
-		rebuild();
 	}
 
 	/** A fold with a few things in it, closed at first, remembered while the window is open. */
@@ -207,6 +210,13 @@ public final class AddonsPanel extends WidgetPanel {
 		body.add(fold(key + "/changelog", () -> "What's new in " + log.version(), all, () -> lines.size() + (lines.size() == 1 ? " line" : " lines")));
 	}
 
+	/** Adds "3 modules" to a "  ·  " list, or nothing when there are none. */
+	private static void count(StringBuilder sb, int n, String what) {
+		if (n == 0) return;
+		if (!sb.isEmpty()) sb.append("  ·  ");
+		sb.append(n).append(' ').append(what).append(n == 1 ? "" : "s");
+	}
+
 	/** One Library listing: what it is, what it adds, what's new, and Install. */
 	private final class LibraryCard extends CardEntry {
 		private final UpdateManager.LibraryAddon a;
@@ -214,7 +224,8 @@ public final class AddonsPanel extends WidgetPanel {
 		private boolean detailsIn;
 
 		LibraryCard(UpdateManager.LibraryAddon a) {
-			super(true, false);
+			// As it was: a rebuild (every click that changes something) makes new cards, which mustn't fold and unfold again.
+			super(a.installed(), unfolded.contains("library/" + a.id()));
 			this.a = a;
 		}
 
@@ -224,8 +235,15 @@ public final class AddonsPanel extends WidgetPanel {
 		}
 
 		@Override
-		protected Identifier iconTexture() {
-			return AddonIcons.library(a.id(), a.iconSha(), () -> updates.libraryIcon(a.id(), a.iconSha()));
+		protected Identifier iconTexture(int px) {
+			return AddonIcons.library(a.id(), a.iconSha(), () -> updates.libraryIcon(a.id(), a.iconSha()), px);
+		}
+
+		@Override
+		protected String subtitle() {
+			StringBuilder sb = new StringBuilder(a.author().isEmpty() ? "" : "By " + a.author());
+			count(sb, a.moduleCount(), "module");
+			return sb.isEmpty() ? a.id() : sb.toString();
 		}
 
 		@Override
@@ -254,7 +272,6 @@ public final class AddonsPanel extends WidgetPanel {
 			if (a.installed()) right = badge(c, " Installed", right, cy, theme().green.argb(), false) - 4;
 			if (a.invite()) right = badge(c, a.granted() ? " Invited" : " Invite only", right, cy, theme().accent.argb(), !a.granted()) - 4;
 			right = badge(c, a.verified() ? " Verified" : " Reviewed", right, cy, a.verified() ? theme().green.argb() : theme().accent.argb(), true) - 4;
-			if (a.moduleCount() > 0) right = badge(c, a.moduleCount() + (a.moduleCount() == 1 ? " module" : " modules"), right, cy, theme().textDim.argb(), false) - 4;
 			if (a.version() != null) right = badge(c, a.version(), right, cy, theme().textDim.argb(), false) - 4;
 			return right;
 		}
@@ -268,7 +285,7 @@ public final class AddonsPanel extends WidgetPanel {
 
 		@Override
 		protected Object bodyKey() {
-			return List.of(a, libraryOffer == null ? "" : libraryOffer.id(), String.valueOf(libraryLooking), libraryNotes.getOrDefault(a.id(), ""), detailsIn,
+			return List.of(a, String.valueOf(libraryLooking), libraryNotes.getOrDefault(a.id(), ""), detailsIn,
 				updates.account().signedIn(), updates.account().busy());
 		}
 
@@ -298,21 +315,6 @@ public final class AddonsPanel extends WidgetPanel {
 
 			String note = libraryNotes.get(a.id());
 			if (note != null) body.add(note.startsWith("Can't") ? new Note(note).error() : new Note(note).color(() -> theme().green.argb()));
-			LinkInstall.Offer o = libraryOffer;
-			if (o != null && a.id().equals(libraryOfferFor)) {
-				body.add(new Label(o.name() + " " + o.version() + "  ·  " + (o.jar().length / 1024) + " KB").bold());
-				body.add(new Note((o.library() == LinkInstall.Library.VERIFIED ? "Verified by Myriad: built from its public source." : "Reviewed by Myriad.")
-					+ " Signed by its developer's key " + o.keyId() + "; its updates come through the Library and must be signed with that key too."));
-				HBox act = new HBox(4);
-				act.add(new Button("Install " + o.name(), () -> installFromLibrary(o)).accent());
-				act.add(new Button("Don't install", () -> {
-					libraryOffer = null;
-					libraryOfferFor = null;
-					rebuild();
-				}).quiet());
-				body.add(act);
-				return;
-			}
 			// Invite-only and not yet granted: signing in, then the code, in place of Install.
 			if (a.invite() && !a.granted()) {
 				invitePrompt(body, a);
@@ -325,8 +327,8 @@ public final class AddonsPanel extends WidgetPanel {
 				foot.add("", a.verified() ? "Source" : "Releases", url, () -> Blaze3D.openUri(URI.create(url)));
 			}
 			foot.gap();
-			if (!a.installed() && a.version() != null && !updates.libraryStale()) {
-				foot.add("", a.id().equals(libraryLooking) ? "Checking…" : "Install " + a.version(), "Downloads and checks it first; nothing is written until you say so.",
+			if (!a.installed() && a.version() != null && !updates.libraryStale() && !libraryNotes.getOrDefault(a.id(), "").contains("loads when you restart")) {
+				foot.add("", a.id().equals(libraryLooking) ? "Installing…" : "Install " + a.version(), "Downloads it and checks every signature first; nothing is written unless they all hold.",
 					() -> lookUpLibrary(a.id()), false, true, () -> true);
 			}
 			if (!foot.isEmpty()) body.add(foot);
@@ -337,16 +339,16 @@ public final class AddonsPanel extends WidgetPanel {
 	private void invitePrompt(VBox body, UpdateManager.LibraryAddon a) {
 		var account = updates.account();
 		if (!account.signedIn()) {
-			body.add(new Note("Invite only. Sign in with your Minecraft account, then enter the code its developer gave you.").icon("\uf023"));
+			body.add(new Note("Sign in with Minecraft, then enter the code its developer gave you.").icon("\uf023"));
 			body.add(new Button(() -> account.busy() ? "Signing in…" : "Sign in with Minecraft", () -> signIn(a.id())).accent()
 				.tooltip("Proves which Minecraft account you are, the way joining a server does: your login goes only to Mojang, never to Myriad."));
 			return;
 		}
-		body.add(new Note("Invite only. Enter the code its developer gave you.").icon("\uf023"));
+		body.add(new Note("Enter the code its developer gave you.").icon("\uf023"));
 		HBox row = new HBox(4);
 		row.addWeighted(new TextField(() -> codeDrafts.getOrDefault(a.id(), "")).onChange(t -> codeDrafts.put(a.id(), t)).onSubmit(t -> redeem(a.id()))
 			.placeholder("myr-ABCDE-FGHIJ-…"), 1);
-		row.addFixed(new Button("Redeem", () -> redeem(a.id())).accent(), 56);
+		row.addFixed(new Button(() -> a.id().equals(libraryLooking) ? "Installing…" : "Redeem and install", () -> redeem(a.id())).accent(), 96);
 		body.add(row);
 	}
 
@@ -368,9 +370,16 @@ public final class AddonsPanel extends WidgetPanel {
 		libraryNotes.remove(id);
 		updates.account().redeem(code).whenComplete((name, err) -> Async.onRenderThread(() -> {
 			if (err != null) libraryNotes.put(id, "Can't redeem it: " + UpdateManager.reasonOf(err) + ".");
-			else {
+			else if (!updates.account().grants().contains(id)) {
+				// A code for another addon: that one's granted, this one isn't.
 				codeDrafts.remove(id);
-				libraryNotes.put(id, "Invited: you can install " + name + " now.");
+				libraryNotes.put(id, "That code was for " + name + ", not this addon: you can install " + name + " from Browse.");
+			} else {
+				// Redeeming a code on an addon's card means installing it: straight on to that.
+				codeDrafts.remove(id);
+				rebuild();
+				lookUpLibrary(id);
+				return;
 			}
 			rebuild();
 		}));
@@ -399,7 +408,7 @@ public final class AddonsPanel extends WidgetPanel {
 		private boolean changelogIn;
 
 		AddonEntry(Addon addon) {
-			super(addon.state() == AddonState.LOADED, false);
+			super(addon.state() == AddonState.LOADED && !updates.removing(addon.id()), unfolded.contains(addon.id()));
 			this.addon = addon;
 		}
 
@@ -413,8 +422,19 @@ public final class AddonsPanel extends WidgetPanel {
 		}
 
 		@Override
-		protected Identifier iconTexture() {
-			return AddonIcons.of(addon);
+		protected Identifier iconTexture(int px) {
+			return AddonIcons.of(addon, px);
+		}
+
+		@Override
+		protected String subtitle() {
+			String id = addon.id();
+			StringBuilder sb = new StringBuilder(addon.authors().isEmpty() ? "" : "By " + String.join(", ", addon.authors()));
+			count(sb, Myriad.modules().ownedBy(id).size(), "module");
+			int huds = (int) Myriad.panels().ownedBy(id).stream().filter(p -> p.isHud()).count();
+			if (huds > 0) sb.append(sb.isEmpty() ? "" : "  ·  ").append(huds).append(" HUD");
+			count(sb, Myriad.commands().ownedBy(id).size(), "command");
+			return sb.isEmpty() ? id : sb.toString();
 		}
 
 		@Override
@@ -626,12 +646,6 @@ public final class AddonsPanel extends WidgetPanel {
 			count(sb, Myriad.barWidgets().ownedBy(id).size(), "bar widget");
 			count(sb, Myriad.keyActions().ownedBy(id).size(), "key action");
 			return sb.isEmpty() ? "Adds nothing visible yet." : sb.toString();
-		}
-
-		private static void count(StringBuilder sb, int n, String what) {
-			if (n == 0) return;
-			if (!sb.isEmpty()) sb.append("  ·  ");
-			sb.append(n).append(' ').append(what).append(n == 1 ? "" : "s");
 		}
 
 		/** What it costs while the game runs, from the profiler when it's on. */
