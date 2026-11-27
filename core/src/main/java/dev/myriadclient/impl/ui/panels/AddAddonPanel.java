@@ -10,6 +10,7 @@ import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.Note;
+import dev.myriadclient.api.ui.widget.Spacer;
 import dev.myriadclient.api.ui.widget.TextField;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.util.Async;
@@ -79,6 +80,7 @@ public final class AddAddonPanel extends WidgetPanel {
 			HBox buttons = new HBox(4);
 			buttons.add(new Button(() -> looking ? "Looking…" : "Look up", this::lookUp).accent());
 			buttons.add(new Button("Cancel", this::close).quiet());
+			content.add(Spacer.fill());
 			content.add(buttons);
 			return;
 		}
@@ -97,6 +99,7 @@ public final class AddAddonPanel extends WidgetPanel {
 			offer = null;
 			rebuild();
 		}).quiet());
+		content.add(Spacer.fill());
 		content.add(act);
 	}
 

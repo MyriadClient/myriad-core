@@ -61,7 +61,23 @@ public class ScrollView extends Widget {
 		if (h0 > 0) target = Math.clamp(target, 0, max);
 		if (offset.target() != target) offset.animateTo(target, 180, Bezier.EASE_OUT_QUINT);
 		contentHeight = child.layout(canvas, x, y - offset.get(), width - gutter);
+		// A Spacer.fill() in the column takes what the view has left over, so what follows it sits at the foot.
+		Spacer fill = viewport >= 0 ? fill() : null;
+		if (fill != null) {
+			float want = Math.max(0, viewport - (contentHeight - fill.extra));
+			if (Math.abs(want - fill.extra) > 0.25f) {
+				fill.extra = want;
+				contentHeight = child.layout(canvas, x, y - offset.get(), width - gutter);
+			}
+		}
 		return viewport >= 0 ? viewport : Math.min(maxHeight, contentHeight);
+	}
+
+	private Spacer fill() {
+		if (child instanceof Container box) {
+			for (Widget w : box.children) if (w instanceof Spacer s && s.fills() && s.isVisible()) return s;
+		}
+		return null;
 	}
 
 	@Override

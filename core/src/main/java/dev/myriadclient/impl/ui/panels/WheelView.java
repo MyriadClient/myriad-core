@@ -83,6 +83,8 @@ final class WheelView extends WidgetPanel {
 		content.add(preview);
 		content.add(search);
 		content.add(slots);
+		// Its settings (and Delete) at the window's foot, away from the cards.
+		content.add(Spacer.fill());
 		content.add(settingsSection());
 	}
 

@@ -123,6 +123,8 @@ final class ControlPanelView extends WidgetPanel {
 		content.add(search);
 		content.add(new EmptyState(Icons.SLIDERS, "No modules yet", "Search above for the modules it switches together.")).visible(() -> control.members.get().isEmpty());
 		content.add(cards);
+		// Its settings (and Delete) at the window's foot, away from the cards.
+		content.add(Spacer.fill());
 		content.add(settingsSection());
 	}
 

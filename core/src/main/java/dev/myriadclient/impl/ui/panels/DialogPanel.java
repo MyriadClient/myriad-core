@@ -7,6 +7,7 @@ import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
+import dev.myriadclient.api.ui.widget.Spacer;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.ui.widget.Widget;
 
@@ -115,6 +116,7 @@ public final class DialogPanel extends WidgetPanel {
 		Button confirm = new Button(confirmLabel, () -> answer(true));
 		buttons.add(danger ? confirm.danger() : confirm.accent());
 		buttons.add(new Button("Cancel", () -> answer(false)).quiet());
+		content.add(Spacer.fill());
 		content.add(buttons);
 	}
 

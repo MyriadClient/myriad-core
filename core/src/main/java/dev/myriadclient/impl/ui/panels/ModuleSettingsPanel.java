@@ -9,6 +9,7 @@ import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.HBox;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.SettingsView;
+import dev.myriadclient.api.ui.widget.Spacer;
 import dev.myriadclient.api.ui.widget.Toggle;
 import dev.myriadclient.api.ui.widget.VBox;
 import dev.myriadclient.api.ui.widget.Widget;
@@ -59,6 +60,8 @@ public final class ModuleSettingsPanel extends WidgetPanel {
 			content.add(new Label("Turn it on to see it on the preview.").dim().visible(() -> !module.isEnabled()));
 		}
 		content.add(SettingsView.build(module.settings));
+		// At the window's foot, away from the settings, so it isn't clicked by accident.
+		content.add(Spacer.fill());
 		content.add(resetButton(module));
 	}
 
