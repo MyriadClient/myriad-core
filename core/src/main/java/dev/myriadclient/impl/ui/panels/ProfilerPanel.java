@@ -171,7 +171,7 @@ public final class ProfilerPanel extends WidgetPanel {
 		@Override
 		public void render(Canvas c, float mx, float my) {
 			c.roundRect(x, y, width, height, 4, theme().surface.argb());
-			c.roundRect(x, y + 3, 2, height - 6, 1, color.getAsInt());
+			c.outline(x, y, width, height, 4, 1, ColorUtil.withAlpha(color.getAsInt(), 110));
 			float s = c.defaultFontSize() * 0.8f;
 			c.text(FontFamily.SANS, s, c.ellipsize(FontFamily.SANS, s, name, width - 9), x + 6, y + 3, theme().textDim.argb());
 			c.text(FontFamily.MONO, c.defaultFontSize(), c.ellipsize(FontFamily.MONO, c.defaultFontSize(), value, width - 8), x + 6, y + 4 + c.textHeight(FontFamily.SANS, s), theme().text.argb());

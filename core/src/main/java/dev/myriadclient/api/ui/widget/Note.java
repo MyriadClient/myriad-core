@@ -74,7 +74,7 @@ public class Note extends Widget {
 	public void render(Canvas c, float mx, float my) {
 		int tint = color.getAsInt();
 		c.roundRect(x, y, width, height, 4, ColorUtil.withAlpha(tint, 26));
-		c.roundRect(x, y + 2, 2, height - 4, 1, ColorUtil.withAlpha(tint, 200));
+		c.outline(x, y, width, height, 4, 1, ColorUtil.withAlpha(tint, 110));
 		if (icon != null) c.text(FontFamily.MONO, c.defaultFontSize(), icon, x + 6, y + PAD, tint);
 		float ly = y + PAD, lh = c.textHeight() + 1;
 		for (String line : lines) {
