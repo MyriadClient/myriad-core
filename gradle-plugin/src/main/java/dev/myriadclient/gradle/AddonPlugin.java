@@ -355,7 +355,7 @@ public final class AddonPlugin implements Plugin<Project> {
 		});
 		project.getTasks().register("libraryInvite", LibraryInvite.class, t -> {
 			t.setGroup("publishing");
-			t.setDescription("Manages an invite-only Library listing's invites (-Paction=create|list|revoke|grants|revoke-grant), signed with the developer key.");
+			t.setDescription("Manages an invite-only Library listing's invites (-Paction=create|list|revoke|revoke-all|grants|revoke-grant|restore-grant|show), signed with the developer key.");
 			t.getAddonId().set(project.provider(() -> {
 				Object given = project.findProperty("myriadAddonId");
 				if (given != null) return given.toString();
