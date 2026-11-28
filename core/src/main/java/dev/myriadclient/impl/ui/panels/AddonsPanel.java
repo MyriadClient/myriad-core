@@ -11,6 +11,7 @@ import dev.myriadclient.api.ui.draw.Canvas;
 import dev.myriadclient.api.ui.widget.Button;
 import dev.myriadclient.api.ui.widget.Collapsible;
 import dev.myriadclient.api.ui.widget.HBox;
+import dev.myriadclient.api.ui.widget.Heading;
 import dev.myriadclient.api.ui.widget.Label;
 import dev.myriadclient.api.ui.widget.Note;
 import dev.myriadclient.api.ui.widget.SettingsView;
@@ -21,7 +22,6 @@ import dev.myriadclient.api.ui.widget.Widget;
 import dev.myriadclient.api.util.Async;
 import dev.myriadclient.impl.MyriadImpl;
 import dev.myriadclient.impl.addon.AddonLoader;
-import dev.myriadclient.impl.event.Profiler;
 import dev.myriadclient.impl.ui.AddonIcons;
 import dev.myriadclient.impl.ui.WindowManager;
 import dev.myriadclient.impl.update.LinkInstall;
@@ -37,10 +37,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import org.jetbrains.annotations.Nullable;
+
 /**
- * Every addon Myriad found, as cards, and the Myriad Library to browse. A card says what the addon is in a line or two;
- * the rest (who made it, where it updates from, what it costs) folds away under Details, and what can be done with it
- * sits along its foot: update, auto update, remove.
+ * Addons in one list: what's installed, then what else the Myriad Library offers, both found by one search. A card says
+ * what the addon is in a line or two; what's new, what it adds and who made it fold away in the same places on every card,
+ * and what can be done with it sits along its foot: install, update, auto update, remove.
  */
 public final class AddonsPanel extends WidgetPanel {
 	private final Set<String> unfolded = new HashSet<>();
@@ -49,11 +51,13 @@ public final class AddonsPanel extends WidgetPanel {
 	private final UpdateManager updates = MyriadImpl.get().updates();
 	/** Private-source tokens being typed, per addon. */
 	private final Map<String, String> tokenDrafts = new HashMap<>();
-	/** Browse: the Myriad Library instead of what's installed; the search typed; one listing's offer at a time. */
-	private boolean browsing;
+	/** The search typed (both lists); whether the Library was read since this window opened; one install at a time. */
 	private String query = "";
+	private boolean libraryAsked;
 	private String libraryLooking;
 	private final Map<String, String> libraryNotes = new HashMap<>();
+	/** {@link #libraryNotes}' key for the account footer's own sign-in. */
+	private static final String ACCOUNT = " account";
 	/** Invite codes being typed, per invite-only listing. */
 	private final Map<String, String> codeDrafts = new HashMap<>();
 	/** Shortcuts in the title bar: checking at start and checking now. */
@@ -70,12 +74,9 @@ public final class AddonsPanel extends WidgetPanel {
 
 	@Override
 	public String subtitle() {
-		if (browsing) {
-			int n = updates.libraryAddons().size();
-			return "Myriad Library · " + n + (n == 1 ? " addon" : " addons");
-		}
 		long failed = Myriad.addons().stream().filter(a -> a.state() == AddonState.FAILED).count();
-		return Myriad.addons().size() + " installed" + (failed > 0 ? ", " + failed + " failed" : "");
+		long offered = libraryOnly().size();
+		return Myriad.addons().size() + " installed" + (failed > 0 ? ", " + failed + " failed" : "") + (offered > 0 ? " · " + offered + " more in the Library" : "");
 	}
 
 	@Override
@@ -90,57 +91,64 @@ public final class AddonsPanel extends WidgetPanel {
 
 	@Override
 	protected void build(VBox content) {
-		// Installed or the Library, as two buttons up top: the one showing is lit.
-		// Installed or the Library, in the menu's own row of small buttons: the one showing is tinted.
-		Toolbar views = new Toolbar()
-			.add("\uf0ae", "Installed (" + Myriad.addons().size() + ")", "The addons in your mods folder", () -> show(false), false, !browsing, () -> true)
-			.add("\uf02d", "Browse the Library", "Addons Myriad has checked, to install in a click", () -> show(true), false, browsing, () -> true)
-			.gap()
-			.add("\uf0c1", "Add from link", "Install an addon from a GitHub repo or its feed", () -> AddAddonPanel.open(here()));
-		content.add(views);
-		if (browsing) {
-			browse(content);
-			return;
+		// The Library (and what the account may install) is read once per window, when it's first shown.
+		if (!libraryAsked) {
+			libraryAsked = true;
+			updates.refreshLibrary().whenComplete((v, e) -> Async.onRenderThread(this::rebuild));
 		}
+		HBox top = new HBox(4);
+		top.addWeighted(new TextField(() -> query).onChange(q -> query = q).placeholder("Search addons and modules").search(), 1);
+		top.addFixed(new Button("\uf0c1 Add from link", () -> AddAddonPanel.open(here())).quiet().tooltip("Install an addon from a GitHub repo or its feed"), 84);
+		content.add(top);
+
+		List<Addon> installed = Myriad.addons();
+		content.add(new Heading("Installed").hint(() -> hint(installed.stream().filter(this::matches).count(), installed.size())));
 		content.add(new Button(() -> "Update all (" + updates.updatable().size() + ")", updates::updateAll).accent()
 			.tooltip("Downloads every update now; they install when you quit.").visible(() -> updates.updatable().size() > 1));
-		for (Addon a : Myriad.addons()) content.add(new AddonEntry(a));
-	}
+		for (Addon a : installed) content.add(new AddonEntry(a).visible(() -> matches(a)));
+		content.add(new Label(() -> "No installed addon matches \"" + query.strip() + "\".").dim()
+			.visible(() -> !query.isBlank() && installed.stream().noneMatch(this::matches)));
 
-	/** The workspace this window is on: its popups open there. */
-	private int here() {
-		return window() != null ? window().workspace() : Myriad.ui().activeWorkspace();
-	}
-
-	private void show(boolean library) {
-		if (browsing == library) return;
-		browsing = library;
-		if (browsing) updates.refreshLibrary().whenComplete((v, e) -> Async.onRenderThread(this::rebuild));
-		rebuild();
-	}
-
-	// ---- the Library ------------------------------------------------------------------------------------------------
-
-	/**
-	 * The Myriad Library: addons Myriad has checked, searched here (nothing typed leaves the game). Verified ones are built
-	 * from their public source; Reviewed ones are closed source, read by Myriad. Neither badge means safe.
-	 */
-	private void browse(VBox content) {
-		content.add(new TextField(() -> query).onChange(q -> query = q).placeholder("Search the Library").search());
-		if (updates.libraryLoading() && updates.libraryAddons().isEmpty()) content.add(new Label("Reading the Library…").dim());
+		List<UpdateManager.LibraryAddon> library = libraryOnly();
+		content.add(new Heading("Myriad Library").hint(() -> library.isEmpty() ? "" : hint(library.stream().filter(this::matches).count(), library.size())));
+		if (updates.libraryLoading() && library.isEmpty()) content.add(new Label("Reading the Library…").dim());
 		String problem = updates.libraryProblem();
 		if (problem != null) content.add(updates.libraryAddons().isEmpty() ? new Note("Can't show the Library: " + problem + ".").error()
 			: new Note("Showing the Library as it was last read: " + problem + "."));
-		List<UpdateManager.LibraryAddon> list = updates.libraryAddons();
-		if (list.isEmpty() && problem == null && !updates.libraryLoading()) content.add(new Label("Nothing in the Library yet.").dim());
-		for (UpdateManager.LibraryAddon a : list) content.add(new LibraryCard(a).visible(() -> matches(a)));
-		// The key and who's signed in sit at the window's foot, below the list.
+		if (library.isEmpty() && problem == null && !updates.libraryLoading()) {
+			content.add(new Label(updates.libraryAddons().isEmpty() ? "Nothing in the Library yet." : "You have everything the Library offers.").dim());
+		}
+		for (UpdateManager.LibraryAddon a : library) content.add(new LibraryCard(a).visible(() -> matches(a)));
+		content.add(new Label(() -> "Nothing in the Library matches \"" + query.strip() + "\".").dim()
+			.visible(() -> !query.isBlank() && !library.isEmpty() && library.stream().noneMatch(this::matches)));
+
+		// The key to the badges and who's signed in sit at the window's foot, below both lists.
 		content.add(Spacer.fill());
 		content.add(new Label("Verified: built by Myriad from its public source. Reviewed: closed source, read by Myriad before each release. "
 			+ "Neither means safe: install only what you trust.").dim());
+		accountFooter(content);
+	}
+
+	/** "3 of 12" while searching, else "12". */
+	private String hint(long shown, int all) {
+		return query.isBlank() ? String.valueOf(all) : shown + " of " + all;
+	}
+
+	/** The Library's listings that aren't loaded addons here (installed ones are in the list above, with their badge). */
+	private List<UpdateManager.LibraryAddon> libraryOnly() {
+		Set<String> loaded = new HashSet<>();
+		for (Addon a : Myriad.addons()) loaded.add(a.id());
+		return updates.libraryAddons().stream().filter(a -> !loaded.contains(a.id())).toList();
+	}
+
+	/**
+	 * Who's signed in, at the window's foot on both views: the one place the Myriad account lives. Signing in is only
+	 * for invite-only addons; nothing else needs it.
+	 */
+	private void accountFooter(VBox content) {
 		var account = updates.account();
+		Toolbar who = new Toolbar();
 		if (account.signedIn()) {
-			Toolbar who = new Toolbar();
 			who.add("\uf007", "Signed in as " + account.name(), "Your Myriad session, for invite-only addons", () -> {
 			});
 			who.gap();
@@ -148,17 +156,42 @@ public final class AddonsPanel extends WidgetPanel {
 				if (!Boolean.TRUE.equals(confirmed)) Myriad.notifications().toast("Signed out here", "Myriad's API couldn't be reached; the session lapses there after 30 days unused").show();
 				rebuild();
 			})));
-			content.add(who);
+		} else {
+			who.add("\uf007", account.busy() ? "Signing in…" : "Sign in with Minecraft",
+				"Only for invite-only addons. Proves which Minecraft account you are, the way joining a server does: your login goes only to Mojang, never to Myriad.",
+				() -> signIn(ACCOUNT, null));
+			String note = libraryNotes.get(ACCOUNT);
+			if (note != null) content.add(new Note(note).error());
 		}
+		content.add(who);
 	}
 
+	/** The workspace this window is on: its popups open there. */
+	private int here() {
+		return window() != null ? window().workspace() : Myriad.ui().activeWorkspace();
+	}
+
+	/** Whether an installed addon matches the search: its name, id, description, authors or a module's name. */
+	private boolean matches(Addon a) {
+		String q = query.strip().toLowerCase(Locale.ROOT);
+		if (q.isEmpty()) return true;
+		StringBuilder text = new StringBuilder(a.name() + " " + a.id() + " " + java.util.Objects.toString(a.description(), "") + " " + String.join(" ", a.authors()));
+		for (var m : Myriad.modules().ownedBy(a.id())) text.append(' ').append(m.name());
+		return text.toString().toLowerCase(Locale.ROOT).contains(q);
+	}
+
+	private static boolean moduleMatches(UpdateManager.LibraryModule m, String q) {
+		return m.name().toLowerCase(Locale.ROOT).contains(q) || m.description().toLowerCase(Locale.ROOT).contains(q);
+	}
+
+	/** Whether a Library listing matches the search (nothing typed leaves the game). */
 	private boolean matches(UpdateManager.LibraryAddon a) {
 		String q = query.strip().toLowerCase(Locale.ROOT);
 		if (q.isEmpty()) return true;
 		StringBuilder text = new StringBuilder(a.name() + " " + a.id() + " " + a.description() + " " + a.author());
 		UpdateManager.LibraryDetails d = updates.libraryDetails(a.id(), a.detailsSha(), () -> {
 		});
-		if (d != null) for (UpdateManager.LibraryModule m : d.modules()) text.append(' ').append(m.name());
+		if (d != null) for (UpdateManager.LibraryModule m : d.modules()) text.append(' ').append(m.name()).append(' ').append(m.description());
 		return text.toString().toLowerCase(Locale.ROOT).contains(q);
 	}
 
@@ -195,19 +228,63 @@ public final class AddonsPanel extends WidgetPanel {
 		}).indent(10).hint(hint);
 	}
 
-	/** "What's new in 2.9.0": the first few lines, the rest in a fold. */
+	/**
+	 * "What's new in 2.9.0", folded: the same place on every card, installed or not. Headings stand out, list items read
+	 * as text, anything else is dim.
+	 */
 	private void whatsNew(VBox body, String key, UpdateManager.Changelog log) {
 		if (log == null || log.text().isBlank()) return;
-		List<String> lines = log.text().lines().filter(l -> !l.isBlank()).toList();
-		VBox all = new VBox(2, 0);
-		for (String l : lines) {
-			// Markdown's emphasis and code marks go; list items get a bullet.
+		// Markdown's blocks: a heading, a list item or a paragraph, each running on over its wrapped lines until a blank
+		// line or the next block. Emphasis and code marks go; list items get a bullet.
+		List<String[]> blocks = new java.util.ArrayList<>(); // {kind, text}: h, li or p
+		boolean open = false;
+		for (String l : log.text().lines().toList()) {
 			String t = l.replace("**", "").replace("`", "").strip();
-			if (t.startsWith("- ") || t.startsWith("* ")) t = "\u2022 " + t.substring(2);
-			else if (t.startsWith("#")) t = t.replaceFirst("^#+\\s*", "");
-			all.add(new Label(t).dim());
+			if (t.isEmpty()) {
+				open = false;
+			} else if (t.startsWith("#")) {
+				blocks.add(new String[]{"h", t.replaceFirst("^#+\\s*", "")});
+				open = false;
+			} else if (t.startsWith("- ") || t.startsWith("* ")) {
+				blocks.add(new String[]{"li", t.substring(2)});
+				open = true;
+			} else if (open) {
+				String[] last = blocks.getLast();
+				last[1] = last[1] + " " + t;
+			} else {
+				blocks.add(new String[]{"p", t});
+				open = true;
+			}
 		}
-		body.add(fold(key + "/changelog", () -> "What's new in " + log.version(), all, () -> lines.size() + (lines.size() == 1 ? " line" : " lines")));
+		VBox all = new VBox(2, 0);
+		int items = 0;
+		for (String[] b : blocks) {
+			switch (b[0]) {
+				case "h" -> all.add(new Label(b[1]).bold());
+				case "li" -> {
+					all.add(new Label("\u2022 " + b[1]));
+					items++;
+				}
+				default -> all.add(new Label(b[1]).dim());
+			}
+		}
+		int n = items;
+		body.add(fold(key + "/changelog", () -> "What's new in " + log.version(), all, () -> n == 0 ? "" : n + (n == 1 ? " change" : " changes")));
+	}
+
+	/**
+	 * One row of a card's details: what it is, dim, in a short column on the left; the value beside it. Kept to a few
+	 * short rows so a narrow window still fits them side by side.
+	 */
+	private static void fact(VBox details, String name, Widget value) {
+		HBox row = new HBox(6);
+		row.addFixed(new Label(name).dim().oneLine(), 52);
+		row.addWeighted(value, 1);
+		details.add(row);
+	}
+
+	private static void fact(VBox details, String name, String value) {
+		fact(details, name, new Label(value));
 	}
 
 	/** Adds "3 modules" to a "  ·  " list, or nothing when there are none. */
@@ -278,7 +355,8 @@ public final class AddonsPanel extends WidgetPanel {
 
 		@Override
 		protected String tooltipText() {
-			return (a.description().isEmpty() ? "" : a.description() + "\n") + (a.verified()
+			// Open, the card shows its description itself.
+			return (a.description().isEmpty() || isExpanded() ? "" : a.description() + "\n") + (a.verified()
 				? "Verified: Myriad built it from its public source and checked the release is exactly that build."
 				: "Reviewed: closed source; Myriad read each release before listing it.");
 		}
@@ -296,21 +374,33 @@ public final class AddonsPanel extends WidgetPanel {
 			// What it adds, before it's installed: fetched when the card opens, checked against the Library's hash.
 			UpdateManager.LibraryDetails adds = updates.libraryDetails(a.id(), a.detailsSha(), () -> detailsIn = true);
 			if (adds == null && a.detailsSha() != null) body.add(new Label("Reading what it adds…").dim());
+			if (adds != null) whatsNew(body, key, adds.changelog());
 			if (adds != null && !adds.modules().isEmpty()) {
-				VBox mods = new VBox(1, 0);
+				// Each module: its name and tag on one line, what it does under it.
+				VBox mods = new VBox(4, 0);
 				for (UpdateManager.LibraryModule m : adds.modules()) {
-					Label l = new Label("• " + m.name() + (m.tag().isEmpty() ? "" : "  ·  " + m.tag()));
-					mods.add(m.description().isEmpty() ? l.dim() : l.dim().tooltip(m.description()));
+					VBox one = new VBox(1, 0);
+					HBox head = new HBox(6);
+					head.addWeighted(new Label(m.name()), 1);
+					if (!m.tag().isEmpty()) head.addFixed(new Label(m.tag()).dim().oneLine(), 64);
+					one.add(head);
+					if (!m.description().isEmpty()) one.add(new Label(m.description()).dim());
+					// Searching for a module: only the ones that match, unless the search matched the addon itself.
+					mods.add(one).visible(() -> {
+						String q = query.strip().toLowerCase(Locale.ROOT);
+						return q.isEmpty() || adds.modules().stream().noneMatch(x -> moduleMatches(x, q)) || moduleMatches(m, q);
+					});
 				}
 				int n = adds.modules().size();
-				body.add(fold(key + "/modules", () -> n + (n == 1 ? " module" : " modules"), mods, () -> ""));
+				body.add(fold(key + "/modules", () -> "What it adds", mods, () -> n + (n == 1 ? " module" : " modules")));
 			}
-			if (adds != null) whatsNew(body, key, adds.changelog());
-			VBox details = new VBox(2, 0);
-			if (!a.author().isEmpty()) details.add(new Label("By " + a.author()).dim());
-			details.add(new Label(a.id() + (a.keyId() == null ? "" : "  ·  developer key " + a.keyId())).dim());
-			if (a.version() == null) details.add(new Label("No release for Minecraft " + net.fabricmc.loader.api.FabricLoader.getInstance().getModContainer("minecraft")
-				.map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("") + (a.newestElsewhere() == null ? "" : " (newest: " + a.newestElsewhere() + ")") + ".").dim());
+			// What the header, badges and foot don't already say.
+			VBox details = new VBox(3, 0);
+			if (!a.author().isEmpty()) fact(details, "Author", a.author());
+			fact(details, "ID", a.id());
+			if (a.keyId() != null) fact(details, "Key", new Label(a.keyId()).tooltip("The developer key its releases are signed with; each is checked before it's installed."));
+			if (a.version() == null) fact(details, "Release", "none for Minecraft " + net.fabricmc.loader.api.FabricLoader.getInstance().getModContainer("minecraft")
+				.map(m -> m.getMetadata().getVersion().getFriendlyString()).orElse("") + (a.newestElsewhere() == null ? "" : " (newest: " + a.newestElsewhere() + ")"));
 			body.add(fold(key + "/details", () -> "Details", details, () -> ""));
 
 			String note = libraryNotes.get(a.id());
@@ -353,12 +443,20 @@ public final class AddonsPanel extends WidgetPanel {
 	}
 
 	private void signIn(String id) {
+		signIn(id, null);
+	}
+
+	/** Signs in with Minecraft; {@code then} runs once signed in. */
+	private void signIn(String id, @Nullable Runnable then) {
 		var account = updates.account();
 		if (account.busy()) return;
 		libraryNotes.remove(id);
 		account.link().whenComplete((v, err) -> Async.onRenderThread(() -> {
 			if (err != null) libraryNotes.put(id, "Can't sign in: " + UpdateManager.reasonOf(err) + ".");
-			else Myriad.notifications().toast("Signed in", "Myriad knows you as " + account.name()).show();
+			else {
+				Myriad.notifications().toast("Signed in", "Myriad knows you as " + account.name()).show();
+				if (then != null) then.run();
+			}
 			rebuild();
 		}));
 		rebuild();
@@ -373,7 +471,7 @@ public final class AddonsPanel extends WidgetPanel {
 			else if (!updates.account().grants().contains(id)) {
 				// A code for another addon: that one's granted, this one isn't.
 				codeDrafts.remove(id);
-				libraryNotes.put(id, "That code was for " + name + ", not this addon: you can install " + name + " from Browse.");
+				libraryNotes.put(id, "That code was for " + name + ", not this addon: you can install " + name + " from the Library below.");
 			} else {
 				// Redeeming a code on an addon's card means installing it: straight on to that.
 				codeDrafts.remove(id);
@@ -480,7 +578,7 @@ public final class AddonsPanel extends WidgetPanel {
 
 		@Override
 		protected String tooltipText() {
-			String d = addon.description();
+			String d = isExpanded() ? null : addon.description(); // open, the card shows it itself
 			String update = updateLine(updates.state(addon.id()));
 			if (update == null) return d == null || d.isEmpty() ? null : d;
 			return d == null || d.isEmpty() ? update : d + "\n" + update;
@@ -511,10 +609,10 @@ public final class AddonsPanel extends WidgetPanel {
 			if (updates.removing(id)) body.add(new Note("Removed when you quit. Changed your mind? Keep it below.").error());
 			if (addon.description() != null && !addon.description().isEmpty()) body.add(new Label(addon.description()));
 			UpdateManager.State u = updates.state(id);
-			if (u != null && (u.kind() == UpdateManager.Kind.AVAILABLE || u.kind() == UpdateManager.Kind.STAGED)) {
-				whatsNew(body, id, updates.changelog(id, u.version(), () -> changelogIn = true));
-			}
 			buildUpdate(body, u);
+			// What's new: in the update waiting for it, else in the version it runs (from its Library listing).
+			boolean newer = u != null && (u.kind() == UpdateManager.Kind.AVAILABLE || u.kind() == UpdateManager.Kind.STAGED || u.kind() == UpdateManager.Kind.FAILED);
+			whatsNew(body, id, updates.changelog(id, newer ? u.version() : addon.version(), () -> changelogIn = true));
 			body.add(fold(id + "/details", () -> "Details", details(), () -> ""));
 			// Core's own settings: profiles and the anti-cheat.
 			if (id.equals("myriad")) ProfilesSection.build(body, AddonsPanel.this::rebuild, folded);
@@ -540,16 +638,21 @@ public final class AddonsPanel extends WidgetPanel {
 			body.add(foot(u));
 		}
 
-		/** Who made it, what it adds, what it costs, and where its updates come from. */
+		/**
+		 * What the header, badges and foot don't already say: who made it, its id, how long it took to start, and the
+		 * key its updates are checked against. (Its running cost is in the Profiler.)
+		 */
 		private VBox details() {
 			String id = addon.id();
-			VBox d = new VBox(2, 0);
-			if (!addon.authors().isEmpty()) d.add(new Label("By " + String.join(", ", addon.authors())).dim());
-			d.add(new Label(id + "  ·  " + addon.version()).dim());
-			d.add(new Label(() -> counts(id)).dim());
+			VBox d = new VBox(3, 0);
+			if (!addon.authors().isEmpty()) fact(d, "Author", String.join(", ", addon.authors()));
+			fact(d, "ID", id);
 			AddonLoader.Startup started = MyriadImpl.get().addonLoader().startup(id);
-			if (started != null) d.add(new Label(started.describe(failed())).dim());
-			d.add(new Label(() -> cost(addon)).dim());
+			if (started != null) {
+				String full = started.describe(failed());
+				int split = full.indexOf(" (");
+				fact(d, "Startup", new Label((split < 0 ? full : full.substring(0, split)).replace("Started in ", "")).tooltip(full));
+			}
 			buildSigning(d);
 			return d;
 		}
@@ -588,26 +691,35 @@ public final class AddonsPanel extends WidgetPanel {
 			return t;
 		}
 
-		/** Whether its updates are signed, where they come from, and a token for a private source. */
+		/**
+		 * The key its updates are checked against (where they come from is its Source button), whether it's pinned to
+		 * the Library, and a token for a private source.
+		 */
 		private void buildSigning(VBox body) {
 			String id = addon.id();
+			String source = UpdateManager.sourceOf(addon);
+			List<String> keys = UpdateManager.signingKeys(addon);
+			if (source != null || !keys.isEmpty()) {
+				fact(body, "Key", new Label(keys.isEmpty() ? "none, unsigned" : String.join(" or ", keys))
+					.tooltip(keys.isEmpty() ? "Its developer doesn't sign its releases, so an update is only as safe as " + source + "."
+						: "Each update is checked against its developer's signature before it's installed."));
+			}
 			if (updates.pinnedToLibrary(id)) {
 				HBox row = new HBox(4);
-				row.addWeighted(new Label("Updates only through the Myriad Library, which checks each release first.").dim(), 1);
+				row.addWeighted(new Label("Library only").tooltip("Updates only through the Myriad Library, which checks each release first."), 1);
 				row.addFixed(new Button("Unpin", () -> {
 					updates.unpinFromLibrary(id);
 					rebuild();
 				}).quiet().tooltip("Update from its own source instead, without the Library's checks (its developer's signature is still needed)."), 46);
-				body.add(row);
+				fact(body, "Updates", row);
 				return;
 			}
-			String source = UpdateManager.sourceOf(addon);
 			if (source == null) return;
-			List<String> keys = UpdateManager.signingKeys(addon);
-			body.add(new Label(keys.isEmpty() ? "Updates from " + source + ", unsigned."
-				: "Updates from " + source + ", signed with key " + String.join(" or ", keys) + ".").dim()
-				.tooltip(keys.isEmpty() ? "Its developer doesn't sign its releases, so an update is only as safe as " + source + "."
-					: "Each update is checked against its developer's signature before it's installed."));
+			// A token only matters for a private repo or feed: shown once one is saved (to replace or forget it), or when
+			// the source couldn't be read (a private repo looks like one with no releases). Add from link takes one too.
+			UpdateManager.State s = updates.state(id);
+			boolean unreachable = s != null && s.kind() == UpdateManager.Kind.UNKNOWN && s.version() == null;
+			if (!updates.hasToken(id) && !unreachable) return;
 			HBox token = new HBox(4);
 			token.addWeighted(new TextField(() -> tokenDrafts.getOrDefault(id, "")).onChange(t -> tokenDrafts.put(id, t)).masked()
 				.placeholder(updates.hasToken(id) ? "Access token saved; paste another to replace it" : "Access token, if its source is private"), 1);
@@ -619,11 +731,20 @@ public final class AddonsPanel extends WidgetPanel {
 				updates.setToken(id, null);
 				rebuild();
 			}).quiet(), 46);
-			body.add(fold(id + "/private-source", () -> "Private source", token, () -> updates.hasToken(id) ? "token saved" : ""));
+			body.add(fold(id + "/private-source", () -> "Access token", token, () -> updates.hasToken(id) ? "saved" : "for a private source"));
 		}
 
 		private void buildUpdate(VBox body, UpdateManager.State u) {
 			if (u == null || updates.removing(addon.id())) return;
+			String id = addon.id();
+			if ((u.kind() == UpdateManager.Kind.AVAILABLE || u.kind() == UpdateManager.Kind.FAILED) && updates.needsSignIn(id)) {
+				// Invite-only: its updates come with the account's session. Signing in goes straight on to the update.
+				String note = libraryNotes.get(id);
+				body.add(note != null ? new Note(note).error() : new Note(u.version() + " is ready. It's invite-only: sign in with Minecraft to update it.").icon("\uf023"));
+				body.add(new Button(() -> updates.account().busy() ? "Signing in…" : "Sign in and update", () -> signIn(id, () -> updates.update(id))).accent()
+					.tooltip("Proves which Minecraft account you are, the way joining a server does: your login goes only to Mojang, never to Myriad."));
+				return;
+			}
 			switch (u.kind()) {
 				case FAILED -> body.add(new Note("Updating to " + u.version() + " failed: " + u.message()).error());
 				case DOWNLOADING -> body.add(new Label("Downloading " + u.version() + "…").dim());
@@ -633,30 +754,6 @@ public final class AddonsPanel extends WidgetPanel {
 					// Up to date, checking, or not checked: said in Details' update line, not here.
 				}
 			}
-		}
-
-		/** "12 modules · 3 HUD elements · 1 command", leaving out what the addon doesn't add. */
-		private static String counts(String id) {
-			StringBuilder sb = new StringBuilder();
-			count(sb, Myriad.modules().ownedBy(id).size(), "module");
-			count(sb, (int) Myriad.panels().ownedBy(id).stream().filter(p -> p.isHud()).count(), "HUD element");
-			count(sb, (int) Myriad.panels().ownedBy(id).stream().filter(p -> !p.isHud()).count(), "window");
-			count(sb, Myriad.commands().ownedBy(id).size(), "command");
-			count(sb, Myriad.themes().ownedBy(id).size(), "theme");
-			count(sb, Myriad.barWidgets().ownedBy(id).size(), "bar widget");
-			count(sb, Myriad.keyActions().ownedBy(id).size(), "key action");
-			return sb.isEmpty() ? "Adds nothing visible yet." : sb.toString();
-		}
-
-		/** What it costs while the game runs, from the profiler when it's on. */
-		private static String cost(Addon a) {
-			Profiler p = MyriadImpl.get().events().profiler();
-			if (p == null) return "Running cost: open the Profiler to measure it.";
-			double ms = 0;
-			for (Profiler.Entry e : p.snapshot()) {
-				if (!e.isJob() && (a.id().equals(e.addon()) || a.name().equals(e.addon()))) ms += e.totalMs();
-			}
-			return String.format(Locale.ROOT, "Running cost: %.2f ms each second", ms);
 		}
 	}
 }
