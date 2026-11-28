@@ -113,6 +113,13 @@ public final class UpdateManager {
 		return jarOf(a) != null && (library.pinned(a.id()) || !trustedKeys(a).isEmpty());
 	}
 
+	/** Whether updating {@code id} waits on signing in: an invite-only Library addon while the account is signed out. */
+	public boolean needsSignIn(String id) {
+		LibraryIndex.Index li = library.index();
+		LibraryIndex.Entry le = fromLibrary.contains(id) && li != null ? li.entry(id) : null;
+		return le != null && le.invite() && !account.signedIn();
+	}
+
 	/** Whether the player turned on auto update for {@code id} (off unless they did). */
 	public boolean autoUpdates(String id) {
 		return auto.on(id);
@@ -123,7 +130,7 @@ public final class UpdateManager {
 		if (on && !canAutoUpdate(a)) return;
 		auto.set(a.id(), on);
 		State s = states.get(a.id());
-		if (on && s != null && s.kind() == Kind.AVAILABLE) update(a.id(), true);
+		if (on && s != null && s.kind() == Kind.AVAILABLE && !needsSignIn(a.id())) update(a.id(), true);
 	}
 
 	/** Whether {@code a} can be removed here: not core, and loaded from a jar in the mods folder. */
@@ -377,7 +384,7 @@ public final class UpdateManager {
 		for (String id : updatable()) {
 			Addon a = addon(id);
 			State s = states.get(id);
-			if (a != null && s != null && s.kind() == Kind.AVAILABLE && auto.on(id) && canAutoUpdate(a)) update(id, true);
+			if (a != null && s != null && s.kind() == Kind.AVAILABLE && auto.on(id) && canAutoUpdate(a) && !needsSignIn(id)) update(id, true);
 			else ids.add(id);
 		}
 		if (ids.isEmpty()) {
@@ -670,10 +677,15 @@ public final class UpdateManager {
 		boolean viaLibrary = fromLibrary.contains(id); // as it was when this update was found, whatever happens meanwhile
 		LibraryIndex.Index li = library.index();
 		LibraryIndex.Entry le = viaLibrary && li != null ? li.entry(id) : null;
-		if (le != null && le.invite()) {
+		boolean invite = le != null && le.invite();
+		if (invite) {
 			// An invite-only addon updates from Myriad's API with the account's session, sent to the API alone.
 			token = account.token();
 			origin = URI.create(dev.myriadclient.impl.MyriadApi.API + "/");
+			if (token == null) {
+				states.put(id, new State(Kind.FAILED, r.version(), r.url(), "it's invite-only: sign in with Minecraft to update it"));
+				return CompletableFuture.completedFuture(null);
+			}
 		}
 		return download(id, r, token, origin).thenAccept(got -> {
 			Verified v = verify(id, r.version(), got, trusted, addon.isCore(), others, minecraftVersion(), core);
@@ -696,12 +708,25 @@ public final class UpdateManager {
 				else toast("Update ready", name(id) + " " + r.version() + " installs when you quit", Notifications.Level.SUCCESS);
 			});
 		}).exceptionally(err -> {
-			String why = reason(err);
+			String why = invite ? inviteReason(reason(err)) : reason(err);
 			LOG.warn("Could not update {} to {}: {}", id, r.version(), why);
 			states.put(id, new State(Kind.FAILED, r.version(), r.url(), why));
 			Async.onRenderThread(() -> toast("Update failed", name(id) + ": " + why, Notifications.Level.ERROR));
 			return null;
 		});
+	}
+
+	/** An invite-only download's failure in the player's words: what the API's refusal means for them. */
+	private String inviteReason(String why) {
+		return switch (why) {
+			case "HTTP 401" -> {
+				account.refresh(); // forgets the session the API no longer knows, so the sign-in button shows
+				yield "your Myriad sign-in has ended: sign in with Minecraft again";
+			}
+			case "HTTP 403" -> "your access to it was taken away; ask its developer for a new code";
+			case "HTTP 404" -> "this release isn't available any more";
+			default -> why;
+		};
 	}
 
 	private @Nullable String libraryKeyRule(String id, @Nullable DevKey signer, byte[] jar, Releases.Release r, Set<String> others, @Nullable Version core) {
