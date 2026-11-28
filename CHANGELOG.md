@@ -17,6 +17,35 @@ Before 1.0 a minor release could also remove what an earlier one had deprecated.
 `dev.myriadclient.impl` is internal and may change in any release. Addons declare the oldest core they support in `fabric.mod.json`
 (`"depends": {"myriad": ">=2.0.0"}`) and can check `Myriad.isAtLeast("2.1.0")` for newer features.
 
+## 2.12.0
+
+The Addons window is one list: what you have and what the Library offers, found by one search. No API changes.
+
+### Addons window
+
+- **One list, one search.** Installed addons come first, then the Library's addons you don't have yet; the Browse tab
+  is gone. The search finds addons in both by name, author, module or what a module does, and on an open Library card
+  narrows its module list to the matches. The Library is read when the window opens.
+- **What's new sits in the same place on every card**, installed or not, for the update waiting or the version you
+  run. A changelog line that wraps in its Markdown reads as one item, and headings stand out.
+- **What it adds** lists each module with its tag and what it does.
+- **Details is short:** author, id, startup time and the key updates are signed with, side by side even in a narrow
+  window. Version, counts and where updates come from were already on the card; running cost is in the Profiler.
+- **Access token** shows on a card only once a token is saved or the addon's source can't be read; Add from link
+  takes one for the first install.
+- An open card's tooltip no longer repeats the description shown under it.
+
+### Account
+
+- **Sign in at the foot of the Addons window**, on both lists; who's signed in and Sign out sit there too.
+- **Updating an invite-only addon while signed out** asks you to sign in instead of failing with `HTTP 401`: its card
+  offers **Sign in and update**, and auto update waits until you're signed in. An ended sign-in, lost access and a
+  withdrawn release each say what happened; an ended sign-in also signs you out here.
+
+### Gradle plugin
+
+- The `libraryInvite` task's description lists every action.
+
 ## 2.11.0
 
 A smoother Addons window, invite-only listings that choose what everyone sees, and a Library that keeps no key to
